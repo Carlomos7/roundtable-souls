@@ -134,11 +134,22 @@ Rebuild the bundled item lists from the reference repos (er-save-manager and Eld
 uv run python scripts/build_known_ids.py
 ```
 
+## Branches
+
+- `dev` is where work happens. Commit and push there; every push runs the tests.
+- `main` only receives merges from `dev` and is what releases are cut from.
+
+```bash
+git checkout dev                      # day-to-day work
+git checkout main && git merge dev    # when dev is ready to ship
+```
+
 ## Releases
 
 Every push to `main` runs the tests (`.github/workflows/test.yml`). Pushing a version tag builds the exe on a Windows runner and publishes a GitHub Release with `RoundtableSouls.zip` attached (`.github/workflows/release.yml`). The tag must match the package version, and a test keeps `pyproject.toml` and `roundtable_souls.__version__` in sync.
 
 ```bash
+git checkout main && git merge dev
 uv run python scripts/bump_version.py 3.1.0   # updates pyproject.toml and __init__.py
 git commit -am "Release 3.1.0"
 git tag v3.1.0
