@@ -129,6 +129,19 @@ Rebuild the bundled item lists from the reference repos (er-save-manager and Eld
 uv run python scripts/build_known_ids.py
 ```
 
+## Releases
+
+Every push to `main` runs the tests (`.github/workflows/test.yml`). Pushing a version tag builds the exe on a Windows runner and publishes a GitHub Release with `RoundtableSouls.zip` attached (`.github/workflows/release.yml`). The tag must match the package version, and a test keeps `pyproject.toml` and `roundtable_souls.__version__` in sync.
+
+```bash
+uv run python scripts/bump_version.py 3.1.0   # updates pyproject.toml and __init__.py
+git commit -am "Release 3.1.0"
+git tag v3.1.0
+git push && git push --tags
+```
+
+The Actions tab shows the build; the zip appears under Releases when it finishes. Users download it from there. The release workflow can also be started by hand from the Actions tab (`workflow_dispatch`), which uploads the zip as a build artifact without publishing a release.
+
 ## Documentation
 
 - [docs/How to use.txt](docs/How%20to%20use.txt) - the user guide shipped in the zip, with the version history
