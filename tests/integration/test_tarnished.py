@@ -68,19 +68,19 @@ def test_dlc_items_count_as_foreign_when_the_dlc_is_missing(tmp_path, monkeypatc
     assert any(f["code"] == "dlc" for f in A.analyze_parsed(r, dlc_owned=False)) and not any(
         f["code"] == "dlc" for f in A.analyze_parsed(r, dlc_owned=True)
     )
-    monkeypatch.setattr(g, "load_settings", lambda: {"dlc_owned": "no"})
+    monkeypatch.setattr(g.saves_service, "load_settings", lambda: {"dlc_owned": "no"})
     assert g.dlc_owned() is False and g.dlc_setting() == "no"
     info = g.save_info(copy)
     assert info["dlc_owned"] is False
-    monkeypatch.setattr(g, "load_settings", lambda: {"dlc_owned": "yes"})
+    monkeypatch.setattr(g.saves_service, "load_settings", lambda: {"dlc_owned": "yes"})
     assert g.dlc_owned() is True
-    monkeypatch.setattr(g, "load_settings", lambda: {})
+    monkeypatch.setattr(g.saves_service, "load_settings", lambda: {})
     assert g.dlc_setting() is None
 
 
 def test_save_info_reports_pack_pieces_and_honours_the_setting(tmp_path, monkeypatch):
     copy = _copy(tmp_path)
-    monkeypatch.setattr(g, "load_settings", lambda: {"tarnished_owned": "auto"})
+    monkeypatch.setattr(g.saves_service, "load_settings", lambda: {"tarnished_owned": "auto"})
     info = g.save_info(copy)
     assert info["tarnished_flag"] == info["tarnished_owned"]
     assert all("pack_items" in c for c in info["characters"])
@@ -88,9 +88,9 @@ def test_save_info_reports_pack_pieces_and_honours_the_setting(tmp_path, monkeyp
         assert all(e["source"] != "Tarnished Edition" for p in info["vanilla_plan"] for e in p["strip"])
         d = g.character_detail(info, info["characters"][0]["slot"] - 1)
         assert "pack_items" in d
-    monkeypatch.setattr(g, "load_settings", lambda: {"tarnished_owned": "no"})
+    monkeypatch.setattr(g.saves_service, "load_settings", lambda: {"tarnished_owned": "no"})
     info2 = g.save_info(copy)
     assert info2["tarnished_owned"] is False
     assert g.tarnished_setting() == "no"
-    monkeypatch.setattr(g, "load_settings", lambda: {"tarnished_owned": "weird"})
+    monkeypatch.setattr(g.saves_service, "load_settings", lambda: {"tarnished_owned": "weird"})
     assert g.tarnished_setting() is None

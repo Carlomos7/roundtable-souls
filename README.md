@@ -8,10 +8,10 @@ A Windows desktop app (PySide6 + Fluent Widgets) that starts Elden Ring through 
 
 ```mermaid
 graph TD
-    UI["<b>UI</b><br/>━━━━━━━━━━━━<br/>• Fluent window (Play, Co-op, Mods, Saves, Tools)<br/>• Review & fix workshop<br/>• Confirm dialogs, log pane"]
-    CORE["<b>CORE</b><br/>━━━━━━━━━━━━<br/>• Setups (me3 / Revive)<br/>• Seamless ini, share JSON<br/>• Save info, jobs, backups<br/>• Settings (pydantic)"]
-    SAVES["<b>SAVES</b><br/>━━━━━━━━━━━━<br/>• layout: BND4 / slot parser<br/>• analyze: findings (read-only)<br/>• fix, loading, vanilla, regulation: named repairs"]
-    MODS["<b>MODS</b><br/>━━━━━━━━━━━━<br/>• profile: me3 settings, load order, conflicts<br/>• manage: install / remove / options"]
+    UI["<b>UI</b><br/>━━━━━━━━━━━━<br/>• window: Play, Co-op, Mods, Saves, Tools, Review & fix<br/>• theme, widgets, editor, dialogs, notes"]
+    CORE["<b>CORE</b><br/>━━━━━━━━━━━━<br/>• core: setups, play jobs, facade<br/>• coop: Seamless ini, share JSON<br/>• settings + models (pydantic)<br/>• files, resources"]
+    SAVES["<b>SAVES</b><br/>━━━━━━━━━━━━<br/>• layout: BND4 / slot parser<br/>• analyze: findings (read-only)<br/>• fix, loading, vanilla, regulation: named repairs<br/>• service: save info, backups, repair gates"]
+    MODS["<b>MODS</b><br/>━━━━━━━━━━━━<br/>• profile: me3 settings, load order, conflicts<br/>• manage: install / remove / options<br/>• service: the Mods page's view"]
     SYSTEM["<b>SYSTEM</b><br/>━━━━━━━━━━━━<br/>• Steam, game, me3 paths<br/>• session: launch and wait<br/>• processes: dead shells<br/>• logging"]
 
     UI --> CORE
@@ -27,7 +27,7 @@ graph TD
     class SAVES,MODS,SYSTEM layer
 ```
 
-The window never touches a save directly. Every read goes through `core.save_info`, every write through a named repair in `saves/` that verifies the new bytes, backs the original up next to the save, and refuses while the game is running.
+The window never touches a save directly. Every read goes through `save_info`, every write through a named repair in `saves/` that verifies the new bytes, backs the original up next to the save, and refuses while the game is running. Data that crosses a layer boundary (save info, findings, mod plans) is validated against the pydantic models in `models.py` at the source.
 
 ## Key Features
 
@@ -36,7 +36,7 @@ The window never touches a save directly. Every read goes through `core.save_inf
 - me3 profile management: install mods from `.zip`, `.7z`, `.rar` or a folder, per-mod options, load order, conflict scan, profile create and delete
 - Save health checks: checksums, regulation block, quest soft-locks, loading hangs, torn writes, non-vanilla items (DLC and Tarnished Edition aware)
 - Opt-in, per-item repairs in a Review & fix workshop, every one backed up with a manifest and undoable
-- Validated settings (pydantic), atomic file writes, locks while the game runs
+- Validated settings and boundary data (pydantic), atomic file writes, locks while the game runs
 
 ## Technologies Used
 
@@ -58,7 +58,8 @@ The window never touches a save directly. Every read goes through `core.save_inf
 **Quality & Packaging:**
 
 - pytest and coverage - tests
-- ruff - lint and import order
+- ruff - lint, import order and formatting
+- pyright - type checking (standard mode)
 - PyInstaller - one-file `RoundtableSouls.exe`
 
 ## Getting Started
@@ -103,11 +104,15 @@ uv run coverage report
 uv run coverage html
 ```
 
-Lint:
+Lint, format and type-check:
 
 ```bash
 uv run ruff check .
+uv run ruff format --check .
+uv run pyright
 ```
+
+The same checks run before every commit once `uv run pre-commit install` has been run.
 
 ## Usage
 

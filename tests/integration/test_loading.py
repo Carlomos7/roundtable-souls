@@ -96,7 +96,7 @@ def test_bad_position_teleports_to_roundtable(tmp_path, monkeypatch):
 def test_dlc_area_without_dlc_and_junk_and_weather(tmp_path, monkeypatch):
     copy = _copy(tmp_path)
     monkeypatch.setattr(g.common, "game_running", lambda: False)
-    monkeypatch.setattr(g, "dlc_owned", lambda: False)
+    monkeypatch.setattr(g.saves_service, "dlc_owned", lambda: False)
 
     def mut(d, s):
         d[s["ga_items_pos"] - 0x1C : s["ga_items_pos"] - 0x18] = bytes([0, 40, 42, 61])  # Land of Shadow

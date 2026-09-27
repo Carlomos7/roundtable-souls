@@ -6,6 +6,7 @@ me3 profiles (`.me3`, TOML, schema v1) and the mods they list.
 | --- | --- |
 | `profile.py` | Top-level profile settings (`savefile`, `start_online`, `disable_arxan`, `mem_patch`, ...), package rows, effective load order and the later-wins conflict scan. |
 | `manage.py` | Install from a `.zip`, `.7z`, `.rar` or folder, per-mod options, remove, and profile create / delete. |
+| `service.py` | The Mods page's view: enable / disable rows, install plans (validated against `models.ModPlan`), me3 facts and profile settings. |
 
 ## Rules
 

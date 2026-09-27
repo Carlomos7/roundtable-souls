@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from roundtable_souls.settings import data_dir
+from roundtable_souls.settings import data_dir, load_settings
 from roundtable_souls.system.logging import get_logger, start_run_log
 
 LOGS_DIR = data_dir() / "logs"
@@ -71,6 +71,26 @@ def processes(name):
 ME3_OVERRIDE = None
 GAME_EXE_OVERRIDE = None
 PROFILE_DIR_OVERRIDE = None
+
+
+PATH_SETTINGS = ("me3_path", "game_exe", "me3_profile_dir")  # Tools > Locations; blank = detect
+
+
+def apply_overrides(settings: dict | None = None) -> dict:
+    """Push the location settings into the tools layer. The profile folder falls back to what `me3 info` last
+    reported (cached in settings), then to me3's default. Returns what is in effect."""
+    global ME3_OVERRIDE, GAME_EXE_OVERRIDE, PROFILE_DIR_OVERRIDE
+    s = load_settings() if settings is None else settings
+    me3 = str(s.get("me3_path") or "").strip()
+    game = str(s.get("game_exe") or "").strip()
+    prof = (
+        str(s.get("me3_profile_dir") or "").strip()
+        or str((s.get("me3_info_cache") or {}).get("profile_dir") or "").strip()
+    )
+    ME3_OVERRIDE = me3 or None
+    GAME_EXE_OVERRIDE = game or None
+    PROFILE_DIR_OVERRIDE = prof or None
+    return {"me3": me3, "game_exe": game, "profile_dir": prof}
 
 
 def game_exe_name():

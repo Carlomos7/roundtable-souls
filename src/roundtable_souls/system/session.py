@@ -181,6 +181,7 @@ def wait_for_save_flush(saves, timeout=30):
     """The game writes its save on the way out. Wait until every save file can
     be opened for writing, which fails while the game still holds it."""
     deadline = time.time() + timeout
+    busy = []
     while time.time() < deadline:
         busy = []
         for save in saves:

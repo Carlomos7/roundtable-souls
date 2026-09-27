@@ -10,6 +10,7 @@ Parsing, read-only analysis and named repairs for Elden Ring PC saves (`ER0000.s
 | `loading.py` | The save states that hang the loading screen (Torrent, position, DLC area or flag, weather) and their fixes. |
 | `vanilla.py` | Remove mod items per character, opt-in and per item. Rows are neutralised in place so nothing shifts. |
 | `regulation.py` | Rebuild the regulation block me3 leaves dirty, from the game's `regulation.bin`. |
+| `service.py` | What the window sees: `save_info` (validated against `models.SaveInfo`), backups with manifests, and the named repair behind each button, all gated on the game being closed. |
 
 ## Format facts the code relies on
 

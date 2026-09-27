@@ -39,6 +39,11 @@ jobs:
           exit 1
         fi
 
+    - name: Lint and type check
+      run: |
+        uv run ruff check .
+        uv run pyright
+
     - name: Run tests
       run: uv run pytest
 

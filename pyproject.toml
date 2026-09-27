@@ -24,6 +24,7 @@ dev = [
     "ruff>=0.16.9",
     "pyinstaller>=6.22.3",
     "pillow>=12.3.0",
+    "pyright>=1.1.414",
 ]
 
 [build-system]
@@ -58,3 +59,21 @@ line-ending = "lf"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 ignore = ["E501", "E731", "E741", "B008", "B905"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/roundtable_souls/core.py" = ["F401"]  # facade re-exports
+
+[tool.pyright]
+include = ["src", "scripts", "tests"]
+pythonVersion = "3.14"
+typeCheckingMode = "standard"
+# Qt and the dict-shaped save data trip these without pointing at bugs; they stay visible as warnings.
+reportAttributeAccessIssue = "warning"
+reportArgumentType = "warning"
+reportOptionalMemberAccess = "warning"
+reportOptionalSubscript = "warning"
+reportOptionalIterable = "warning"
+reportGeneralTypeIssues = "warning"
+reportIndexIssue = "warning"
+reportCallIssue = "warning"
+reportOperatorIssue = "warning"
