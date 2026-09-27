@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 FROZEN = bool(getattr(sys, "frozen", False))
 APP_DIR_NAME = "RoundtableSouls"
-LEGACY_APP_DIR_NAMES = ("Roundtable", "PlayEldenRing")
+LEGACY_APP_DIR_NAMES = ("Roundtable",)
 
 
 def exe_dir() -> Path:

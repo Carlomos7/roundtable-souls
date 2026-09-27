@@ -3,7 +3,8 @@ name = "roundtable-souls"
 version = "3.0.0"
 description = "Launcher and save toolkit for modded Elden Ring: me3 profiles, Seamless Co-op settings, save checks and repairs."
 readme = "README.md"
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Carlos Ray Segarra" }]
 requires-python = ">=3.14"
 dependencies = [
@@ -31,6 +32,7 @@ build-backend = "uv_build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["tests"]
 markers = ["integration: needs a real Elden Ring save on this PC (skipped otherwise)"]
 
 [tool.coverage.run]

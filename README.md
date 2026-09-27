@@ -93,7 +93,7 @@ The launcher keeps `launcher_settings.json` and a `logs/` folder next to the exe
 uv run pytest
 ```
 
-`tests/unit` runs anywhere. `tests/integration` exercises the repairs on temporary copies of a real Seamless Co-op save from this PC and skips when there is none. The live save is never written.
+`tests/unit` runs anywhere. `tests/integration` exercises the repairs on temporary copies of a real Seamless Co-op save: the one under `%APPDATA%\EldenRing`, or the file named in `ROUNDTABLE_TEST_SAVE`. Without one they skip, so CI runs the unit tests only. The original save is never written.
 
 With coverage:
 
@@ -123,7 +123,7 @@ Build the exe and the share bundle (`dist/share/RoundtableSouls.zip`):
 uv run python scripts/build.py
 ```
 
-Rebuild the bundled item lists from the reference repos (er-save-manager and Elden-Ring-Save-Editor checked out next to this one, or `ER_WORKSPACE` set):
+Rebuild the bundled item lists from the reference repos (er-save-manager and Elden-Ring-Save-Editor checked out next to this repo, or the folder holding them in `ER_REPOS`):
 
 ```bash
 uv run python scripts/build_known_ids.py
@@ -144,7 +144,8 @@ The Actions tab shows the build; the zip appears under Releases when it finishes
 
 ## Documentation
 
-- [docs/How to use.txt](docs/How%20to%20use.txt) - the user guide shipped in the zip, with the version history
+- [docs/How to use.txt](docs/How%20to%20use.txt) - the user guide shipped in the zip
+- [CHANGELOG.md](CHANGELOG.md) - version history
 - [src/roundtable_souls/saves/README.md](src/roundtable_souls/saves/README.md) - save format facts the repairs rely on
 - [src/roundtable_souls/mods/README.md](src/roundtable_souls/mods/README.md) - how profiles are edited
 - [src/roundtable_souls/system/README.md](src/roundtable_souls/system/README.md) - detection and the play session

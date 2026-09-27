@@ -5,6 +5,7 @@ import shutil
 import pytest
 
 from roundtable_souls import core as g
+from support import live_save as _live_save
 
 A = g.save_analyze
 F = g.save_fix
@@ -77,13 +78,6 @@ def test_repair_available_predicate():
     assert g.repair_available({"quest_fixes": [{"slot": 1}]})
     assert g.repair_available({"checksum_fixes": {"slots": [0], "ud10": False}})
     assert g.repair_available({"checksum_fixes": {"slots": [], "ud10": True}})
-
-
-def _live_save():
-    for p in g.common.save_files():
-        if p.suffix.lower() == ".co2" and p.exists():
-            return p
-    return None
 
 
 def test_quest_fix_on_a_copy_of_the_live_save(tmp_path, monkeypatch):

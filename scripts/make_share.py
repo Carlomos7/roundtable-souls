@@ -5,6 +5,7 @@ Settings and logs are never included. Run by scripts/build.py after PyInstaller;
 
 from __future__ import annotations
 
+import shutil
 import sys
 import zipfile
 from pathlib import Path
@@ -13,25 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 EXE_NAME = "RoundtableSouls"
 DIST = ROOT / "dist"
 SHARE = DIST / "share"
-STALE = ("launcher_settings.json", f"{EXE_NAME}.old.exe")
-
-
-def copy_exe(src: Path, dest: Path) -> None:
-    """Copy over the share exe, parking the old one when it is still running."""
-    try:
-        dest.write_bytes(src.read_bytes())
-        return
-    except PermissionError:
-        pass
-    old = dest.with_name(f"{EXE_NAME}.old.exe")
-    if old.exists():
-        old.unlink(missing_ok=True)
-    dest.rename(old)
-    dest.write_bytes(src.read_bytes())
-    try:
-        old.unlink()
-    except OSError:
-        print(f"make_share: the previous share exe is still open; {old.name} stays until it closes")
+STALE = ("launcher_settings.json",)
 
 
 def main() -> int:
@@ -48,7 +31,7 @@ def main() -> int:
             f.unlink()
         logs.rmdir()
     exe = SHARE / src.name
-    copy_exe(src, exe)
+    shutil.copyfile(src, exe)
     docs = ROOT / "docs" / "How to use.txt"
     out = SHARE / f"{EXE_NAME}.zip"
     tmp = out.with_suffix(".zip.tmp")

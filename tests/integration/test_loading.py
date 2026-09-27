@@ -1,32 +1,17 @@
 """Fix loading: detectors and fixes exercised on mutated COPIES of the live co-op save in a temp folder.
 Skipped on a PC without a save; the live file is never written."""
 import math
-import shutil
 import struct
 
 import pytest
 
 from roundtable_souls import core as g
+from support import copy_live_save as _copy
 
 A = g.save_analyze
 F = g.save_fix
 L = g.save_layout_check
 S = g.save_loading
-
-
-def _live_save():
-    for p in g.common.save_files():
-        if p.suffix.lower() == ".co2" and p.exists():
-            return p
-    return None
-
-
-def _copy(tmp_path):
-    src = _live_save()
-    if not src:
-        pytest.skip("no live co-op save on this PC")
-    copy = tmp_path / "ER0000.co2"; shutil.copy2(src, copy)
-    return copy
 
 
 def _first_active(r):

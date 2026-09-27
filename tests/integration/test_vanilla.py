@@ -6,6 +6,7 @@ import struct
 import pytest
 
 from roundtable_souls import core as g
+from support import live_save as _live_save
 
 A = g.save_analyze
 F = g.save_fix
@@ -65,13 +66,6 @@ def test_neutral_rows_keep_length():
     assert len(V._neutral_row(ARMOR | 5360000)) == 16 - 4 and V._neutral_row(ARMOR | 5360000)[:4] == struct.pack("<I", ARMOR | 10000)
     assert V._neutral_row(0x80001234) == b"" and V.row_size(0x80001234) == 8 and V.row_size(0) == 8
     assert V.row_size(1000000) == 21 and V.row_size(ARMOR | 40000) == 16
-
-
-def _live_save():
-    for p in g.common.save_files():
-        if p.suffix.lower() == ".co2" and p.exists():
-            return p
-    return None
 
 
 def test_restore_vanilla_on_a_copy_of_the_live_save(tmp_path, monkeypatch):

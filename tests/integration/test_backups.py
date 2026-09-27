@@ -1,25 +1,17 @@
 """Backups with manifests, restore with a safety copy, and the Play session options.
 Runs on COPIES of the live co-op save in a temp folder; the live file is never written."""
 import json
-import shutil
 import struct
 from pathlib import Path
 
 import pytest
 
 from roundtable_souls import core as g
+from support import copy_live_save as _copy
 
 F = g.save_fix
 L = g.save_layout_check
 A = g.save_analyze
-
-
-def _copy(tmp_path):
-    src = next((p for p in g.common.save_files() if p.suffix.lower() == ".co2" and p.exists()), None)
-    if not src:
-        pytest.skip("no live co-op save on this PC")
-    copy = tmp_path / "ER0000.co2"; shutil.copy2(src, copy)
-    return copy
 
 
 def test_backup_writes_manifest_and_list_reads_it(tmp_path):

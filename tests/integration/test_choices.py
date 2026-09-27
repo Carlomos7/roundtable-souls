@@ -1,25 +1,17 @@
 """Partial selections: each write action honours the chosen subset and leaves the rest alone.
 Runs on COPIES of the live co-op save in a temp folder; skipped without one. The live file is never written."""
-import shutil
 import struct
 
 import pytest
 
 from roundtable_souls import core as g
+from support import copy_live_save as _copy
 
 A = g.save_analyze
 F = g.save_fix
 L = g.save_layout_check
 V = g.save_vanilla
 S = g.save_loading
-
-
-def _copy(tmp_path):
-    src = next((p for p in g.common.save_files() if p.suffix.lower() == ".co2" and p.exists()), None)
-    if not src:
-        pytest.skip("no live co-op save on this PC")
-    copy = tmp_path / "ER0000.co2"; shutil.copy2(src, copy)
-    return copy
 
 
 def test_restore_only_the_ticked_items(tmp_path, monkeypatch):

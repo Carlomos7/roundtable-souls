@@ -8,9 +8,9 @@
                         a PC without the DLC installed can show them as DLC items rather than vanilla
 
 Sources:
-  repos/Elden-Ring-Save-Editor/src/db/*_name.rs      Paramdex name tables = every param row the game has
-  repos/Elden-Ring-Save-Editor/src/db/{items,weapons,armors,talismans,aows}.rs
-  repos/er-save-manager/src/er_save_manager/data/items/**.csv   (vanilla, DLC and the mod folders)
+  Elden-Ring-Save-Editor/src/db/*_name.rs      Paramdex name tables = every param row the game has
+  Elden-Ring-Save-Editor/src/db/{items,weapons,armors,talismans,aows}.rs
+  er-save-manager/src/er_save_manager/data/items/**.csv   (vanilla, DLC and the mod folders)
 
 Weapons: base + affinity*100 + upgrade; the table lists bases, so upgrade 0..25 is appended and the
 analyzer strips affinity. Spirit ashes get +0..+10. Run:  uv run python scripts/build_known_ids.py
@@ -20,9 +20,9 @@ import re
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parents[1] / "src" / "roundtable_souls" / "data"
-ROOT = Path(os.environ.get("ER_WORKSPACE", Path(__file__).resolve().parents[3]))   # holds repos/er-save-manager and repos/Elden-Ring-Save-Editor
-ERSM = ROOT / "repos" / "er-save-manager" / "src" / "er_save_manager" / "data" / "items"
-RUST = ROOT / "repos" / "Elden-Ring-Save-Editor" / "src" / "db"
+REPOS = Path(os.environ.get("ER_REPOS", Path(__file__).resolve().parents[2]))   # er-save-manager and Elden-Ring-Save-Editor checked out here
+ERSM = REPOS / "er-save-manager" / "src" / "er_save_manager" / "data" / "items"
+RUST = REPOS / "Elden-Ring-Save-Editor" / "src" / "db"
 
 WEAPON, ARMOR, TALISMAN, GOODS, AOW = 0x00000000, 0x10000000, 0x20000000, 0x40000000, 0x80000000
 MAX_UPGRADE = 25
@@ -84,7 +84,7 @@ def expand(cat: str, i: int):
 
 def main():
     if not ERSM.is_dir() or not RUST.is_dir():
-        raise SystemExit(f"reference repos not found under {ROOT / 'repos'}")
+        raise SystemExit(f"reference repos not found under {REPOS} (set ER_REPOS)")
     known: set[int] = set()
     mods: dict[int, tuple[str, str]] = {}
     dlc: dict[int, str] = {}

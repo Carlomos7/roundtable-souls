@@ -1,24 +1,16 @@
 """Tarnished Edition gear is official content: vanilla when the pack flag is set, mod items when forced off.
 Runs on COPIES of the live co-op save in a temp folder; the live file is never written."""
-import shutil
 
 import pytest
 
 from roundtable_souls import core as g
+from support import copy_live_save as _copy
 
 A = g.save_analyze
 L = g.save_layout_check
 V = g.save_vanilla
 
 ARMOR = 0x10000000
-
-
-def _copy(tmp_path):
-    src = next((p for p in g.common.save_files() if p.suffix.lower() == ".co2" and p.exists()), None)
-    if not src:
-        pytest.skip("no live co-op save on this PC")
-    copy = tmp_path / "ER0000.co2"; shutil.copy2(src, copy)
-    return copy
 
 
 def test_pack_ids_and_labels():
