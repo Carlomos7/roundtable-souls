@@ -9,6 +9,7 @@ at the end (later loads later, so a new mod overrides what is above it), and per
 only the keys inside one block. Profiles in the inline-array form Revive's installer writes are
 converted to blocks first (that form has no comments to lose).
 """
+
 from __future__ import annotations
 
 import os
@@ -21,12 +22,50 @@ import tomllib
 import zipfile
 from pathlib import Path
 
-ARCHIVE_EXTENSIONS = (".zip", ".7z", ".rar")          # what me3-manager takes; .7z via py7zr (bundled), .rar via an extractor on the PC
+ARCHIVE_EXTENSIONS = (
+    ".zip",
+    ".7z",
+    ".rar",
+)  # what me3-manager takes; .7z via py7zr (bundled), .rar via an extractor on the PC
 
-ACCEPTABLE_FOLDERS = {"_backup", "_unknown", "action", "asset", "chr", "cutscene", "event", "font", "map", "material",
-                      "menu", "movie", "msg", "other", "param", "parts", "script", "sd", "sfx", "shader", "sound",
-                      "expression", "facegen", "obj", "mtd", "model", "sfxbnd"}
-IGNORED_DLLS = {"dinput8.dll", "modengine2.dll", "mod_loader.dll", "lua.dll", "zlib1.dll", "me3-mod-host.dll", "me3_mod_host.dll"}
+ACCEPTABLE_FOLDERS = {
+    "_backup",
+    "_unknown",
+    "action",
+    "asset",
+    "chr",
+    "cutscene",
+    "event",
+    "font",
+    "map",
+    "material",
+    "menu",
+    "movie",
+    "msg",
+    "other",
+    "param",
+    "parts",
+    "script",
+    "sd",
+    "sfx",
+    "shader",
+    "sound",
+    "expression",
+    "facegen",
+    "obj",
+    "mtd",
+    "model",
+    "sfxbnd",
+}
+IGNORED_DLLS = {
+    "dinput8.dll",
+    "modengine2.dll",
+    "mod_loader.dll",
+    "lua.dll",
+    "zlib1.dll",
+    "me3-mod-host.dll",
+    "me3_mod_host.dll",
+}
 # Loose game files at an archive root (a common Nexus layout: one .partsbnd.dcx and a readme) and the folder
 # the game serves them from. First match wins.
 LOOSE_RULES = (
@@ -50,11 +89,15 @@ def loose_files(folder: Path) -> list[tuple[Path, str]]:
     """(file, game folder) for loose game files sitting directly in folder."""
     out = []
     for c in _children(Path(folder)):
-        if not c.is_file(): continue
+        if not c.is_file():
+            continue
         for rx, sub in LOOSE_RULES:
             if rx.search(c.name):
-                out.append((c, sub)); break
+                out.append((c, sub))
+                break
     return out
+
+
 NATIVE_OPTION_KEYS = ("enabled", "optional", "load_early", "initializer", "finalizer", "load_after", "load_before")
 PACKAGE_OPTION_KEYS = ("enabled", "id", "load_after", "load_before")
 _BLOCK = re.compile(r"^[ \t]*\[\[(packages|natives)\]\][ \t]*$", re.I)
@@ -70,7 +113,11 @@ class ModError(Exception):
 # ----------------------------------------------------------------------------- detection
 def _children(folder: Path) -> list[Path]:
     try:
-        return [c for c in folder.iterdir() if not c.name.startswith(".") and c.name.lower() not in ("__macosx", "thumbs.db", "desktop.ini")]
+        return [
+            c
+            for c in folder.iterdir()
+            if not c.name.startswith(".") and c.name.lower() not in ("__macosx", "thumbs.db", "desktop.ini")
+        ]
     except OSError:
         return []
 
@@ -82,7 +129,9 @@ def detect_kind(folder: Path) -> str:
         return "me3"
     kids = _children(folder)
     dlls = [c for c in kids if c.is_file() and c.suffix.lower() == ".dll" and c.name.lower() not in IGNORED_DLLS]
-    assets = any(c.is_dir() and c.name.lower() in ACCEPTABLE_FOLDERS for c in kids) or (folder / "regulation.bin").is_file()
+    assets = (
+        any(c.is_dir() and c.name.lower() in ACCEPTABLE_FOLDERS for c in kids) or (folder / "regulation.bin").is_file()
+    )
     if dlls and not assets:
         return "native"
     if assets:
@@ -119,9 +168,17 @@ def detect(source: Path) -> dict:
     loose = loose_files(root) if kind == "package" and not has_dirs else []
     for _f, sub in loose:
         label = sub or "regulation.bin"
-        if label not in assets: assets.append(label)
-    return {"root": root, "kind": kind, "assets": assets, "dlls": dlls, "me3": me3, "loose": loose,
-            "size": sum(p.stat().st_size for p in root.rglob("*") if p.is_file())}
+        if label not in assets:
+            assets.append(label)
+    return {
+        "root": root,
+        "kind": kind,
+        "assets": assets,
+        "dlls": dlls,
+        "me3": me3,
+        "loose": loose,
+        "size": sum(p.stat().st_size for p in root.rglob("*") if p.is_file()),
+    }
 
 
 # ----------------------------------------------------------------------------- archives
@@ -132,7 +189,8 @@ def _unsafe(name: str) -> bool:
 
 def extract_zip(archive: Path, dest: Path) -> Path:
     """Extract a .zip into dest, refusing entries that would escape it."""
-    archive = Path(archive); dest = Path(dest)
+    archive = Path(archive)
+    dest = Path(dest)
     dest.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(archive) as z:
         for info in z.infolist():
@@ -148,7 +206,8 @@ def extract_7z(archive: Path, dest: Path) -> Path:
         import py7zr
     except ImportError as e:
         raise ModError("7z support is missing from this build") from e
-    archive = Path(archive); dest = Path(dest)
+    archive = Path(archive)
+    dest = Path(dest)
     dest.mkdir(parents=True, exist_ok=True)
     try:
         with py7zr.SevenZipFile(archive, "r") as z:
@@ -166,6 +225,7 @@ def extract_7z(archive: Path, dest: Path) -> Path:
 def _no_window():
     try:
         from roundtable_souls.system import common
+
         return common.NO_WINDOW
     except Exception:
         return 0
@@ -188,11 +248,14 @@ def rar_tools() -> list[list[str]]:
 def extract_rar(archive: Path, dest: Path) -> Path:
     """.rar through whichever extractor the PC has. bsdtar refuses absolute and .. paths on its own; the others
     are followed by a check that nothing landed outside dest."""
-    archive = Path(archive); dest = Path(dest)
+    archive = Path(archive)
+    dest = Path(dest)
     dest.mkdir(parents=True, exist_ok=True)
     tools = rar_tools()
     if not tools:
-        raise ModError("no .rar extractor found: Windows' tar.exe, 7-Zip or WinRAR is needed, or unpack it first and install the folder")
+        raise ModError(
+            "no .rar extractor found: Windows' tar.exe, 7-Zip or WinRAR is needed, or unpack it first and install the folder"
+        )
     errors = []
     for tool in tools:
         if tool[1] == "-xf":
@@ -200,9 +263,18 @@ def extract_rar(archive: Path, dest: Path) -> Path:
         else:
             cmd = tool + [str(archive), f"-o{dest}"]
         try:
-            r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600, creationflags=_no_window())
+            r = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=600,
+                creationflags=_no_window(),
+            )
         except (OSError, subprocess.TimeoutExpired) as e:
-            errors.append(f"{Path(tool[0]).name}: {e}"); continue
+            errors.append(f"{Path(tool[0]).name}: {e}")
+            continue
         if r.returncode == 0 and any(dest.iterdir()):
             root = dest.resolve()
             for p in dest.rglob("*"):
@@ -210,7 +282,9 @@ def extract_rar(archive: Path, dest: Path) -> Path:
                     shutil.rmtree(dest, ignore_errors=True)
                     raise ModError("archive tried to write outside the folder; refused")
             return dest
-        errors.append(f"{Path(tool[0]).name}: {(r.stderr or r.stdout or '').strip()[:200] or 'exit ' + str(r.returncode)}")
+        errors.append(
+            f"{Path(tool[0]).name}: {(r.stderr or r.stdout or '').strip()[:200] or 'exit ' + str(r.returncode)}"
+        )
         for p in dest.iterdir():
             shutil.rmtree(p, ignore_errors=True) if p.is_dir() else p.unlink(missing_ok=True)
     raise ModError("could not unpack the .rar: " + "; ".join(errors))
@@ -218,9 +292,12 @@ def extract_rar(archive: Path, dest: Path) -> Path:
 
 def extract_archive(archive: Path, dest: Path) -> Path:
     ext = Path(archive).suffix.lower()
-    if ext == ".zip": return extract_zip(archive, dest)
-    if ext == ".7z": return extract_7z(archive, dest)
-    if ext == ".rar": return extract_rar(archive, dest)
+    if ext == ".zip":
+        return extract_zip(archive, dest)
+    if ext == ".7z":
+        return extract_7z(archive, dest)
+    if ext == ".rar":
+        return extract_rar(archive, dest)
     raise ModError(f"{ext or 'that file'} is not a supported archive (zip, 7z, rar)")
 
 
@@ -234,7 +311,8 @@ def stage(source: Path, staging_root: Path) -> tuple[Path, bool]:
         try:
             extract_archive(source, tmp)
         except Exception:
-            shutil.rmtree(tmp, ignore_errors=True); raise
+            shutil.rmtree(tmp, ignore_errors=True)
+            raise
         return tmp, True
     raise ModError("pick a .zip, .7z or .rar archive, or a folder")
 
@@ -243,14 +321,19 @@ def stage(source: Path, staging_root: Path) -> tuple[Path, bool]:
 def blocks(text: str) -> list[dict]:
     """[[packages]] / [[natives]] blocks with line spans: {index, kind, start, end, lines, keys}. Comments are not blocks."""
     lines = text.splitlines(keepends=True)
-    heads = [(i, "package" if m.group(1).lower() == "packages" else "native") for i, l in enumerate(lines) if (m := _BLOCK.match(l.rstrip("\r\n")))]
+    heads = [
+        (i, "package" if m.group(1).lower() == "packages" else "native")
+        for i, l in enumerate(lines)
+        if (m := _BLOCK.match(l.rstrip("\r\n")))
+    ]
     out = []
     for n, (i, kind) in enumerate(heads):
         j = heads[n + 1][0] if n + 1 < len(heads) else len(lines)
         # a following non-mod table ([supports] etc.) ends the block too
         for k in range(i + 1, j):
             if _ANY_TABLE.match(lines[k].rstrip("\r\n")) and not _BLOCK.match(lines[k].rstrip("\r\n")):
-                j = k; break
+                j = k
+                break
         out.append({"index": n, "kind": kind, "start": i, "end": j, "lines": lines[i:j]})
     return out
 
@@ -271,8 +354,11 @@ def _path_lit(p: str) -> str:
 def _dep_list(deps) -> str:
     items = []
     for d in deps or []:
-        if isinstance(d, str): d = {"id": d, "optional": True}
-        items.append("{ id = " + _q(d["id"]) + ", optional = " + ("true" if d.get("optional", True) else "false") + " }")
+        if isinstance(d, str):
+            d = {"id": d, "optional": True}
+        items.append(
+            "{ id = " + _q(d["id"]) + ", optional = " + ("true" if d.get("optional", True) else "false") + " }"
+        )
     return "[" + ", ".join(items) + "]"
 
 
@@ -281,18 +367,25 @@ def _entry_lines(kind: str, row: dict, nl: str) -> list[str]:
     if kind == "package" and row.get("id"):
         out.append(f"id = {_q(row['id'])}{nl}")
     out.append(f"path = {_path_lit(row['path'])}{nl}")
-    if row.get("enabled") is False: out.append(f"enabled = false{nl}")
+    if row.get("enabled") is False:
+        out.append(f"enabled = false{nl}")
     if kind == "native":
-        if row.get("optional"): out.append(f"optional = true{nl}")
-        if row.get("load_early"): out.append(f"load_early = true{nl}")
+        if row.get("optional"):
+            out.append(f"optional = true{nl}")
+        if row.get("load_early"):
+            out.append(f"load_early = true{nl}")
         init = row.get("initializer")
         if isinstance(init, dict):
-            if init.get("function"): out.append(f"initializer = {{ function = {_q(init['function'])} }}{nl}")
+            if init.get("function"):
+                out.append(f"initializer = {{ function = {_q(init['function'])} }}{nl}")
             elif isinstance(init.get("delay"), dict) and init["delay"].get("ms") is not None:
                 out.append(f"initializer = {{ delay = {{ ms = {int(init['delay']['ms'])} }} }}{nl}")
-        if row.get("finalizer"): out.append(f"finalizer = {_q(row['finalizer'])}{nl}")
-    if row.get("load_after"): out.append(f"load_after = {_dep_list(row['load_after'])}{nl}")
-    if row.get("load_before"): out.append(f"load_before = {_dep_list(row['load_before'])}{nl}")
+        if row.get("finalizer"):
+            out.append(f"finalizer = {_q(row['finalizer'])}{nl}")
+    if row.get("load_after"):
+        out.append(f"load_after = {_dep_list(row['load_after'])}{nl}")
+    if row.get("load_before"):
+        out.append(f"load_before = {_dep_list(row['load_before'])}{nl}")
     return out
 
 
@@ -311,27 +404,33 @@ def to_blocks(text: str) -> str:
             out.append(f"{nl}[[supports]]{nl}game = {_q(sup['game'])}{nl}")
     for key, kind in (("natives", "native"), ("packages", "package")):
         rows = data.get(key) or []
-        if isinstance(rows, dict): rows = [rows]
+        if isinstance(rows, dict):
+            rows = [rows]
         for row in rows:
             if isinstance(row, dict) and row.get("path"):
-                out.append(nl); out.extend(_entry_lines(kind, row, nl))
+                out.append(nl)
+                out.extend(_entry_lines(kind, row, nl))
     return "".join(out)
 
 
 def _strip_key(lines: list[str], key: str) -> list[str]:
     """Remove a key from a block's lines, including a multi-line [ ... ] value."""
-    out = []; skipping = False; depth = 0
+    out = []
+    skipping = False
+    depth = 0
     for l in lines:
         body = l.rstrip("\r\n")
         if skipping:
             depth += body.count("[") - body.count("]")
-            if depth <= 0: skipping = False
+            if depth <= 0:
+                skipping = False
             continue
         m = _KEY.match(body)
         if m and m.group(1) == key:
             val = m.group(2)
             depth = val.count("[") - val.count("]")
-            if depth > 0: skipping = True
+            if depth > 0:
+                skipping = True
             continue
         out.append(l)
     return out
@@ -347,65 +446,90 @@ def block_options(text: str, index: int) -> dict:
         return {"kind": b["kind"], "path": "", "id": "", "enabled": True}
     rows = data.get("packages") or data.get("natives") or [{}]
     row = rows[0] if isinstance(rows, list) else rows
-    deps = lambda v: [{"id": d["id"], "optional": bool(d.get("optional", False))} if isinstance(d, dict) else {"id": str(d), "optional": True} for d in (v or [])]
-    return {"kind": b["kind"], "path": str(row.get("path") or ""), "id": str(row.get("id") or ""), "enabled": row.get("enabled", True) is not False,
-            "optional": bool(row.get("optional", False)), "load_early": bool(row.get("load_early", False)),
-            "initializer": row.get("initializer") if isinstance(row.get("initializer"), dict) else None,
-            "finalizer": str(row.get("finalizer") or ""), "load_after": deps(row.get("load_after")), "load_before": deps(row.get("load_before"))}
+    deps = lambda v: [
+        {"id": d["id"], "optional": bool(d.get("optional", False))}
+        if isinstance(d, dict)
+        else {"id": str(d), "optional": True}
+        for d in (v or [])
+    ]
+    return {
+        "kind": b["kind"],
+        "path": str(row.get("path") or ""),
+        "id": str(row.get("id") or ""),
+        "enabled": row.get("enabled", True) is not False,
+        "optional": bool(row.get("optional", False)),
+        "load_early": bool(row.get("load_early", False)),
+        "initializer": row.get("initializer") if isinstance(row.get("initializer"), dict) else None,
+        "finalizer": str(row.get("finalizer") or ""),
+        "load_after": deps(row.get("load_after")),
+        "load_before": deps(row.get("load_before")),
+    }
 
 
 def set_block_options(text: str, index: int, opts: dict) -> str:
     """Rewrite the option keys of one block; path and comments stay. Keys absent from opts are left alone;
     keys given as None / False / empty are removed (me3's defaults)."""
     bl = blocks(text)
-    b = bl[index]; nl = "\r\n" if "\r\n" in text else "\n"
+    b = bl[index]
+    nl = "\r\n" if "\r\n" in text else "\n"
     lines = list(b["lines"])
     keys = NATIVE_OPTION_KEYS if b["kind"] == "native" else PACKAGE_OPTION_KEYS
     new = []
     for key in keys:
-        if key not in opts: continue
+        if key not in opts:
+            continue
         v = opts[key]
         lines = _strip_key(lines, key)
         if key == "enabled":
-            if v is False: new.append(f"enabled = false{nl}")
+            if v is False:
+                new.append(f"enabled = false{nl}")
         elif key in ("optional", "load_early"):
-            if v: new.append(f"{key} = true{nl}")
+            if v:
+                new.append(f"{key} = true{nl}")
         elif key == "id":
-            if not v:                                       # blank: keep whatever the block had
+            if not v:  # blank: keep whatever the block had
                 cur = block_options(text, index).get("id")
-                if cur: new.append(f"id = {_q(cur)}{nl}")
+                if cur:
+                    new.append(f"id = {_q(cur)}{nl}")
             else:
                 new.append(f"id = {_q(v)}{nl}")
         elif key == "finalizer":
-            if v: new.append(f"finalizer = {_q(v)}{nl}")
+            if v:
+                new.append(f"finalizer = {_q(v)}{nl}")
         elif key == "initializer":
-            if isinstance(v, dict) and v.get("function"): new.append(f"initializer = {{ function = {_q(v['function'])} }}{nl}")
+            if isinstance(v, dict) and v.get("function"):
+                new.append(f"initializer = {{ function = {_q(v['function'])} }}{nl}")
             elif isinstance(v, dict) and isinstance(v.get("delay"), dict) and v["delay"].get("ms") is not None:
                 new.append(f"initializer = {{ delay = {{ ms = {int(v['delay']['ms'])} }} }}{nl}")
         elif key in ("load_after", "load_before"):
-            if v: new.append(f"{key} = {_dep_list(v)}{nl}")
+            if v:
+                new.append(f"{key} = {_dep_list(v)}{nl}")
     # insert new keys right after the path line (or the header)
     at = 1
     for i, l in enumerate(lines):
         m = _KEY.match(l.rstrip("\r\n"))
-        if m and m.group(1) == "path": at = i + 1; break
-    if at < len(lines) and not lines[at - 1].endswith(("\n", "\r\n")): lines[at - 1] += nl
+        if m and m.group(1) == "path":
+            at = i + 1
+            break
+    if at < len(lines) and not lines[at - 1].endswith(("\n", "\r\n")):
+        lines[at - 1] += nl
     lines[at:at] = new
     all_lines = text.splitlines(keepends=True)
-    all_lines[b["start"]:b["end"]] = lines
+    all_lines[b["start"] : b["end"]] = lines
     return "".join(all_lines)
 
 
 def remove_block(text: str, index: int) -> str:
     b = blocks(text)[index]
     all_lines = text.splitlines(keepends=True)
-    del all_lines[b["start"]:b["end"]]
+    del all_lines[b["start"] : b["end"]]
     return "".join(all_lines)
 
 
 def append_entry(text: str, kind: str, row: dict) -> str:
     nl = "\r\n" if "\r\n" in text else "\n"
-    if text and not text.endswith(("\n", "\r\n")): text += nl
+    if text and not text.endswith(("\n", "\r\n")):
+        text += nl
     return text + nl + "".join(_entry_lines(kind, row, nl))
 
 
@@ -430,19 +554,23 @@ def roots(profile: Path, text: str) -> tuple[Path, Path]:
     counts: dict[tuple[str, Path], int] = {}
     for b in blocks(text):
         o = block_options(text, b["index"])
-        if not o["path"]: continue
+        if not o["path"]:
+            continue
         parent = resolve(profile, o["path"]).parent
         counts[(b["kind"], parent)] = counts.get((b["kind"], parent), 0) + 1
+
     def pick(kind, names, default):
         best = None
         for (k, parent), _n in sorted(counts.items(), key=lambda kv: -kv[1]):
             if k == kind and parent.name.lower() in names and parent.parent == profile.parent:
-                best = parent; break
+                best = parent
+                break
         return best or profile.parent / default
+
     return pick("package", ("mod", "mods", "packages"), "mod"), pick("native", ("natives", "dll", "dlls"), "natives")
 
 
-_NEXUS_SUFFIX = re.compile(r"-\d+-[\d-]+-\d{10}$")      # "Hair 13-561-1-1-1648994275": mod id, version, upload time
+_NEXUS_SUFFIX = re.compile(r"-\d+-[\d-]+-\d{10}$")  # "Hair 13-561-1-1-1648994275": mod id, version, upload time
 
 
 def slug(name: str) -> str:
@@ -474,11 +602,14 @@ def _write(profile: Path, new_text: str) -> Path:
 def plan_install(profile: Path, source: Path, name: str | None = None) -> dict:
     """Detect and describe what install() would do. Leaves a temp folder behind for zips ('staging')."""
     profile = Path(profile)
-    staging_root = profile.parent / ".roundtable-staging"; staging_root.mkdir(exist_ok=True)
-    for old in staging_root.iterdir():                      # a crash mid-install can leave a temp folder behind
+    staging_root = profile.parent / ".roundtable-staging"
+    staging_root.mkdir(exist_ok=True)
+    for old in staging_root.iterdir():  # a crash mid-install can leave a temp folder behind
         try:
-            if old.is_dir() and time.time() - old.stat().st_mtime > 3600: shutil.rmtree(old, ignore_errors=True)
-        except OSError: pass
+            if old.is_dir() and time.time() - old.stat().st_mtime > 3600:
+                shutil.rmtree(old, ignore_errors=True)
+        except OSError:
+            pass
     folder, temp = stage(source, staging_root)
     d = detect(folder)
     text = read_text(profile)
@@ -486,21 +617,31 @@ def plan_install(profile: Path, source: Path, name: str | None = None) -> dict:
     base = slug(name or (Path(source).stem if Path(source).suffix.lower() in ARCHIVE_EXTENSIONS else Path(source).name))
     plan = {**d, "name": base, "staging": folder if temp else None, "array_form": is_array_form(text)}
     if d["kind"] == "me3":
-        plan["error"] = "This is a whole me3 profile, not a mod. Copy its .me3 next to yours and pick it as a setup instead."
+        plan["error"] = (
+            "This is a whole me3 profile, not a mod. Copy its .me3 next to yours and pick it as a setup instead."
+        )
     elif d["kind"] == "unknown":
-        plan["error"] = "No game folders (parts, chr, msg, ...), no regulation.bin, no known game file and no DLL found in here."
+        plan["error"] = (
+            "No game folders (parts, chr, msg, ...), no regulation.bin, no known game file and no DLL found in here."
+        )
     elif d["kind"] == "package":
         plan["dest"] = pk_root / base
         plan["entries"] = [{"kind": "package", "id": base, "path": rel(profile, plan["dest"])}]
     else:
         plan["dest"] = nt_root / base
-        plan["entries"] = [{"kind": "native", "path": rel(profile, plan["dest"] / p.relative_to(d["root"]))} for p in d["dlls"]]
+        plan["entries"] = [
+            {"kind": "native", "path": rel(profile, plan["dest"] / p.relative_to(d["root"]))} for p in d["dlls"]
+        ]
     if plan.get("dest") and Path(plan["dest"]).exists():
         plan["exists"] = True
-        try: plan["in_place"] = Path(plan["dest"]).resolve() == Path(d["root"]).resolve()
-        except OSError: plan["in_place"] = False
+        try:
+            plan["in_place"] = Path(plan["dest"]).resolve() == Path(d["root"]).resolve()
+        except OSError:
+            plan["in_place"] = False
     existing = {resolve(profile, e["path"]).resolve() for e in entries(profile) if e.get("path")}
-    plan["already_listed"] = [e["path"] for e in plan.get("entries") or [] if resolve(profile, e["path"]).resolve() in existing]
+    plan["already_listed"] = [
+        e["path"] for e in plan.get("entries") or [] if resolve(profile, e["path"]).resolve() in existing
+    ]
     return plan
 
 
@@ -517,7 +658,7 @@ def install(profile: Path, plan: dict, overwrite: bool = False) -> dict:
         shutil.rmtree(dest)
     loose = {Path(f).name: sub for f, sub in (plan.get("loose") or [])}
     if in_place:
-        pass                                               # the files are already where they belong: only the profile changes
+        pass  # the files are already where they belong: only the profile changes
     elif loose:
         # loose game files go into the folder the game serves them from; everything else copies as it is
         dest.mkdir(parents=True, exist_ok=True)
@@ -525,7 +666,8 @@ def install(profile: Path, plan: dict, overwrite: bool = False) -> dict:
             sub = loose.get(c.name)
             if c.is_file() and sub is not None:
                 target = (dest / sub) if sub else dest
-                target.mkdir(parents=True, exist_ok=True); shutil.copy2(c, target / c.name)
+                target.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(c, target / c.name)
             elif c.is_dir():
                 shutil.copytree(c, dest / c.name, ignore=shutil.ignore_patterns("__MACOSX", "Thumbs.db", ".DS_Store"))
             else:
@@ -562,9 +704,17 @@ def uninstall(profile: Path, index: int, delete_folder: bool = True) -> dict:
     if delete_folder and folder is not None and folder.is_dir():
         inside = profile.parent.resolve() in folder.resolve().parents
         still = [block_options(new_text, b["index"])["path"] for b in blocks(new_text)]
-        shared = any(p and (folder.resolve() == resolve(profile, p).resolve() or folder.resolve() in resolve(profile, p).resolve().parents) for p in still)
+        shared = any(
+            p
+            and (
+                folder.resolve() == resolve(profile, p).resolve()
+                or folder.resolve() in resolve(profile, p).resolve().parents
+            )
+            for p in still
+        )
         if inside and not shared and folder.resolve() != profile.parent.resolve():
-            shutil.rmtree(folder); removed_folder = True
+            shutil.rmtree(folder)
+            removed_folder = True
     bak = _write(profile, new_text)
     return {"kind": o["kind"], "path": o["path"], "folder": folder, "removed_folder": removed_folder, "backup": bak}
 
@@ -585,16 +735,19 @@ def entries(profile: Path) -> list[dict]:
     out = []
     for b in blocks(text):
         o = block_options(text, b["index"])
-        o["index"] = b["index"]; o["name"] = o["id"] or Path(o["path"]).name or f"entry {b['index'] + 1}"
+        o["index"] = b["index"]
+        o["name"] = o["id"] or Path(o["path"]).name or f"entry {b['index'] + 1}"
         out.append(o)
     return out
 
 
 # ----------------------------------------------------------------------------- profiles
 def create_profile(folder: Path, name: str, game: str = "eldenring", copy_from: Path | None = None) -> Path:
-    folder = Path(folder); folder.mkdir(parents=True, exist_ok=True)
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
     stem = slug(name)
-    if stem.lower().endswith(".me3"): stem = stem[:-4]
+    if stem.lower().endswith(".me3"):
+        stem = stem[:-4]
     path = folder / f"{stem}.me3"
     if path.exists():
         raise ModError(f"{path.name} already exists")
@@ -603,7 +756,8 @@ def create_profile(folder: Path, name: str, game: str = "eldenring", copy_from: 
     else:
         text = f'profileVersion = "v1"\n\n[[supports]]\ngame = {_q(game)}\n'
     path.write_text(text, encoding="utf-8", newline="")
-    (folder / "mod").mkdir(exist_ok=True); (folder / "natives").mkdir(exist_ok=True)
+    (folder / "mod").mkdir(exist_ok=True)
+    (folder / "natives").mkdir(exist_ok=True)
     return path
 
 
@@ -612,11 +766,14 @@ def delete_profile(path: Path) -> Path:
     path = Path(path)
     if not path.is_file():
         raise ModError(f"{path} is not a file")
-    trash = path.parent / "deleted-profiles"; trash.mkdir(exist_ok=True)
+    trash = path.parent / "deleted-profiles"
+    trash.mkdir(exist_ok=True)
     dest = trash / f"{path.stem}.{time.strftime('%Y%m%d-%H%M%S')}.me3"
     shutil.move(str(path), str(dest))
     for extra in (path.with_name(path.name + ".bak"), path.with_name(path.stem + ".offline.me3")):
         if extra.exists():
-            try: extra.unlink()
-            except OSError: pass
+            try:
+                extra.unlink()
+            except OSError:
+                pass
     return dest

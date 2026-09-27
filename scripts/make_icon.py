@@ -6,6 +6,7 @@ plate, so the artwork is a full-bleed square. Each ICO size is drawn on its own
 sizes use all eight. Frames are PNG inside the ICO. Sizes follow the current
 shell ladder: 16, 20, 24, 32, 40, 48, 64, 128, 256.
 """
+
 from __future__ import annotations
 
 import math

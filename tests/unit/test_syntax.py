@@ -1,4 +1,5 @@
 """The GUI module is not imported by the other tests (it needs a display), so at least make sure every module compiles."""
+
 import py_compile
 from pathlib import Path
 

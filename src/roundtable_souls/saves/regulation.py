@@ -24,6 +24,7 @@ folder next to it.
 
 Exit codes: 0 done (repaired or nothing to do), 1 error, 2 game is running.
 """
+
 import argparse
 import hashlib
 import shutil
@@ -54,16 +55,16 @@ def load_regulation(src):
     from the block of a healthy save."""
     data = Path(src).read_bytes()
     if is_pc_save(data):
-        body = data[UD11_OFF + 0x20: UD11_OFF + UD11_SIZE]
+        body = data[UD11_OFF + 0x20 : UD11_OFF + UD11_SIZE]
         reg = body[: len(body.rstrip(b"\0"))]
         reg = reg[: min((len(reg) + 15) // 16 * 16, BLOCK)]
-        return reg, data[UD11_OFF + 0x10: UD11_OFF + 0x20]
+        return reg, data[UD11_OFF + 0x10 : UD11_OFF + 0x20]
     return data, HEALTHY_HEADER
 
 
 def block_status(data):
     """(healthy, used_bytes, header) for a save's regulation block."""
-    entry = data[UD11_OFF: UD11_OFF + UD11_SIZE]
+    entry = data[UD11_OFF : UD11_OFF + UD11_SIZE]
     header = bytes(entry[0x10:0x20])
     used = len(entry[0x20:].rstrip(b"\0"))
     signed = hashlib.md5(entry[0x10:]).digest() == entry[:0x10]
@@ -83,8 +84,19 @@ def backup(save):
     shutil.copy2(save, dest)
     try:
         import json
-        Path(str(dest) + ".json").write_text(json.dumps({"action": "Repair regulation block", "when": time.strftime("%Y-%m-%d %H:%M:%S"),
-                                                         "save": str(save), "changes": ["regulation block rebuilt from regulation.bin"]}, indent=1), encoding="utf-8")
+
+        Path(str(dest) + ".json").write_text(
+            json.dumps(
+                {
+                    "action": "Repair regulation block",
+                    "when": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "save": str(save),
+                    "changes": ["regulation block rebuilt from regulation.bin"],
+                },
+                indent=1,
+            ),
+            encoding="utf-8",
+        )
     except OSError:
         pass
     return dest
@@ -107,7 +119,7 @@ def repair(save, reg, header, force=False, out_path=None, dry_run=False):
         log("  would repair (dry run)")
         return True
 
-    data[UD11_OFF: UD11_OFF + UD11_SIZE] = rebuild_block(reg, header)
+    data[UD11_OFF : UD11_OFF + UD11_SIZE] = rebuild_block(reg, header)
     out = Path(out_path) if out_path else save
     if out == save:
         log(f"  backup: {backup(save)}")
@@ -119,7 +131,9 @@ def repair(save, reg, header, force=False, out_path=None, dry_run=False):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("saves", nargs="*", help="save files to repair (default: every save under %%APPDATA%%/EldenRing)")
-    ap.add_argument("--regulation", help="regulation.bin, or a healthy save to copy the block from (default: the game's)")
+    ap.add_argument(
+        "--regulation", help="regulation.bin, or a healthy save to copy the block from (default: the game's)"
+    )
     ap.add_argument("--force", action="store_true", help="rewrite the block even if it looks healthy")
     ap.add_argument("--dry-run", action="store_true", help="report what would change without writing")
     ap.add_argument("-o", "--out", help="output path (single save only; default: repair in place)")

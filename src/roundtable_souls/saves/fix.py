@@ -11,6 +11,7 @@ Nothing is written when the plan is empty. Callers refuse while the game runs.
 Flag edits mirror er-save-manager's CorruptionFixer, so the result matches
 what that editor would produce for the same issue.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -26,10 +27,37 @@ BACKUP_DIR = "save-fix-backups"
 SLOT_STRIDE = 0x10 + L.SLOT_SIZE
 
 RANNI_FLAGS_TO_ENABLE = [
-    1034509410, 1034509412, 1034500732, 1034500736, 1034505015, 1034509361, 1034500715, 1034500710,
-    1034500700, 1034490701, 1034490700, 1034509413, 1034509418, 1034509355, 1034509357, 1034509358,
-    1034509205, 1045379208, 1034509305, 1034509306, 1034509417, 1034500734, 1034509416, 1034500739,
-    1034500733, 1034502610, 1034505002, 1034505003, 1034505004, 1034500716, 1034503600,
+    1034509410,
+    1034509412,
+    1034500732,
+    1034500736,
+    1034505015,
+    1034509361,
+    1034500715,
+    1034500710,
+    1034500700,
+    1034490701,
+    1034490700,
+    1034509413,
+    1034509418,
+    1034509355,
+    1034509357,
+    1034509358,
+    1034509205,
+    1045379208,
+    1034509305,
+    1034509306,
+    1034509417,
+    1034500734,
+    1034509416,
+    1034500739,
+    1034500733,
+    1034502610,
+    1034505002,
+    1034505003,
+    1034505004,
+    1034500716,
+    1034503600,
 ]
 RADAHN_MAP_MARKER = 9417
 SEALING_TREE_RESTED_AFTER = 20010500
@@ -56,7 +84,7 @@ def set_flag(event_flags: bytearray, event_id: int, state: bool) -> None:
     if pos >= len(event_flags):
         raise FixError(f"flag {event_id}: offset {pos:#x} past the end of the flag table")
     if state:
-        event_flags[pos] |= (1 << bit)
+        event_flags[pos] |= 1 << bit
     else:
         event_flags[pos] &= ~(1 << bit) & 0xFF
 
@@ -64,12 +92,15 @@ def set_flag(event_flags: bytearray, event_id: int, state: bool) -> None:
 def _fix_ranni(f):
     set_flag(f, A.RANNI_BLOCKING, False)
     for fid in RANNI_FLAGS_TO_ENABLE:
-        try: set_flag(f, fid, True)
-        except FixError: pass          # not every progression flag block is in the BST
+        try:
+            set_flag(f, fid, True)
+        except FixError:
+            pass  # not every progression flag block is in the BST
 
 
 def _fix_radahn_alive(f):
-    set_flag(f, A.METEORITE_GREEN, False); set_flag(f, RADAHN_MAP_MARKER, False)
+    set_flag(f, A.METEORITE_GREEN, False)
+    set_flag(f, RADAHN_MAP_MARKER, False)
 
 
 def _fix_radahn_dead(f):
@@ -77,7 +108,8 @@ def _fix_radahn_dead(f):
 
 
 def _fix_morgott(f):
-    set_flag(f, A.MORGOTT_THORNS, True); set_flag(f, A.MORGOTT_FOG, True)
+    set_flag(f, A.MORGOTT_THORNS, True)
+    set_flag(f, A.MORGOTT_FOG, True)
 
 
 def _fix_radagon(f):
@@ -85,11 +117,13 @@ def _fix_radagon(f):
 
 
 def _fix_sealing_tree(f):
-    set_flag(f, A.GRACE_ENIR_ILIM, True); set_flag(f, SEALING_TREE_RESTED_AFTER, True)
+    set_flag(f, A.GRACE_ENIR_ILIM, True)
+    set_flag(f, SEALING_TREE_RESTED_AFTER, True)
 
 
 def _fix_romina(f):
-    set_flag(f, A.SPIRIT_TREE_BURNING, False); set_flag(f, SEALING_TREE_CUTSCENE, False)
+    set_flag(f, A.SPIRIT_TREE_BURNING, False)
+    set_flag(f, SEALING_TREE_CUTSCENE, False)
 
 
 def _fix_unte_golem(f):
@@ -129,13 +163,19 @@ def plan_quest_fixes(parsed: dict) -> list[dict]:
         if not issues:
             continue
         name = ""
-        try: name = slot["pgd"]["name"]
-        except Exception: pass
-        plan.append({
-            "slot": i, "name": name, "issues": issues,
-            "labels": [A._FLAG_ISSUE_TITLES.get(k, (k, ""))[0] for k in issues],
-            "actions": [A.FLAG_FIX_TEXT.get(k, k) for k in issues],
-        })
+        try:
+            name = slot["pgd"]["name"]
+        except Exception:
+            pass
+        plan.append(
+            {
+                "slot": i,
+                "name": name,
+                "issues": issues,
+                "labels": [A._FLAG_ISSUE_TITLES.get(k, (k, ""))[0] for k in issues],
+                "actions": [A.FLAG_FIX_TEXT.get(k, k) for k in issues],
+            }
+        )
     return plan
 
 
@@ -156,15 +196,20 @@ def backup(save: Path, manifest: dict | None = None) -> Path:
     dest = folder / f"{save.name}.{stamp}.bak"
     n = 1
     while dest.exists():
-        n += 1; dest = folder / f"{save.name}.{stamp}-{n}.bak"
+        n += 1
+        dest = folder / f"{save.name}.{stamp}-{n}.bak"
     shutil.copy2(save, dest)
     write_manifest(dest, manifest or {"action": "Backup"}, save)
     return dest
 
 
 def write_manifest(bak: Path, manifest: dict, save: Path | None = None) -> None:
-    doc = {"action": manifest.get("action", "Backup"), "when": time.strftime("%Y-%m-%d %H:%M:%S"),
-           "save": str(save) if save else "", "changes": list(manifest.get("changes") or [])}
+    doc = {
+        "action": manifest.get("action", "Backup"),
+        "when": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "save": str(save) if save else "",
+        "changes": list(manifest.get("changes") or []),
+    }
     try:
         Path(str(bak) + ".json").write_text(json.dumps(doc, indent=1), encoding="utf-8")
     except OSError:
@@ -177,20 +222,22 @@ def read_manifest(bak: Path) -> dict | None:
         return None
     try:
         return json.loads(p.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return None
 
 
 def _sign_slot(data: bytearray, i: int) -> None:
     off = L.HEADER + i * SLOT_STRIDE
-    data[off: off + 0x10] = hashlib.md5(data[off + 0x10: off + SLOT_STRIDE]).digest()
+    data[off : off + 0x10] = hashlib.md5(data[off + 0x10 : off + SLOT_STRIDE]).digest()
 
 
 def _sign_ud10(data: bytearray, ud10_pos: int) -> None:
-    data[ud10_pos: ud10_pos + 0x10] = hashlib.md5(data[ud10_pos + 0x10: ud10_pos + 0x60010]).digest()
+    data[ud10_pos : ud10_pos + 0x10] = hashlib.md5(data[ud10_pos + 0x10 : ud10_pos + 0x60010]).digest()
 
 
-def _commit(save: Path, data: bytes, touched_slots: list[int], expect_ud10_ok: bool, manifest: dict | None = None) -> Path:
+def _commit(
+    save: Path, data: bytes, touched_slots: list[int], expect_ud10_ok: bool, manifest: dict | None = None
+) -> Path:
     """Verify the new bytes parse with matching MD5s, back the original up, then replace it."""
     tmp = save.with_name(save.name + ".roundtable.tmp")
     tmp.write_bytes(data)
@@ -220,8 +267,12 @@ def apply_quest_fixes(save: Path, slots: list[int] | None = None, log=None, sele
     data = bytearray(save.read_bytes())
     r = L.parse(str(save))
     plan = [p for p in plan_quest_fixes(r) if slots is None or p["slot"] in slots]
-    if selection is not None:                      # {slot: [issue keys]}; slots missing from it are left alone
-        plan = [{**p, "issues": [k for k in p["issues"] if k in selection.get(p["slot"], [])]} for p in plan if p["slot"] in selection]
+    if selection is not None:  # {slot: [issue keys]}; slots missing from it are left alone
+        plan = [
+            {**p, "issues": [k for k in p["issues"] if k in selection.get(p["slot"], [])]}
+            for p in plan
+            if p["slot"] in selection
+        ]
         plan = [p for p in plan if p["issues"]]
     if not plan:
         say("  nothing to fix")
@@ -232,7 +283,7 @@ def apply_quest_fixes(save: Path, slots: list[int] | None = None, log=None, sele
         i = p["slot"]
         slot = r["slots"][i]
         pos = slot["event_flags_pos"]
-        flags = bytearray(data[pos: pos + A.EVENT_FLAGS_SIZE])
+        flags = bytearray(data[pos : pos + A.EVENT_FLAGS_SIZE])
         for key in p["issues"]:
             FIXERS[key](flags)
             say(f"  slot {i + 1} ({p['name']}): {A.FLAG_FIX_TEXT.get(key, key)}")
@@ -240,7 +291,7 @@ def apply_quest_fixes(save: Path, slots: list[int] | None = None, log=None, sele
         still = [k for k in A.detect_flag_issues(bytes(flags)) if k in p["issues"]]
         if still:
             raise FixError(f"slot {i + 1}: {', '.join(still)} still detected after the fix; not writing")
-        data[pos: pos + A.EVENT_FLAGS_SIZE] = flags
+        data[pos : pos + A.EVENT_FLAGS_SIZE] = flags
         _sign_slot(data, i)
         touched.append(i)
     bak = _commit(save, bytes(data), touched, r["ud10_md5_ok"], {"action": "Fix quest flags", "changes": changes})
@@ -259,10 +310,14 @@ def repair_checksums(save: Path, log=None) -> dict:
         say("  checksums already match")
         return {"slots": [], "ud10": False, "backup": None}
     for i in plan["slots"]:
-        _sign_slot(data, i); say(f"  slot {i + 1}: checksum recomputed")
+        _sign_slot(data, i)
+        say(f"  slot {i + 1}: checksum recomputed")
     if plan["ud10"]:
-        _sign_ud10(data, r["ud10_pos"]); say("  profile summary: checksum recomputed")
-    changes = [f"slot {i + 1}: checksum recomputed" for i in plan["slots"]] + (["profile summary: checksum recomputed"] if plan["ud10"] else [])
+        _sign_ud10(data, r["ud10_pos"])
+        say("  profile summary: checksum recomputed")
+    changes = [f"slot {i + 1}: checksum recomputed" for i in plan["slots"]] + (
+        ["profile summary: checksum recomputed"] if plan["ud10"] else []
+    )
     bak = _commit(save, bytes(data), plan["slots"], True, {"action": "Fix checksums", "changes": changes})
     say(f"  backup: {bak}")
     return {"slots": plan["slots"], "ud10": plan["ud10"], "backup": bak}

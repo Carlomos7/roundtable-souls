@@ -20,6 +20,7 @@ used; if there are several, they are listed and you pick one.
 --no-launch skips starting the game and only waits for a running instance (if
 any) to close before repairing, which is handy for testing.
 """
+
 import argparse
 import subprocess
 import time
@@ -46,7 +47,7 @@ def pick_profile(requested):
     try:
         choice = int(input("which one? ").strip())
         return str(profiles[choice - 1])
-    except (ValueError, IndexError, EOFError):
+    except ValueError, IndexError, EOFError:
         fail("no profile chosen; pass one with --profile")
 
 
@@ -84,7 +85,14 @@ def ensure_steam_running(timeout=60):
         while time.time() < deadline and not common.processes("steam.exe"):
             time.sleep(2)
     time.sleep(5)
-    log("steam: running" + (" and signed in" if common.steam_logged_in() else ", NOT signed in (offline play: choose 'Start in Offline Mode' in Steam if it asks)"))
+    log(
+        "steam: running"
+        + (
+            " and signed in"
+            if common.steam_logged_in()
+            else ", NOT signed in (offline play: choose 'Start in Offline Mode' in Steam if it asks)"
+        )
+    )
 
 
 def clear_dead_shells(when):
@@ -93,7 +101,9 @@ def clear_dead_shells(when):
     this raises one UAC prompt only when there is something to clear."""
     found, remaining = clear_dead_game_shells.clear()
     if remaining:
-        log(f"{when}: {len(remaining)} dead shell(s) could not be removed; Discord/overlays may still show the game as running")
+        log(
+            f"{when}: {len(remaining)} dead shell(s) could not be removed; Discord/overlays may still show the game as running"
+        )
 
 
 ME3_LOG = common.LOGS_DIR / "me3_launch.log"
@@ -115,7 +125,12 @@ def launch(game, profile, me3=None, exe=None, extra_args=()):
     me3 = Path(me3) if me3 else common.me3_exe()
     if not me3 or not Path(me3).exists():
         fail("me3 was not found on PATH or in its default install folder; install it or use --no-launch")
-    cmd = [str(me3), "launch"] + (["--exe", str(exe)] if exe else ["--game", game]) + ["--profile", profile] + list(extra_args)
+    cmd = (
+        [str(me3), "launch"]
+        + (["--exe", str(exe)] if exe else ["--game", game])
+        + ["--profile", profile]
+        + list(extra_args)
+    )
     log("launching: " + " ".join(cmd))
     log(f"me3 output goes to {ME3_LOG}")
 
@@ -208,7 +223,9 @@ def main():
     ap.add_argument("--profile", help="me3 profile name, or path to a .me3 file (default: auto-detect)")
     ap.add_argument("--game", default="eldenring")
     ap.add_argument("--no-launch", action="store_true", help="do not start the game, only wait and repair")
-    ap.add_argument("--appear-timeout", type=int, default=20, help="with --no-launch: seconds to wait for a game to show up")
+    ap.add_argument(
+        "--appear-timeout", type=int, default=20, help="with --no-launch: seconds to wait for a game to show up"
+    )
     ap.add_argument("--steam-timeout", type=int, default=120, help="seconds to wait for Steam to sign in")
     a = ap.parse_args()
     common.start_log("me3_session")

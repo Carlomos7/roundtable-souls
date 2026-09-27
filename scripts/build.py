@@ -1,7 +1,7 @@
 """Build RoundtableSouls.exe: tests, icon, PyInstaller, then the share bundle.
 
-    uv run python scripts/build.py            everything
-    uv run python scripts/build.py --no-test  skip the test run
+uv run python scripts/build.py            everything
+uv run python scripts/build.py --no-test  skip the test run
 """
 
 from __future__ import annotations
@@ -28,13 +28,32 @@ def main() -> int:
         run(py, "-m", "pytest", "-q")
     run(py, str(ROOT / "scripts" / "make_icon.py"))
     run(
-        py, "-m", "PyInstaller", "--noconfirm", "--onefile", "--windowed", "--name", EXE_NAME,
-        "--icon", str(PKG / "assets" / "icon.ico"),
-        "--paths", str(ROOT / "src"),
-        "--collect-data", "roundtable_souls",
-        "--collect-all", "qfluentwidgets", "--collect-all", "py7zr",
-        "--exclude-module", "tkinter",
-        "--distpath", str(DIST), "--workpath", str(BUILD / "work"), "--specpath", str(BUILD),
+        py,
+        "-m",
+        "PyInstaller",
+        "--noconfirm",
+        "--onefile",
+        "--windowed",
+        "--name",
+        EXE_NAME,
+        "--icon",
+        str(PKG / "assets" / "icon.ico"),
+        "--paths",
+        str(ROOT / "src"),
+        "--collect-data",
+        "roundtable_souls",
+        "--collect-all",
+        "qfluentwidgets",
+        "--collect-all",
+        "py7zr",
+        "--exclude-module",
+        "tkinter",
+        "--distpath",
+        str(DIST),
+        "--workpath",
+        str(BUILD / "work"),
+        "--specpath",
+        str(BUILD),
         str(ROOT / "scripts" / "entry.py"),
     )
     exe = DIST / f"{EXE_NAME}.exe"

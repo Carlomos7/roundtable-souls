@@ -18,6 +18,7 @@ Detect only (reported by save_analyze, never written here):
 
 Every write goes through save_fix._commit (verify, back up into save-fix-backups, replace).
 """
+
 from __future__ import annotations
 
 import math
@@ -34,9 +35,15 @@ DLC_PREFIXES = set(range(20, 30)) | {61}
 VALID_PREFIXES = set(range(10, 20)) | DLC_PREFIXES | set(range(30, 60)) | {60}
 
 FIX_TEXT = {
-    "torrent": ("Torrent stuck at 0 HP", "Mark Torrent dead so the game stops waiting for him. He returns at the next grace."),
+    "torrent": (
+        "Torrent stuck at 0 HP",
+        "Mark Torrent dead so the game stops waiting for him. He returns at the next grace.",
+    ),
     "position": ("Position is not on any map", "Move the character to Roundtable Hold."),
-    "dlc_area": ("In the Land of Shadow without the DLC installed", "Move the character to Roundtable Hold and clear the DLC entry flag."),
+    "dlc_area": (
+        "In the Land of Shadow without the DLC installed",
+        "Move the character to Roundtable Hold and clear the DLC entry flag.",
+    ),
     "dlc_flag": ("DLC entry flag set without the DLC installed", "Clear the DLC entry flag."),
     "dlc_junk": ("Junk in the DLC block", "Zero the unused bytes of the DLC block."),
     "weather": ("Weather out of sync with the map", "Set the weather area to the current map."),
@@ -91,10 +98,19 @@ def plan_loading_fixes(parsed: dict, dlc_owned: bool | None = None) -> list[dict
         if not issues:
             continue
         name = ""
-        try: name = slot["pgd"]["name"]
-        except Exception: pass
-        plan.append({"slot": i, "name": name, "issues": issues,
-                     "labels": [FIX_TEXT[k][0] for k in issues], "actions": [FIX_TEXT[k][1] for k in issues]})
+        try:
+            name = slot["pgd"]["name"]
+        except Exception:
+            pass
+        plan.append(
+            {
+                "slot": i,
+                "name": name,
+                "issues": issues,
+                "labels": [FIX_TEXT[k][0] for k in issues],
+                "actions": [FIX_TEXT[k][1] for k in issues],
+            }
+        )
     return plan
 
 
@@ -121,15 +137,16 @@ def torn_write_check(data: bytes, parsed: dict) -> list[dict]:
 # ----------------------------------------------------------------------------- apply
 def _teleport_roundtable(data: bytearray, slot: dict) -> None:
     map_pos = slot["ga_items_pos"] - 0x1C
-    data[map_pos: map_pos + 4] = ROUNDTABLE_MAP
+    data[map_pos : map_pos + 4] = ROUNDTABLE_MAP
     xyz = struct.pack("<fff", *ROUNDTABLE_XYZ)
-    data[slot["coords_pos"]: slot["coords_pos"] + 12] = xyz
-    data[slot["coords2_pos"]: slot["coords2_pos"] + 12] = xyz
+    data[slot["coords_pos"] : slot["coords_pos"] + 12] = xyz
+    data[slot["coords2_pos"] : slot["coords2_pos"] + 12] = xyz
     struct.pack_into("<H", data, slot["weather_pos"], ROUNDTABLE_MAP[3])
 
 
-def apply_loading_fixes(save: Path, slots: list[int] | None = None, dlc_owned: bool | None = None, log=None,
-                        selection: dict | None = None) -> dict:
+def apply_loading_fixes(
+    save: Path, slots: list[int] | None = None, dlc_owned: bool | None = None, log=None, selection: dict | None = None
+) -> dict:
     """selection = {slot: [issue keys]} narrows the plan; slots missing from it are left alone."""
     save = Path(save)
     say = log or (lambda *_: None)
@@ -137,7 +154,11 @@ def apply_loading_fixes(save: Path, slots: list[int] | None = None, dlc_owned: b
     r = L.parse(str(save))
     plan = [p for p in plan_loading_fixes(r, dlc_owned) if slots is None or p["slot"] in slots]
     if selection is not None:
-        plan = [{**p, "issues": [k for k in p["issues"] if k in selection.get(p["slot"], [])]} for p in plan if p["slot"] in selection]
+        plan = [
+            {**p, "issues": [k for k in p["issues"] if k in selection.get(p["slot"], [])]}
+            for p in plan
+            if p["slot"] in selection
+        ]
         plan = [p for p in plan if p["issues"]]
     if not plan:
         say("  nothing to fix")
@@ -145,8 +166,10 @@ def apply_loading_fixes(save: Path, slots: list[int] | None = None, dlc_owned: b
     touched = []
     changes = []
     for p in plan:
-        i = p["slot"]; slot = r["slots"][i]; who = p["name"] or f"slot {i + 1}"
-        moved = "position" in p["issues"] or "dlc_area" in p["issues"]      # the teleport already syncs the weather
+        i = p["slot"]
+        slot = r["slots"][i]
+        who = p["name"] or f"slot {i + 1}"
+        moved = "position" in p["issues"] or "dlc_area" in p["issues"]  # the teleport already syncs the weather
         for key in p["issues"]:
             if key == "weather" and moved:
                 continue
@@ -159,7 +182,7 @@ def apply_loading_fixes(save: Path, slots: list[int] | None = None, dlc_owned: b
             elif key == "dlc_flag":
                 data[slot["dlc_pos"] + 1] = 0
             elif key == "dlc_junk":
-                data[slot["dlc_pos"] + 4: slot["dlc_pos"] + 50] = bytes(46)
+                data[slot["dlc_pos"] + 4 : slot["dlc_pos"] + 50] = bytes(46)
             elif key == "weather":
                 struct.pack_into("<H", data, slot["weather_pos"], slot["map_id"][3])
             say(f"  {who}: {FIX_TEXT[key][1]}")

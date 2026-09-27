@@ -2,6 +2,7 @@
 
 Nothing here writes to disk except the run log.
 """
+
 import os
 import subprocess
 import sys
@@ -24,6 +25,7 @@ _log = get_logger("run")
 
 # ----------------------------------------------------------------- logging
 
+
 def log(msg=""):
     """One line to the run log (and to the window, when it is listening)."""
     _log.info("%s", msg)
@@ -41,13 +43,18 @@ def fail(msg, code=1):
 
 # --------------------------------------------------------------- processes
 
+
 def processes(name):
     """(pid, working set in KB) for every process with this image name."""
     if os.name != "nt":
         return []
     try:
-        out = subprocess.run(["tasklist", "/FI", f"IMAGENAME eq {name}", "/FO", "CSV"],
-                             capture_output=True, text=True, creationflags=NO_WINDOW).stdout
+        out = subprocess.run(
+            ["tasklist", "/FI", f"IMAGENAME eq {name}", "/FO", "CSV"],
+            capture_output=True,
+            text=True,
+            creationflags=NO_WINDOW,
+        ).stdout
     except OSError:
         return []
     found = []
@@ -80,11 +87,13 @@ def dead_game_shells():
 
 # ------------------------------------------------------------------- steam
 
+
 def _reg_value(subkey, name):
     if os.name != "nt":
         return None
     try:
         import winreg
+
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, subkey) as key:
             return winreg.QueryValueEx(key, name)[0]
     except OSError:
@@ -122,7 +131,7 @@ def steam_libraries():
             for line in vdf.read_text(errors="ignore").splitlines():
                 line = line.strip()
                 if line.startswith('"path"'):
-                    value = line[len('"path"'):].strip().strip('"').replace("\\\\", "\\")
+                    value = line[len('"path"') :].strip().strip('"').replace("\\\\", "\\")
                     roots.append(Path(value))
     # Fallbacks for a machine where the registry is unhelpful.
     for guess in (r"C:\Program Files (x86)\Steam", r"C:\Program Files\Steam"):
@@ -155,6 +164,7 @@ def regulation_bin():
 
 # ------------------------------------------------------------------- saves
 
+
 def save_files():
     """Every ER0000.sl2 / ER0000.co2 under %APPDATA%\\EldenRing."""
     appdata = os.environ.get("APPDATA")
@@ -169,11 +179,13 @@ def save_files():
 
 # --------------------------------------------------------------------- me3
 
+
 def me3_exe():
     """The me3 set in the launcher's settings, else me3 on PATH, else its default per-user install location."""
     if ME3_OVERRIDE and Path(ME3_OVERRIDE).is_file():
         return Path(ME3_OVERRIDE)
     from shutil import which
+
     found = which("me3")
     if found:
         return Path(found)

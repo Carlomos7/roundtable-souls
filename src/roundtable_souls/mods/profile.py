@@ -4,6 +4,7 @@ read-only conflict scan across enabled packages (which file wins when two packag
 Load order rule (me3): packages later in the effective order override earlier ones. The effective
 order is the file order, then every package with load_after is moved behind the packages it names.
 """
+
 from __future__ import annotations
 
 import os
@@ -14,14 +15,28 @@ from pathlib import Path
 SETTING_KEYS = ("savefile", "start_online", "disable_arxan", "mem_patch", "mem_patch_heap_size")
 SETTING_TEXT = {
     "savefile": ("Save file", "Use a different save file name for this profile (in the game's save folder)."),
-    "start_online": ("Online matchmaking", "me3 blocks the official servers by default. Turning this on with mods risks a ban."),
+    "start_online": (
+        "Online matchmaking",
+        "me3 blocks the official servers by default. Turning this on with mods risks a ban.",
+    ),
     "disable_arxan": ("Neutralise Arxan", "Disables the game's tamper protection; helps some mods stay stable."),
     "mem_patch": ("Memory patch", "Lifts the game's memory limits for heavy mods (me3 default: on for Elden Ring)."),
-    "mem_patch_heap_size": ("Heap size (MB)", "Override how much memory the game allocates with the memory patch. 0 = me3 default."),
+    "mem_patch_heap_size": (
+        "Heap size (MB)",
+        "Override how much memory the game allocates with the memory patch. 0 = me3 default.",
+    ),
 }
 IGNORED_NAMES = {"me3.toml", ".nexus_metadata.json", "thumbs.db", "desktop.ini", ".ds_store", ".gitignore"}
 IGNORED_SUFFIXES = {".bak", ".tmp", ".old"}
-ROOT_DOC_SUFFIXES = {".txt", ".md", ".url", ".html", ".pdf", ".png", ".jpg"}   # notes at a package root are not game paths
+ROOT_DOC_SUFFIXES = {
+    ".txt",
+    ".md",
+    ".url",
+    ".html",
+    ".pdf",
+    ".png",
+    ".jpg",
+}  # notes at a package root are not game paths
 _KEY_LINE = re.compile(r"^[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*=", re.M)
 _SECTION = re.compile(r"^[ \t]*\[")
 
@@ -66,10 +81,10 @@ def set_setting(text: str, key: str, value) -> str:
     nl = "\r\n" if "\r\n" in text else "\n"
     lines = text.splitlines(keepends=True)
     if lines and not lines[-1].endswith(("\n", "\r\n")):
-        lines[-1] += nl                                   # a file without a final newline must not glue lines together
+        lines[-1] += nl  # a file without a final newline must not glue lines together
     end = _top_region_end(lines)
     hits = [i for i in range(end) if (m := _KEY_LINE.match(lines[i].rstrip("\r\n"))) and m.group(1) == key]
-    for i in reversed(hits[1:]):                          # a duplicated key would make the TOML invalid: keep one line
+    for i in reversed(hits[1:]):  # a duplicated key would make the TOML invalid: keep one line
         del lines[i]
     hit = hits[0] if hits else None
     if value is None or value == "" or (key == "mem_patch_heap_size" and value == 0):
@@ -84,7 +99,8 @@ def set_setting(text: str, key: str, value) -> str:
     for i in range(end):
         m = _KEY_LINE.match(lines[i].rstrip("\r\n"))
         if m and m.group(1) == "profileVersion":
-            after = i + 1; break
+            after = i + 1
+            break
     lines.insert(after, new_line)
     return "".join(lines)
 
@@ -109,12 +125,16 @@ def package_rows(text: str) -> list[dict]:
         ident = str(row.get("id") or Path(path).name)
         deps = []
         for d in row.get("load_after") or []:
-            if isinstance(d, dict) and d.get("id"): deps.append(str(d["id"]))
-            elif isinstance(d, str): deps.append(d)
+            if isinstance(d, dict) and d.get("id"):
+                deps.append(str(d["id"]))
+            elif isinstance(d, str):
+                deps.append(d)
         before = []
         for d in row.get("load_before") or []:
-            if isinstance(d, dict) and d.get("id"): before.append(str(d["id"]))
-            elif isinstance(d, str): before.append(d)
+            if isinstance(d, dict) and d.get("id"):
+                before.append(str(d["id"]))
+            elif isinstance(d, str):
+                before.append(d)
         out.append({"index": i, "id": ident, "path": path, "load_after": deps, "load_before": before})
     return out
 
@@ -129,10 +149,16 @@ def effective_order(rows: list[dict]) -> list[dict]:
             i = ids.index(r["id"])
             need = max((ids.index(d) for d in r["load_after"] if d in ids), default=-1)
             if need > i:
-                order.remove(r); order.insert(need, r); moved = True; break
+                order.remove(r)
+                order.insert(need, r)
+                moved = True
+                break
             limit = min((ids.index(d) for d in r["load_before"] if d in ids), default=len(ids))
             if limit < i:
-                order.remove(r); order.insert(limit, r); moved = True; break
+                order.remove(r)
+                order.insert(limit, r)
+                moved = True
+                break
         if not moved:
             break
     return order
@@ -162,7 +188,8 @@ def scan_conflicts(profile: Path, text: str | None = None, max_files: int = 4000
     order = effective_order(package_rows(text))
     seen: dict[str, list[tuple[int, str, int, float]]] = {}
     packages = []
-    total = 0; truncated = False
+    total = 0
+    truncated = False
     for rank, row in enumerate(order):
         root = resolve(profile, row["path"])
         info = {"id": row["id"], "path": str(root), "files": 0, "wins": 0, "loses": 0, "missing": not root.is_dir()}
@@ -179,14 +206,20 @@ def scan_conflicts(profile: Path, text: str | None = None, max_files: int = 4000
                 rel = str(full.relative_to(root)).replace("\\", "/")
                 if "/" not in rel and Path(low).suffix in ROOT_DOC_SUFFIXES:
                     continue
-                try: st = full.stat()
-                except OSError: continue
+                try:
+                    st = full.stat()
+                except OSError:
+                    continue
                 seen.setdefault(rel.lower(), []).append((rank, rel, st.st_size, st.st_mtime))
-                info["files"] += 1; total += 1
+                info["files"] += 1
+                total += 1
                 if total >= max_files:
-                    truncated = True; break
-            if truncated: break
-        if truncated: break
+                    truncated = True
+                    break
+            if truncated:
+                break
+        if truncated:
+            break
     conflicts = []
     by_cat: dict[str, int] = {}
     for _key, hits in seen.items():
@@ -194,13 +227,16 @@ def scan_conflicts(profile: Path, text: str | None = None, max_files: int = 4000
             continue
         hits.sort()
         win = hits[-1]
-        winner = packages[win[0]]; winner["wins"] += 1
+        winner = packages[win[0]]
+        winner["wins"] += 1
         losers = []
         for rank, _rel, size, _mtime in hits[:-1]:
             packages[rank]["loses"] += 1
             losers.append({"id": packages[rank]["id"], "size": size})
         cat = category_of(win[1])
         by_cat[cat] = by_cat.get(cat, 0) + 1
-        conflicts.append({"path": win[1], "category": cat, "winner": winner["id"], "winner_size": win[2], "losers": losers})
+        conflicts.append(
+            {"path": win[1], "category": cat, "winner": winner["id"], "winner_size": win[2], "losers": losers}
+        )
     conflicts.sort(key=lambda c: (c["category"], c["path"].lower()))
     return {"packages": packages, "conflicts": conflicts, "files": total, "by_category": by_cat, "truncated": truncated}

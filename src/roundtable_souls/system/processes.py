@@ -13,6 +13,7 @@ eldenring.exe with no threads. A running game always has hundreds.
 Usage:
   clear_dead_game_shells.py [--dry-run]
 """
+
 import argparse
 import subprocess
 import sys
@@ -27,11 +28,15 @@ def dead_shells():
     """PIDs of eldenring.exe processes with zero threads."""
     if sys.platform != "win32":
         return []
-    script = ("Get-Process eldenring -ErrorAction SilentlyContinue | "
-              "Where-Object { $_.Threads.Count -eq 0 } | ForEach-Object { $_.Id }")
+    script = (
+        "Get-Process eldenring -ErrorAction SilentlyContinue | "
+        "Where-Object { $_.Threads.Count -eq 0 } | ForEach-Object { $_.Id }"
+    )
     try:
-        out = subprocess.run(PS + [script], capture_output=True, text=True, timeout=30, creationflags=common.NO_WINDOW).stdout
-    except (OSError, subprocess.TimeoutExpired):
+        out = subprocess.run(
+            PS + [script], capture_output=True, text=True, timeout=30, creationflags=common.NO_WINDOW
+        ).stdout
+    except OSError, subprocess.TimeoutExpired:
         return []
     return [int(x) for x in out.split() if x.isdigit()]
 
@@ -41,8 +46,10 @@ def kill_elevated(pids):
     present afterwards."""
     ids = ",".join(str(p) for p in pids)
     inner = f"Stop-Process -Id {ids} -Force -ErrorAction SilentlyContinue"
-    launcher = (f"$p = Start-Process powershell.exe -ArgumentList '-NoProfile','-NonInteractive','-Command',"
-                f"\"{inner}\" -Verb RunAs -Wait -PassThru; exit $p.ExitCode")
+    launcher = (
+        f"$p = Start-Process powershell.exe -ArgumentList '-NoProfile','-NonInteractive','-Command',"
+        f'"{inner}" -Verb RunAs -Wait -PassThru; exit $p.ExitCode'
+    )
     try:
         subprocess.run(PS + [launcher], capture_output=True, text=True, timeout=120, creationflags=common.NO_WINDOW)
     except (OSError, subprocess.TimeoutExpired) as err:

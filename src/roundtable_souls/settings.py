@@ -97,7 +97,7 @@ def load_settings() -> dict[str, Any]:
         raw = json.loads(settings_path().read_text(encoding="utf-8"))
         if not isinstance(raw, dict):
             raw = {}
-    except (OSError, ValueError):
+    except OSError, ValueError:
         raw = {}
     try:
         return LauncherSettings.model_validate(raw).model_dump()

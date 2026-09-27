@@ -1,4 +1,5 @@
 """Editor helpers behind Ctrl+/, Tab and Shift+Tab in the profile and share boxes."""
+
 from roundtable_souls import core as g
 
 
@@ -6,7 +7,7 @@ def test_toggle_comment_toml_block_and_back():
     lines = ["[[natives]]", "  path = 'natives/x.dll'", "", "  load_early = true"]
     out = g.toggle_comment(lines, "#")
     assert out == ["# [[natives]]", "#   path = 'natives/x.dll'", "", "#   load_early = true"]
-    assert g.toggle_comment(out, "#") == lines                       # round trip, blank line untouched
+    assert g.toggle_comment(out, "#") == lines  # round trip, blank line untouched
     # indented block: the marker goes at the shallowest indent, not column 0
     assert g.toggle_comment(["    a = 1", "      b = 2"], "#") == ["    # a = 1", "    #   b = 2"]
     # mixed block (one line already commented) comments everything, so the second press uncomments cleanly

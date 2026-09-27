@@ -15,19 +15,28 @@ Sources:
 Weapons: base + affinity*100 + upgrade; the table lists bases, so upgrade 0..25 is appended and the
 analyzer strips affinity. Spirit ashes get +0..+10. Run:  uv run python scripts/build_known_ids.py
 """
+
 import os
 import re
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parents[1] / "src" / "roundtable_souls" / "data"
-REPOS = Path(os.environ.get("ER_REPOS", Path(__file__).resolve().parents[2]))   # er-save-manager and Elden-Ring-Save-Editor checked out here
+REPOS = Path(
+    os.environ.get("ER_REPOS", Path(__file__).resolve().parents[2])
+)  # er-save-manager and Elden-Ring-Save-Editor checked out here
 ERSM = REPOS / "er-save-manager" / "src" / "er_save_manager" / "data" / "items"
 RUST = REPOS / "Elden-Ring-Save-Editor" / "src" / "db"
 
 WEAPON, ARMOR, TALISMAN, GOODS, AOW = 0x00000000, 0x10000000, 0x20000000, 0x40000000, 0x80000000
 MAX_UPGRADE = 25
 MAX_ASH = 10
-NAME_TABLES = {"item_name": GOODS, "weapon_name": WEAPON, "armor_name": ARMOR, "accessory_name": TALISMAN, "aow_name": AOW}
+NAME_TABLES = {
+    "item_name": GOODS,
+    "weapon_name": WEAPON,
+    "armor_name": ARMOR,
+    "accessory_name": TALISMAN,
+    "aow_name": AOW,
+}
 ENTRY = re.compile(r'^\s*\((\d+)\s*,\s*"((?:[^"\\]|\\.)*)"\s*\)', re.M)
 
 
@@ -49,9 +58,21 @@ def category_for(rel: str):
     r = "/" + rel.replace("\\", "/")
     if r.endswith("armor_slot_types.csv"):
         return None, None
-    source = "Seamless Co-op" if r.endswith("SeamlessCoop.csv") else "Tarnished Pack" if "/TarnishedPack/" in r \
-        else "Convergence" if "/Convergence/" in r else None
-    if "/Weapons/" in r or "/DLCWeapons/" in r or "Weapons.csv" in r or r.endswith(("Ammo.csv", "Shields.csv", "SpellTools.csv")):
+    source = (
+        "Seamless Co-op"
+        if r.endswith("SeamlessCoop.csv")
+        else "Tarnished Pack"
+        if "/TarnishedPack/" in r
+        else "Convergence"
+        if "/Convergence/" in r
+        else None
+    )
+    if (
+        "/Weapons/" in r
+        or "/DLCWeapons/" in r
+        or "Weapons.csv" in r
+        or r.endswith(("Ammo.csv", "Shields.csv", "SpellTools.csv"))
+    ):
         cat = "weapon"
     elif r.endswith("Armor.csv"):
         cat = "armor"
@@ -61,7 +82,11 @@ def category_for(rel: str):
         cat = "aow"
     elif r.endswith("Ashes.csv"):
         cat = "ashes"
-    elif "/Goods/" in r or "/DLCGoods/" in r or r.endswith(("Magic.csv", "Goods.csv", "Spelltools/ConvergenceSpellTools.csv")):
+    elif (
+        "/Goods/" in r
+        or "/DLCGoods/" in r
+        or r.endswith(("Magic.csv", "Goods.csv", "Spelltools/ConvergenceSpellTools.csv"))
+    ):
         cat = "goods"
     else:
         raise SystemExit(f"unclassified csv: {rel}")
@@ -95,12 +120,13 @@ def main():
         text = (RUST / f"{name}.rs").read_text(encoding="utf-8")
         n = 0
         for m in ENTRY.finditer(text):
-            v = int(m.group(1)); n += 1
+            v = int(m.group(1))
+            n += 1
             if cat_bits == WEAPON:
                 base = v // 100 * 100
                 known.update(WEAPON | (base + u) for u in range(MAX_UPGRADE + 1))
             elif cat_bits == GOODS and 200000 <= v < 300000 or 2200000 <= v < 2300000:
-                known.update(GOODS | (v + u) for u in range(MAX_ASH + 1))   # spirit ash upgrade levels
+                known.update(GOODS | (v + u) for u in range(MAX_ASH + 1))  # spirit ash upgrade levels
             else:
                 known.add(cat_bits | v)
         per[f"rust {name}.rs"] = n
@@ -110,7 +136,8 @@ def main():
         text = (RUST / f"{name}.rs").read_text(encoding="utf-8")
         n = 0
         for m in re.finditer(r"0x([0-9A-Fa-f]{8})", text):
-            v = int(m.group(1), 16); n += 1
+            v = int(m.group(1), 16)
+            n += 1
             if v == 0xFFFFFFFF:
                 continue
             if (v & 0xF0000000) == WEAPON:
@@ -134,7 +161,7 @@ def main():
                 for i in ids:
                     mods.setdefault(i, (source, label))
                 if source == "Tarnished Pack" and cat == "armor":
-                    mods.setdefault(ARMOR | (v + 1000), (source, label + " (altered)"))   # altered variants sit at +1000
+                    mods.setdefault(ARMOR | (v + 1000), (source, label + " (altered)"))  # altered variants sit at +1000
             else:
                 known.update(ids)
                 if "/DLC/" in ("/" + rel.replace("\\", "/")):
@@ -143,12 +170,15 @@ def main():
 
     for i in list(mods):
         if i in known:
-            del mods[i]            # a mod list re-listing a vanilla item is still vanilla
+            del mods[i]  # a mod list re-listing a vanilla item is still vanilla
     known.add(0xFFFFFFFF)
     (HERE / "known_item_ids.txt").write_text("\n".join(str(i) for i in sorted(known)) + "\n", encoding="utf-8")
     (HERE / "mod_item_names.txt").write_text(
-        "".join(f"{i},{src},{label}\n" for i, (src, label) in sorted(mods.items())), encoding="utf-8")
-    (HERE / "dlc_item_names.txt").write_text("".join(f"{i},{label}\n" for i, label in sorted(dlc.items())), encoding="utf-8")
+        "".join(f"{i},{src},{label}\n" for i, (src, label) in sorted(mods.items())), encoding="utf-8"
+    )
+    (HERE / "dlc_item_names.txt").write_text(
+        "".join(f"{i},{label}\n" for i, label in sorted(dlc.items())), encoding="utf-8"
+    )
     print(f"dlc items: {len(dlc)}")
     cats = {}
     for i in known:
