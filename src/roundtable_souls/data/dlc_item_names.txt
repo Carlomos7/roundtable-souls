@@ -1,0 +1,3497 @@
+1500000,Main-gauche
+1500001,Main-gauche
+1500002,Main-gauche
+1500003,Main-gauche
+1500004,Main-gauche
+1500005,Main-gauche
+1500006,Main-gauche
+1500007,Main-gauche
+1500008,Main-gauche
+1500009,Main-gauche
+1500010,Main-gauche
+1500011,Main-gauche
+1500012,Main-gauche
+1500013,Main-gauche
+1500014,Main-gauche
+1500015,Main-gauche
+1500016,Main-gauche
+1500017,Main-gauche
+1500018,Main-gauche
+1500019,Main-gauche
+1500020,Main-gauche
+1500021,Main-gauche
+1500022,Main-gauche
+1500023,Main-gauche
+1500024,Main-gauche
+1500025,Main-gauche
+1510000,Fire Knight's Shortsword
+1510001,Fire Knight's Shortsword
+1510002,Fire Knight's Shortsword
+1510003,Fire Knight's Shortsword
+1510004,Fire Knight's Shortsword
+1510005,Fire Knight's Shortsword
+1510006,Fire Knight's Shortsword
+1510007,Fire Knight's Shortsword
+1510008,Fire Knight's Shortsword
+1510009,Fire Knight's Shortsword
+1510010,Fire Knight's Shortsword
+1510011,Fire Knight's Shortsword
+1510012,Fire Knight's Shortsword
+1510013,Fire Knight's Shortsword
+1510014,Fire Knight's Shortsword
+1510015,Fire Knight's Shortsword
+1510016,Fire Knight's Shortsword
+1510017,Fire Knight's Shortsword
+1510018,Fire Knight's Shortsword
+1510019,Fire Knight's Shortsword
+1510020,Fire Knight's Shortsword
+1510021,Fire Knight's Shortsword
+1510022,Fire Knight's Shortsword
+1510023,Fire Knight's Shortsword
+1510024,Fire Knight's Shortsword
+1510025,Fire Knight's Shortsword
+2510000,Velvet Sword of St. Trina
+2510001,Velvet Sword of St. Trina
+2510002,Velvet Sword of St. Trina
+2510003,Velvet Sword of St. Trina
+2510004,Velvet Sword of St. Trina
+2510005,Velvet Sword of St. Trina
+2510006,Velvet Sword of St. Trina
+2510007,Velvet Sword of St. Trina
+2510008,Velvet Sword of St. Trina
+2510009,Velvet Sword of St. Trina
+2510010,Velvet Sword of St. Trina
+2510011,Velvet Sword of St. Trina
+2510012,Velvet Sword of St. Trina
+2510013,Velvet Sword of St. Trina
+2510014,Velvet Sword of St. Trina
+2510015,Velvet Sword of St. Trina
+2510016,Velvet Sword of St. Trina
+2510017,Velvet Sword of St. Trina
+2510018,Velvet Sword of St. Trina
+2510019,Velvet Sword of St. Trina
+2510020,Velvet Sword of St. Trina
+2510021,Velvet Sword of St. Trina
+2510022,Velvet Sword of St. Trina
+2510023,Velvet Sword of St. Trina
+2510024,Velvet Sword of St. Trina
+2510025,Velvet Sword of St. Trina
+2520000,Star-Lined Sword
+2520001,Star-Lined Sword
+2520002,Star-Lined Sword
+2520003,Star-Lined Sword
+2520004,Star-Lined Sword
+2520005,Star-Lined Sword
+2520006,Star-Lined Sword
+2520007,Star-Lined Sword
+2520008,Star-Lined Sword
+2520009,Star-Lined Sword
+2520010,Star-Lined Sword
+2520011,Star-Lined Sword
+2520012,Star-Lined Sword
+2520013,Star-Lined Sword
+2520014,Star-Lined Sword
+2520015,Star-Lined Sword
+2520016,Star-Lined Sword
+2520017,Star-Lined Sword
+2520018,Star-Lined Sword
+2520019,Star-Lined Sword
+2520020,Star-Lined Sword
+2520021,Star-Lined Sword
+2520022,Star-Lined Sword
+2520023,Star-Lined Sword
+2520024,Star-Lined Sword
+2520025,Star-Lined Sword
+2530000,Carian Sorcery Sword
+2530001,Carian Sorcery Sword
+2530002,Carian Sorcery Sword
+2530003,Carian Sorcery Sword
+2530004,Carian Sorcery Sword
+2530005,Carian Sorcery Sword
+2530006,Carian Sorcery Sword
+2530007,Carian Sorcery Sword
+2530008,Carian Sorcery Sword
+2530009,Carian Sorcery Sword
+2530010,Carian Sorcery Sword
+2530011,Carian Sorcery Sword
+2530012,Carian Sorcery Sword
+2530013,Carian Sorcery Sword
+2530014,Carian Sorcery Sword
+2530015,Carian Sorcery Sword
+2530016,Carian Sorcery Sword
+2530017,Carian Sorcery Sword
+2530018,Carian Sorcery Sword
+2530019,Carian Sorcery Sword
+2530020,Carian Sorcery Sword
+2530021,Carian Sorcery Sword
+2530022,Carian Sorcery Sword
+2530023,Carian Sorcery Sword
+2530024,Carian Sorcery Sword
+2530025,Carian Sorcery Sword
+2540000,Stone-Sheathed Sword
+2540001,Stone-Sheathed Sword
+2540002,Stone-Sheathed Sword
+2540003,Stone-Sheathed Sword
+2540004,Stone-Sheathed Sword
+2540005,Stone-Sheathed Sword
+2540006,Stone-Sheathed Sword
+2540007,Stone-Sheathed Sword
+2540008,Stone-Sheathed Sword
+2540009,Stone-Sheathed Sword
+2540010,Stone-Sheathed Sword
+2540011,Stone-Sheathed Sword
+2540012,Stone-Sheathed Sword
+2540013,Stone-Sheathed Sword
+2540014,Stone-Sheathed Sword
+2540015,Stone-Sheathed Sword
+2540016,Stone-Sheathed Sword
+2540017,Stone-Sheathed Sword
+2540018,Stone-Sheathed Sword
+2540019,Stone-Sheathed Sword
+2540020,Stone-Sheathed Sword
+2540021,Stone-Sheathed Sword
+2540022,Stone-Sheathed Sword
+2540023,Stone-Sheathed Sword
+2540024,Stone-Sheathed Sword
+2540025,Stone-Sheathed Sword
+2550000,Sword of Light
+2550001,Sword of Light
+2550002,Sword of Light
+2550003,Sword of Light
+2550004,Sword of Light
+2550005,Sword of Light
+2550006,Sword of Light
+2550007,Sword of Light
+2550008,Sword of Light
+2550009,Sword of Light
+2550010,Sword of Light
+2550011,Sword of Light
+2550012,Sword of Light
+2550013,Sword of Light
+2550014,Sword of Light
+2550015,Sword of Light
+2550016,Sword of Light
+2550017,Sword of Light
+2550018,Sword of Light
+2550019,Sword of Light
+2550020,Sword of Light
+2550021,Sword of Light
+2550022,Sword of Light
+2550023,Sword of Light
+2550024,Sword of Light
+2550025,Sword of Light
+2560000,Sword of Darkness
+2560001,Sword of Darkness
+2560002,Sword of Darkness
+2560003,Sword of Darkness
+2560004,Sword of Darkness
+2560005,Sword of Darkness
+2560006,Sword of Darkness
+2560007,Sword of Darkness
+2560008,Sword of Darkness
+2560009,Sword of Darkness
+2560010,Sword of Darkness
+2560011,Sword of Darkness
+2560012,Sword of Darkness
+2560013,Sword of Darkness
+2560014,Sword of Darkness
+2560015,Sword of Darkness
+2560016,Sword of Darkness
+2560017,Sword of Darkness
+2560018,Sword of Darkness
+2560019,Sword of Darkness
+2560020,Sword of Darkness
+2560021,Sword of Darkness
+2560022,Sword of Darkness
+2560023,Sword of Darkness
+2560024,Sword of Darkness
+2560025,Sword of Darkness
+3500000,Sword Lance
+3500001,Sword Lance
+3500002,Sword Lance
+3500003,Sword Lance
+3500004,Sword Lance
+3500005,Sword Lance
+3500006,Sword Lance
+3500007,Sword Lance
+3500008,Sword Lance
+3500009,Sword Lance
+3500010,Sword Lance
+3500011,Sword Lance
+3500012,Sword Lance
+3500013,Sword Lance
+3500014,Sword Lance
+3500015,Sword Lance
+3500016,Sword Lance
+3500017,Sword Lance
+3500018,Sword Lance
+3500019,Sword Lance
+3500020,Sword Lance
+3500021,Sword Lance
+3500022,Sword Lance
+3500023,Sword Lance
+3500024,Sword Lance
+3500025,Sword Lance
+3510000,Greatsword of Damnation
+3510001,Greatsword of Damnation
+3510002,Greatsword of Damnation
+3510003,Greatsword of Damnation
+3510004,Greatsword of Damnation
+3510005,Greatsword of Damnation
+3510006,Greatsword of Damnation
+3510007,Greatsword of Damnation
+3510008,Greatsword of Damnation
+3510009,Greatsword of Damnation
+3510010,Greatsword of Damnation
+3510011,Greatsword of Damnation
+3510012,Greatsword of Damnation
+3510013,Greatsword of Damnation
+3510014,Greatsword of Damnation
+3510015,Greatsword of Damnation
+3510016,Greatsword of Damnation
+3510017,Greatsword of Damnation
+3510018,Greatsword of Damnation
+3510019,Greatsword of Damnation
+3510020,Greatsword of Damnation
+3510021,Greatsword of Damnation
+3510022,Greatsword of Damnation
+3510023,Greatsword of Damnation
+3510024,Greatsword of Damnation
+3510025,Greatsword of Damnation
+3520000,Lizard Greatsword
+3520001,Lizard Greatsword
+3520002,Lizard Greatsword
+3520003,Lizard Greatsword
+3520004,Lizard Greatsword
+3520005,Lizard Greatsword
+3520006,Lizard Greatsword
+3520007,Lizard Greatsword
+3520008,Lizard Greatsword
+3520009,Lizard Greatsword
+3520010,Lizard Greatsword
+3520011,Lizard Greatsword
+3520012,Lizard Greatsword
+3520013,Lizard Greatsword
+3520014,Lizard Greatsword
+3520015,Lizard Greatsword
+3520016,Lizard Greatsword
+3520017,Lizard Greatsword
+3520018,Lizard Greatsword
+3520019,Lizard Greatsword
+3520020,Lizard Greatsword
+3520021,Lizard Greatsword
+3520022,Lizard Greatsword
+3520023,Lizard Greatsword
+3520024,Lizard Greatsword
+3520025,Lizard Greatsword
+3550000,Greatsword of Solitude
+3550001,Greatsword of Solitude
+3550002,Greatsword of Solitude
+3550003,Greatsword of Solitude
+3550004,Greatsword of Solitude
+3550005,Greatsword of Solitude
+3550006,Greatsword of Solitude
+3550007,Greatsword of Solitude
+3550008,Greatsword of Solitude
+3550009,Greatsword of Solitude
+3550010,Greatsword of Solitude
+3550011,Greatsword of Solitude
+3550012,Greatsword of Solitude
+3550013,Greatsword of Solitude
+3550014,Greatsword of Solitude
+3550015,Greatsword of Solitude
+3550016,Greatsword of Solitude
+3550017,Greatsword of Solitude
+3550018,Greatsword of Solitude
+3550019,Greatsword of Solitude
+3550020,Greatsword of Solitude
+3550021,Greatsword of Solitude
+3550022,Greatsword of Solitude
+3550023,Greatsword of Solitude
+3550024,Greatsword of Solitude
+3550025,Greatsword of Solitude
+4500000,Ancient Meteoric Ore Greatsword
+4500001,Ancient Meteoric Ore Greatsword
+4500002,Ancient Meteoric Ore Greatsword
+4500003,Ancient Meteoric Ore Greatsword
+4500004,Ancient Meteoric Ore Greatsword
+4500005,Ancient Meteoric Ore Greatsword
+4500006,Ancient Meteoric Ore Greatsword
+4500007,Ancient Meteoric Ore Greatsword
+4500008,Ancient Meteoric Ore Greatsword
+4500009,Ancient Meteoric Ore Greatsword
+4500010,Ancient Meteoric Ore Greatsword
+4500011,Ancient Meteoric Ore Greatsword
+4500012,Ancient Meteoric Ore Greatsword
+4500013,Ancient Meteoric Ore Greatsword
+4500014,Ancient Meteoric Ore Greatsword
+4500015,Ancient Meteoric Ore Greatsword
+4500016,Ancient Meteoric Ore Greatsword
+4500017,Ancient Meteoric Ore Greatsword
+4500018,Ancient Meteoric Ore Greatsword
+4500019,Ancient Meteoric Ore Greatsword
+4500020,Ancient Meteoric Ore Greatsword
+4500021,Ancient Meteoric Ore Greatsword
+4500022,Ancient Meteoric Ore Greatsword
+4500023,Ancient Meteoric Ore Greatsword
+4500024,Ancient Meteoric Ore Greatsword
+4500025,Ancient Meteoric Ore Greatsword
+4520000,Fire Knight's Greatsword
+4520001,Fire Knight's Greatsword
+4520002,Fire Knight's Greatsword
+4520003,Fire Knight's Greatsword
+4520004,Fire Knight's Greatsword
+4520005,Fire Knight's Greatsword
+4520006,Fire Knight's Greatsword
+4520007,Fire Knight's Greatsword
+4520008,Fire Knight's Greatsword
+4520009,Fire Knight's Greatsword
+4520010,Fire Knight's Greatsword
+4520011,Fire Knight's Greatsword
+4520012,Fire Knight's Greatsword
+4520013,Fire Knight's Greatsword
+4520014,Fire Knight's Greatsword
+4520015,Fire Knight's Greatsword
+4520016,Fire Knight's Greatsword
+4520017,Fire Knight's Greatsword
+4520018,Fire Knight's Greatsword
+4520019,Fire Knight's Greatsword
+4520020,Fire Knight's Greatsword
+4520021,Fire Knight's Greatsword
+4520022,Fire Knight's Greatsword
+4520023,Fire Knight's Greatsword
+4520024,Fire Knight's Greatsword
+4520025,Fire Knight's Greatsword
+4530000,Greatsword of Radahn (Lord)
+4530001,Greatsword of Radahn (Lord)
+4530002,Greatsword of Radahn (Lord)
+4530003,Greatsword of Radahn (Lord)
+4530004,Greatsword of Radahn (Lord)
+4530005,Greatsword of Radahn (Lord)
+4530006,Greatsword of Radahn (Lord)
+4530007,Greatsword of Radahn (Lord)
+4530008,Greatsword of Radahn (Lord)
+4530009,Greatsword of Radahn (Lord)
+4530010,Greatsword of Radahn (Lord)
+4530011,Greatsword of Radahn (Lord)
+4530012,Greatsword of Radahn (Lord)
+4530013,Greatsword of Radahn (Lord)
+4530014,Greatsword of Radahn (Lord)
+4530015,Greatsword of Radahn (Lord)
+4530016,Greatsword of Radahn (Lord)
+4530017,Greatsword of Radahn (Lord)
+4530018,Greatsword of Radahn (Lord)
+4530019,Greatsword of Radahn (Lord)
+4530020,Greatsword of Radahn (Lord)
+4530021,Greatsword of Radahn (Lord)
+4530022,Greatsword of Radahn (Lord)
+4530023,Greatsword of Radahn (Lord)
+4530024,Greatsword of Radahn (Lord)
+4530025,Greatsword of Radahn (Lord)
+4540000,Moonrithyll's Knight Sword
+4540001,Moonrithyll's Knight Sword
+4540002,Moonrithyll's Knight Sword
+4540003,Moonrithyll's Knight Sword
+4540004,Moonrithyll's Knight Sword
+4540005,Moonrithyll's Knight Sword
+4540006,Moonrithyll's Knight Sword
+4540007,Moonrithyll's Knight Sword
+4540008,Moonrithyll's Knight Sword
+4540009,Moonrithyll's Knight Sword
+4540010,Moonrithyll's Knight Sword
+4540011,Moonrithyll's Knight Sword
+4540012,Moonrithyll's Knight Sword
+4540013,Moonrithyll's Knight Sword
+4540014,Moonrithyll's Knight Sword
+4540015,Moonrithyll's Knight Sword
+4540016,Moonrithyll's Knight Sword
+4540017,Moonrithyll's Knight Sword
+4540018,Moonrithyll's Knight Sword
+4540019,Moonrithyll's Knight Sword
+4540020,Moonrithyll's Knight Sword
+4540021,Moonrithyll's Knight Sword
+4540022,Moonrithyll's Knight Sword
+4540023,Moonrithyll's Knight Sword
+4540024,Moonrithyll's Knight Sword
+4540025,Moonrithyll's Knight Sword
+4550000,Greatsword of Radahn (Light)
+4550001,Greatsword of Radahn (Light)
+4550002,Greatsword of Radahn (Light)
+4550003,Greatsword of Radahn (Light)
+4550004,Greatsword of Radahn (Light)
+4550005,Greatsword of Radahn (Light)
+4550006,Greatsword of Radahn (Light)
+4550007,Greatsword of Radahn (Light)
+4550008,Greatsword of Radahn (Light)
+4550009,Greatsword of Radahn (Light)
+4550010,Greatsword of Radahn (Light)
+4550011,Greatsword of Radahn (Light)
+4550012,Greatsword of Radahn (Light)
+4550013,Greatsword of Radahn (Light)
+4550014,Greatsword of Radahn (Light)
+4550015,Greatsword of Radahn (Light)
+4550016,Greatsword of Radahn (Light)
+4550017,Greatsword of Radahn (Light)
+4550018,Greatsword of Radahn (Light)
+4550019,Greatsword of Radahn (Light)
+4550020,Greatsword of Radahn (Light)
+4550021,Greatsword of Radahn (Light)
+4550022,Greatsword of Radahn (Light)
+4550023,Greatsword of Radahn (Light)
+4550024,Greatsword of Radahn (Light)
+4550025,Greatsword of Radahn (Light)
+6500000,Queelign's Greatsword
+6500001,Queelign's Greatsword
+6500002,Queelign's Greatsword
+6500003,Queelign's Greatsword
+6500004,Queelign's Greatsword
+6500005,Queelign's Greatsword
+6500006,Queelign's Greatsword
+6500007,Queelign's Greatsword
+6500008,Queelign's Greatsword
+6500009,Queelign's Greatsword
+6500010,Queelign's Greatsword
+6500011,Queelign's Greatsword
+6500012,Queelign's Greatsword
+6500013,Queelign's Greatsword
+6500014,Queelign's Greatsword
+6500015,Queelign's Greatsword
+6500016,Queelign's Greatsword
+6500017,Queelign's Greatsword
+6500018,Queelign's Greatsword
+6500019,Queelign's Greatsword
+6500020,Queelign's Greatsword
+6500021,Queelign's Greatsword
+6500022,Queelign's Greatsword
+6500023,Queelign's Greatsword
+6500024,Queelign's Greatsword
+6500025,Queelign's Greatsword
+7500000,Spirit Sword
+7500001,Spirit Sword
+7500002,Spirit Sword
+7500003,Spirit Sword
+7500004,Spirit Sword
+7500005,Spirit Sword
+7500006,Spirit Sword
+7500007,Spirit Sword
+7500008,Spirit Sword
+7500009,Spirit Sword
+7500010,Spirit Sword
+7500011,Spirit Sword
+7500012,Spirit Sword
+7500013,Spirit Sword
+7500014,Spirit Sword
+7500015,Spirit Sword
+7500016,Spirit Sword
+7500017,Spirit Sword
+7500018,Spirit Sword
+7500019,Spirit Sword
+7500020,Spirit Sword
+7500021,Spirit Sword
+7500022,Spirit Sword
+7500023,Spirit Sword
+7500024,Spirit Sword
+7500025,Spirit Sword
+7510000,Falx
+7510001,Falx
+7510002,Falx
+7510003,Falx
+7510004,Falx
+7510005,Falx
+7510006,Falx
+7510007,Falx
+7510008,Falx
+7510009,Falx
+7510010,Falx
+7510011,Falx
+7510012,Falx
+7510013,Falx
+7510014,Falx
+7510015,Falx
+7510016,Falx
+7510017,Falx
+7510018,Falx
+7510019,Falx
+7510020,Falx
+7510021,Falx
+7510022,Falx
+7510023,Falx
+7510024,Falx
+7510025,Falx
+7520000,Dancing Blade of Ranah
+7520001,Dancing Blade of Ranah
+7520002,Dancing Blade of Ranah
+7520003,Dancing Blade of Ranah
+7520004,Dancing Blade of Ranah
+7520005,Dancing Blade of Ranah
+7520006,Dancing Blade of Ranah
+7520007,Dancing Blade of Ranah
+7520008,Dancing Blade of Ranah
+7520009,Dancing Blade of Ranah
+7520010,Dancing Blade of Ranah
+7520011,Dancing Blade of Ranah
+7520012,Dancing Blade of Ranah
+7520013,Dancing Blade of Ranah
+7520014,Dancing Blade of Ranah
+7520015,Dancing Blade of Ranah
+7520016,Dancing Blade of Ranah
+7520017,Dancing Blade of Ranah
+7520018,Dancing Blade of Ranah
+7520019,Dancing Blade of Ranah
+7520020,Dancing Blade of Ranah
+7520021,Dancing Blade of Ranah
+7520022,Dancing Blade of Ranah
+7520023,Dancing Blade of Ranah
+7520024,Dancing Blade of Ranah
+7520025,Dancing Blade of Ranah
+7530000,Horned Warrior's Sword
+7530001,Horned Warrior's Sword
+7530002,Horned Warrior's Sword
+7530003,Horned Warrior's Sword
+7530004,Horned Warrior's Sword
+7530005,Horned Warrior's Sword
+7530006,Horned Warrior's Sword
+7530007,Horned Warrior's Sword
+7530008,Horned Warrior's Sword
+7530009,Horned Warrior's Sword
+7530010,Horned Warrior's Sword
+7530011,Horned Warrior's Sword
+7530012,Horned Warrior's Sword
+7530013,Horned Warrior's Sword
+7530014,Horned Warrior's Sword
+7530015,Horned Warrior's Sword
+7530016,Horned Warrior's Sword
+7530017,Horned Warrior's Sword
+7530018,Horned Warrior's Sword
+7530019,Horned Warrior's Sword
+7530020,Horned Warrior's Sword
+7530021,Horned Warrior's Sword
+7530022,Horned Warrior's Sword
+7530023,Horned Warrior's Sword
+7530024,Horned Warrior's Sword
+7530025,Horned Warrior's Sword
+8500000,Putrescence Cleaver
+8500001,Putrescence Cleaver
+8500002,Putrescence Cleaver
+8500003,Putrescence Cleaver
+8500004,Putrescence Cleaver
+8500005,Putrescence Cleaver
+8500006,Putrescence Cleaver
+8500007,Putrescence Cleaver
+8500008,Putrescence Cleaver
+8500009,Putrescence Cleaver
+8500010,Putrescence Cleaver
+8500011,Putrescence Cleaver
+8500012,Putrescence Cleaver
+8500013,Putrescence Cleaver
+8500014,Putrescence Cleaver
+8500015,Putrescence Cleaver
+8500016,Putrescence Cleaver
+8500017,Putrescence Cleaver
+8500018,Putrescence Cleaver
+8500019,Putrescence Cleaver
+8500020,Putrescence Cleaver
+8500021,Putrescence Cleaver
+8500022,Putrescence Cleaver
+8500023,Putrescence Cleaver
+8500024,Putrescence Cleaver
+8500025,Putrescence Cleaver
+8510000,Freyja's Greatsword
+8510001,Freyja's Greatsword
+8510002,Freyja's Greatsword
+8510003,Freyja's Greatsword
+8510004,Freyja's Greatsword
+8510005,Freyja's Greatsword
+8510006,Freyja's Greatsword
+8510007,Freyja's Greatsword
+8510008,Freyja's Greatsword
+8510009,Freyja's Greatsword
+8510010,Freyja's Greatsword
+8510011,Freyja's Greatsword
+8510012,Freyja's Greatsword
+8510013,Freyja's Greatsword
+8510014,Freyja's Greatsword
+8510015,Freyja's Greatsword
+8510016,Freyja's Greatsword
+8510017,Freyja's Greatsword
+8510018,Freyja's Greatsword
+8510019,Freyja's Greatsword
+8510020,Freyja's Greatsword
+8510021,Freyja's Greatsword
+8510022,Freyja's Greatsword
+8510023,Freyja's Greatsword
+8510024,Freyja's Greatsword
+8510025,Freyja's Greatsword
+8520000,Horned Warrior's Greatsword
+8520001,Horned Warrior's Greatsword
+8520002,Horned Warrior's Greatsword
+8520003,Horned Warrior's Greatsword
+8520004,Horned Warrior's Greatsword
+8520005,Horned Warrior's Greatsword
+8520006,Horned Warrior's Greatsword
+8520007,Horned Warrior's Greatsword
+8520008,Horned Warrior's Greatsword
+8520009,Horned Warrior's Greatsword
+8520010,Horned Warrior's Greatsword
+8520011,Horned Warrior's Greatsword
+8520012,Horned Warrior's Greatsword
+8520013,Horned Warrior's Greatsword
+8520014,Horned Warrior's Greatsword
+8520015,Horned Warrior's Greatsword
+8520016,Horned Warrior's Greatsword
+8520017,Horned Warrior's Greatsword
+8520018,Horned Warrior's Greatsword
+8520019,Horned Warrior's Greatsword
+8520020,Horned Warrior's Greatsword
+8520021,Horned Warrior's Greatsword
+8520022,Horned Warrior's Greatsword
+8520023,Horned Warrior's Greatsword
+8520024,Horned Warrior's Greatsword
+8520025,Horned Warrior's Greatsword
+9500000,Sword of Night
+9500001,Sword of Night
+9500002,Sword of Night
+9500003,Sword of Night
+9500004,Sword of Night
+9500005,Sword of Night
+9500006,Sword of Night
+9500007,Sword of Night
+9500008,Sword of Night
+9500009,Sword of Night
+9500010,Sword of Night
+9500011,Sword of Night
+9500012,Sword of Night
+9500013,Sword of Night
+9500014,Sword of Night
+9500015,Sword of Night
+9500016,Sword of Night
+9500017,Sword of Night
+9500018,Sword of Night
+9500019,Sword of Night
+9500020,Sword of Night
+9500021,Sword of Night
+9500022,Sword of Night
+9500023,Sword of Night
+9500024,Sword of Night
+9500025,Sword of Night
+10500000,Euporia
+10500001,Euporia
+10500002,Euporia
+10500003,Euporia
+10500004,Euporia
+10500005,Euporia
+10500006,Euporia
+10500007,Euporia
+10500008,Euporia
+10500009,Euporia
+10500010,Euporia
+10500011,Euporia
+10500012,Euporia
+10500013,Euporia
+10500014,Euporia
+10500015,Euporia
+10500016,Euporia
+10500017,Euporia
+10500018,Euporia
+10500019,Euporia
+10500020,Euporia
+10500021,Euporia
+10500022,Euporia
+10500023,Euporia
+10500024,Euporia
+10500025,Euporia
+10510000,Black Steel Twinblade
+10510001,Black Steel Twinblade
+10510002,Black Steel Twinblade
+10510003,Black Steel Twinblade
+10510004,Black Steel Twinblade
+10510005,Black Steel Twinblade
+10510006,Black Steel Twinblade
+10510007,Black Steel Twinblade
+10510008,Black Steel Twinblade
+10510009,Black Steel Twinblade
+10510010,Black Steel Twinblade
+10510011,Black Steel Twinblade
+10510012,Black Steel Twinblade
+10510013,Black Steel Twinblade
+10510014,Black Steel Twinblade
+10510015,Black Steel Twinblade
+10510016,Black Steel Twinblade
+10510017,Black Steel Twinblade
+10510018,Black Steel Twinblade
+10510019,Black Steel Twinblade
+10510020,Black Steel Twinblade
+10510021,Black Steel Twinblade
+10510022,Black Steel Twinblade
+10510023,Black Steel Twinblade
+10510024,Black Steel Twinblade
+10510025,Black Steel Twinblade
+11500000,Flowerstone Gavel
+11500001,Flowerstone Gavel
+11500002,Flowerstone Gavel
+11500003,Flowerstone Gavel
+11500004,Flowerstone Gavel
+11500005,Flowerstone Gavel
+11500006,Flowerstone Gavel
+11500007,Flowerstone Gavel
+11500008,Flowerstone Gavel
+11500009,Flowerstone Gavel
+11500010,Flowerstone Gavel
+11500011,Flowerstone Gavel
+11500012,Flowerstone Gavel
+11500013,Flowerstone Gavel
+11500014,Flowerstone Gavel
+11500015,Flowerstone Gavel
+11500016,Flowerstone Gavel
+11500017,Flowerstone Gavel
+11500018,Flowerstone Gavel
+11500019,Flowerstone Gavel
+11500020,Flowerstone Gavel
+11500021,Flowerstone Gavel
+11500022,Flowerstone Gavel
+11500023,Flowerstone Gavel
+11500024,Flowerstone Gavel
+11500025,Flowerstone Gavel
+12500000,Smithscript Greathammer
+12500001,Smithscript Greathammer
+12500002,Smithscript Greathammer
+12500003,Smithscript Greathammer
+12500004,Smithscript Greathammer
+12500005,Smithscript Greathammer
+12500006,Smithscript Greathammer
+12500007,Smithscript Greathammer
+12500008,Smithscript Greathammer
+12500009,Smithscript Greathammer
+12500010,Smithscript Greathammer
+12500011,Smithscript Greathammer
+12500012,Smithscript Greathammer
+12500013,Smithscript Greathammer
+12500014,Smithscript Greathammer
+12500015,Smithscript Greathammer
+12500016,Smithscript Greathammer
+12500017,Smithscript Greathammer
+12500018,Smithscript Greathammer
+12500019,Smithscript Greathammer
+12500020,Smithscript Greathammer
+12500021,Smithscript Greathammer
+12500022,Smithscript Greathammer
+12500023,Smithscript Greathammer
+12500024,Smithscript Greathammer
+12500025,Smithscript Greathammer
+12510000,Anvil Hammer
+12510001,Anvil Hammer
+12510002,Anvil Hammer
+12510003,Anvil Hammer
+12510004,Anvil Hammer
+12510005,Anvil Hammer
+12510006,Anvil Hammer
+12510007,Anvil Hammer
+12510008,Anvil Hammer
+12510009,Anvil Hammer
+12510010,Anvil Hammer
+12510011,Anvil Hammer
+12510012,Anvil Hammer
+12510013,Anvil Hammer
+12510014,Anvil Hammer
+12510015,Anvil Hammer
+12510016,Anvil Hammer
+12510017,Anvil Hammer
+12510018,Anvil Hammer
+12510019,Anvil Hammer
+12510020,Anvil Hammer
+12510021,Anvil Hammer
+12510022,Anvil Hammer
+12510023,Anvil Hammer
+12510024,Anvil Hammer
+12510025,Anvil Hammer
+12520000,Black Steel Greathammer
+12520001,Black Steel Greathammer
+12520002,Black Steel Greathammer
+12520003,Black Steel Greathammer
+12520004,Black Steel Greathammer
+12520005,Black Steel Greathammer
+12520006,Black Steel Greathammer
+12520007,Black Steel Greathammer
+12520008,Black Steel Greathammer
+12520009,Black Steel Greathammer
+12520010,Black Steel Greathammer
+12520011,Black Steel Greathammer
+12520012,Black Steel Greathammer
+12520013,Black Steel Greathammer
+12520014,Black Steel Greathammer
+12520015,Black Steel Greathammer
+12520016,Black Steel Greathammer
+12520017,Black Steel Greathammer
+12520018,Black Steel Greathammer
+12520019,Black Steel Greathammer
+12520020,Black Steel Greathammer
+12520021,Black Steel Greathammer
+12520022,Black Steel Greathammer
+12520023,Black Steel Greathammer
+12520024,Black Steel Greathammer
+12520025,Black Steel Greathammer
+12530000,Bloodfiend's Arm
+12530001,Bloodfiend's Arm
+12530002,Bloodfiend's Arm
+12530003,Bloodfiend's Arm
+12530004,Bloodfiend's Arm
+12530005,Bloodfiend's Arm
+12530006,Bloodfiend's Arm
+12530007,Bloodfiend's Arm
+12530008,Bloodfiend's Arm
+12530009,Bloodfiend's Arm
+12530010,Bloodfiend's Arm
+12530011,Bloodfiend's Arm
+12530012,Bloodfiend's Arm
+12530013,Bloodfiend's Arm
+12530014,Bloodfiend's Arm
+12530015,Bloodfiend's Arm
+12530016,Bloodfiend's Arm
+12530017,Bloodfiend's Arm
+12530018,Bloodfiend's Arm
+12530019,Bloodfiend's Arm
+12530020,Bloodfiend's Arm
+12530021,Bloodfiend's Arm
+12530022,Bloodfiend's Arm
+12530023,Bloodfiend's Arm
+12530024,Bloodfiend's Arm
+12530025,Bloodfiend's Arm
+13500000,Serpent Flail
+13500001,Serpent Flail
+13500002,Serpent Flail
+13500003,Serpent Flail
+13500004,Serpent Flail
+13500005,Serpent Flail
+13500006,Serpent Flail
+13500007,Serpent Flail
+13500008,Serpent Flail
+13500009,Serpent Flail
+13500010,Serpent Flail
+13500011,Serpent Flail
+13500012,Serpent Flail
+13500013,Serpent Flail
+13500014,Serpent Flail
+13500015,Serpent Flail
+13500016,Serpent Flail
+13500017,Serpent Flail
+13500018,Serpent Flail
+13500019,Serpent Flail
+13500020,Serpent Flail
+13500021,Serpent Flail
+13500022,Serpent Flail
+13500023,Serpent Flail
+13500024,Serpent Flail
+13500025,Serpent Flail
+14500000,Smithscript Axe
+14500001,Smithscript Axe
+14500002,Smithscript Axe
+14500003,Smithscript Axe
+14500004,Smithscript Axe
+14500005,Smithscript Axe
+14500006,Smithscript Axe
+14500007,Smithscript Axe
+14500008,Smithscript Axe
+14500009,Smithscript Axe
+14500010,Smithscript Axe
+14500011,Smithscript Axe
+14500012,Smithscript Axe
+14500013,Smithscript Axe
+14500014,Smithscript Axe
+14500015,Smithscript Axe
+14500016,Smithscript Axe
+14500017,Smithscript Axe
+14500018,Smithscript Axe
+14500019,Smithscript Axe
+14500020,Smithscript Axe
+14500021,Smithscript Axe
+14500022,Smithscript Axe
+14500023,Smithscript Axe
+14500024,Smithscript Axe
+14500025,Smithscript Axe
+14510000,Death Knight's Twin Axes
+14510001,Death Knight's Twin Axes
+14510002,Death Knight's Twin Axes
+14510003,Death Knight's Twin Axes
+14510004,Death Knight's Twin Axes
+14510005,Death Knight's Twin Axes
+14510006,Death Knight's Twin Axes
+14510007,Death Knight's Twin Axes
+14510008,Death Knight's Twin Axes
+14510009,Death Knight's Twin Axes
+14510010,Death Knight's Twin Axes
+14510011,Death Knight's Twin Axes
+14510012,Death Knight's Twin Axes
+14510013,Death Knight's Twin Axes
+14510014,Death Knight's Twin Axes
+14510015,Death Knight's Twin Axes
+14510016,Death Knight's Twin Axes
+14510017,Death Knight's Twin Axes
+14510018,Death Knight's Twin Axes
+14510019,Death Knight's Twin Axes
+14510020,Death Knight's Twin Axes
+14510021,Death Knight's Twin Axes
+14510022,Death Knight's Twin Axes
+14510023,Death Knight's Twin Axes
+14510024,Death Knight's Twin Axes
+14510025,Death Knight's Twin Axes
+14520000,Messmer Soldier's Axe
+14520001,Messmer Soldier's Axe
+14520002,Messmer Soldier's Axe
+14520003,Messmer Soldier's Axe
+14520004,Messmer Soldier's Axe
+14520005,Messmer Soldier's Axe
+14520006,Messmer Soldier's Axe
+14520007,Messmer Soldier's Axe
+14520008,Messmer Soldier's Axe
+14520009,Messmer Soldier's Axe
+14520010,Messmer Soldier's Axe
+14520011,Messmer Soldier's Axe
+14520012,Messmer Soldier's Axe
+14520013,Messmer Soldier's Axe
+14520014,Messmer Soldier's Axe
+14520015,Messmer Soldier's Axe
+14520016,Messmer Soldier's Axe
+14520017,Messmer Soldier's Axe
+14520018,Messmer Soldier's Axe
+14520019,Messmer Soldier's Axe
+14520020,Messmer Soldier's Axe
+14520021,Messmer Soldier's Axe
+14520022,Messmer Soldier's Axe
+14520023,Messmer Soldier's Axe
+14520024,Messmer Soldier's Axe
+14520025,Messmer Soldier's Axe
+14540000,Forked-Tongue Hatchet
+14540001,Forked-Tongue Hatchet
+14540002,Forked-Tongue Hatchet
+14540003,Forked-Tongue Hatchet
+14540004,Forked-Tongue Hatchet
+14540005,Forked-Tongue Hatchet
+14540006,Forked-Tongue Hatchet
+14540007,Forked-Tongue Hatchet
+14540008,Forked-Tongue Hatchet
+14540009,Forked-Tongue Hatchet
+14540010,Forked-Tongue Hatchet
+14540011,Forked-Tongue Hatchet
+14540012,Forked-Tongue Hatchet
+14540013,Forked-Tongue Hatchet
+14540014,Forked-Tongue Hatchet
+14540015,Forked-Tongue Hatchet
+14540016,Forked-Tongue Hatchet
+14540017,Forked-Tongue Hatchet
+14540018,Forked-Tongue Hatchet
+14540019,Forked-Tongue Hatchet
+14540020,Forked-Tongue Hatchet
+14540021,Forked-Tongue Hatchet
+14540022,Forked-Tongue Hatchet
+14540023,Forked-Tongue Hatchet
+14540024,Forked-Tongue Hatchet
+14540025,Forked-Tongue Hatchet
+15500000,Death Knight's Longhaft Axe
+15500001,Death Knight's Longhaft Axe
+15500002,Death Knight's Longhaft Axe
+15500003,Death Knight's Longhaft Axe
+15500004,Death Knight's Longhaft Axe
+15500005,Death Knight's Longhaft Axe
+15500006,Death Knight's Longhaft Axe
+15500007,Death Knight's Longhaft Axe
+15500008,Death Knight's Longhaft Axe
+15500009,Death Knight's Longhaft Axe
+15500010,Death Knight's Longhaft Axe
+15500011,Death Knight's Longhaft Axe
+15500012,Death Knight's Longhaft Axe
+15500013,Death Knight's Longhaft Axe
+15500014,Death Knight's Longhaft Axe
+15500015,Death Knight's Longhaft Axe
+15500016,Death Knight's Longhaft Axe
+15500017,Death Knight's Longhaft Axe
+15500018,Death Knight's Longhaft Axe
+15500019,Death Knight's Longhaft Axe
+15500020,Death Knight's Longhaft Axe
+15500021,Death Knight's Longhaft Axe
+15500022,Death Knight's Longhaft Axe
+15500023,Death Knight's Longhaft Axe
+15500024,Death Knight's Longhaft Axe
+15500025,Death Knight's Longhaft Axe
+15510000,Bonny Butchering Knife
+15510001,Bonny Butchering Knife
+15510002,Bonny Butchering Knife
+15510003,Bonny Butchering Knife
+15510004,Bonny Butchering Knife
+15510005,Bonny Butchering Knife
+15510006,Bonny Butchering Knife
+15510007,Bonny Butchering Knife
+15510008,Bonny Butchering Knife
+15510009,Bonny Butchering Knife
+15510010,Bonny Butchering Knife
+15510011,Bonny Butchering Knife
+15510012,Bonny Butchering Knife
+15510013,Bonny Butchering Knife
+15510014,Bonny Butchering Knife
+15510015,Bonny Butchering Knife
+15510016,Bonny Butchering Knife
+15510017,Bonny Butchering Knife
+15510018,Bonny Butchering Knife
+15510019,Bonny Butchering Knife
+15510020,Bonny Butchering Knife
+15510021,Bonny Butchering Knife
+15510022,Bonny Butchering Knife
+15510023,Bonny Butchering Knife
+15510024,Bonny Butchering Knife
+15510025,Bonny Butchering Knife
+16500000,Smithscript Spear
+16500001,Smithscript Spear
+16500002,Smithscript Spear
+16500003,Smithscript Spear
+16500004,Smithscript Spear
+16500005,Smithscript Spear
+16500006,Smithscript Spear
+16500007,Smithscript Spear
+16500008,Smithscript Spear
+16500009,Smithscript Spear
+16500010,Smithscript Spear
+16500011,Smithscript Spear
+16500012,Smithscript Spear
+16500013,Smithscript Spear
+16500014,Smithscript Spear
+16500015,Smithscript Spear
+16500016,Smithscript Spear
+16500017,Smithscript Spear
+16500018,Smithscript Spear
+16500019,Smithscript Spear
+16500020,Smithscript Spear
+16500021,Smithscript Spear
+16500022,Smithscript Spear
+16500023,Smithscript Spear
+16500024,Smithscript Spear
+16500025,Smithscript Spear
+16520000,Swift Spear
+16520001,Swift Spear
+16520002,Swift Spear
+16520003,Swift Spear
+16520004,Swift Spear
+16520005,Swift Spear
+16520006,Swift Spear
+16520007,Swift Spear
+16520008,Swift Spear
+16520009,Swift Spear
+16520010,Swift Spear
+16520011,Swift Spear
+16520012,Swift Spear
+16520013,Swift Spear
+16520014,Swift Spear
+16520015,Swift Spear
+16520016,Swift Spear
+16520017,Swift Spear
+16520018,Swift Spear
+16520019,Swift Spear
+16520020,Swift Spear
+16520021,Swift Spear
+16520022,Swift Spear
+16520023,Swift Spear
+16520024,Swift Spear
+16520025,Swift Spear
+16540000,Bloodfiend's Fork
+16540001,Bloodfiend's Fork
+16540002,Bloodfiend's Fork
+16540003,Bloodfiend's Fork
+16540004,Bloodfiend's Fork
+16540005,Bloodfiend's Fork
+16540006,Bloodfiend's Fork
+16540007,Bloodfiend's Fork
+16540008,Bloodfiend's Fork
+16540009,Bloodfiend's Fork
+16540010,Bloodfiend's Fork
+16540011,Bloodfiend's Fork
+16540012,Bloodfiend's Fork
+16540013,Bloodfiend's Fork
+16540014,Bloodfiend's Fork
+16540015,Bloodfiend's Fork
+16540016,Bloodfiend's Fork
+16540017,Bloodfiend's Fork
+16540018,Bloodfiend's Fork
+16540019,Bloodfiend's Fork
+16540020,Bloodfiend's Fork
+16540021,Bloodfiend's Fork
+16540022,Bloodfiend's Fork
+16540023,Bloodfiend's Fork
+16540024,Bloodfiend's Fork
+16540025,Bloodfiend's Fork
+16550000,Bloodfiend's Sacred Spear
+16550001,Bloodfiend's Sacred Spear
+16550002,Bloodfiend's Sacred Spear
+16550003,Bloodfiend's Sacred Spear
+16550004,Bloodfiend's Sacred Spear
+16550005,Bloodfiend's Sacred Spear
+16550006,Bloodfiend's Sacred Spear
+16550007,Bloodfiend's Sacred Spear
+16550008,Bloodfiend's Sacred Spear
+16550009,Bloodfiend's Sacred Spear
+16550010,Bloodfiend's Sacred Spear
+16550011,Bloodfiend's Sacred Spear
+16550012,Bloodfiend's Sacred Spear
+16550013,Bloodfiend's Sacred Spear
+16550014,Bloodfiend's Sacred Spear
+16550015,Bloodfiend's Sacred Spear
+16550016,Bloodfiend's Sacred Spear
+16550017,Bloodfiend's Sacred Spear
+16550018,Bloodfiend's Sacred Spear
+16550019,Bloodfiend's Sacred Spear
+16550020,Bloodfiend's Sacred Spear
+16550021,Bloodfiend's Sacred Spear
+16550022,Bloodfiend's Sacred Spear
+16550023,Bloodfiend's Sacred Spear
+16550024,Bloodfiend's Sacred Spear
+16550025,Bloodfiend's Sacred Spear
+17500000,Spear of the Impaler
+17500001,Spear of the Impaler
+17500002,Spear of the Impaler
+17500003,Spear of the Impaler
+17500004,Spear of the Impaler
+17500005,Spear of the Impaler
+17500006,Spear of the Impaler
+17500007,Spear of the Impaler
+17500008,Spear of the Impaler
+17500009,Spear of the Impaler
+17500010,Spear of the Impaler
+17500011,Spear of the Impaler
+17500012,Spear of the Impaler
+17500013,Spear of the Impaler
+17500014,Spear of the Impaler
+17500015,Spear of the Impaler
+17500016,Spear of the Impaler
+17500017,Spear of the Impaler
+17500018,Spear of the Impaler
+17500019,Spear of the Impaler
+17500020,Spear of the Impaler
+17500021,Spear of the Impaler
+17500022,Spear of the Impaler
+17500023,Spear of the Impaler
+17500024,Spear of the Impaler
+17500025,Spear of the Impaler
+17510000,Messmer Soldier's Spear
+17510001,Messmer Soldier's Spear
+17510002,Messmer Soldier's Spear
+17510003,Messmer Soldier's Spear
+17510004,Messmer Soldier's Spear
+17510005,Messmer Soldier's Spear
+17510006,Messmer Soldier's Spear
+17510007,Messmer Soldier's Spear
+17510008,Messmer Soldier's Spear
+17510009,Messmer Soldier's Spear
+17510010,Messmer Soldier's Spear
+17510011,Messmer Soldier's Spear
+17510012,Messmer Soldier's Spear
+17510013,Messmer Soldier's Spear
+17510014,Messmer Soldier's Spear
+17510015,Messmer Soldier's Spear
+17510016,Messmer Soldier's Spear
+17510017,Messmer Soldier's Spear
+17510018,Messmer Soldier's Spear
+17510019,Messmer Soldier's Spear
+17510020,Messmer Soldier's Spear
+17510021,Messmer Soldier's Spear
+17510022,Messmer Soldier's Spear
+17510023,Messmer Soldier's Spear
+17510024,Messmer Soldier's Spear
+17510025,Messmer Soldier's Spear
+17520000,Barbed Staff-Spear
+17520001,Barbed Staff-Spear
+17520002,Barbed Staff-Spear
+17520003,Barbed Staff-Spear
+17520004,Barbed Staff-Spear
+17520005,Barbed Staff-Spear
+17520006,Barbed Staff-Spear
+17520007,Barbed Staff-Spear
+17520008,Barbed Staff-Spear
+17520009,Barbed Staff-Spear
+17520010,Barbed Staff-Spear
+17520011,Barbed Staff-Spear
+17520012,Barbed Staff-Spear
+17520013,Barbed Staff-Spear
+17520014,Barbed Staff-Spear
+17520015,Barbed Staff-Spear
+17520016,Barbed Staff-Spear
+17520017,Barbed Staff-Spear
+17520018,Barbed Staff-Spear
+17520019,Barbed Staff-Spear
+17520020,Barbed Staff-Spear
+17520021,Barbed Staff-Spear
+17520022,Barbed Staff-Spear
+17520023,Barbed Staff-Spear
+17520024,Barbed Staff-Spear
+17520025,Barbed Staff-Spear
+18500000,Spirit Glaive
+18500001,Spirit Glaive
+18500002,Spirit Glaive
+18500003,Spirit Glaive
+18500004,Spirit Glaive
+18500005,Spirit Glaive
+18500006,Spirit Glaive
+18500007,Spirit Glaive
+18500008,Spirit Glaive
+18500009,Spirit Glaive
+18500010,Spirit Glaive
+18500011,Spirit Glaive
+18500012,Spirit Glaive
+18500013,Spirit Glaive
+18500014,Spirit Glaive
+18500015,Spirit Glaive
+18500016,Spirit Glaive
+18500017,Spirit Glaive
+18500018,Spirit Glaive
+18500019,Spirit Glaive
+18500020,Spirit Glaive
+18500021,Spirit Glaive
+18500022,Spirit Glaive
+18500023,Spirit Glaive
+18500024,Spirit Glaive
+18500025,Spirit Glaive
+18510000,Poleblade of the Bud
+18510001,Poleblade of the Bud
+18510002,Poleblade of the Bud
+18510003,Poleblade of the Bud
+18510004,Poleblade of the Bud
+18510005,Poleblade of the Bud
+18510006,Poleblade of the Bud
+18510007,Poleblade of the Bud
+18510008,Poleblade of the Bud
+18510009,Poleblade of the Bud
+18510010,Poleblade of the Bud
+18510011,Poleblade of the Bud
+18510012,Poleblade of the Bud
+18510013,Poleblade of the Bud
+18510014,Poleblade of the Bud
+18510015,Poleblade of the Bud
+18510016,Poleblade of the Bud
+18510017,Poleblade of the Bud
+18510018,Poleblade of the Bud
+18510019,Poleblade of the Bud
+18510020,Poleblade of the Bud
+18510021,Poleblade of the Bud
+18510022,Poleblade of the Bud
+18510023,Poleblade of the Bud
+18510024,Poleblade of the Bud
+18510025,Poleblade of the Bud
+19500000,Obsidian Lamina
+19500001,Obsidian Lamina
+19500002,Obsidian Lamina
+19500003,Obsidian Lamina
+19500004,Obsidian Lamina
+19500005,Obsidian Lamina
+19500006,Obsidian Lamina
+19500007,Obsidian Lamina
+19500008,Obsidian Lamina
+19500009,Obsidian Lamina
+19500010,Obsidian Lamina
+19500011,Obsidian Lamina
+19500012,Obsidian Lamina
+19500013,Obsidian Lamina
+19500014,Obsidian Lamina
+19500015,Obsidian Lamina
+19500016,Obsidian Lamina
+19500017,Obsidian Lamina
+19500018,Obsidian Lamina
+19500019,Obsidian Lamina
+19500020,Obsidian Lamina
+19500021,Obsidian Lamina
+19500022,Obsidian Lamina
+19500023,Obsidian Lamina
+19500024,Obsidian Lamina
+19500025,Obsidian Lamina
+20500000,Tooth Whip
+20500001,Tooth Whip
+20500002,Tooth Whip
+20500003,Tooth Whip
+20500004,Tooth Whip
+20500005,Tooth Whip
+20500006,Tooth Whip
+20500007,Tooth Whip
+20500008,Tooth Whip
+20500009,Tooth Whip
+20500010,Tooth Whip
+20500011,Tooth Whip
+20500012,Tooth Whip
+20500013,Tooth Whip
+20500014,Tooth Whip
+20500015,Tooth Whip
+20500016,Tooth Whip
+20500017,Tooth Whip
+20500018,Tooth Whip
+20500019,Tooth Whip
+20500020,Tooth Whip
+20500021,Tooth Whip
+20500022,Tooth Whip
+20500023,Tooth Whip
+20500024,Tooth Whip
+20500025,Tooth Whip
+21500000,Thiollier's Hidden Needle
+21500001,Thiollier's Hidden Needle
+21500002,Thiollier's Hidden Needle
+21500003,Thiollier's Hidden Needle
+21500004,Thiollier's Hidden Needle
+21500005,Thiollier's Hidden Needle
+21500006,Thiollier's Hidden Needle
+21500007,Thiollier's Hidden Needle
+21500008,Thiollier's Hidden Needle
+21500009,Thiollier's Hidden Needle
+21500010,Thiollier's Hidden Needle
+21500011,Thiollier's Hidden Needle
+21500012,Thiollier's Hidden Needle
+21500013,Thiollier's Hidden Needle
+21500014,Thiollier's Hidden Needle
+21500015,Thiollier's Hidden Needle
+21500016,Thiollier's Hidden Needle
+21500017,Thiollier's Hidden Needle
+21500018,Thiollier's Hidden Needle
+21500019,Thiollier's Hidden Needle
+21500020,Thiollier's Hidden Needle
+21500021,Thiollier's Hidden Needle
+21500022,Thiollier's Hidden Needle
+21500023,Thiollier's Hidden Needle
+21500024,Thiollier's Hidden Needle
+21500025,Thiollier's Hidden Needle
+21510000,Pata
+21510001,Pata
+21510002,Pata
+21510003,Pata
+21510004,Pata
+21510005,Pata
+21510006,Pata
+21510007,Pata
+21510008,Pata
+21510009,Pata
+21510010,Pata
+21510011,Pata
+21510012,Pata
+21510013,Pata
+21510014,Pata
+21510015,Pata
+21510016,Pata
+21510017,Pata
+21510018,Pata
+21510019,Pata
+21510020,Pata
+21510021,Pata
+21510022,Pata
+21510023,Pata
+21510024,Pata
+21510025,Pata
+21520000,Poisoned Hand
+21520001,Poisoned Hand
+21520002,Poisoned Hand
+21520003,Poisoned Hand
+21520004,Poisoned Hand
+21520005,Poisoned Hand
+21520006,Poisoned Hand
+21520007,Poisoned Hand
+21520008,Poisoned Hand
+21520009,Poisoned Hand
+21520010,Poisoned Hand
+21520011,Poisoned Hand
+21520012,Poisoned Hand
+21520013,Poisoned Hand
+21520014,Poisoned Hand
+21520015,Poisoned Hand
+21520016,Poisoned Hand
+21520017,Poisoned Hand
+21520018,Poisoned Hand
+21520019,Poisoned Hand
+21520020,Poisoned Hand
+21520021,Poisoned Hand
+21520022,Poisoned Hand
+21520023,Poisoned Hand
+21520024,Poisoned Hand
+21520025,Poisoned Hand
+21530000,Madding Hand
+21530001,Madding Hand
+21530002,Madding Hand
+21530003,Madding Hand
+21530004,Madding Hand
+21530005,Madding Hand
+21530006,Madding Hand
+21530007,Madding Hand
+21530008,Madding Hand
+21530009,Madding Hand
+21530010,Madding Hand
+21530011,Madding Hand
+21530012,Madding Hand
+21530013,Madding Hand
+21530014,Madding Hand
+21530015,Madding Hand
+21530016,Madding Hand
+21530017,Madding Hand
+21530018,Madding Hand
+21530019,Madding Hand
+21530020,Madding Hand
+21530021,Madding Hand
+21530022,Madding Hand
+21530023,Madding Hand
+21530024,Madding Hand
+21530025,Madding Hand
+21540000,Golem Fist
+21540001,Golem Fist
+21540002,Golem Fist
+21540003,Golem Fist
+21540004,Golem Fist
+21540005,Golem Fist
+21540006,Golem Fist
+21540007,Golem Fist
+21540008,Golem Fist
+21540009,Golem Fist
+21540010,Golem Fist
+21540011,Golem Fist
+21540012,Golem Fist
+21540013,Golem Fist
+21540014,Golem Fist
+21540015,Golem Fist
+21540016,Golem Fist
+21540017,Golem Fist
+21540018,Golem Fist
+21540019,Golem Fist
+21540020,Golem Fist
+21540021,Golem Fist
+21540022,Golem Fist
+21540023,Golem Fist
+21540024,Golem Fist
+21540025,Golem Fist
+21550000,Shield of Night
+21550001,Shield of Night
+21550002,Shield of Night
+21550003,Shield of Night
+21550004,Shield of Night
+21550005,Shield of Night
+21550006,Shield of Night
+21550007,Shield of Night
+21550008,Shield of Night
+21550009,Shield of Night
+21550010,Shield of Night
+21550011,Shield of Night
+21550012,Shield of Night
+21550013,Shield of Night
+21550014,Shield of Night
+21550015,Shield of Night
+21550016,Shield of Night
+21550017,Shield of Night
+21550018,Shield of Night
+21550019,Shield of Night
+21550020,Shield of Night
+21550021,Shield of Night
+21550022,Shield of Night
+21550023,Shield of Night
+21550024,Shield of Night
+21550025,Shield of Night
+22500000,Claws of Night
+22500001,Claws of Night
+22500002,Claws of Night
+22500003,Claws of Night
+22500004,Claws of Night
+22500005,Claws of Night
+22500006,Claws of Night
+22500007,Claws of Night
+22500008,Claws of Night
+22500009,Claws of Night
+22500010,Claws of Night
+22500011,Claws of Night
+22500012,Claws of Night
+22500013,Claws of Night
+22500014,Claws of Night
+22500015,Claws of Night
+22500016,Claws of Night
+22500017,Claws of Night
+22500018,Claws of Night
+22500019,Claws of Night
+22500020,Claws of Night
+22500021,Claws of Night
+22500022,Claws of Night
+22500023,Claws of Night
+22500024,Claws of Night
+22500025,Claws of Night
+23500000,Devonia's Hammer
+23500001,Devonia's Hammer
+23500002,Devonia's Hammer
+23500003,Devonia's Hammer
+23500004,Devonia's Hammer
+23500005,Devonia's Hammer
+23500006,Devonia's Hammer
+23500007,Devonia's Hammer
+23500008,Devonia's Hammer
+23500009,Devonia's Hammer
+23500010,Devonia's Hammer
+23500011,Devonia's Hammer
+23500012,Devonia's Hammer
+23500013,Devonia's Hammer
+23500014,Devonia's Hammer
+23500015,Devonia's Hammer
+23500016,Devonia's Hammer
+23500017,Devonia's Hammer
+23500018,Devonia's Hammer
+23500019,Devonia's Hammer
+23500020,Devonia's Hammer
+23500021,Devonia's Hammer
+23500022,Devonia's Hammer
+23500023,Devonia's Hammer
+23500024,Devonia's Hammer
+23500025,Devonia's Hammer
+23510000,Shadow Sunflower Blossom
+23510001,Shadow Sunflower Blossom
+23510002,Shadow Sunflower Blossom
+23510003,Shadow Sunflower Blossom
+23510004,Shadow Sunflower Blossom
+23510005,Shadow Sunflower Blossom
+23510006,Shadow Sunflower Blossom
+23510007,Shadow Sunflower Blossom
+23510008,Shadow Sunflower Blossom
+23510009,Shadow Sunflower Blossom
+23510010,Shadow Sunflower Blossom
+23510011,Shadow Sunflower Blossom
+23510012,Shadow Sunflower Blossom
+23510013,Shadow Sunflower Blossom
+23510014,Shadow Sunflower Blossom
+23510015,Shadow Sunflower Blossom
+23510016,Shadow Sunflower Blossom
+23510017,Shadow Sunflower Blossom
+23510018,Shadow Sunflower Blossom
+23510019,Shadow Sunflower Blossom
+23510020,Shadow Sunflower Blossom
+23510021,Shadow Sunflower Blossom
+23510022,Shadow Sunflower Blossom
+23510023,Shadow Sunflower Blossom
+23510024,Shadow Sunflower Blossom
+23510025,Shadow Sunflower Blossom
+23520000,Gazing Finger
+23520001,Gazing Finger
+23520002,Gazing Finger
+23520003,Gazing Finger
+23520004,Gazing Finger
+23520005,Gazing Finger
+23520006,Gazing Finger
+23520007,Gazing Finger
+23520008,Gazing Finger
+23520009,Gazing Finger
+23520010,Gazing Finger
+23520011,Gazing Finger
+23520012,Gazing Finger
+23520013,Gazing Finger
+23520014,Gazing Finger
+23520015,Gazing Finger
+23520016,Gazing Finger
+23520017,Gazing Finger
+23520018,Gazing Finger
+23520019,Gazing Finger
+23520020,Gazing Finger
+23520021,Gazing Finger
+23520022,Gazing Finger
+23520023,Gazing Finger
+23520024,Gazing Finger
+23520025,Gazing Finger
+24500000,Nanaya's Torch
+24500001,Nanaya's Torch
+24500002,Nanaya's Torch
+24500003,Nanaya's Torch
+24500004,Nanaya's Torch
+24500005,Nanaya's Torch
+24500006,Nanaya's Torch
+24500007,Nanaya's Torch
+24500008,Nanaya's Torch
+24500009,Nanaya's Torch
+24500010,Nanaya's Torch
+24500011,Nanaya's Torch
+24500012,Nanaya's Torch
+24500013,Nanaya's Torch
+24500014,Nanaya's Torch
+24500015,Nanaya's Torch
+24500016,Nanaya's Torch
+24500017,Nanaya's Torch
+24500018,Nanaya's Torch
+24500019,Nanaya's Torch
+24500020,Nanaya's Torch
+24500021,Nanaya's Torch
+24500022,Nanaya's Torch
+24500023,Nanaya's Torch
+24500024,Nanaya's Torch
+24500025,Nanaya's Torch
+24510000,Lamenting Visage
+24510001,Lamenting Visage
+24510002,Lamenting Visage
+24510003,Lamenting Visage
+24510004,Lamenting Visage
+24510005,Lamenting Visage
+24510006,Lamenting Visage
+24510007,Lamenting Visage
+24510008,Lamenting Visage
+24510009,Lamenting Visage
+24510010,Lamenting Visage
+24510011,Lamenting Visage
+24510012,Lamenting Visage
+24510013,Lamenting Visage
+24510014,Lamenting Visage
+24510015,Lamenting Visage
+24510016,Lamenting Visage
+24510017,Lamenting Visage
+24510018,Lamenting Visage
+24510019,Lamenting Visage
+24510020,Lamenting Visage
+24510021,Lamenting Visage
+24510022,Lamenting Visage
+24510023,Lamenting Visage
+24510024,Lamenting Visage
+24510025,Lamenting Visage
+30510000,Smithscript Shield
+30510001,Smithscript Shield
+30510002,Smithscript Shield
+30510003,Smithscript Shield
+30510004,Smithscript Shield
+30510005,Smithscript Shield
+30510006,Smithscript Shield
+30510007,Smithscript Shield
+30510008,Smithscript Shield
+30510009,Smithscript Shield
+30510010,Smithscript Shield
+30510011,Smithscript Shield
+30510012,Smithscript Shield
+30510013,Smithscript Shield
+30510014,Smithscript Shield
+30510015,Smithscript Shield
+30510016,Smithscript Shield
+30510017,Smithscript Shield
+30510018,Smithscript Shield
+30510019,Smithscript Shield
+30510020,Smithscript Shield
+30510021,Smithscript Shield
+30510022,Smithscript Shield
+30510023,Smithscript Shield
+30510024,Smithscript Shield
+30510025,Smithscript Shield
+31500000,Messmer Soldier Shield
+31500001,Messmer Soldier Shield
+31500002,Messmer Soldier Shield
+31500003,Messmer Soldier Shield
+31500004,Messmer Soldier Shield
+31500005,Messmer Soldier Shield
+31500006,Messmer Soldier Shield
+31500007,Messmer Soldier Shield
+31500008,Messmer Soldier Shield
+31500009,Messmer Soldier Shield
+31500010,Messmer Soldier Shield
+31500011,Messmer Soldier Shield
+31500012,Messmer Soldier Shield
+31500013,Messmer Soldier Shield
+31500014,Messmer Soldier Shield
+31500015,Messmer Soldier Shield
+31500016,Messmer Soldier Shield
+31500017,Messmer Soldier Shield
+31500018,Messmer Soldier Shield
+31500019,Messmer Soldier Shield
+31500020,Messmer Soldier Shield
+31500021,Messmer Soldier Shield
+31500022,Messmer Soldier Shield
+31500023,Messmer Soldier Shield
+31500024,Messmer Soldier Shield
+31500025,Messmer Soldier Shield
+31510000,Wolf Crest Shield
+31510001,Wolf Crest Shield
+31510002,Wolf Crest Shield
+31510003,Wolf Crest Shield
+31510004,Wolf Crest Shield
+31510005,Wolf Crest Shield
+31510006,Wolf Crest Shield
+31510007,Wolf Crest Shield
+31510008,Wolf Crest Shield
+31510009,Wolf Crest Shield
+31510010,Wolf Crest Shield
+31510011,Wolf Crest Shield
+31510012,Wolf Crest Shield
+31510013,Wolf Crest Shield
+31510014,Wolf Crest Shield
+31510015,Wolf Crest Shield
+31510016,Wolf Crest Shield
+31510017,Wolf Crest Shield
+31510018,Wolf Crest Shield
+31510019,Wolf Crest Shield
+31510020,Wolf Crest Shield
+31510021,Wolf Crest Shield
+31510022,Wolf Crest Shield
+31510023,Wolf Crest Shield
+31510024,Wolf Crest Shield
+31510025,Wolf Crest Shield
+31520000,Serpent Crest Shield
+31520001,Serpent Crest Shield
+31520002,Serpent Crest Shield
+31520003,Serpent Crest Shield
+31520004,Serpent Crest Shield
+31520005,Serpent Crest Shield
+31520006,Serpent Crest Shield
+31520007,Serpent Crest Shield
+31520008,Serpent Crest Shield
+31520009,Serpent Crest Shield
+31520010,Serpent Crest Shield
+31520011,Serpent Crest Shield
+31520012,Serpent Crest Shield
+31520013,Serpent Crest Shield
+31520014,Serpent Crest Shield
+31520015,Serpent Crest Shield
+31520016,Serpent Crest Shield
+31520017,Serpent Crest Shield
+31520018,Serpent Crest Shield
+31520019,Serpent Crest Shield
+31520020,Serpent Crest Shield
+31520021,Serpent Crest Shield
+31520022,Serpent Crest Shield
+31520023,Serpent Crest Shield
+31520024,Serpent Crest Shield
+31520025,Serpent Crest Shield
+31530000,Golden Lion Shield
+31530001,Golden Lion Shield
+31530002,Golden Lion Shield
+31530003,Golden Lion Shield
+31530004,Golden Lion Shield
+31530005,Golden Lion Shield
+31530006,Golden Lion Shield
+31530007,Golden Lion Shield
+31530008,Golden Lion Shield
+31530009,Golden Lion Shield
+31530010,Golden Lion Shield
+31530011,Golden Lion Shield
+31530012,Golden Lion Shield
+31530013,Golden Lion Shield
+31530014,Golden Lion Shield
+31530015,Golden Lion Shield
+31530016,Golden Lion Shield
+31530017,Golden Lion Shield
+31530018,Golden Lion Shield
+31530019,Golden Lion Shield
+31530020,Golden Lion Shield
+31530021,Golden Lion Shield
+31530022,Golden Lion Shield
+31530023,Golden Lion Shield
+31530024,Golden Lion Shield
+31530025,Golden Lion Shield
+32500000,Black Steel Greatshield
+32500001,Black Steel Greatshield
+32500002,Black Steel Greatshield
+32500003,Black Steel Greatshield
+32500004,Black Steel Greatshield
+32500005,Black Steel Greatshield
+32500006,Black Steel Greatshield
+32500007,Black Steel Greatshield
+32500008,Black Steel Greatshield
+32500009,Black Steel Greatshield
+32500010,Black Steel Greatshield
+32500011,Black Steel Greatshield
+32500012,Black Steel Greatshield
+32500013,Black Steel Greatshield
+32500014,Black Steel Greatshield
+32500015,Black Steel Greatshield
+32500016,Black Steel Greatshield
+32500017,Black Steel Greatshield
+32500018,Black Steel Greatshield
+32500019,Black Steel Greatshield
+32500020,Black Steel Greatshield
+32500021,Black Steel Greatshield
+32500022,Black Steel Greatshield
+32500023,Black Steel Greatshield
+32500024,Black Steel Greatshield
+32500025,Black Steel Greatshield
+32520000,Verdigris Greatshield
+32520001,Verdigris Greatshield
+32520002,Verdigris Greatshield
+32520003,Verdigris Greatshield
+32520004,Verdigris Greatshield
+32520005,Verdigris Greatshield
+32520006,Verdigris Greatshield
+32520007,Verdigris Greatshield
+32520008,Verdigris Greatshield
+32520009,Verdigris Greatshield
+32520010,Verdigris Greatshield
+32520011,Verdigris Greatshield
+32520012,Verdigris Greatshield
+32520013,Verdigris Greatshield
+32520014,Verdigris Greatshield
+32520015,Verdigris Greatshield
+32520016,Verdigris Greatshield
+32520017,Verdigris Greatshield
+32520018,Verdigris Greatshield
+32520019,Verdigris Greatshield
+32520020,Verdigris Greatshield
+32520021,Verdigris Greatshield
+32520022,Verdigris Greatshield
+32520023,Verdigris Greatshield
+32520024,Verdigris Greatshield
+32520025,Verdigris Greatshield
+33510000,Staff of the Great Beyond
+33510001,Staff of the Great Beyond
+33510002,Staff of the Great Beyond
+33510003,Staff of the Great Beyond
+33510004,Staff of the Great Beyond
+33510005,Staff of the Great Beyond
+33510006,Staff of the Great Beyond
+33510007,Staff of the Great Beyond
+33510008,Staff of the Great Beyond
+33510009,Staff of the Great Beyond
+33510010,Staff of the Great Beyond
+33510011,Staff of the Great Beyond
+33510012,Staff of the Great Beyond
+33510013,Staff of the Great Beyond
+33510014,Staff of the Great Beyond
+33510015,Staff of the Great Beyond
+33510016,Staff of the Great Beyond
+33510017,Staff of the Great Beyond
+33510018,Staff of the Great Beyond
+33510019,Staff of the Great Beyond
+33510020,Staff of the Great Beyond
+33510021,Staff of the Great Beyond
+33510022,Staff of the Great Beyond
+33510023,Staff of the Great Beyond
+33510024,Staff of the Great Beyond
+33510025,Staff of the Great Beyond
+33520000,Maternal Staff
+33520001,Maternal Staff
+33520002,Maternal Staff
+33520003,Maternal Staff
+33520004,Maternal Staff
+33520005,Maternal Staff
+33520006,Maternal Staff
+33520007,Maternal Staff
+33520008,Maternal Staff
+33520009,Maternal Staff
+33520010,Maternal Staff
+33520011,Maternal Staff
+33520012,Maternal Staff
+33520013,Maternal Staff
+33520014,Maternal Staff
+33520015,Maternal Staff
+33520016,Maternal Staff
+33520017,Maternal Staff
+33520018,Maternal Staff
+33520019,Maternal Staff
+33520020,Maternal Staff
+33520021,Maternal Staff
+33520022,Maternal Staff
+33520023,Maternal Staff
+33520024,Maternal Staff
+33520025,Maternal Staff
+34500000,Dryleaf Seal
+34500001,Dryleaf Seal
+34500002,Dryleaf Seal
+34500003,Dryleaf Seal
+34500004,Dryleaf Seal
+34500005,Dryleaf Seal
+34500006,Dryleaf Seal
+34500007,Dryleaf Seal
+34500008,Dryleaf Seal
+34500009,Dryleaf Seal
+34500010,Dryleaf Seal
+34500011,Dryleaf Seal
+34500012,Dryleaf Seal
+34500013,Dryleaf Seal
+34500014,Dryleaf Seal
+34500015,Dryleaf Seal
+34500016,Dryleaf Seal
+34500017,Dryleaf Seal
+34500018,Dryleaf Seal
+34500019,Dryleaf Seal
+34500020,Dryleaf Seal
+34500021,Dryleaf Seal
+34500022,Dryleaf Seal
+34500023,Dryleaf Seal
+34500024,Dryleaf Seal
+34500025,Dryleaf Seal
+34510000,Fire Knight's Seal
+34510001,Fire Knight's Seal
+34510002,Fire Knight's Seal
+34510003,Fire Knight's Seal
+34510004,Fire Knight's Seal
+34510005,Fire Knight's Seal
+34510006,Fire Knight's Seal
+34510007,Fire Knight's Seal
+34510008,Fire Knight's Seal
+34510009,Fire Knight's Seal
+34510010,Fire Knight's Seal
+34510011,Fire Knight's Seal
+34510012,Fire Knight's Seal
+34510013,Fire Knight's Seal
+34510014,Fire Knight's Seal
+34510015,Fire Knight's Seal
+34510016,Fire Knight's Seal
+34510017,Fire Knight's Seal
+34510018,Fire Knight's Seal
+34510019,Fire Knight's Seal
+34510020,Fire Knight's Seal
+34510021,Fire Knight's Seal
+34510022,Fire Knight's Seal
+34510023,Fire Knight's Seal
+34510024,Fire Knight's Seal
+34510025,Fire Knight's Seal
+34520000,Spiraltree Seal
+34520001,Spiraltree Seal
+34520002,Spiraltree Seal
+34520003,Spiraltree Seal
+34520004,Spiraltree Seal
+34520005,Spiraltree Seal
+34520006,Spiraltree Seal
+34520007,Spiraltree Seal
+34520008,Spiraltree Seal
+34520009,Spiraltree Seal
+34520010,Spiraltree Seal
+34520011,Spiraltree Seal
+34520012,Spiraltree Seal
+34520013,Spiraltree Seal
+34520014,Spiraltree Seal
+34520015,Spiraltree Seal
+34520016,Spiraltree Seal
+34520017,Spiraltree Seal
+34520018,Spiraltree Seal
+34520019,Spiraltree Seal
+34520020,Spiraltree Seal
+34520021,Spiraltree Seal
+34520022,Spiraltree Seal
+34520023,Spiraltree Seal
+34520024,Spiraltree Seal
+34520025,Spiraltree Seal
+40500000,Bone Bow
+40500001,Bone Bow
+40500002,Bone Bow
+40500003,Bone Bow
+40500004,Bone Bow
+40500005,Bone Bow
+40500006,Bone Bow
+40500007,Bone Bow
+40500008,Bone Bow
+40500009,Bone Bow
+40500010,Bone Bow
+40500011,Bone Bow
+40500012,Bone Bow
+40500013,Bone Bow
+40500014,Bone Bow
+40500015,Bone Bow
+40500016,Bone Bow
+40500017,Bone Bow
+40500018,Bone Bow
+40500019,Bone Bow
+40500020,Bone Bow
+40500021,Bone Bow
+40500022,Bone Bow
+40500023,Bone Bow
+40500024,Bone Bow
+40500025,Bone Bow
+41510000,Ansbach's Longbow
+41510001,Ansbach's Longbow
+41510002,Ansbach's Longbow
+41510003,Ansbach's Longbow
+41510004,Ansbach's Longbow
+41510005,Ansbach's Longbow
+41510006,Ansbach's Longbow
+41510007,Ansbach's Longbow
+41510008,Ansbach's Longbow
+41510009,Ansbach's Longbow
+41510010,Ansbach's Longbow
+41510011,Ansbach's Longbow
+41510012,Ansbach's Longbow
+41510013,Ansbach's Longbow
+41510014,Ansbach's Longbow
+41510015,Ansbach's Longbow
+41510016,Ansbach's Longbow
+41510017,Ansbach's Longbow
+41510018,Ansbach's Longbow
+41510019,Ansbach's Longbow
+41510020,Ansbach's Longbow
+41510021,Ansbach's Longbow
+41510022,Ansbach's Longbow
+41510023,Ansbach's Longbow
+41510024,Ansbach's Longbow
+41510025,Ansbach's Longbow
+42500000,Igon's Greatbow
+42500001,Igon's Greatbow
+42500002,Igon's Greatbow
+42500003,Igon's Greatbow
+42500004,Igon's Greatbow
+42500005,Igon's Greatbow
+42500006,Igon's Greatbow
+42500007,Igon's Greatbow
+42500008,Igon's Greatbow
+42500009,Igon's Greatbow
+42500010,Igon's Greatbow
+42500011,Igon's Greatbow
+42500012,Igon's Greatbow
+42500013,Igon's Greatbow
+42500014,Igon's Greatbow
+42500015,Igon's Greatbow
+42500016,Igon's Greatbow
+42500017,Igon's Greatbow
+42500018,Igon's Greatbow
+42500019,Igon's Greatbow
+42500020,Igon's Greatbow
+42500021,Igon's Greatbow
+42500022,Igon's Greatbow
+42500023,Igon's Greatbow
+42500024,Igon's Greatbow
+42500025,Igon's Greatbow
+43500000,Repeating Crossbow
+43500001,Repeating Crossbow
+43500002,Repeating Crossbow
+43500003,Repeating Crossbow
+43500004,Repeating Crossbow
+43500005,Repeating Crossbow
+43500006,Repeating Crossbow
+43500007,Repeating Crossbow
+43500008,Repeating Crossbow
+43500009,Repeating Crossbow
+43500010,Repeating Crossbow
+43500011,Repeating Crossbow
+43500012,Repeating Crossbow
+43500013,Repeating Crossbow
+43500014,Repeating Crossbow
+43500015,Repeating Crossbow
+43500016,Repeating Crossbow
+43500017,Repeating Crossbow
+43500018,Repeating Crossbow
+43500019,Repeating Crossbow
+43500020,Repeating Crossbow
+43500021,Repeating Crossbow
+43500022,Repeating Crossbow
+43500023,Repeating Crossbow
+43500024,Repeating Crossbow
+43500025,Repeating Crossbow
+43510000,Spread Crossbow
+43510001,Spread Crossbow
+43510002,Spread Crossbow
+43510003,Spread Crossbow
+43510004,Spread Crossbow
+43510005,Spread Crossbow
+43510006,Spread Crossbow
+43510007,Spread Crossbow
+43510008,Spread Crossbow
+43510009,Spread Crossbow
+43510010,Spread Crossbow
+43510011,Spread Crossbow
+43510012,Spread Crossbow
+43510013,Spread Crossbow
+43510014,Spread Crossbow
+43510015,Spread Crossbow
+43510016,Spread Crossbow
+43510017,Spread Crossbow
+43510018,Spread Crossbow
+43510019,Spread Crossbow
+43510020,Spread Crossbow
+43510021,Spread Crossbow
+43510022,Spread Crossbow
+43510023,Spread Crossbow
+43510024,Spread Crossbow
+43510025,Spread Crossbow
+44500000,Rabbath's Cannon
+44500001,Rabbath's Cannon
+44500002,Rabbath's Cannon
+44500003,Rabbath's Cannon
+44500004,Rabbath's Cannon
+44500005,Rabbath's Cannon
+44500006,Rabbath's Cannon
+44500007,Rabbath's Cannon
+44500008,Rabbath's Cannon
+44500009,Rabbath's Cannon
+44500010,Rabbath's Cannon
+44500011,Rabbath's Cannon
+44500012,Rabbath's Cannon
+44500013,Rabbath's Cannon
+44500014,Rabbath's Cannon
+44500015,Rabbath's Cannon
+44500016,Rabbath's Cannon
+44500017,Rabbath's Cannon
+44500018,Rabbath's Cannon
+44500019,Rabbath's Cannon
+44500020,Rabbath's Cannon
+44500021,Rabbath's Cannon
+44500022,Rabbath's Cannon
+44500023,Rabbath's Cannon
+44500024,Rabbath's Cannon
+44500025,Rabbath's Cannon
+50540000,Piquebone Arrow (Fletched)
+50540001,Piquebone Arrow (Fletched)
+50540002,Piquebone Arrow (Fletched)
+50540003,Piquebone Arrow (Fletched)
+50540004,Piquebone Arrow (Fletched)
+50540005,Piquebone Arrow (Fletched)
+50540006,Piquebone Arrow (Fletched)
+50540007,Piquebone Arrow (Fletched)
+50540008,Piquebone Arrow (Fletched)
+50540009,Piquebone Arrow (Fletched)
+50540010,Piquebone Arrow (Fletched)
+50540011,Piquebone Arrow (Fletched)
+50540012,Piquebone Arrow (Fletched)
+50540013,Piquebone Arrow (Fletched)
+50540014,Piquebone Arrow (Fletched)
+50540015,Piquebone Arrow (Fletched)
+50540016,Piquebone Arrow (Fletched)
+50540017,Piquebone Arrow (Fletched)
+50540018,Piquebone Arrow (Fletched)
+50540019,Piquebone Arrow (Fletched)
+50540020,Piquebone Arrow (Fletched)
+50540021,Piquebone Arrow (Fletched)
+50540022,Piquebone Arrow (Fletched)
+50540023,Piquebone Arrow (Fletched)
+50540024,Piquebone Arrow (Fletched)
+50540025,Piquebone Arrow (Fletched)
+50550000,Piquebone Arrow
+50550001,Piquebone Arrow
+50550002,Piquebone Arrow
+50550003,Piquebone Arrow
+50550004,Piquebone Arrow
+50550005,Piquebone Arrow
+50550006,Piquebone Arrow
+50550007,Piquebone Arrow
+50550008,Piquebone Arrow
+50550009,Piquebone Arrow
+50550010,Piquebone Arrow
+50550011,Piquebone Arrow
+50550012,Piquebone Arrow
+50550013,Piquebone Arrow
+50550014,Piquebone Arrow
+50550015,Piquebone Arrow
+50550016,Piquebone Arrow
+50550017,Piquebone Arrow
+50550018,Piquebone Arrow
+50550019,Piquebone Arrow
+50550020,Piquebone Arrow
+50550021,Piquebone Arrow
+50550022,Piquebone Arrow
+50550023,Piquebone Arrow
+50550024,Piquebone Arrow
+50550025,Piquebone Arrow
+51500000,Igon's Harpoon
+51500001,Igon's Harpoon
+51500002,Igon's Harpoon
+51500003,Igon's Harpoon
+51500004,Igon's Harpoon
+51500005,Igon's Harpoon
+51500006,Igon's Harpoon
+51500007,Igon's Harpoon
+51500008,Igon's Harpoon
+51500009,Igon's Harpoon
+51500010,Igon's Harpoon
+51500011,Igon's Harpoon
+51500012,Igon's Harpoon
+51500013,Igon's Harpoon
+51500014,Igon's Harpoon
+51500015,Igon's Harpoon
+51500016,Igon's Harpoon
+51500017,Igon's Harpoon
+51500018,Igon's Harpoon
+51500019,Igon's Harpoon
+51500020,Igon's Harpoon
+51500021,Igon's Harpoon
+51500022,Igon's Harpoon
+51500023,Igon's Harpoon
+51500024,Igon's Harpoon
+51500025,Igon's Harpoon
+52520000,Piquebone Bolt
+52520001,Piquebone Bolt
+52520002,Piquebone Bolt
+52520003,Piquebone Bolt
+52520004,Piquebone Bolt
+52520005,Piquebone Bolt
+52520006,Piquebone Bolt
+52520007,Piquebone Bolt
+52520008,Piquebone Bolt
+52520009,Piquebone Bolt
+52520010,Piquebone Bolt
+52520011,Piquebone Bolt
+52520012,Piquebone Bolt
+52520013,Piquebone Bolt
+52520014,Piquebone Bolt
+52520015,Piquebone Bolt
+52520016,Piquebone Bolt
+52520017,Piquebone Bolt
+52520018,Piquebone Bolt
+52520019,Piquebone Bolt
+52520020,Piquebone Bolt
+52520021,Piquebone Bolt
+52520022,Piquebone Bolt
+52520023,Piquebone Bolt
+52520024,Piquebone Bolt
+52520025,Piquebone Bolt
+53500000,Rabbath's Greatbolt
+53500001,Rabbath's Greatbolt
+53500002,Rabbath's Greatbolt
+53500003,Rabbath's Greatbolt
+53500004,Rabbath's Greatbolt
+53500005,Rabbath's Greatbolt
+53500006,Rabbath's Greatbolt
+53500007,Rabbath's Greatbolt
+53500008,Rabbath's Greatbolt
+53500009,Rabbath's Greatbolt
+53500010,Rabbath's Greatbolt
+53500011,Rabbath's Greatbolt
+53500012,Rabbath's Greatbolt
+53500013,Rabbath's Greatbolt
+53500014,Rabbath's Greatbolt
+53500015,Rabbath's Greatbolt
+53500016,Rabbath's Greatbolt
+53500017,Rabbath's Greatbolt
+53500018,Rabbath's Greatbolt
+53500019,Rabbath's Greatbolt
+53500020,Rabbath's Greatbolt
+53500021,Rabbath's Greatbolt
+53500022,Rabbath's Greatbolt
+53500023,Rabbath's Greatbolt
+53500024,Rabbath's Greatbolt
+53500025,Rabbath's Greatbolt
+60500000,Dryleaf Arts
+60500001,Dryleaf Arts
+60500002,Dryleaf Arts
+60500003,Dryleaf Arts
+60500004,Dryleaf Arts
+60500005,Dryleaf Arts
+60500006,Dryleaf Arts
+60500007,Dryleaf Arts
+60500008,Dryleaf Arts
+60500009,Dryleaf Arts
+60500010,Dryleaf Arts
+60500011,Dryleaf Arts
+60500012,Dryleaf Arts
+60500013,Dryleaf Arts
+60500014,Dryleaf Arts
+60500015,Dryleaf Arts
+60500016,Dryleaf Arts
+60500017,Dryleaf Arts
+60500018,Dryleaf Arts
+60500019,Dryleaf Arts
+60500020,Dryleaf Arts
+60500021,Dryleaf Arts
+60500022,Dryleaf Arts
+60500023,Dryleaf Arts
+60500024,Dryleaf Arts
+60500025,Dryleaf Arts
+60510000,Dane's Footwork
+60510001,Dane's Footwork
+60510002,Dane's Footwork
+60510003,Dane's Footwork
+60510004,Dane's Footwork
+60510005,Dane's Footwork
+60510006,Dane's Footwork
+60510007,Dane's Footwork
+60510008,Dane's Footwork
+60510009,Dane's Footwork
+60510010,Dane's Footwork
+60510011,Dane's Footwork
+60510012,Dane's Footwork
+60510013,Dane's Footwork
+60510014,Dane's Footwork
+60510015,Dane's Footwork
+60510016,Dane's Footwork
+60510017,Dane's Footwork
+60510018,Dane's Footwork
+60510019,Dane's Footwork
+60510020,Dane's Footwork
+60510021,Dane's Footwork
+60510022,Dane's Footwork
+60510023,Dane's Footwork
+60510024,Dane's Footwork
+60510025,Dane's Footwork
+61500000,Firespark Perfume Bottle
+61500001,Firespark Perfume Bottle
+61500002,Firespark Perfume Bottle
+61500003,Firespark Perfume Bottle
+61500004,Firespark Perfume Bottle
+61500005,Firespark Perfume Bottle
+61500006,Firespark Perfume Bottle
+61500007,Firespark Perfume Bottle
+61500008,Firespark Perfume Bottle
+61500009,Firespark Perfume Bottle
+61500010,Firespark Perfume Bottle
+61500011,Firespark Perfume Bottle
+61500012,Firespark Perfume Bottle
+61500013,Firespark Perfume Bottle
+61500014,Firespark Perfume Bottle
+61500015,Firespark Perfume Bottle
+61500016,Firespark Perfume Bottle
+61500017,Firespark Perfume Bottle
+61500018,Firespark Perfume Bottle
+61500019,Firespark Perfume Bottle
+61500020,Firespark Perfume Bottle
+61500021,Firespark Perfume Bottle
+61500022,Firespark Perfume Bottle
+61500023,Firespark Perfume Bottle
+61500024,Firespark Perfume Bottle
+61500025,Firespark Perfume Bottle
+61510000,Chilling Perfume Bottle
+61510001,Chilling Perfume Bottle
+61510002,Chilling Perfume Bottle
+61510003,Chilling Perfume Bottle
+61510004,Chilling Perfume Bottle
+61510005,Chilling Perfume Bottle
+61510006,Chilling Perfume Bottle
+61510007,Chilling Perfume Bottle
+61510008,Chilling Perfume Bottle
+61510009,Chilling Perfume Bottle
+61510010,Chilling Perfume Bottle
+61510011,Chilling Perfume Bottle
+61510012,Chilling Perfume Bottle
+61510013,Chilling Perfume Bottle
+61510014,Chilling Perfume Bottle
+61510015,Chilling Perfume Bottle
+61510016,Chilling Perfume Bottle
+61510017,Chilling Perfume Bottle
+61510018,Chilling Perfume Bottle
+61510019,Chilling Perfume Bottle
+61510020,Chilling Perfume Bottle
+61510021,Chilling Perfume Bottle
+61510022,Chilling Perfume Bottle
+61510023,Chilling Perfume Bottle
+61510024,Chilling Perfume Bottle
+61510025,Chilling Perfume Bottle
+61520000,Frenzyflame Perfume Bottle
+61520001,Frenzyflame Perfume Bottle
+61520002,Frenzyflame Perfume Bottle
+61520003,Frenzyflame Perfume Bottle
+61520004,Frenzyflame Perfume Bottle
+61520005,Frenzyflame Perfume Bottle
+61520006,Frenzyflame Perfume Bottle
+61520007,Frenzyflame Perfume Bottle
+61520008,Frenzyflame Perfume Bottle
+61520009,Frenzyflame Perfume Bottle
+61520010,Frenzyflame Perfume Bottle
+61520011,Frenzyflame Perfume Bottle
+61520012,Frenzyflame Perfume Bottle
+61520013,Frenzyflame Perfume Bottle
+61520014,Frenzyflame Perfume Bottle
+61520015,Frenzyflame Perfume Bottle
+61520016,Frenzyflame Perfume Bottle
+61520017,Frenzyflame Perfume Bottle
+61520018,Frenzyflame Perfume Bottle
+61520019,Frenzyflame Perfume Bottle
+61520020,Frenzyflame Perfume Bottle
+61520021,Frenzyflame Perfume Bottle
+61520022,Frenzyflame Perfume Bottle
+61520023,Frenzyflame Perfume Bottle
+61520024,Frenzyflame Perfume Bottle
+61520025,Frenzyflame Perfume Bottle
+61530000,Lightning Perfume Bottle
+61530001,Lightning Perfume Bottle
+61530002,Lightning Perfume Bottle
+61530003,Lightning Perfume Bottle
+61530004,Lightning Perfume Bottle
+61530005,Lightning Perfume Bottle
+61530006,Lightning Perfume Bottle
+61530007,Lightning Perfume Bottle
+61530008,Lightning Perfume Bottle
+61530009,Lightning Perfume Bottle
+61530010,Lightning Perfume Bottle
+61530011,Lightning Perfume Bottle
+61530012,Lightning Perfume Bottle
+61530013,Lightning Perfume Bottle
+61530014,Lightning Perfume Bottle
+61530015,Lightning Perfume Bottle
+61530016,Lightning Perfume Bottle
+61530017,Lightning Perfume Bottle
+61530018,Lightning Perfume Bottle
+61530019,Lightning Perfume Bottle
+61530020,Lightning Perfume Bottle
+61530021,Lightning Perfume Bottle
+61530022,Lightning Perfume Bottle
+61530023,Lightning Perfume Bottle
+61530024,Lightning Perfume Bottle
+61530025,Lightning Perfume Bottle
+61540000,Deadly Poison Perfume Bottle
+61540001,Deadly Poison Perfume Bottle
+61540002,Deadly Poison Perfume Bottle
+61540003,Deadly Poison Perfume Bottle
+61540004,Deadly Poison Perfume Bottle
+61540005,Deadly Poison Perfume Bottle
+61540006,Deadly Poison Perfume Bottle
+61540007,Deadly Poison Perfume Bottle
+61540008,Deadly Poison Perfume Bottle
+61540009,Deadly Poison Perfume Bottle
+61540010,Deadly Poison Perfume Bottle
+61540011,Deadly Poison Perfume Bottle
+61540012,Deadly Poison Perfume Bottle
+61540013,Deadly Poison Perfume Bottle
+61540014,Deadly Poison Perfume Bottle
+61540015,Deadly Poison Perfume Bottle
+61540016,Deadly Poison Perfume Bottle
+61540017,Deadly Poison Perfume Bottle
+61540018,Deadly Poison Perfume Bottle
+61540019,Deadly Poison Perfume Bottle
+61540020,Deadly Poison Perfume Bottle
+61540021,Deadly Poison Perfume Bottle
+61540022,Deadly Poison Perfume Bottle
+61540023,Deadly Poison Perfume Bottle
+61540024,Deadly Poison Perfume Bottle
+61540025,Deadly Poison Perfume Bottle
+62500000,Dueling Shield
+62500001,Dueling Shield
+62500002,Dueling Shield
+62500003,Dueling Shield
+62500004,Dueling Shield
+62500005,Dueling Shield
+62500006,Dueling Shield
+62500007,Dueling Shield
+62500008,Dueling Shield
+62500009,Dueling Shield
+62500010,Dueling Shield
+62500011,Dueling Shield
+62500012,Dueling Shield
+62500013,Dueling Shield
+62500014,Dueling Shield
+62500015,Dueling Shield
+62500016,Dueling Shield
+62500017,Dueling Shield
+62500018,Dueling Shield
+62500019,Dueling Shield
+62500020,Dueling Shield
+62500021,Dueling Shield
+62500022,Dueling Shield
+62500023,Dueling Shield
+62500024,Dueling Shield
+62500025,Dueling Shield
+62510000,Carian Thrusting Shield
+62510001,Carian Thrusting Shield
+62510002,Carian Thrusting Shield
+62510003,Carian Thrusting Shield
+62510004,Carian Thrusting Shield
+62510005,Carian Thrusting Shield
+62510006,Carian Thrusting Shield
+62510007,Carian Thrusting Shield
+62510008,Carian Thrusting Shield
+62510009,Carian Thrusting Shield
+62510010,Carian Thrusting Shield
+62510011,Carian Thrusting Shield
+62510012,Carian Thrusting Shield
+62510013,Carian Thrusting Shield
+62510014,Carian Thrusting Shield
+62510015,Carian Thrusting Shield
+62510016,Carian Thrusting Shield
+62510017,Carian Thrusting Shield
+62510018,Carian Thrusting Shield
+62510019,Carian Thrusting Shield
+62510020,Carian Thrusting Shield
+62510021,Carian Thrusting Shield
+62510022,Carian Thrusting Shield
+62510023,Carian Thrusting Shield
+62510024,Carian Thrusting Shield
+62510025,Carian Thrusting Shield
+63500000,Smithscript Dagger
+63500001,Smithscript Dagger
+63500002,Smithscript Dagger
+63500003,Smithscript Dagger
+63500004,Smithscript Dagger
+63500005,Smithscript Dagger
+63500006,Smithscript Dagger
+63500007,Smithscript Dagger
+63500008,Smithscript Dagger
+63500009,Smithscript Dagger
+63500010,Smithscript Dagger
+63500011,Smithscript Dagger
+63500012,Smithscript Dagger
+63500013,Smithscript Dagger
+63500014,Smithscript Dagger
+63500015,Smithscript Dagger
+63500016,Smithscript Dagger
+63500017,Smithscript Dagger
+63500018,Smithscript Dagger
+63500019,Smithscript Dagger
+63500020,Smithscript Dagger
+63500021,Smithscript Dagger
+63500022,Smithscript Dagger
+63500023,Smithscript Dagger
+63500024,Smithscript Dagger
+63500025,Smithscript Dagger
+64500000,Backhand Blade
+64500001,Backhand Blade
+64500002,Backhand Blade
+64500003,Backhand Blade
+64500004,Backhand Blade
+64500005,Backhand Blade
+64500006,Backhand Blade
+64500007,Backhand Blade
+64500008,Backhand Blade
+64500009,Backhand Blade
+64500010,Backhand Blade
+64500011,Backhand Blade
+64500012,Backhand Blade
+64500013,Backhand Blade
+64500014,Backhand Blade
+64500015,Backhand Blade
+64500016,Backhand Blade
+64500017,Backhand Blade
+64500018,Backhand Blade
+64500019,Backhand Blade
+64500020,Backhand Blade
+64500021,Backhand Blade
+64500022,Backhand Blade
+64500023,Backhand Blade
+64500024,Backhand Blade
+64500025,Backhand Blade
+64510000,Smithscript Cirque
+64510001,Smithscript Cirque
+64510002,Smithscript Cirque
+64510003,Smithscript Cirque
+64510004,Smithscript Cirque
+64510005,Smithscript Cirque
+64510006,Smithscript Cirque
+64510007,Smithscript Cirque
+64510008,Smithscript Cirque
+64510009,Smithscript Cirque
+64510010,Smithscript Cirque
+64510011,Smithscript Cirque
+64510012,Smithscript Cirque
+64510013,Smithscript Cirque
+64510014,Smithscript Cirque
+64510015,Smithscript Cirque
+64510016,Smithscript Cirque
+64510017,Smithscript Cirque
+64510018,Smithscript Cirque
+64510019,Smithscript Cirque
+64510020,Smithscript Cirque
+64510021,Smithscript Cirque
+64510022,Smithscript Cirque
+64510023,Smithscript Cirque
+64510024,Smithscript Cirque
+64510025,Smithscript Cirque
+64520000,Curseblade's Cirque
+64520001,Curseblade's Cirque
+64520002,Curseblade's Cirque
+64520003,Curseblade's Cirque
+64520004,Curseblade's Cirque
+64520005,Curseblade's Cirque
+64520006,Curseblade's Cirque
+64520007,Curseblade's Cirque
+64520008,Curseblade's Cirque
+64520009,Curseblade's Cirque
+64520010,Curseblade's Cirque
+64520011,Curseblade's Cirque
+64520012,Curseblade's Cirque
+64520013,Curseblade's Cirque
+64520014,Curseblade's Cirque
+64520015,Curseblade's Cirque
+64520016,Curseblade's Cirque
+64520017,Curseblade's Cirque
+64520018,Curseblade's Cirque
+64520019,Curseblade's Cirque
+64520020,Curseblade's Cirque
+64520021,Curseblade's Cirque
+64520022,Curseblade's Cirque
+64520023,Curseblade's Cirque
+64520024,Curseblade's Cirque
+64520025,Curseblade's Cirque
+66500000,Great Katana
+66500001,Great Katana
+66500002,Great Katana
+66500003,Great Katana
+66500004,Great Katana
+66500005,Great Katana
+66500006,Great Katana
+66500007,Great Katana
+66500008,Great Katana
+66500009,Great Katana
+66500010,Great Katana
+66500011,Great Katana
+66500012,Great Katana
+66500013,Great Katana
+66500014,Great Katana
+66500015,Great Katana
+66500016,Great Katana
+66500017,Great Katana
+66500018,Great Katana
+66500019,Great Katana
+66500020,Great Katana
+66500021,Great Katana
+66500022,Great Katana
+66500023,Great Katana
+66500024,Great Katana
+66500025,Great Katana
+66510000,Dragon-Hunter's Great Katana
+66510001,Dragon-Hunter's Great Katana
+66510002,Dragon-Hunter's Great Katana
+66510003,Dragon-Hunter's Great Katana
+66510004,Dragon-Hunter's Great Katana
+66510005,Dragon-Hunter's Great Katana
+66510006,Dragon-Hunter's Great Katana
+66510007,Dragon-Hunter's Great Katana
+66510008,Dragon-Hunter's Great Katana
+66510009,Dragon-Hunter's Great Katana
+66510010,Dragon-Hunter's Great Katana
+66510011,Dragon-Hunter's Great Katana
+66510012,Dragon-Hunter's Great Katana
+66510013,Dragon-Hunter's Great Katana
+66510014,Dragon-Hunter's Great Katana
+66510015,Dragon-Hunter's Great Katana
+66510016,Dragon-Hunter's Great Katana
+66510017,Dragon-Hunter's Great Katana
+66510018,Dragon-Hunter's Great Katana
+66510019,Dragon-Hunter's Great Katana
+66510020,Dragon-Hunter's Great Katana
+66510021,Dragon-Hunter's Great Katana
+66510022,Dragon-Hunter's Great Katana
+66510023,Dragon-Hunter's Great Katana
+66510024,Dragon-Hunter's Great Katana
+66510025,Dragon-Hunter's Great Katana
+66520000,Rakshasa's Great Katana
+66520001,Rakshasa's Great Katana
+66520002,Rakshasa's Great Katana
+66520003,Rakshasa's Great Katana
+66520004,Rakshasa's Great Katana
+66520005,Rakshasa's Great Katana
+66520006,Rakshasa's Great Katana
+66520007,Rakshasa's Great Katana
+66520008,Rakshasa's Great Katana
+66520009,Rakshasa's Great Katana
+66520010,Rakshasa's Great Katana
+66520011,Rakshasa's Great Katana
+66520012,Rakshasa's Great Katana
+66520013,Rakshasa's Great Katana
+66520014,Rakshasa's Great Katana
+66520015,Rakshasa's Great Katana
+66520016,Rakshasa's Great Katana
+66520017,Rakshasa's Great Katana
+66520018,Rakshasa's Great Katana
+66520019,Rakshasa's Great Katana
+66520020,Rakshasa's Great Katana
+66520021,Rakshasa's Great Katana
+66520022,Rakshasa's Great Katana
+66520023,Rakshasa's Great Katana
+66520024,Rakshasa's Great Katana
+66520025,Rakshasa's Great Katana
+67500000,Milady
+67500001,Milady
+67500002,Milady
+67500003,Milady
+67500004,Milady
+67500005,Milady
+67500006,Milady
+67500007,Milady
+67500008,Milady
+67500009,Milady
+67500010,Milady
+67500011,Milady
+67500012,Milady
+67500013,Milady
+67500014,Milady
+67500015,Milady
+67500016,Milady
+67500017,Milady
+67500018,Milady
+67500019,Milady
+67500020,Milady
+67500021,Milady
+67500022,Milady
+67500023,Milady
+67500024,Milady
+67500025,Milady
+67510000,Leda's Sword
+67510001,Leda's Sword
+67510002,Leda's Sword
+67510003,Leda's Sword
+67510004,Leda's Sword
+67510005,Leda's Sword
+67510006,Leda's Sword
+67510007,Leda's Sword
+67510008,Leda's Sword
+67510009,Leda's Sword
+67510010,Leda's Sword
+67510011,Leda's Sword
+67510012,Leda's Sword
+67510013,Leda's Sword
+67510014,Leda's Sword
+67510015,Leda's Sword
+67510016,Leda's Sword
+67510017,Leda's Sword
+67510018,Leda's Sword
+67510019,Leda's Sword
+67510020,Leda's Sword
+67510021,Leda's Sword
+67510022,Leda's Sword
+67510023,Leda's Sword
+67510024,Leda's Sword
+67510025,Leda's Sword
+67520000,Rellana's Twin Blades
+67520001,Rellana's Twin Blades
+67520002,Rellana's Twin Blades
+67520003,Rellana's Twin Blades
+67520004,Rellana's Twin Blades
+67520005,Rellana's Twin Blades
+67520006,Rellana's Twin Blades
+67520007,Rellana's Twin Blades
+67520008,Rellana's Twin Blades
+67520009,Rellana's Twin Blades
+67520010,Rellana's Twin Blades
+67520011,Rellana's Twin Blades
+67520012,Rellana's Twin Blades
+67520013,Rellana's Twin Blades
+67520014,Rellana's Twin Blades
+67520015,Rellana's Twin Blades
+67520016,Rellana's Twin Blades
+67520017,Rellana's Twin Blades
+67520018,Rellana's Twin Blades
+67520019,Rellana's Twin Blades
+67520020,Rellana's Twin Blades
+67520021,Rellana's Twin Blades
+67520022,Rellana's Twin Blades
+67520023,Rellana's Twin Blades
+67520024,Rellana's Twin Blades
+67520025,Rellana's Twin Blades
+68500000,Beast Claw (Weapon)
+68500001,Beast Claw (Weapon)
+68500002,Beast Claw (Weapon)
+68500003,Beast Claw (Weapon)
+68500004,Beast Claw (Weapon)
+68500005,Beast Claw (Weapon)
+68500006,Beast Claw (Weapon)
+68500007,Beast Claw (Weapon)
+68500008,Beast Claw (Weapon)
+68500009,Beast Claw (Weapon)
+68500010,Beast Claw (Weapon)
+68500011,Beast Claw (Weapon)
+68500012,Beast Claw (Weapon)
+68500013,Beast Claw (Weapon)
+68500014,Beast Claw (Weapon)
+68500015,Beast Claw (Weapon)
+68500016,Beast Claw (Weapon)
+68500017,Beast Claw (Weapon)
+68500018,Beast Claw (Weapon)
+68500019,Beast Claw (Weapon)
+68500020,Beast Claw (Weapon)
+68500021,Beast Claw (Weapon)
+68500022,Beast Claw (Weapon)
+68500023,Beast Claw (Weapon)
+68500024,Beast Claw (Weapon)
+68500025,Beast Claw (Weapon)
+68510000,Red Bear's Claw
+68510001,Red Bear's Claw
+68510002,Red Bear's Claw
+68510003,Red Bear's Claw
+68510004,Red Bear's Claw
+68510005,Red Bear's Claw
+68510006,Red Bear's Claw
+68510007,Red Bear's Claw
+68510008,Red Bear's Claw
+68510009,Red Bear's Claw
+68510010,Red Bear's Claw
+68510011,Red Bear's Claw
+68510012,Red Bear's Claw
+68510013,Red Bear's Claw
+68510014,Red Bear's Claw
+68510015,Red Bear's Claw
+68510016,Red Bear's Claw
+68510017,Red Bear's Claw
+68510018,Red Bear's Claw
+68510019,Red Bear's Claw
+68510020,Red Bear's Claw
+68510021,Red Bear's Claw
+68510022,Red Bear's Claw
+68510023,Red Bear's Claw
+68510024,Red Bear's Claw
+68510025,Red Bear's Claw
+271435456,Dane's Hat
+271435556,Dryleaf Robe
+271435656,Dryleaf Arm Wraps
+271435756,Dryleaf Cuissardes
+271436556,Dryleaf Robe (Altered)
+271445456,Gaius's Helm
+271445556,Gaius's Armor
+271445656,Gaius's Gauntlets
+271445756,Gaius's Greaves
+273435456,Oathseeker Knight Helm
+273435556,Leda's Armor
+273435656,Oathseeker Knight Gauntlets
+273435756,Oathseeker Knight Greaves
+273437556,Oathseeker Knight Armor
+273445456,Verdigris Helm
+273445556,Verdigris Armor
+273445656,Verdigris Gauntlets
+273445756,Verdigris Greaves
+273455456,Pelt of Ralva
+273455556,Iron Rivet Armor
+273455656,Iron Rivet Gauntlets
+273455756,Iron Rivet Greaves
+273456456,Fang Helm
+273465456,Thiollier's Mask
+273465556,Thiollier's Garb
+273465656,Thiollier's Gloves
+273465756,Thiollier's Trousers
+273466556,Thiollier's Garb (Altered)
+273495456,High Priest Hat
+273495556,High Priest Robe
+273495656,High Priest Gloves
+273495756,High Priest Undergarments
+273497556,Finger Robe
+273505456,Caterpillar Mask
+273505556,Braided Cord Robe
+273505656,Braided Arm Wraps
+273505756,Soiled Loincloth
+273515456,Dancer's Hood
+273515556,Dancer's Dress
+273515656,Dancer's Bracer
+273515756,Dancer's Trousers
+273516556,Dancer's Dress (Altered)
+273525456,Helm of Night
+273525556,Armor of Night
+273525656,Gauntlets of Night
+273525756,Greaves of Night
+273535456,Igon's Helm
+273535556,Igon's Armor
+273535656,Igon's Gauntlets
+273535756,Igon's Loincloth
+273536456,Igon's Helm (Altered)
+273536556,Igon's Armor (Altered)
+273545456,Wise Man's Mask
+273545556,Ansbach's Attire
+273545656,Ansbach's Manchettes
+273545756,Ansbach's Boots
+273546556,Ansbach's Attire (Altered)
+273555456,Freyja's Helm
+273555556,Freyja's Armor
+273555656,Freyja's Gauntlets
+273555756,Freyja's Greaves
+273556556,Freyja's Armor (Altered)
+273565456,Helm of Solitude
+273565556,Armor of Solitude
+273565656,Gauntlets of Solitude
+273565756,Greaves of Solitude
+273566556,Armor of Solitude (Altered)
+273575456,Messmer Soldier Helm
+273575556,Messmer Soldier Armor
+273575656,Messmer Soldier Gauntlets
+273575756,Messmer Soldier Greaves
+273576556,Messmer Soldier Armor (Altered)
+273585456,Black Knight Helm
+273585556,Black Knight Armor
+273585656,Black Knight Gauntlets
+273585756,Black Knight Greaves
+273595456,Rakshasa Helm
+273595556,Rakshasa Armor
+273595656,Rakshasa Gauntlets
+273595756,Rakshasa Greaves
+273615456,Fire Knight Helm
+273615556,Fire Knight Armor
+273615656,Fire Knight Gauntlets
+273615756,Fire Knight Greaves
+273616556,Fire Knight Armor (Altered)
+273617456,Death Mask Helm
+273618456,Winged Serpent Helm
+273619456,Salza's Hood
+273625456,Leather Headband
+273625556,Gloried Attire
+273625656,Leather Arm Wraps
+273625756,Leather Leg Wraps
+273626456,Leather Crown
+273626556,Highland Attire
+273635456,Death Knight Helm
+273635556,Death Knight Armor
+273635656,Death Knight Gauntlets
+273635756,Death Knight Greaves
+273645456,Curseblade Mask
+273645556,Ascetic's Loincloth
+273645656,Ascetic's Wrist Guards
+273645756,Ascetic's Ankle Guards
+273655456,Messmer's Helm
+273655556,Messmer's Armor
+273655656,Messmer's Gauntlets
+273655756,Messmer's Greaves
+273656456,Messmer's Helm (Altered)
+273665456,Gravebird Helm
+273665556,Gravebird's Blackquill Armor
+273665656,Gravebird Bracelets
+273665756,Gravebird Anklets
+273666556,Gravebird Armor
+273675456,Common Soldier Helm
+273675556,Common Soldier Cloth Armor
+273675656,Common Soldier Gauntlets
+273675756,Common Soldier Greaves
+273685456,Horned Warrior Helm
+273685556,Horned Warrior Armor
+273685656,Horned Warrior Gauntlets
+273685756,Horned Warrior Greaves
+273687456,Divine Beast Helm
+273687556,Divine Beast Warrior Armor
+273688456,Divine Bird Helm
+273688556,Divine Bird Warrior Armor
+273688656,Divine Bird Warrior Gauntlets
+273688756,Divine Bird Warrior Greaves
+273695456,Rellana's Helm
+273695556,Rellana's Armor
+273695656,Rellana's Gloves
+273695756,Rellana's Greaves
+273705456,Young Lion's Helm
+273705556,Young Lion's Armor
+273705656,Young Lion's Gauntlets
+273705756,Young Lion's Greaves
+273706556,Young Lion's Armor (Altered)
+273707456,Circlet of Light
+273715456,Shadow Militiaman Helm
+273715556,Shadow Militiaman Armor
+273715656,Shadow Militiaman Gauntlets
+273715756,Shadow Militiaman Greaves
+273725456,Divine Beast Head
+273735456,St. Trina's Blossom
+273745456,Crucible Hammer-Helm
+273755456,Greatjar
+273765456,Imp Head (Lion)
+536877912,Crimson Amber Medallion +3
+536877922,Cerulean Amber Medallion +3
+536877932,Viridian Amber Medallion +3
+536877942,Two-Headed Turtle Talisman
+536877952,Stalwart Horn Charm +2
+536877962,Immunizing Horn Charm +2
+536877972,Clarifying Horn Charm +2
+536877992,Mottled Necklace +2
+536878002,Spelldrake Talisman +3
+536878012,Flamedrake Talisman +3
+536878022,Boltdrake Talisman +3
+536878032,Golden Braid
+536878042,Pearldrake Talisman +3
+536878052,Crimson Seed Talisman +1
+536878062,Cerulean Seed Talisman +1
+536878912,Blessed Blue Dew Talisman
+536878922,Fine Crucible Feather Talisman
+536878932,Outer God Heirloom
+536878942,Shattered Stone Talisman
+536878952,Two-Handed Sword Talisman
+536878962,Crusade Insignia
+536878972,Aged One's Exultation
+536878982,Arrow's Soaring Sting Talisman
+536879002,Pearl Shield Talisman
+536879012,Dried Bouquet
+536879022,Smithing Talisman
+536879032,Ailment Talisman
+536879042,Retaliatory Crossed-Tree
+536879052,Lacerating Crossed-Tree
+536879062,Sharpshot Talisman
+536879072,St. Trina's Smile
+536879082,Talisman of the Dread
+536879092,Enraged Divine Beast
+536879102,Beloved Stardust
+536879112,Talisman of Lord's Bestowal
+536879122,Verdigris Discus
+536879132,Rellana's Cameo
+536879142,Blade of Mercy
+536879152,Talisman of All Crucibles
+1075742124,Hefty Fire Pot
+1075742134,Hefty Rock Pot
+1075742144,Hefty Lightning Pot
+1075742154,Hefty Fetid Pot
+1075742164,Hefty Fly Pot
+1075742184,Hefty Freezing Pot
+1075742194,Hefty Poison Pot
+1075742204,Hefty Oil Pot
+1075742424,Hefty Volcano Pot
+1075742444,Hefty Frenzied Flame Pot
+1075742474,Hefty Rancor Pot
+1075742484,Hefty Magic Pot
+1075742494,Hefty Rot Pot
+1075742504,Hefty Furnace Pot
+1075742514,Hefty Red Lightning Pot
+1075742524,Red Lightning Pot
+1075742534,Frenzied Flame Pot
+1075742564,Eternal Sleep Pot
+1075742584,Roped Frenzied Flame Pot
+1075742624,Spirit Raisin
+1075742724,Blessing of Marika
+1075742734,Lulling Branch
+1075742924,Dragon Communion Flesh
+1075742929,Dragonscale Flesh
+1075742934,Fingerprint Nostrum
+1075742944,Spellproof Pickled Liver
+1075742954,Fireproof Pickled Liver
+1075742964,Lightningproof Pickled Liver
+1075742974,Holyproof Pickled Liver
+1075742984,Opaline Pickled Liver
+1075742994,Well-Pickled Turtle Neck
+1075743024,Scorpion Stew
+1075743025,Gourmet Scorpion Stew
+1075743026,Scorpion Stew
+1075743027,Gourmet Scorpion Stew
+1075743034,Sacred Bloody Flesh
+1075743044,Silver Horn Tender
+1075743054,Golden Horn Tender
+1075743224,Messmerfire Grease
+1075743234,Dragonbolt Grease
+1075743244,Royal Magic Grease
+1075743254,Golden Grease
+1075743274,Eternal Sleep Grease
+1075743304,Dragon Communion Grease
+1075743324,Drawstring Messmerfire Grease
+1075743334,Drawstring Dragonbolt Grease
+1075743344,Drawstring Royal Magic Grease
+1075743354,Drawstring Golden Grease
+1075743374,Drawstring Eternal Sleep Grease
+1075743424,Festive Grease
+1075743524,Innard Meat
+1075743534,Dragon Communion Harpoon
+1075743824,Polter Stone
+1075743834,Rock Heart
+1075743844,Priestess Heart
+1075743854,Lamenter's Mask
+1075743924,Ancient Dragon's Blessing
+1075743944,Iris of Grace
+1075743954,Iris of Occultation
+1075743964,Thiollier's Concoction
+1075743974,"Prattling Pate ""Lamentation"""
+1075744724,Remembrance of the Wild Boar Rider
+1075744725,Remembrance of the Impaler
+1075744726,Remembrance of the Shadow Sunflower
+1075744727,Remembrance of the Twin Moon Knight
+1075744728,Remembrance of the Saint of the Bud
+1075744729,Remembrance of the Dancing Lion
+1075744731,Remembrance of a God and a Lord
+1075744732,Remembrance of the Lord of Frenzied Flame
+1075744733,Remembrance of the Mother of Fingers
+1075744734,Remembrance of Putrescence
+1075744774,Leda's Rune
+1075744775,Broken Rune
+1075744776,Shadow Realm Rune [1]
+1075744777,Shadow Realm Rune [2]
+1075744778,Shadow Realm Rune [3]
+1075744779,Shadow Realm Rune [4]
+1075744780,Shadow Realm Rune [5]
+1075744781,Shadow Realm Rune [6]
+1075744782,Shadow Realm Rune [7]
+1075744783,Rune of an Unsung Hero
+1075744784,Marika's Rune
+1075744824,Bondstone
+1075744825,Spritestone
+1075744954,Horned Bairn
+1075744964,Perfumed Oil of Ranah
+1075744974,Call of Tibia
+1075744984,Surging Frenzied Flame
+1075744994,Golden Vow (Consumable)
+1075745004,Fire Coil
+1075745014,Fire Spritestone
+1075745024,Glinting Nail
+1075745134,Sunwarmth Stone
+1075745174,Charming Branch
+1075746124,Miriam's Vanishing
+1075746134,Glintblade Trio
+1075746144,Rellana's Twin Moons
+1075746324,Glintstone Nail
+1075746334,Glintstone Nails
+1075746524,Blades of Stone
+1075746534,Gravitational Missile
+1075746724,Mantle of Thorns
+1075746734,Impenetrable Thorns
+1075746824,Rings of Spectral Light
+1075748024,Vortex of Putrescence
+1075748034,Mass of Putrescence
+1075748124,Furious Blade of Ansbach
+1075748224,Heal from Afar
+1075748474,Aspects of the Crucible: Thorns
+1075748484,Aspects of the Crucible: Bloom
+1075748494,Minor Erdtree
+1075748504,Land of Shadow
+1075748514,Wrath from Afar
+1075748524,Light of Miquella
+1075748534,Multilayered Ring of Light
+1075748624,Roar of Rugalea
+1075748724,Knight's Lightning Spear
+1075748734,Dragonbolt of Florissax
+1075748744,Electrocharge
+1075748824,Bayle's Tyranny
+1075748834,Bayle's Flame Lightning
+1075748844,Ghostflame Breath
+1075749024,Rotten Butterflies
+1075749034,Pest-Thread Spears
+1075749124,Midra's Flame of Frenzy
+1075749234,Fleeting Microcosm
+1075749244,Cherishing Fingers
+1075749424,Watchful Spirit
+1075749524,Golden Arcs
+1075749534,Giant Golden Arc
+1075749544,Spira
+1075749554,Divine Beast Tornado
+1075749564,Divine Bird Feathers
+1075749624,Fire Serpent
+1075749634,Rain of Fire
+1075749644,Messmer's Orb
+1075749824,Miquella's Great Rune
+1075749827,Igon's Furled Finger
+1075749828,Well Depths Key
+1075749829,Gaol Upper Level Key
+1075749830,Gaol Lower Level Key
+1075749831,Cross Map
+1075749832,Hole-Laden Necklace
+1075749835,Heart of Bayle
+1075749836,New Cross Map
+1075749837,Storeroom Key
+1075749838,Secret Rite Scroll
+1075749839,Letter for Freyja
+1075749840,Ruins Map
+1075749841,Ruins Map (2nd)
+1075749842,Ruins Map (3rd)
+1075749843,Black Syrup
+1075749845,Messmer's Kindling
+1075749849,Furnace Keeper's Note
+1075749851,Castle Cross Message
+1075749852,Ancient Ruins Cross Message
+1075749853,Monk's Missive
+1075749854,Storehouse Cross Message
+1075749855,Note: Sealed Spiritsprings
+1075749856,Torn Diary Page
+1075749857,Larval Tear (Spirit)
+1075749858,Message from Leda
+1075749860,Prayer Room Key
+1075749861,Tower of Shadow Message
+1075750024,Incursion Painting
+1075750025,The Sacred Tower Painting
+1075750026,Domain of Dragons Painting
+1075750424,Map: Gravesite Plain
+1075750425,Map: Scadu Altus
+1075750426,Map: Southern Shore
+1075750427,Map: Rauh Ruins
+1075750428,Map: Abyss
+1075750724,Moore's Bell Bearing
+1075750725,Ymir's Bell Bearing
+1075750726,Herbalist's Bell Bearing
+1075750727,Mushroom-Seller's Bell Bearing [1]
+1075750728,Mushroom-Seller's Bell Bearing [2]
+1075750729,Greasemonger's Bell Bearing
+1075750730,Moldmonger's Bell Bearing
+1075750731,Igon's Bell Bearing
+1075750732,Spellmachinist's Bell Bearing
+1075750733,String-Seller's Bell Bearing
+1075750824,Ring of Miquella
+1075750825,May the Best Win
+1075750826,The Two Fingers
+1075750827,Let Us Go Together
+1075750828,O Mother
+1075750984,About the Scadutree Blessing
+1075750985,About the Revered Spirit Ash Blessing
+1075750986,About New Inventory Features
+1075751125,Forager Brood Cookbook [6]
+1075751126,Forager Brood Cookbook [1]
+1075751127,Forager Brood Cookbook [2]
+1075751128,Forager Brood Cookbook [3]
+1075751129,Forager Brood Cookbook [4]
+1075751130,Forager Brood Cookbook [5]
+1075751131,Igon's Cookbook [2]
+1075751132,Finger-Weaver's Cookbook [2]
+1075751133,Greater Potentate's Cookbook [1]
+1075751134,Greater Potentate's Cookbook [4]
+1075751135,Greater Potentate's Cookbook [5]
+1075751136,Greater Potentate's Cookbook [12]
+1075751137,Greater Potentate's Cookbook [7]
+1075751138,Greater Potentate's Cookbook [9]
+1075751139,Greater Potentate's Cookbook [10]
+1075751140,Greater Potentate's Cookbook [11]
+1075751141,Mad Craftsman's Cookbook [2]
+1075751142,Greater Potentate's Cookbook [8]
+1075751143,Greater Potentate's Cookbook [3]
+1075751144,Greater Potentate's Cookbook [13]
+1075751145,Greater Potentate's Cookbook [14]
+1075751146,Greater Potentate's Cookbook [6]
+1075751147,Greater Potentate's Cookbook [2]
+1075751148,Ancient Dragon Knight's Cookbook [1]
+1075751149,Mad Craftsman's Cookbook [1]
+1075751150,St. Trina Disciple's Cookbook [1]
+1075751151,Fire Knight's Cookbook [1]
+1075751152,Ancient Dragon Knight's Cookbook [2]
+1075751153,Loyal Knight's Cookbook
+1075751154,Battlefield Priest's Cookbook [1]
+1075751155,Igon's Cookbook [1]
+1075751156,Battlefield Priest's Cookbook [2]
+1075751157,Forager Brood Cookbook [7]
+1075751158,St. Trina Disciple's Cookbook [3]
+1075751159,Grave Keeper's Cookbook [2]
+1075751160,Antiquity Scholar's Cookbook [2]
+1075751161,Tibia's Cookbook
+1075751162,Mad Craftsman's Cookbook [3]
+1075751163,Battlefield Priest's Cookbook [3]
+1075751164,Fire Knight's Cookbook [2]
+1075751165,Antiquity Scholar's Cookbook [1]
+1075751166,Finger-Weaver's Cookbook [1]
+1075751167,Battlefield Priest's Cookbook [4]
+1075751168,Grave Keeper's Cookbook [1]
+1075751169,St. Trina Disciple's Cookbook [2]
+1075751324,Hefty Cracked Pot
+1075751824,Scadutree Fragment
+1075751924,Revered Spirit Ash
+1075752824,Viridian Hidden Tear
+1075752834,Crimsonburst Dried Tear
+1075752844,Crimson-Sapping Cracked Tear
+1075752854,Cerulean-Sapping Cracked Tear
+1075752864,Oil-Soaked Tear
+1075752874,Bloodsucking Cracked Tear
+1075752884,Glovewort Crystal Tear
+1075752894,Deflecting Hardtear
+1075756824,Beast Horn
+1075756834,Spirit Calculus
+1075756844,Pearlescent Scale
+1075756854,Scorpion Liver
+1075756864,Fly Mold
+1075761825,Rada Fruit
+1075761826,Redflesh Mushroom
+1075761827,Whiteflesh Mushroom
+1075761828,Knot Resin
+1075761829,Dewgem
+1075761830,Black Pyrefly
+1075761831,Glintslab Firefly
+1075761832,Yellow Fulgurbloom
+1075761833,Shadow Sunflower
+1075761834,Toxic Mossling
+1075761835,Scarlet Bud
+1075761836,Sanguine Amaryllis
+1075761837,Frozen Maggot
+1075761838,Deep-Purple Lily
+1075761839,Nectarblood Burgeon
+1075761840,Winter-Lantern Fly
+1075761841,Swollen Grape
+1075761842,Grave Keeper's Brainpan
+1075761843,Horn-Strewn Excrement
+1075761844,Gas Stone
+1075761845,Ghostflame Bloom
+1075761846,Grave Cricket
+1075761847,Dragon's Calorbloom
+1075761848,Finger Mimic
+1075761849,Empyrean-Blood Burgeon
+1075761850,Congealed Putrescence
+1075761851,Roundrock
+1075761852,Spiritgrave Stone
+1075761853,Rauh Burrow
+1075761854,Ember of Messmer
+1075761855,Blessed Bone Shard
+1075761856,Red Fulgurbloom
+1075761857,Nailstone
+1075761858,Sharp Gravel Stone
+1075761859,Furnace Visage
+1075941824,Curseblade Meera
+1075941825,Curseblade Meera
+1075941826,Curseblade Meera
+1075941827,Curseblade Meera
+1075941828,Curseblade Meera
+1075941829,Curseblade Meera
+1075941830,Curseblade Meera
+1075941831,Curseblade Meera
+1075941832,Curseblade Meera
+1075941833,Curseblade Meera
+1075941834,Curseblade Meera
+1075942824,Bloodfiend Hexer's Ashes
+1075942825,Bloodfiend Hexer's Ashes
+1075942826,Bloodfiend Hexer's Ashes
+1075942827,Bloodfiend Hexer's Ashes
+1075942828,Bloodfiend Hexer's Ashes
+1075942829,Bloodfiend Hexer's Ashes
+1075942830,Bloodfiend Hexer's Ashes
+1075942831,Bloodfiend Hexer's Ashes
+1075942832,Bloodfiend Hexer's Ashes
+1075942833,Bloodfiend Hexer's Ashes
+1075942834,Bloodfiend Hexer's Ashes
+1075943824,Gravebird Ashes
+1075943825,Gravebird Ashes
+1075943826,Gravebird Ashes
+1075943827,Gravebird Ashes
+1075943828,Gravebird Ashes
+1075943829,Gravebird Ashes
+1075943830,Gravebird Ashes
+1075943831,Gravebird Ashes
+1075943832,Gravebird Ashes
+1075943833,Gravebird Ashes
+1075943834,Gravebird Ashes
+1075944824,Fire Knight Hilde
+1075944825,Fire Knight Hilde
+1075944826,Fire Knight Hilde
+1075944827,Fire Knight Hilde
+1075944828,Fire Knight Hilde
+1075944829,Fire Knight Hilde
+1075944830,Fire Knight Hilde
+1075944831,Fire Knight Hilde
+1075944832,Fire Knight Hilde
+1075944833,Fire Knight Hilde
+1075944834,Fire Knight Hilde
+1075945824,Spider Scorpion Ashes
+1075945825,Spider Scorpion Ashes
+1075945826,Spider Scorpion Ashes
+1075945827,Spider Scorpion Ashes
+1075945828,Spider Scorpion Ashes
+1075945829,Spider Scorpion Ashes
+1075945830,Spider Scorpion Ashes
+1075945831,Spider Scorpion Ashes
+1075945832,Spider Scorpion Ashes
+1075945833,Spider Scorpion Ashes
+1075945834,Spider Scorpion Ashes
+1075946824,Inquisitor Ashes
+1075946825,Inquisitor Ashes
+1075946826,Inquisitor Ashes
+1075946827,Inquisitor Ashes
+1075946828,Inquisitor Ashes
+1075946829,Inquisitor Ashes
+1075946830,Inquisitor Ashes
+1075946831,Inquisitor Ashes
+1075946832,Inquisitor Ashes
+1075946833,Inquisitor Ashes
+1075946834,Inquisitor Ashes
+1075947824,Demi-Human Swordsman Yosh
+1075947825,Demi-Human Swordsman Yosh
+1075947826,Demi-Human Swordsman Yosh
+1075947827,Demi-Human Swordsman Yosh
+1075947828,Demi-Human Swordsman Yosh
+1075947829,Demi-Human Swordsman Yosh
+1075947830,Demi-Human Swordsman Yosh
+1075947831,Demi-Human Swordsman Yosh
+1075947832,Demi-Human Swordsman Yosh
+1075947833,Demi-Human Swordsman Yosh
+1075947834,Demi-Human Swordsman Yosh
+1075948824,Messmer Soldier Ashes
+1075948825,Messmer Soldier Ashes
+1075948826,Messmer Soldier Ashes
+1075948827,Messmer Soldier Ashes
+1075948828,Messmer Soldier Ashes
+1075948829,Messmer Soldier Ashes
+1075948830,Messmer Soldier Ashes
+1075948831,Messmer Soldier Ashes
+1075948832,Messmer Soldier Ashes
+1075948833,Messmer Soldier Ashes
+1075948834,Messmer Soldier Ashes
+1075949824,Black Knight Commander Andreas
+1075949825,Black Knight Commander Andreas
+1075949826,Black Knight Commander Andreas
+1075949827,Black Knight Commander Andreas
+1075949828,Black Knight Commander Andreas
+1075949829,Black Knight Commander Andreas
+1075949830,Black Knight Commander Andreas
+1075949831,Black Knight Commander Andreas
+1075949832,Black Knight Commander Andreas
+1075949833,Black Knight Commander Andreas
+1075949834,Black Knight Commander Andreas
+1075950824,Black Knight Captain Huw
+1075950825,Black Knight Captain Huw
+1075950826,Black Knight Captain Huw
+1075950827,Black Knight Captain Huw
+1075950828,Black Knight Captain Huw
+1075950829,Black Knight Captain Huw
+1075950830,Black Knight Captain Huw
+1075950831,Black Knight Captain Huw
+1075950832,Black Knight Captain Huw
+1075950833,Black Knight Captain Huw
+1075950834,Black Knight Captain Huw
+1075951824,Bigmouth Imp Ashes
+1075951825,Bigmouth Imp Ashes
+1075951826,Bigmouth Imp Ashes
+1075951827,Bigmouth Imp Ashes
+1075951828,Bigmouth Imp Ashes
+1075951829,Bigmouth Imp Ashes
+1075951830,Bigmouth Imp Ashes
+1075951831,Bigmouth Imp Ashes
+1075951832,Bigmouth Imp Ashes
+1075951833,Bigmouth Imp Ashes
+1075951834,Bigmouth Imp Ashes
+1075952824,Man-Fly Ashes
+1075952825,Man-Fly Ashes
+1075952826,Man-Fly Ashes
+1075952827,Man-Fly Ashes
+1075952828,Man-Fly Ashes
+1075952829,Man-Fly Ashes
+1075952830,Man-Fly Ashes
+1075952831,Man-Fly Ashes
+1075952832,Man-Fly Ashes
+1075952833,Man-Fly Ashes
+1075952834,Man-Fly Ashes
+1075953824,Taylew the Golem Smith
+1075953825,Taylew the Golem Smith
+1075953826,Taylew the Golem Smith
+1075953827,Taylew the Golem Smith
+1075953828,Taylew the Golem Smith
+1075953829,Taylew the Golem Smith
+1075953830,Taylew the Golem Smith
+1075953831,Taylew the Golem Smith
+1075953832,Taylew the Golem Smith
+1075953833,Taylew the Golem Smith
+1075953834,Taylew the Golem Smith
+1075954824,Divine Bird Warrior Ornis
+1075954825,Divine Bird Warrior Ornis
+1075954826,Divine Bird Warrior Ornis
+1075954827,Divine Bird Warrior Ornis
+1075954828,Divine Bird Warrior Ornis
+1075954829,Divine Bird Warrior Ornis
+1075954830,Divine Bird Warrior Ornis
+1075954831,Divine Bird Warrior Ornis
+1075954832,Divine Bird Warrior Ornis
+1075954833,Divine Bird Warrior Ornis
+1075954834,Divine Bird Warrior Ornis
+1075955824,Horned Warrior Ashes
+1075955825,Horned Warrior Ashes
+1075955826,Horned Warrior Ashes
+1075955827,Horned Warrior Ashes
+1075955828,Horned Warrior Ashes
+1075955829,Horned Warrior Ashes
+1075955830,Horned Warrior Ashes
+1075955831,Horned Warrior Ashes
+1075955832,Horned Warrior Ashes
+1075955833,Horned Warrior Ashes
+1075955834,Horned Warrior Ashes
+1075956824,Ancient Dragon Florissax
+1075956825,Ancient Dragon Florissax
+1075956826,Ancient Dragon Florissax
+1075956827,Ancient Dragon Florissax
+1075956828,Ancient Dragon Florissax
+1075956829,Ancient Dragon Florissax
+1075956830,Ancient Dragon Florissax
+1075956831,Ancient Dragon Florissax
+1075956832,Ancient Dragon Florissax
+1075956833,Ancient Dragon Florissax
+1075956834,Ancient Dragon Florissax
+1075958824,Fingercreeper Ashes
+1075958825,Fingercreeper Ashes
+1075958826,Fingercreeper Ashes
+1075958827,Fingercreeper Ashes
+1075958828,Fingercreeper Ashes
+1075958829,Fingercreeper Ashes
+1075958830,Fingercreeper Ashes
+1075958831,Fingercreeper Ashes
+1075958832,Fingercreeper Ashes
+1075958833,Fingercreeper Ashes
+1075958834,Fingercreeper Ashes
+1075959824,Fire Knight Queelign
+1075959825,Fire Knight Queelign
+1075959826,Fire Knight Queelign
+1075959827,Fire Knight Queelign
+1075959828,Fire Knight Queelign
+1075959829,Fire Knight Queelign
+1075959830,Fire Knight Queelign
+1075959831,Fire Knight Queelign
+1075959832,Fire Knight Queelign
+1075959833,Fire Knight Queelign
+1075959834,Fire Knight Queelign
+1075960824,Swordhand of Night Jolán
+1075960825,Swordhand of Night Jolán
+1075960826,Swordhand of Night Jolán
+1075960827,Swordhand of Night Jolán
+1075960828,Swordhand of Night Jolán
+1075960829,Swordhand of Night Jolán
+1075960830,Swordhand of Night Jolán
+1075960831,Swordhand of Night Jolán
+1075960832,Swordhand of Night Jolán
+1075960833,Swordhand of Night Jolán
+1075960834,Swordhand of Night Jolán
+1075961824,Jolan and Anna
+1075961825,Jolan and Anna
+1075961826,Jolan and Anna
+1075961827,Jolan and Anna
+1075961828,Jolan and Anna
+1075961829,Jolan and Anna
+1075961830,Jolan and Anna
+1075961831,Jolan and Anna
+1075961832,Jolan and Anna
+1075961833,Jolan and Anna
+1075961834,Jolan and Anna
+2147683648,Ash of War: Dryleaf Whirlwind
+2147683748,Ash of War: Aspects of the Crucible: Wings
+2147883648,Ash of War: Spinning Gravity Thrust
+2147884648,Ash of War: Palm Blast
+2147885648,Ash of War: Piercing Throw
+2147886648,Ash of War: Scattershot Throw
+2147887648,Ash of War: Wall of Sparks
+2147888648,Ash of War: Rolling Sparks
+2147889648,Ash of War: Raging Beast
+2147890648,Ash of War: Savage Claws
+2147892648,Ash of War: Blind Spot
+2147893648,Ash of War: Swift Slash
+2147894648,Ash of War: Overhead Stance
+2147895648,Ash of War: Wing Stance
+2147896648,Ash of War: Blinkbolt
+2147897648,Ash of War: Flame Skewer
+2147898648,Ash of War: Savage Lion's Claw
+2147899648,Ash of War: Divine Beast Frost Stomp
+2147900648,Ash of War: Flame Spear
+2147901648,Ash of War: Carian Sovereignty
+2147902648,Ash of War: Shriek of Sorrow
+2147905648,Ash of War: Ghostflame Call
+2147988648,Ash of War: The Poison Flower Blooms Twice
+2148031648,Ash of War: Igon's Drake Hunt
+2148283648,Ash of War: Shield Strike

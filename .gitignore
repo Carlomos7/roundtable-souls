@@ -1,0 +1,32 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[codz]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+.pytest_cache/
+.ruff_cache/
+
+# Environments
+.venv/
+.env
+
+# Launcher state (never committed: it is per-machine)
+launcher_settings.json
+launcher_settings.json.tmp
+logs/
+*.log
+
+# Editors
+.vscode/
+.idea/

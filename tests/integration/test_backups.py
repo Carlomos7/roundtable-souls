@@ -1,0 +1,94 @@
+"""Backups with manifests, restore with a safety copy, and the Play session options.
+Runs on COPIES of the live co-op save in a temp folder; the live file is never written."""
+import json
+import shutil
+import struct
+from pathlib import Path
+
+import pytest
+
+from roundtable_souls import core as g
+
+F = g.save_fix
+L = g.save_layout_check
+A = g.save_analyze
+
+
+def _copy(tmp_path):
+    src = next((p for p in g.common.save_files() if p.suffix.lower() == ".co2" and p.exists()), None)
+    if not src:
+        pytest.skip("no live co-op save on this PC")
+    copy = tmp_path / "ER0000.co2"; shutil.copy2(src, copy)
+    return copy
+
+
+def test_backup_writes_manifest_and_list_reads_it(tmp_path):
+    copy = _copy(tmp_path)
+    bak = F.backup(copy, {"action": "Fix quest flags", "changes": ["Tarnished: Ruins of Unte golem stuck"]})
+    assert bak.parent.name == F.BACKUP_DIR and bak.read_bytes() == copy.read_bytes()
+    m = json.loads(Path(str(bak) + ".json").read_text(encoding="utf-8"))
+    assert m["action"] == "Fix quest flags" and m["changes"] == ["Tarnished: Ruins of Unte golem stuck"] and m["save"].endswith("ER0000.co2")
+    bak2 = F.backup(copy)                                     # same second: still a distinct file
+    assert bak2 != bak and F.read_manifest(bak2)["action"] == "Backup"
+    rows = g.list_backups(copy)
+    assert [r["path"] for r in rows][:2] == sorted([bak, bak2], key=lambda p: p.stat().st_mtime, reverse=True) or len(rows) == 2
+    assert {r["action"] for r in rows} == {"Fix quest flags", "Backup"} and all(r["save_name"] == "ER0000.co2" for r in rows)
+    assert g.save_for_backup(bak) == copy
+    # a backup without a manifest still lists, named after its folder
+    Path(str(bak2) + ".json").unlink()
+    assert any(r["path"] == bak2 and r["action"] == "Save fix" for r in g.list_backups(copy))
+
+
+def test_fix_writes_a_manifest_that_names_the_change(tmp_path, monkeypatch):
+    copy = _copy(tmp_path); monkeypatch.setattr(g.common, "game_running", lambda: False)
+    data = bytearray(copy.read_bytes()); r = L.parse(str(copy)); i = next(k for k, a in enumerate(r["ud10"]["active"]) if a); s = r["slots"][i]
+    struct.pack_into("<i", data, s["horse_pos"] + 32, 0); struct.pack_into("<I", data, s["horse_pos"] + 36, 13)
+    F._sign_slot(data, i); copy.write_bytes(bytes(data))
+    out = g.fix_loading(copy)
+    m = F.read_manifest(out["backup"])
+    assert m["action"] == "Fix loading" and any("Torrent" in c for c in m["changes"])
+
+
+def test_restore_backup_round_trip_with_safety_copy(tmp_path, monkeypatch):
+    copy = _copy(tmp_path); monkeypatch.setattr(g.common, "game_running", lambda: False)
+    original = copy.read_bytes()
+    bak = F.backup(copy, {"action": "Fix loading", "changes": ["x"]})
+    data = bytearray(original); data[0x400] ^= 0x5A; copy.write_bytes(bytes(data))      # the live file moves on
+    changed = copy.read_bytes(); assert changed != original
+    safety = g.restore_backup(bak)
+    assert copy.read_bytes() == original
+    assert safety and safety.read_bytes() == changed and F.read_manifest(safety)["action"] == "Before restoring a backup"
+    g.restore_backup(safety, copy)                              # undo the restore
+    assert copy.read_bytes() == changed
+    g.delete_backup(bak)
+    assert not bak.exists() and not Path(str(bak) + ".json").exists()
+    junk = tmp_path / "ER0000.co2.junk.bak"; junk.write_bytes(b"nope")
+    with pytest.raises(RuntimeError):
+        g.restore_backup(junk, copy)
+    monkeypatch.setattr(g.common, "game_running", lambda: True)
+    with pytest.raises(RuntimeError):
+        g.restore_backup(safety, copy)
+
+
+def test_play_options_defaults_and_backup_before_play(tmp_path, monkeypatch):
+    assert g.play_options({}) == g.PLAY_DEFAULTS
+    assert g.play_options({"play_repair_after": False, "play_backup_before": 1})["play_repair_after"] is False
+    assert g.play_options({"play_backup_before": 1})["play_backup_before"] is True
+    assert g.play_options({"play_boot_boost": None})["play_boot_boost"] is True            # null in the file = default
+    copy = _copy(tmp_path)
+    monkeypatch.setattr(g.common, "save_files", lambda: [copy])
+    made = g.backup_saves_before_play()
+    assert len(made) == 1 and F.read_manifest(made[0])["action"] == "Backup before Play" and made[0].read_bytes() == copy.read_bytes()
+
+
+def test_character_detail_and_place_names(tmp_path):
+    copy = _copy(tmp_path); info = g.save_info(copy)
+    ch = info["characters"][0]
+    assert ch["where"] and ch["torrent"] and "vig" in ch["stats"]
+    d = g.character_detail(info, ch["slot"] - 1)
+    assert d["name"] == ch["name"] and isinstance(d["mods"], dict) and isinstance(d["loading"], list)
+    assert g.place_name(bytes([0, 0, 10, 11])) == "Roundtable Hold"
+    assert g.place_name(bytes([0, 46, 47, 61])).startswith("Land of Shadow")
+    assert g.place_name(bytes([0, 0, 0, 18])) == "Stranded Graveyard"
+    assert g.torrent_text((1939, 1)) == "resting, 1,939 HP" and g.torrent_text((0, 13)) == "summoned, 0 HP"
+    assert g.character_detail(info, 9) == {}
