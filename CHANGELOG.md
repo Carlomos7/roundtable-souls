@@ -72,7 +72,7 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
 
 ## [2.50]
 
-- Install mod accepts .7z and .rar as well as .zip, the same formats me3-manager takes.
+- Install mod accepts .7z and .rar as well as .zip.
 
 ## [2.49]
 
@@ -84,7 +84,7 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
 
 ## [2.47]
 
-- From me3 and me3-manager: package conflict scan on Mods, profile settings as menus, boot boost / logos / diagnostics launch flags, me3 version and update notice with its logs.
+- Mods: package conflict scan, profile settings as menus, boot boost / logos / diagnostics launch flags, and the me3 version with an update notice and its logs.
 
 ## [2.46]
 
@@ -112,7 +112,7 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
 
 ## [2.40]
 
-- Fix loading: Torrent, position, DLC flags and weather repairs from the save editors, with the usual confirm and backup. Torn writes are detected and named. Status chips on each save card; action buttons wrap on narrow windows.
+- Fix loading: Torrent, position, DLC flags and weather repairs, with the usual confirm and backup. Torn writes are detected and named. Status chips on each save card; action buttons wrap on narrow windows.
 
 ## [2.39]
 
@@ -124,7 +124,7 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
 
 ## [2.37]
 
-- Restore vanilla: strips Seamless and mod items by name, clears leftover rows and soft-locks, re-signs, backs up. The vanilla item list is rebuilt from the game's own param names (Paramdex), so vanilla goods, gestures and spirit-ash levels no longer read as unknown, and mod packs no longer pass as vanilla. Mod items are named on the Saves page.
+- Restore vanilla: strips Seamless and mod items by name, clears leftover rows and soft-locks, re-signs, backs up. The vanilla item list is rebuilt from the game's own item data, so vanilla goods, gestures and spirit-ash levels no longer read as unknown, and mod packs no longer pass as vanilla. Mod items are named on the Saves page.
 
 ## [2.36]
 
