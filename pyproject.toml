@@ -1,0 +1,80 @@
+[project]
+name = "roundtable-souls"
+version = "3.2.0"
+description = "Launcher and save toolkit for modded Elden Ring: me3 profiles, Seamless Co-op settings, save checks and repairs."
+readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
+authors = [{ name = "Carlos Ray Segarra" }]
+requires-python = ">=3.14"
+dependencies = [
+    "PySide6>=6.11.2",
+    "PySide6-Fluent-Widgets>=1.11.3",
+    "pydantic>=2.13.5",
+    "py7zr>=1.1.3",
+]
+
+[project.scripts]
+roundtable-souls = "roundtable_souls:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "coverage>=7.13.0",
+    "ruff>=0.16.9",
+    "pyinstaller>=6.22.3",
+    "pillow>=12.3.0",
+    "pyright>=1.1.414",
+    "pre-commit>=4.6.2",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.19,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests"]
+markers = ["integration: needs a real Elden Ring save on this PC (skipped otherwise)"]
+
+[tool.coverage.run]
+branch = true
+source = ["src/roundtable_souls"]
+omit = ["src/roundtable_souls/ui/*"]
+
+[tool.coverage.report]
+show_missing = true
+precision = 2
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+src = ["src", "tests"]
+
+[tool.ruff.format]
+line-ending = "lf"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501", "E731", "E741", "B008", "B905"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/roundtable_souls/core.py" = ["F401"]  # facade re-exports
+
+[tool.pyright]
+include = ["src", "scripts", "tests"]
+pythonVersion = "3.14"
+typeCheckingMode = "standard"
+# Qt and the dict-shaped save data trip these without pointing at bugs; they stay visible as warnings.
+reportAttributeAccessIssue = "warning"
+reportArgumentType = "warning"
+reportOptionalMemberAccess = "warning"
+reportOptionalSubscript = "warning"
+reportOptionalIterable = "warning"
+reportGeneralTypeIssues = "warning"
+reportIndexIssue = "warning"
+reportCallIssue = "warning"
+reportOperatorIssue = "warning"

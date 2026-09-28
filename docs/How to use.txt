@@ -1,0 +1,188 @@
+Roundtable Souls
+================
+
+A launcher for modded Elden Ring: it starts the game through me3, keeps your
+Seamless Co-op settings in one place, manages your mods, and checks and repairs
+your saves.
+
+
+GETTING STARTED
+---------------
+
+You need Steam with Elden Ring, and me3 (https://github.com/garyttierney/me3)
+or a Nightreign Revive installation, which brings its own me3.
+
+Windows, installer (recommended)
+  Run RoundtableSouls-Setup.exe. It installs for your account only, with no
+  administrator prompt, adds a Start menu entry, and can be removed from
+  Settings > Apps like any other program.
+
+Windows, portable
+  Unzip RoundtableSouls.zip into a folder of its own and run
+  RoundtableSouls.exe. It keeps its settings and logs in that folder.
+
+  Either way, Windows may warn the first time because the program is not
+  signed: choose "More info", then "Run anyway".
+
+Linux and Steam Deck (Desktop Mode)
+  Unpack RoundtableSouls-linux-x86_64.tar.gz and run RoundtableSouls. Install
+  me3 for Linux first. The game runs through Proton; Roundtable Souls finds
+  your saves inside the game's Proton folder, on the internal drive or an SD
+  card.
+
+
+THE PAGES
+---------
+
+Play
+  Your character, the setup that Play will start, and the Play button. Leave
+  the window open while you play; it can be minimised. After you quit it
+  repairs your saves (see "Save repairs" below) and closes any leftover game
+  processes. Setup lets you switch profiles or pick a .me3 file.
+
+Co-op
+  The Seamless Co-op session password, difficulty presets, and every other
+  Seamless setting, each with a short explanation. Nothing is written until
+  you press Save changes on the bar at the bottom (or Ctrl+S). Discard puts
+  the page back to the file.
+
+  Difficulty presets are per extra player; only the host's numbers count:
+    Seamless default         the mod's own values.
+    Party of 3 (Nightreign)  enemies and bosses gain 100 % health per extra
+                             player, poise rises a little, damage stays.
+    Party of 4 / 5 / 6       the same total for a bigger group, in smaller
+                             steps, so a full party is not overwhelming.
+    Custom                   your own six numbers.
+
+  Share with a friend puts all your Seamless settings into one block of text.
+  Copy sends yours; Paste and Apply takes a friend's after showing what would
+  change.
+
+Mods
+  What the current me3 profile loads. Each mod can be turned on or off, has
+  Options (load order and, for DLL mods, how they load) and can be removed
+  (its folder is deleted only if you tick that). Install mod takes a .zip,
+  .7z or .rar, or a folder, works out what kind of mod it is and adds it at
+  the end of the load order. New profile and Delete profile manage .me3
+  files. Profile settings are me3's own options for this profile. Conflicts
+  lists files two mods both replace and which one wins.
+
+  Edit profile shows the .me3 text:
+    Ctrl+F find, Ctrl+H replace (Aa matches case, .* uses patterns),
+    Enter and Shift+Enter step through matches, Esc closes the search bar,
+    Ctrl+/ comments lines in or out, Tab and Shift+Tab indent a selection,
+    Ctrl+D duplicates a line, Ctrl+Z undoes any of these in one step.
+
+Saves
+  Every save file with its characters and a few status notes:
+    Loads fine / May not load   whether something would hang the loading
+                                screen.
+    Mod items                   items the game itself does not define.
+    Opens in save editors       whether save editors can read it.
+
+  Review & fix opens one save on its own page. Every possible fix is a tick
+  box: loading fixes and checksum fixes start ticked, removals start off.
+  Apply shows what will change, makes a backup, writes, checks the result,
+  and offers Undo.
+
+    May not load        Torrent stuck at 0 HP, a character standing nowhere,
+                        or in the Land of Shadow on a PC without the DLC.
+                        The fix marks Torrent as fallen, or moves the
+                        character to Roundtable Hold.
+    Remove mod items    takes items the game does not define off a character.
+                        They are named by kind and ID, for example
+                        "Armour 742000". Worn items have to come off in-game
+                        first. Use this before copying a co-op character to
+                        a standard save.
+    For save editors    recomputes stale checksums and repairs the block
+                        me3 leaves behind.
+
+  Copy to standard save and Copy to co-op save copy a save between the
+  Seamless Co-op file and the normal one, backing up whatever they replace.
+  Copy report puts a plain-text summary on the clipboard.
+
+  Backups lists every copy made before a change. Restore puts one back (the
+  current file is copied first, so a restore can be undone too).
+
+  Shadow of the Erdtree is detected from the game folder, and the Tarnished
+  Edition pack from your save; nothing to set. With the pack, its equipment
+  is left alone even though it is not in the game's item list.
+
+  A save damaged by a crash while saving is named as such and left alone:
+  restore a backup from before the crash.
+
+Settings
+  Launcher: the version and whether this copy is installed or portable,
+  Check for updates, the releases page and the launcher's logs.
+  Steam shortcut: see "Playing from Steam" below.
+  Appearance: dark or light, and the logo.
+  Maintenance: repair saves now, and clear leftover game processes (Windows).
+  Play session: turn each step around the game on or off.
+  Locations: point at a me3, game or profile folder that is not where it
+  usually is. Blank means detect.
+  me3: its version and folders, and a notice when a newer me3 is out.
+  Offline play: start the game without Seamless Co-op when Steam cannot sign
+  in (co-op itself needs Steam online).
+
+  Ctrl+1 to Ctrl+5 open the pages. Nothing has keyboard focus when the window
+  opens, so a stray key press cannot start the game.
+
+
+PLAYING FROM STEAM (Big Picture, Steam Deck Gaming Mode)
+--------------------------------------------------------
+
+Roundtable Souls can run Play without its window:
+
+  1. In Steam, choose Add a Game > Add a Non-Steam Game and pick
+     RoundtableSouls (RoundtableSouls.exe on Windows).
+  2. In that shortcut's Properties, set Launch Options to:  --play
+     Settings > Steam shortcut shows the exact target and option, with Copy
+     buttons.
+
+Starting the shortcut uses the setup Play last used, launches the game, and
+repairs your saves when you quit, just like the Play button. Open the window
+once in Desktop Mode first so a setup is remembered.
+
+
+UPDATES
+-------
+
+Roundtable Souls checks for a new version at most once an hour when it starts
+(Settings > Launcher can turn that off, or check right away). When one is out,
+a bar offers Update now. It downloads the new version, checks it against the
+published checksums, and restarts into it. Your settings, logs and backups are
+kept. Nothing is ever installed without that click. Skip hides one version.
+
+
+SAVE REPAIRS
+------------
+
+Playing through me3 leaves a block at the end of the save that save editors
+cannot read. The game does not mind. After every session, Roundtable Souls
+puts the game's own data back into that block. Every rewritten save is backed
+up first, next to the save, and nothing else in it is touched.
+
+
+WHERE FILES LIVE
+----------------
+
+Settings and logs:
+  installed on Windows   %LOCALAPPDATA%\RoundtableSouls
+  portable               next to the program (or the folder above when that
+                         folder cannot be written)
+  Linux                  ~/.local/share/RoundtableSouls when the program's
+                         folder cannot be written
+Backups: folders named save-fix-backups and regulation-fix-backups next to
+your saves.
+
+If something goes wrong, logs/launcher-errors.log and logs/last_run.log say
+what happened.
+
+
+LICENCE
+-------
+
+Roundtable Souls is free software under the GNU General Public License,
+version 3 or later (LICENSE.txt). THIRD_PARTY_NOTICES.md credits the work it
+builds on. The source code and every version's changes are at
+https://github.com/Carlomos7/roundtable-souls
