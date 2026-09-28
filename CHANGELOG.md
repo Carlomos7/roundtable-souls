@@ -2,6 +2,10 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
+## [Unreleased]
+
+- Builds: tests run only when code, tests, build files or dependencies change, exactly as locked; a newer push cancels the older run. Releases must come from main, match the version, and are checked file by file before they go public.
+
 ## [3.2.0] - 2026-09-27
 
 - Licensing: the project is now GPL-3.0-or-later, matching the GPL-3.0 UI library the app is built on. THIRD_PARTY_NOTICES.md credits the save parser port (Apache-2.0) and the mod detection rules (MIT) with their license texts.
