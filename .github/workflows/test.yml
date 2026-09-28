@@ -28,6 +28,9 @@ jobs:
     - id: filter
       uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
       with:
+        # Pushes compare with the previous push to the same branch (a new branch compares with main);
+        # pull requests compare with their base branch.
+        base: ${{ github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000' && github.event.before || '' }}
         filters: |
           code:
             - "src/**"
