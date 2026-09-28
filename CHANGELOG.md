@@ -4,7 +4,7 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
 
 ## [Unreleased]
 
-- Builds: tests run only when code, tests, build files or dependencies change, exactly as locked; a newer push cancels the older run. Releases must come from main, match the version, and are checked file by file before they go public.
+- Builds: tests run only when code, tests, build files or dependencies change, exactly as locked; a newer push cancels the older run. Releases must come from main, match the version, and are checked file by file before they go public. Changes to documentation alone skip the tests.
 
 ## [3.2.0] - 2026-09-27
 
