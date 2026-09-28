@@ -78,13 +78,14 @@ def test_game_tabs_switch_every_page(launcher, app):
     assert launcher.game is games.NIGHTREIGN and common.GAME is games.NIGHTREIGN
     assert launcher.windowTitle().endswith("Nightreign")
     assert launcher.shortcut_fields["Launch options"].text().endswith("--game nightreign --play")
-    assert not launcher.repair_row.isVisibleTo(launcher.tools_page)  # the regulation repair is Elden Ring's
+    assert launcher.repair_row.isVisibleTo(launcher.tools_page)  # Nightreign re-signs encrypted sections after play
 
     launcher._on_game_tab("darksouls3")
     for _ in range(10):
         app.processEvents()
     assert launcher.stackedWidget.currentWidget() is launcher.placeholder_page
     assert not launcher.navigationInterface.widget(launcher.play_page.objectName()).isEnabled()
+    assert not launcher.repair_row.isVisibleTo(launcher.tools_page)
     QTest.keyClick(launcher, Qt.Key_1, Qt.ControlModifier)  # Ctrl+1 cannot open Play for a placeholder game
     app.processEvents()
     assert launcher.stackedWidget.currentWidget() is launcher.placeholder_page

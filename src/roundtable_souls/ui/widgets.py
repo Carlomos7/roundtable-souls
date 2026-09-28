@@ -145,7 +145,7 @@ class Bus(QObject):
     update_progress = Signal(str)
     update_ready = Signal(object)
     conflicts = Signal(dict)
-    saves = Signal(list)
+    saves = Signal(dict)
 
 
 def page(name: str):

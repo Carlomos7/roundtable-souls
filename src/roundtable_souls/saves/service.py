@@ -13,6 +13,7 @@ from roundtable_souls.saves import container as save_container
 from roundtable_souls.saves import fix as save_fix
 from roundtable_souls.saves import layout as save_layout_check
 from roundtable_souls.saves import loading as save_loading
+from roundtable_souls.saves import nightreign as repair_nightreign
 from roundtable_souls.saves import regulation as repair_regulation
 from roundtable_souls.saves import vanilla as save_vanilla
 from roundtable_souls.system import common
@@ -50,6 +51,8 @@ def _save_info(path: Path) -> dict:
         return info
 
     game = games.for_save(path) or games.ELDEN_RING
+    if game.save_reader == "nightreign":
+        return _nightreign_info(info, data, game)
     if game.save_reader != "eldenring":
         return _container_info(info, data, game)
 
@@ -186,8 +189,88 @@ def _save_info(path: Path) -> dict:
     return info
 
 
+def _nightreign_info(info: dict, data: bytes, game: games.Game) -> dict:
+    """Nightreign: structure, per-section checksums, and whether entry 12 still looks like RSLT."""
+    info["block"] = "n/a"
+    try:
+        found = save_container.check(data, game.save_sections)
+        status = repair_nightreign.inspect(data, game.save_sections)
+    except (save_container.ContainerError, repair_nightreign.NightreignSaveError) as e:
+        info["error"] = str(e)[:120]
+        info["findings"] = [
+            {
+                "level": "error",
+                "code": "layout",
+                "title": "Damaged save file",
+                "detail": f"The file structure is broken: {e}. Restore a backup from the list below.",
+            }
+        ]
+        return info
+    findings = [
+        {
+            "level": "ok",
+            "code": "layout",
+            "title": "File structure OK",
+            "detail": f"All {len(found)} sections are whole.",
+        }
+    ]
+    if status["checksum_all_ok"]:
+        findings.append(
+            {
+                "level": "ok",
+                "code": "checksum",
+                "title": "Section checksums match",
+                "detail": f"All {len(found)} encrypted sections verify (MD5 of each decrypted payload).",
+            }
+        )
+    else:
+        bad = [str(i) for i, ok in enumerate(status["checksum_ok"]) if not ok]
+        findings.append(
+            {
+                "level": "warn",
+                "code": "checksum",
+                "title": "Section checksum mismatch",
+                "detail": f"Section(s) {', '.join(bad) or '?'} do not match their MD5. Repair re-signs them with the original IV.",
+            }
+        )
+    if status["regulation_ok"]:
+        findings.append(
+            {
+                "level": "ok",
+                "code": "regulation",
+                "title": "Regulation section OK",
+                "detail": "Entry 12 is a signed RSLT blob (not a copy of regulation.bin).",
+            }
+        )
+        info["block"] = "OK"
+    elif status["rslt"]:
+        findings.append(
+            {
+                "level": "warn",
+                "code": "regulation",
+                "title": "Regulation section needs a checksum",
+                "detail": "Entry 12 still looks like RSLT, but its MD5 does not match. Repair re-signs it.",
+            }
+        )
+        info["block"] = "needs repair"
+    else:
+        findings.append(
+            {
+                "level": "warn",
+                "code": "regulation",
+                "title": "Regulation section needs repair",
+                "detail": "Entry 12 is not a signed RSLT blob. Repair copies it from a healthy .bak / .sl2 / .co2 next to this file when one exists. Game\\regulation.bin is a different encoding and is not written into the save.",
+            }
+        )
+        info["block"] = "needs repair"
+    info["needs_repair"] = not status["healthy"]
+    info["findings"] = findings
+    info["convert_ok"] = Path(info["path"]).suffix.lower() == ".co2" and save_analyze.findings_are_clean(findings)
+    return info
+
+
 def _container_info(info: dict, data: bytes, game: games.Game) -> dict:
-    """A save whose contents are not readable yet (Nightreign): only the file structure is checked."""
+    """A save whose contents are not readable yet: only the file structure is checked."""
     info["block"] = "n/a"
     try:
         found = save_container.check(data, game.save_sections)
@@ -407,9 +490,12 @@ def delete_backup(bak: Path) -> None:
 
 
 def repair_save(path: Path) -> bool:
-    """Repair one save's regulation block from the game's regulation.bin. Returns True if rewritten."""
+    """Repair one save's regulation block. Returns True if rewritten."""
     path = Path(path)
     assert_writable(path)
+    game = games.for_save(path) or common.GAME
+    if game.save_reader == "nightreign":
+        return bool(repair_nightreign.repair(path, log=common.log))
     source = common.regulation_bin()
     if not source:
         raise RuntimeError("Could not find the game's regulation.bin through Steam.")
@@ -490,8 +576,22 @@ def repair_available(info: dict) -> bool:
 def save_summary(info: dict) -> list:
     """Three calm status chips for a save card: (text, tone). Tones: success, warn, muted."""
     chips = []
-    if any(f.get("code") == "contents" for f in info.get("findings") or []):
+    findings = info.get("findings") or []
+    if any(f.get("code") == "contents" for f in findings):
         return [("File is whole", "success"), ("Backups and copies work", "muted")]
+    if any(f.get("code") == "checksum" for f in findings):
+        if info.get("error") and not info.get("characters"):
+            return [("Could not read", "warn")]
+        if any(f.get("code") == "layout" and f.get("level") == "error" for f in findings):
+            return [("Damaged file", "warn")]
+        cs_bad = any(f.get("code") == "checksum" and f.get("level") != "ok" for f in findings)
+        reg_bad = any(f.get("code") == "regulation" and f.get("level") != "ok" for f in findings)
+        chips.append(("File is whole", "success"))
+        chips.append(
+            ("Section checksums match", "success") if not cs_bad else ("Section checksums need repair", "warn")
+        )
+        chips.append(("Regulation OK", "success") if not reg_bad else ("Regulation needs repair", "muted"))
+        return chips
     if info.get("error") and not info.get("characters"):
         return [("Could not read", "warn")]
     torn = any(f.get("code") == "layout" and f.get("level") == "error" for f in info.get("findings") or [])

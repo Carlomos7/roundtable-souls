@@ -26,11 +26,18 @@ def save_check_notes(info: dict) -> list[dict]:
     notes = []
     findings = [f for f in (info.get("findings") or []) if f.get("level") in ("warn", "error")]
     if info.get("needs_repair"):
+        nr = any(f.get("code") == "checksum" for f in info.get("findings") or [])
         notes.append(
             {
                 "kind": "action",
                 "title": "Repair for save editors",
-                "detail": "me3 left extra data at the end of the file. The game does not mind. Repair puts the real regulation.bin back so editors can open it.",
+                "detail": (
+                    "me3 can leave a section unsigned or the regulation payload unreadable. Repair re-signs every "
+                    "section. If entry 12 is garbled, it is copied from a healthy .bak / .sl2 / .co2 next to this file "
+                    "when one exists."
+                    if nr
+                    else "me3 left extra data at the end of the file. The game does not mind. Repair puts the real regulation.bin back so editors can open it."
+                ),
             }
         )
     by = {}
@@ -144,6 +151,7 @@ def save_check_notes(info: dict) -> list[dict]:
             "slot_checksum",
             "ud10_checksum",
             "regulation",
+            "checksum",
             "read",
         ):
             continue

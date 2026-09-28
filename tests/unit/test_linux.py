@@ -91,6 +91,7 @@ def test_me3_paths_follow_its_linux_layout(tmp_path, monkeypatch):
     assert common.me3_exe() is None
     (home / ".local" / "bin").mkdir(parents=True)
     (home / ".local" / "bin" / "me3").write_bytes(b"#!/bin/sh\n")
+    common.clear_detection_cache()  # detection is cached per session; the app clears it on every game switch
     assert common.me3_exe() == home / ".local" / "bin" / "me3"
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "cfg"))
     assert common.me3_profiles_dir() == tmp_path / "cfg" / "me3" / "profiles"

@@ -7,6 +7,7 @@ import pytest
 
 from roundtable_souls import core, games, settings
 from roundtable_souls.saves import container
+from roundtable_souls.saves import nightreign as nr
 from roundtable_souls.saves import service as saves
 from roundtable_souls.system import common
 
@@ -154,9 +155,12 @@ def container_bytes(names, sizes, truncate=0):
 
 
 def nr_save(tmp_path, name="NR0000.co2", **kw):
-    names = [f"USER_DATA{i:03d}" for i in range(14)]
+    payloads = [(b"RSLT" + bytes(12)) if i == 12 else bytes([i]) + bytes(15) for i in range(14)]
+    data = nr.pack_save(payloads)
+    if kw.get("truncate"):
+        data = data[: len(data) - kw["truncate"]]
     p = tmp_path / name
-    p.write_bytes(container_bytes(names, [64] * 14, **kw))
+    p.write_bytes(data)
     return p
 
 
@@ -172,12 +176,17 @@ def test_container_check():
         container.check(b"not a save" * 10)
 
 
-def test_nightreign_save_info_checks_structure_only(tmp_path):
+def test_nightreign_save_info_checks_checksums_and_regulation(tmp_path):
     info = saves.save_info(nr_save(tmp_path))
     assert info["kind"] == "Seamless Co-op" and info["error"] is None and info["characters"] == []
-    assert [f["code"] for f in info["findings"]] == ["layout", "contents"]
-    assert info["convert_ok"] and not saves.repair_available(info)
-    assert saves.save_summary(info)[0] == ("File is whole", "success")
+    assert [f["code"] for f in info["findings"]] == ["layout", "checksum", "regulation"]
+    assert all(f["level"] == "ok" for f in info["findings"])
+    assert info["convert_ok"] and not info["needs_repair"] and not saves.repair_available(info)
+    assert saves.save_summary(info) == [
+        ("File is whole", "success"),
+        ("Section checksums match", "success"),
+        ("Regulation OK", "success"),
+    ]
     broken = saves.save_info(nr_save(tmp_path, "NR0000.sl2", truncate=40))
     assert broken["error"] and broken["findings"][0]["title"] == "Damaged save file"
 

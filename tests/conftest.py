@@ -25,7 +25,11 @@ def no_installed_mod_names(request, monkeypatch):
 
 @pytest.fixture(autouse=True)
 def elden_ring_is_the_active_game():
-    """Every test starts on Elden Ring, and one that switches games cannot leak the switch into the next."""
+    """Every test starts on Elden Ring, with no detection cached from a prior test that used a different environment."""
     common.GAME = games.DEFAULT
+    common.clear_detection_cache()
+    common._PROFILE_GAMES_CACHE.clear()
     yield
     common.GAME = games.DEFAULT
+    common.clear_detection_cache()
+    common._PROFILE_GAMES_CACHE.clear()

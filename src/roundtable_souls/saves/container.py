@@ -1,9 +1,9 @@
-"""Read-only structure check for saves whose contents Roundtable Souls cannot read yet (Nightreign).
+"""Read-only structure check for BND4 saves (Nightreign uses this, then decrypts each section separately).
 
 A FromSoftware PC save is a BND4 container: a header, one 32-byte entry per section (USER_DATA000, 001, ...), the
-section names in UTF-16, then the sections themselves. Nightreign encrypts every section, so only the container is
-checked here: the magic, the section count, and that every section and name lies inside the file. That is enough to
-tell a whole save from a torn or truncated one, and to refuse restoring something that is not a save at all.
+section names in UTF-16, then the sections themselves. The check here is the magic, the section count, and that every
+section and name lies inside the file. That is enough to tell a whole save from a torn or truncated one, and to refuse
+restoring something that is not a save at all.
 """
 
 from __future__ import annotations

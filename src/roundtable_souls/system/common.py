@@ -137,7 +137,24 @@ def apply_overrides(settings: dict | None = None) -> dict:
     ME3_OVERRIDE = me3 or None
     GAME_EXE_OVERRIDE = game or None
     PROFILE_DIR_OVERRIDE = prof or None
+    _DETECT_CACHE.clear()  # Steam/me3/game folders may now resolve differently
     return {"me3": me3, "game_exe": game, "profile_dir": prof}
+
+
+# Detection (Steam libraries, the game folder, me3.exe) scans PATH and the disk. The answers are stable within a
+# session, but Setup.summary()/problems() ask for them many times per game-tab switch, so they are memoised here and
+# cleared whenever an override changes (apply_overrides) or a Locations refresh happens.
+_DETECT_CACHE: dict = {}
+
+
+def _detected(key, compute):
+    if key not in _DETECT_CACHE:
+        _DETECT_CACHE[key] = compute()
+    return _DETECT_CACHE[key]
+
+
+def clear_detection_cache() -> None:
+    _DETECT_CACHE.clear()
 
 
 def set_game(game: games.Game | str, settings: dict | None = None) -> games.Game:
@@ -247,7 +264,11 @@ def steam_logged_in():
 
 
 def steam_libraries():
-    """Every Steam library root on this machine, the install itself first."""
+    """Every Steam library root on this machine, the install itself first (cached for the session)."""
+    return _detected("steam_libraries", _steam_libraries)
+
+
+def _steam_libraries():
     roots = []
     root = steam_root()
     if root:
@@ -277,12 +298,16 @@ def game_dir():
 
 
 def installed_dir(game: games.Game):
-    """The folder with this game's exe in any Steam library, or None."""
-    for root in steam_libraries():
-        candidate = root / "steamapps" / "common" / Path(game.install_dir)
-        if (candidate / game.exe).exists():
-            return candidate
-    return None
+    """The folder with this game's exe in any Steam library, or None (cached per game for the session)."""
+
+    def find():
+        for root in steam_libraries():
+            candidate = root / "steamapps" / "common" / Path(game.install_dir)
+            if (candidate / game.exe).exists():
+                return candidate
+        return None
+
+    return _detected(("installed_dir", game.key), find)
 
 
 def regulation_bin():
@@ -326,9 +351,14 @@ def save_files(game: games.Game | None = None):
 
 
 def me3_exe():
-    """The me3 set in the launcher's settings, else me3 on PATH, else its default per-user install location."""
+    """The me3 set in the launcher's settings, else me3 on PATH, else its default per-user install location.
+    The PATH search and default-folder check are cached for the session (cleared when an override changes)."""
     if ME3_OVERRIDE and Path(ME3_OVERRIDE).is_file():
         return Path(ME3_OVERRIDE)
+    return _detected("me3_exe", _me3_exe_detected)
+
+
+def _me3_exe_detected():
     found = shutil.which("me3")
     if found:
         return Path(found)
@@ -368,19 +398,33 @@ def me3_profiles(game: games.Game | None = None):
     )
 
 
+_PROFILE_GAMES_CACHE: dict = {}  # path -> (mtime, games); parsing every .me3 on each game-tab switch is pure waste
+
+
 def profile_games(profile: Path) -> tuple[str, ...]:
-    """The games a .me3 profile says it supports ([[supports]] game = ...), lower-case; empty when it names none."""
+    """The games a .me3 profile says it supports ([[supports]] game = ...), lower-case; empty when it names none.
+    Cached by file modification time, so a profile is parsed once until it changes on disk."""
     import tomllib
 
+    profile = Path(profile)
     try:
-        data = tomllib.loads(Path(profile).read_text(encoding="utf-8", errors="replace"))
+        mtime = profile.stat().st_mtime
+    except OSError:
+        return ()
+    cached = _PROFILE_GAMES_CACHE.get(profile)
+    if cached and cached[0] == mtime:
+        return cached[1]
+    try:
+        data = tomllib.loads(profile.read_text(encoding="utf-8", errors="replace"))
     except OSError, tomllib.TOMLDecodeError:
         return ()
     rows = data.get("supports") or []
     if isinstance(rows, dict):
         rows = [rows]
-    return tuple(
+    result = tuple(
         str(r.get("game") or "").strip().lower()
         for r in rows
         if isinstance(r, dict) and str(r.get("game") or "").strip()
     )
+    _PROFILE_GAMES_CACHE[profile] = (mtime, result)
+    return result

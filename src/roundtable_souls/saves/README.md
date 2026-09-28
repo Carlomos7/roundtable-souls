@@ -4,7 +4,8 @@ Parsing, read-only checks and named repairs for Elden Ring PC saves (`ER0000.sl2
 
 | Module | Role |
 | --- | --- |
-| `container.py` | Structure check for saves whose contents are not read yet (Nightreign, which encrypts every section): the BND4 header, the section count the game writes, and every section and name inside the file. |
+| `container.py` | Structure check for a BND4 save: the header, the section count the game writes, and every section and name inside the file. |
+| `nightreign.py` | Nightreign decrypt / MD5 / re-sign (original IV), and restore of entry 12 from a healthy sibling when me3 left it unreadable. |
 | `layout.py` | Elden Ring save parser. Version aware and tolerant: a slot that does not parse is reported, the others still load. |
 | `analyze.py` | Findings (ok / info / warn / error): duplicate entries, items the game does not define, torn writes. `Catalog` decides what counts as a game item for one save. Never writes. |
 | `fix.py` | Checksum repair, and the commit step every repair uses: `backup` (with a JSON note of what changed) and `_commit` (verify, back up, replace). |

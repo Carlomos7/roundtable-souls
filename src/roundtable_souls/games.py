@@ -23,7 +23,7 @@ class Game:
     save_stem: str  # save file name without extension
     coop_dll: str | None = None  # Seamless Co-op dll for this game, if one exists
     coop_ini: str | None = None
-    save_reader: str | None = None  # "eldenring": full character reading; "container": file structure only
+    save_reader: str | None = None  # "eldenring": characters; "nightreign": checksums; "container": structure only
     save_sections: int | None = None  # sections the game writes into a save, for the structure check
     regulation_repair: bool = False  # me3 leaves the save's regulation block dirty; repaired after play
     ready: bool = False
@@ -61,8 +61,9 @@ NIGHTREIGN = Game(
     save_stem="NR0000",
     coop_dll="nrsc.dll",
     coop_ini="nrsc_settings.ini",
-    save_reader="container",
+    save_reader="nightreign",
     save_sections=14,
+    regulation_repair=True,
     ready=True,
 )
 DARK_SOULS_3 = Game(

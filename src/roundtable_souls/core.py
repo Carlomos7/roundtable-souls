@@ -403,7 +403,7 @@ def route_logs(sink):
 
 def _after_play(opts):
     if not common.GAME.regulation_repair:
-        pass  # only Elden Ring saves get the regulation block me3 leaves dirty
+        pass  # this game has no regulation block me3 leaves dirty
     elif opts["play_repair_after"]:
         me3_session.repair_all()
     else:

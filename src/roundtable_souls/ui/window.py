@@ -27,6 +27,8 @@ from PySide6.QtWidgets import (
     QApplication,
     QBoxLayout,
     QFileDialog,
+    QFrame,
+    QGraphicsOpacityEffect,
     QGridLayout,
     QHBoxLayout,
     QHeaderView,
@@ -312,11 +314,20 @@ class Launcher(FluentWindow):
         for g in games.GAMES:
             item = self.game_tabs.addItem(g.key, g.name, onClick=lambda _=False, k=g.key: self._on_game_tab(k))
             item.setToolTip(g.name if g.ready else f"{g.name}: support is coming. The tab shows what was found.")
+            if not g.ready:  # dim the games that are not playable yet, so Elden Ring and Nightreign read as active
+                fade = QGraphicsOpacityEffect(item)
+                fade.setOpacity(0.4)
+                item.setGraphicsEffect(fade)
         self.game_tabs.setCurrentItem(self.game.key)
         self.game_tabs.setFixedHeight(32)
+        sep = QFrame(bar)
+        sep.setFixedSize(1, 16)
+        sep.setStyleSheet("background: rgba(196, 160, 106, 90); border: none;")  # a faint gold hairline
         at = bar.hBoxLayout.indexOf(bar.titleLabel)
         bar.hBoxLayout.insertSpacing(at + 1, 16)
-        bar.hBoxLayout.insertWidget(at + 2, self.game_tabs, 0, Qt.AlignVCenter)
+        bar.hBoxLayout.insertWidget(at + 2, sep, 0, Qt.AlignVCenter)
+        bar.hBoxLayout.insertSpacing(at + 3, 16)
+        bar.hBoxLayout.insertWidget(at + 4, self.game_tabs, 0, Qt.AlignVCenter)
 
     def _on_game_tab(self, key):
         g = games.get(key)
@@ -344,11 +355,10 @@ class Launcher(FluentWindow):
 
     def _set_game(self, g, remember=False):
         """Point every page at another game: its setups, co-op ini, mods, saves and running checks."""
-        self.game = use_game(g, load_settings())
-        self.settings = load_settings()
         if remember:
             save_settings(game=g.key)
-            self.settings["game"] = g.key
+        self.settings = load_settings()
+        self.game = use_game(g, self.settings)
         self.game_tabs.setCurrentItem(g.key)
         self.game_running = False
         for bar_name in ("shells_bar",):
@@ -359,14 +369,18 @@ class Launcher(FluentWindow):
                 except Exception:
                     pass
                 setattr(self, bar_name, None)
+        # Show the destination page at once so the tab feels instant; the per-page fills below then populate it.
+        if g.ready and self.stackedWidget.currentWidget() in (
+            self.placeholder_page,
+            getattr(self, "workshop_page", None),
+        ):
+            self.switchTo(self.play_page)
         self.setups = discover(remembered_setup(self.settings)) if g.ready else []
         self._fill_setups()
         self._apply_game_ui()
         threading.Thread(target=lambda: self.bus.running.emit(core.common.game_running()), daemon=True).start()
         if g.ready:
             self.refresh_saves()
-            if self.stackedWidget.currentWidget() in (self.placeholder_page, getattr(self, "workshop_page", None)):
-                self.switchTo(self.play_page)
         else:
             self._update_saves_badge(0)
             self.switchTo(self.placeholder_page)
@@ -1474,7 +1488,9 @@ class Launcher(FluentWindow):
         b = ghost_btn("Repair", FI.UPDATE)
         b.clicked.connect(lambda: self.start(job_repair, "Repairing saves...", need_setup=False))
         self.repair_row = PairRow(
-            "Repair saves", "Runs after every Elden Ring session. Use this if the window was closed first.", b
+            "Repair saves",
+            "Runs after a session when this game needs it. Use this if the window was closed first.",
+            b,
         )
         cl.addWidget(self.repair_row)
         b = ghost_btn("Clear", FI.DELETE)
@@ -1521,8 +1537,8 @@ class Launcher(FluentWindow):
             (
                 "play_repair_after",
                 "Repair saves after quitting",
-                "Elden Ring: puts the real regulation.bin back in the save block me3 dirties.",
-                "The game does not mind the dirty block; save editors do. Turn this off if you never use editors.",
+                "Puts the regulation section back in order after me3. Elden Ring copies regulation.bin in; Nightreign re-signs its encrypted sections.",
+                "The game does not mind a dirty block; save editors do. Nightreign never writes Game\\regulation.bin into the save (that file is a different encoding). Turn this off if you never use editors.",
             ),
             (
                 "play_clear_after",
@@ -2211,15 +2227,22 @@ class Launcher(FluentWindow):
     # ---------------------------------------------------------------- saves
     def refresh_saves(self):
         self.saves_note.setText("Reading saves...")
+        # A game-tab switch and the running-game watcher can both ask at once; a token lets a stale read's result be
+        # dropped in _fill_saves instead of reading and rebuilding the cards twice.
+        self._saves_token = getattr(self, "_saves_token", 0) + 1
+        token, game = self._saves_token, self.game
 
         def work():
-            self.bus.saves.emit([save_info(p) for p in core.common.save_files()])
+            infos = [save_info(p) for p in core.common.save_files(game)]
+            self.bus.saves.emit({"token": token, "infos": infos})
 
         threading.Thread(target=work, daemon=True).start()
 
-    def _fill_saves(self, infos):
-        # A scan started before a tab switch can land after it: keep only this game's saves.
-        infos = [i for i in infos if games.for_save(i["path"]) in (self.game, None)]
+    def _fill_saves(self, payload):
+        # Ignore a read that a newer refresh has already superseded (avoids reading and rebuilding the cards twice).
+        if payload["token"] != getattr(self, "_saves_token", 0):
+            return
+        infos = [i for i in payload["infos"] if games.for_save(i["path"]) in (self.game, None)]
         self.saves = infos
         for w in getattr(self, "_save_cards", []):
             self.saves_lay.removeWidget(w)
@@ -2316,7 +2339,9 @@ class Launcher(FluentWindow):
                 table_h = t.horizontalHeader().height() + 38 * max(1, len(s["characters"])) + 8
                 t.setFixedHeight(table_h)
                 cl.addWidget(t)
-            elif not any(f.get("code") == "contents" for f in s.get("findings") or []):
+            elif self.game.save_reader not in ("container", "nightreign") and not any(
+                f.get("code") == "contents" for f in s.get("findings") or []
+            ):
                 cl.addWidget(hint("No active characters in this file."))
 
             notes = save_check_notes(s)
@@ -2331,8 +2356,8 @@ class Launcher(FluentWindow):
             row.setContentsMargins(0, 4, 0, 0)
             row.setHorizontalSpacing(8)
             row.setVerticalSpacing(8)
-            if s.get("characters"):
-                fixable = repair_available(s) and not self.game_running
+            fixable = repair_available(s) and not self.game_running
+            if s.get("characters") or fixable:
                 b = primary_btn("Review && fix") if fixable else ghost_btn("Review", FI.VIEW)
                 if fixable:
                     b.setMinimumHeight(34)
@@ -2366,8 +2391,9 @@ class Launcher(FluentWindow):
             (s for s in ordered if s["characters"]), None
         )
         contents_unread = [s for s in ordered if any(f.get("code") == "contents" for f in s.get("findings") or [])]
-        if contents_unread and not (pick and pick["characters"]):
-            newest = max(contents_unread, key=lambda s: str(s.get("modified")))
+        nr_only = [s for s in ordered if any(f.get("code") == "checksum" for f in s.get("findings") or [])]
+        if (contents_unread or nr_only) and not (pick and pick["characters"]):
+            newest = max(contents_unread or nr_only, key=lambda s: str(s.get("modified")))
             self.hero.name.setText(self.game.name)
             self.hero.sub.setText(f"Last saved {newest['modified']}")
             self.stat_level.setVisible(False)  # no character data to show for this game yet
@@ -3318,11 +3344,16 @@ class Launcher(FluentWindow):
                 row, _ = self._ws_box(("checksum", "ud10"), "Recompute the profile summary checksum", True)
                 cl.addWidget(row)
             if slot is None and s.get("needs_repair"):
+                nr = any(f.get("code") == "checksum" for f in s.get("findings") or [])
                 row, _ = self._ws_box(
                     ("regulation",),
                     "Repair the regulation block",
                     True,
-                    sub="puts the game's regulation.bin back; me3 dirties it every session",
+                    sub=(
+                        "re-signs every section; restores entry 12 from a healthy copy next to this file when it can"
+                        if nr
+                        else "puts the game's regulation.bin back; me3 dirties it every session"
+                    ),
                 )
                 cl.addWidget(row)
             self.ws_lay.addWidget(c)
