@@ -1762,8 +1762,8 @@ class Launcher(FluentWindow):
             self.setup_exp.setExpand(True)
             self.play_btn.setEnabled(False)
             self.ini = None
-            self._load_coop()
-            self._fill_mods()
+            self._coop_ready = False
+            self._schedule_page_fill()
             return
         probs = s.problems()
         if probs:
@@ -1780,15 +1780,29 @@ class Launcher(FluentWindow):
         self.setup_exp.setExpand(bool(probs))
         self.play_btn.setEnabled(not probs and not self.game_running and not self.busy)
         self.ini = s.ini
-        self._load_coop()
-        self._fill_mods()
+        self._coop_ready = False  # the Co-op and Mods pages are rebuilt just after this paint (see _schedule_page_fill)
         self._update_plan()
+        self._schedule_page_fill()
         if getattr(self, "me3_line", None) is not None:
             self._refresh_me3()
         remembered = str(remembered_setup(self.settings) or "")
         if remembered.lower() != s.source.lower():
             remember_setup(s.source, s.game)
             self.settings = load_settings()
+
+    def _schedule_page_fill(self):
+        """Build the Co-op and Mods pages just after the visible (Play) page has painted, so a game switch or setup
+        change feels instant. Coalesced by a token: only the newest schedule runs, and only its heavy widget builds."""
+        self._page_fill_token = getattr(self, "_page_fill_token", 0) + 1
+        token = self._page_fill_token
+        QTimer.singleShot(0, lambda: self._do_page_fill(token))
+
+    def _do_page_fill(self, token):
+        if token != getattr(self, "_page_fill_token", 0):
+            return  # a newer switch or setup change superseded this one
+        self._load_coop()
+        self._fill_mods()
+        self._update_plan()
 
     def _update_plan(self):
         s = self.setup
@@ -1842,6 +1856,7 @@ class Launcher(FluentWindow):
     def _load_coop(self):
         ini = self.ini
         on = ini is not None
+        self._coop_ready = True  # the co-op form now reflects self.ini, so pending-change detection is valid
         self.coop_off.setVisible(not on)
         for w in self.coop_form:
             w.setVisible(on)
@@ -2046,7 +2061,7 @@ class Launcher(FluentWindow):
         self._update_plan()
 
     def _coop_pending(self):
-        if self.ini is None or not hasattr(self, "pw"):
+        if self.ini is None or not hasattr(self, "pw") or not getattr(self, "_coop_ready", False):
             return False
         pw = self.pw.text().strip() != (self.pw_file or "")
         scal = self.scaling_file is not None and self._scaling_values() != self.scaling_file

@@ -384,6 +384,25 @@ def me3_profiles_dir():
     return config / "profiles" if config else None
 
 
+# A .me3 profile sits at the top of the profiles folder or one level down in a "<name>-mods" folder beside its assets.
+# Those asset folders (mod overrides, natives, ReShade) can hold thousands of files, so the walk stops at this depth
+# and skips folders that clearly hold mod content rather than profiles: a full rglob here took seconds on real setups.
+_PROFILE_SCAN_DEPTH = 2
+_PROFILE_PRUNE = {"mod", "natives", "reshade", "reshade-shaders", "modengine2", "cache", "sd", "movie", "logs"}
+
+
+def _iter_me3_files(root: Path, depth: int = 0):
+    try:
+        entries = list(os.scandir(root))
+    except OSError:
+        return
+    for e in entries:
+        if e.is_file() and e.name.endswith(".me3"):
+            yield Path(e.path)
+        elif e.is_dir() and depth < _PROFILE_SCAN_DEPTH and e.name.lower() not in _PROFILE_PRUNE:
+            yield from _iter_me3_files(Path(e.path), depth + 1)
+
+
 def me3_profiles(game: games.Game | None = None):
     """User-made .me3 profiles for the game (the *-default.me3 ones me3 generates are skipped). A profile that names
     no game in [[supports]] counts for Elden Ring, the only game older profiles were written for."""
@@ -393,7 +412,7 @@ def me3_profiles(game: games.Game | None = None):
         return []
     return sorted(
         p
-        for p in root.rglob("*.me3")
+        for p in _iter_me3_files(root)
         if not p.name.endswith("-default.me3") and game.key in (profile_games(p) or (games.ELDEN_RING.key,))
     )
 
