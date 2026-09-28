@@ -35,7 +35,7 @@ The window never touches a save directly. Every read goes through `save_info`, e
 - `--play` for a Steam shortcut, Big Picture or Steam Deck Gaming Mode: the same session without the window
 - Seamless Co-op password, difficulty presets by party size, every other setting explained, and a share format for a group
 - me3 profile management: install mods from `.zip`, `.7z`, `.rar` or a folder, per-mod options, load order, conflict scan, profile create and delete
-- Save checks: checksums, the regulation block me3 dirties, loading hangs, torn writes, and items the game does not define; Shadow of the Erdtree and the Tarnished Edition pack are detected automatically
+- Save checks: checksums, the regulation block me3 dirties, loading hangs, torn writes, and items the game does not define, judged against the installed game's own item tables (so Shadow of the Erdtree and Tarnished Edition gear are always official); mod items are named from the mods' own files
 - Opt-in, per-item repairs on a Review & fix page, every one backed up and undoable; copies between standard and co-op saves
 - Windows installer (per-user, no administrator prompt) or portable zip; Linux build for desktop and Steam Deck
 - Update now: downloads the release for this kind of copy, checks it against published SHA-256 checksums, and restarts into it
@@ -142,7 +142,7 @@ Build for the current platform (tests, icon, PyInstaller, the installer when Inn
 uv run python scripts/build.py
 ```
 
-Rebuild the game item list from [ER-Save-Editor](https://github.com/ClayAmore/ER-Save-Editor) checked out next to this repo (or at `ER_SAVE_EDITOR`):
+Rebuild the game item list from a local checkout of the item ID tables (`ER_SAVE_EDITOR`, or pass the folder):
 
 ```bash
 uv run python scripts/build_item_list.py
@@ -180,13 +180,9 @@ git push && git push --tags
 
 ## Licensing
 
-GNU General Public License v3.0 or later, see [LICENSE](LICENSE). The window is built on PySide6-Fluent-Widgets, which is GPL-3.0. [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) credits the save parser this project ports (Apache-2.0) and the mod detection rules it follows (MIT), with their license texts.
+GNU General Public License v3.0 or later, see [LICENSE](LICENSE). The window is built on PySide6-Fluent-Widgets, which is GPL-3.0. Other notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Credits
 
-- [ER-Save-Editor](https://github.com/ClayAmore/ER-Save-Editor) by ClayAmore - the save format, ported for reading, and the game's item IDs
 - [me3](https://github.com/garyttierney/me3) - the mod loader this launcher drives
-- [me3-manager](https://github.com/2Pz/me3-manager) - the mod install rules this launcher follows
 - [Seamless Co-op](https://www.nexusmods.com/eldenring/mods/510) - the settings file the Co-op page edits
-
-None of these projects endorse Roundtable Souls.

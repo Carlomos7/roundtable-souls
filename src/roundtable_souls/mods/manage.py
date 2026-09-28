@@ -1,6 +1,6 @@
 """Install, remove and configure mods in a me3 profile, and create or delete profiles.
 
-Detection follows me3-manager's rules (MIT; see THIRD_PARTY_NOTICES.md): a folder is a *package* when it holds game asset folders (parts, chr,
+A folder is a *package* when it holds game asset folders (parts, chr,
 msg, ...) or regulation.bin, a *native* when it holds DLLs and no assets, a whole *me3 profile* when it
 contains a .me3 file. Single-folder wrappers (the usual zip layout) are unwrapped first.
 
@@ -26,7 +26,7 @@ ARCHIVE_EXTENSIONS = (
     ".zip",
     ".7z",
     ".rar",
-)  # what me3-manager takes; .7z via py7zr (bundled), .rar via an extractor on the PC
+)  # .7z via py7zr (bundled), .rar via an extractor on the PC
 
 ACCEPTABLE_FOLDERS = {
     "_backup",
@@ -123,7 +123,7 @@ def _children(folder: Path) -> list[Path]:
 
 
 def detect_kind(folder: Path) -> str:
-    """'me3' | 'native' | 'package' | 'unknown' for one folder (me3-manager's rules)."""
+    """'me3' | 'native' | 'package' | 'unknown' for one folder."""
     folder = Path(folder)
     if any(folder.rglob("*.me3")):
         return "me3"

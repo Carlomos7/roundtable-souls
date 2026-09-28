@@ -1,8 +1,9 @@
 """Read-only save checks: duplicate inventory entries, items the game does not define, and torn writes.
 
-Never writes. The item check compares every held, stored and leftover item against the IDs the game defines
-(data/known_item_ids.txt). Anything outside that list came from somewhere other than the game: a mod, or, for
-equipment on a save with the Tarnished Edition pack enabled, the pack itself, which is left alone.
+Never writes. The item check compares every held, stored and leftover item against the items the game defines: the
+bundled list (data/known_item_ids.txt) plus every item in the installed game's own regulation.bin, which also covers
+official content the list lacks, such as the Tarnished Edition pack. Anything outside both came from a mod; its name
+comes from the mod's own files when they can be read (mods/item_names.py).
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ import struct
 from collections import Counter
 from dataclasses import dataclass, field
 
+from roundtable_souls import gamefiles
 from roundtable_souls.resources import DATA_DIR
 
 WEAPON, ARMOUR, TALISMAN, GOODS, ASH = 0x0, 0x1, 0x2, 0x4, 0x8
@@ -26,6 +28,7 @@ EMPTY_IDS = frozenset((0, 0xFFFFFFFF))
 TARNISHED_FLAG_BYTE = 3  # in the per-character DLC block
 
 _KNOWN_IDS: set[int] | None = None
+_GAME_IDS: tuple[tuple, frozenset[int]] | None = None
 
 
 def known_item_ids() -> set[int]:
@@ -36,6 +39,29 @@ def known_item_ids() -> set[int]:
         text = path.read_text(encoding="utf-8") if path.is_file() else ""
         _KNOWN_IDS = {int(line) for line in text.split() if line.isdigit()}
     return _KNOWN_IDS
+
+
+def game_item_ids() -> frozenset[int]:
+    """Every item the installed game's regulation.bin defines (empty when the game or the file cannot be read).
+    Read once per version of the file."""
+    global _GAME_IDS
+    from roundtable_souls.system import common
+
+    path = common.regulation_bin()
+    if path is None:
+        return frozenset()
+    try:
+        stamp = (str(path), path.stat().st_mtime_ns, path.stat().st_size)
+    except OSError:
+        return frozenset()
+    if _GAME_IDS and _GAME_IDS[0] == stamp:
+        return _GAME_IDS[1]
+    try:
+        ids = gamefiles.regulation_item_ids(path.read_bytes())
+    except OSError, gamefiles.FormatError, ValueError, IndexError:
+        ids = frozenset()
+    _GAME_IDS = (stamp, ids)
+    return ids
 
 
 def kind_of(item_id: int) -> int:
@@ -66,18 +92,22 @@ class Catalog:
     """Decides whether an item ID belongs to the game for one save."""
 
     known: frozenset[int] = field(default_factory=frozenset)
-    pack: bool = False  # Tarnished Edition enabled: unlisted equipment is taken to be pack gear
+    pack: bool = False  # the save has the Tarnished Edition pack enabled
+    game: frozenset[int] = field(default_factory=frozenset)  # items the installed game's regulation defines
 
     @classmethod
-    def for_save(cls, parsed: dict | None = None) -> Catalog:
-        return cls(frozenset(known_item_ids()), tarnished_flag(parsed or {}))
+    def for_save(cls, parsed: dict | None = None, game: frozenset[int] | None = None) -> Catalog:
+        return cls(frozenset(known_item_ids()), tarnished_flag(parsed or {}), game_item_ids() if game is None else game)
 
     @property
     def available(self) -> bool:
         return bool(self.known)
 
+    def _listed(self, item_id: int) -> bool:
+        return item_id in self.known or item_id in self.game
+
     def is_game_item(self, item_id: int) -> bool:
-        if item_id in EMPTY_IDS or item_id in self.known:
+        if item_id in EMPTY_IDS or self._listed(item_id):
             return True
         kind, raw = kind_of(item_id), item_id & 0x0FFFFFFF
         if kind == WEAPON:
@@ -85,17 +115,25 @@ class Catalog:
             if raw == UNARMED_WEAPON:
                 return True
             base = raw // 10000 * 10000
-            if base in self.known or (base + raw % 100) in self.known:
+            if self._listed(base) or self._listed(base + raw % 100):
                 return True
         elif kind == ARMOUR and raw in NAKED_ARMOR:
             return True
         elif kind == ASH and raw == 0:
             return True
-        return self.pack and kind in EQUIPMENT
+        # Without the game's own item tables (the game is not on this PC), fall back to assuming a save with the
+        # pack enabled got its unlisted equipment from the pack.
+        return not self.game and self.pack and kind in EQUIPMENT
 
 
 def item_label(item_id: int) -> tuple[str, str]:
-    """(display name, source) for an item outside the game's list. Without a name list, the kind and ID identify it."""
+    """(display name, source) for an item the game does not define: the mod's own name when its files can be read,
+    otherwise the kind and ID."""
+    from roundtable_souls.mods.item_names import item_names
+
+    named = item_names().get(item_id)
+    if named:
+        return named
     kind, raw = kind_of(item_id), item_id & 0x0FFFFFFF
     label = KIND_NAMES.get(kind, "Item")
     if kind == WEAPON and raw % 100:
@@ -223,13 +261,18 @@ def scan_mod_items(slot: dict, catalog: Catalog | None = None) -> dict:
 
 
 def _name_list(entries: list[dict], limit: int = 5) -> str:
-    names: list[str] = []
+    """'Seamless Co-op: Tiny Great Pot, Effigy of Malenia (+3 more); Not in the game: Armour 742000'"""
+    by: dict[str, list[str]] = {}
     for e in entries:
         label = e["name"] + (" (worn)" if e.get("worn") else "")
+        names = by.setdefault(e.get("source") or UNLISTED, [])
         if label not in names:
             names.append(label)
-    more = f" (+{len(names) - limit} more)" if len(names) > limit else ""
-    return ", ".join(names[:limit]) + more
+    parts = []
+    for source, names in by.items():
+        more = f" (+{len(names) - limit} more)" if len(names) > limit else ""
+        parts.append(f"{source}: {', '.join(names[:limit])}{more}")
+    return "; ".join(parts)
 
 
 def analyze_slot(slot: dict, index: int, name: str, catalog: Catalog) -> list[dict]:
@@ -322,7 +365,9 @@ def analyze_parsed(parsed: dict, *, dlc_owned: bool | None = None, raw: bytes | 
                 "level": "ok",
                 "code": "tarnished",
                 "title": "Tarnished Edition pack enabled",
-                "detail": "Equipment the game's item list does not include is taken to be pack gear and left alone.",
+                "detail": "Its gear is official content and is never treated as a mod item."
+                if catalog.game
+                else "The game's own item tables could not be read here, so unlisted equipment is taken to be pack gear.",
             }
         )
     for plan in save_loading.plan_loading_fixes(parsed, dlc_owned):

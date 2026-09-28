@@ -1,6 +1,6 @@
 """Roundtable Souls: a launcher and save toolkit for modded Elden Ring."""
 
-__version__ = "3.2.0"
+__version__ = "3.3.0"
 
 
 def main() -> int:

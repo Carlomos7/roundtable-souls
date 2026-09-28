@@ -43,12 +43,13 @@ def _slot(**kw):
 
 
 def test_scan_mod_items_finds_direct_goods_rows_and_worn():
+    # IDs the game does not define (official items, such as Tarnished Edition gear, now count as game items)
     pot = 0xB07FDE61  # Tiny Great Pot, direct goods handle
     sword_h, hat_h, orphan_h = 0x80800010, 0x90800011, 0x80800012
     rows = [
-        dict(gaitem_handle=sword_h, item_id=3560008, pos=0),
-        dict(gaitem_handle=hat_h, item_id=ARMOR | 5360000, pos=21),
-        dict(gaitem_handle=orphan_h, item_id=31540000, pos=37),
+        dict(gaitem_handle=sword_h, item_id=77700008, pos=0),
+        dict(gaitem_handle=hat_h, item_id=ARMOR | 7420000, pos=21),
+        dict(gaitem_handle=orphan_h, item_id=77710000, pos=37),
         dict(gaitem_handle=0x80800013, item_id=1000114, pos=58),
     ]
     inv = {
@@ -60,18 +61,18 @@ def test_scan_mod_items_finds_direct_goods_rows_and_worn():
     slot = _slot(
         ga_items=rows,
         inventory=inv,
-        chr_asm=[5360000],
-        equipped_items=[ARMOR | 5360000, GOODS | 8380001],
+        chr_asm=[7420000],
+        equipped_items=[ARMOR | 7420000, GOODS | 8380001],
         pouch=[(pot, 9)] + [(0, 0xFFFFFFFF)] * 5,
     )
     scan = A.scan_mod_items(slot)
     by = {e["name"]: e for e in scan["held"]}
-    pot_n, sword_n, hat_n = "Item 8380001", "Weapon 3560000 +8", "Armour 5360000"
+    pot_n, sword_n, hat_n = "Item 8380001", "Weapon 77700000 +8", "Armour 7420000"
     assert set(by) == {pot_n, sword_n, hat_n}
     assert by[pot_n]["pouch"] == [0] and not by[pot_n]["worn"] and by[pot_n]["row"] is None  # pouch goods strip
     assert by[hat_n]["worn"] and by[hat_n]["row"] == 1
     assert not by[sword_n]["worn"] and by[sword_n]["pos"] == 1  # past count still counts
-    assert [o["name"] for o in scan["orphans"]] == ["Weapon 31540000"]
+    assert [o["name"] for o in scan["orphans"]] == ["Weapon 77710000"]
     plan = V.plan_restore({"ud10": {"active": [True]}, "slots": [slot]})
     assert [e["name"] for e in plan[0]["strip"]] == [pot_n, sword_n]  # worn goods strip via the pouch
     assert [b["name"] for b in plan[0]["blocked"]] == [hat_n]

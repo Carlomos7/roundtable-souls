@@ -564,29 +564,46 @@ def play_headless() -> int:
     return 0
 
 
-def check():  # `roundtable-souls --check` prints this
+def check():
+    """`roundtable-souls --check`: what the launcher detects, printed and written to logs/last_run.log (so the windowed
+    exe, which has no console, can be checked too). The co-op password is never included."""
+    from roundtable_souls.mods.item_names import item_names
+
+    lines = [f"{TITLE} {VERSION}"]
     settings = load_settings()
     setups = discover(settings.get("setup"))
-    print(f"{TITLE} {VERSION}")
-    print("setups found:", len(setups))
+    lines.append(f"setups found: {len(setups)}")
     for s in setups:
         sc = read_scaling(s.ini) if s.ini else None
-        print(
-            f"  [{s.kind}] {s.label}\n      {s.summary()}\n      ini: {s.ini}  password: {read_password(s.ini) if s.ini else None}\n      scaling: {preset_of(sc) if sc else None} {sc}"
-            + ("\n      PROBLEMS: " + "; ".join(s.problems()) if s.problems() else "")
-        )
-    print("remembered:", settings.get("setup"))
-    print("steam:", common.steam_exe())
-    print(
-        "data folder:",
-        DATA_DIR,
-        "(next to the exe)" if DATA_DIR == HERE else "(exe folder not writable, using LOCALAPPDATA)",
-    )
+        password = "set" if s.ini and read_password(s.ini) else "not set"
+        lines += [
+            f"  [{s.kind}] {s.label}",
+            f"      {s.summary()}",
+            f"      ini: {s.ini}  password: {password}",
+            f"      scaling: {preset_of(sc) if sc else None} {sc}",
+        ]
+        if s.problems():
+            lines.append("      PROBLEMS: " + "; ".join(s.problems()))
+    lines.append(f"remembered: {settings.get('setup')}")
+    lines.append(f"steam: {common.steam_exe()}")
+    lines.append(f"game: {common.game_dir()}")
+    game_ids = save_analyze.game_item_ids()
+    lines.append(f"game items from regulation.bin: {len(game_ids) if game_ids else 'not readable'}")
+    names = item_names(refresh=True).names
+    sources = sorted({source for _name, source in names.values()})
+    lines.append(f"mod item names: {len(names)} from {', '.join(sources) or 'no mods'}")
+    lines.append(f"data folder: {DATA_DIR} ({'next to the program' if DATA_DIR == HERE else 'per-user app data'})")
     for p in common.save_files():
         i = save_info(p)
-        print(
+        lines.append(
             f"  save {i['name']}: {i['kind']}, block {i['block']}, modified {i['modified']}"
             + (f", error {i['error']}" if i["error"] else "")
         )
         for c in i["characters"]:
-            print(f"      slot {c['slot']}: {c['name']} lvl {c['level']} {c['body']} hp {c['hp']} runes {c['runes']}")
+            lines.append(
+                f"      slot {c['slot']}: {c['name']} lvl {c['level']} {c['body']} hp {c['hp']} runes {c['runes']}"
+            )
+    common.start_log("launcher: check")
+    for line in lines:
+        print(line)
+        common.log(line)

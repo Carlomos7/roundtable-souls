@@ -51,7 +51,7 @@ def test_detection_rules(tmp_path):
     mixed = tmp_path / "mx"
     (mixed / "msg").mkdir(parents=True)
     (mixed / "tool.dll").write_bytes(b"x")
-    assert M.detect_kind(mixed) == "package"  # assets win, like me3-manager
+    assert M.detect_kind(mixed) == "package"  # assets win
     nested = tmp_path / "nd" / "SeamlessCoop"
     nested.mkdir(parents=True)
     (nested / "ersc.dll").write_bytes(b"x")
@@ -107,7 +107,7 @@ def test_loose_game_files_are_sorted_into_folders(tmp_path):
     save = tmp_path / "save"
     save.mkdir()
     (save / "ER0000.sl2").write_bytes(b"s")
-    assert "No game folders" in M.plan_install(p, save)["error"]  # a save is not a mod; same answer as me3-manager
+    assert "No game folders" in M.plan_install(p, save)["error"]  # a save is not a mod
     junk = tmp_path / "junk2"
     junk.mkdir()
     (junk / "notes.txt").write_text("x")
@@ -115,7 +115,7 @@ def test_loose_game_files_are_sorted_into_folders(tmp_path):
     rs = tmp_path / "reshade" / "Dark Souls ReShaded"
     rs.mkdir(parents=True)
     (rs / "dxgi.dll").write_bytes(b"x")
-    assert M.plan_install(p, tmp_path / "reshade")["kind"] == "native"  # a DLL is a native, like me3-manager
+    assert M.plan_install(p, tmp_path / "reshade")["kind"] == "native"  # a DLL is a native
 
 
 def test_zip_safety(tmp_path):

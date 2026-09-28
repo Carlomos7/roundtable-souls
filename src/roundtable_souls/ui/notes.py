@@ -153,21 +153,24 @@ def save_check_notes(info: dict) -> list[dict]:
 
 
 def _mod_item_rows(info: dict) -> list:
-    """(character, '12 items (2 worn)', tooltip with the item names) per character."""
+    """(character, 'Seamless Co-op 12  ·  Not in the game 2 (1 worn)', tooltip with the item names) per character."""
     rows = []
     for p in info.get("vanilla_plan") or []:
         entries = list(p.get("strip") or []) + [b for b in (p.get("blocked") or []) if b.get("why") == "worn"]
         if not entries:
             continue
-        names, worn = [], set()
+        by: dict[str, tuple[list[str], set[str]]] = {}
         for e in entries:
+            names, worn = by.setdefault(e.get("source") or "Not in the game", ([], set()))
             if e["name"] not in names:
                 names.append(e["name"])
             if e.get("why") == "worn":
                 worn.add(e["name"])
-        text = f"{len(names)} item{'s' if len(names) != 1 else ''}" + (f" ({len(worn)} worn)" if worn else "")
-        tip = "\n".join(n + ("  (worn)" if n in worn else "") for n in names)
-        rows.append((p.get("name") or f"slot {p['slot'] + 1}", text, tip))
+        parts, tip = [], []
+        for source, (names, worn) in by.items():
+            parts.append(f"{source} {len(names)}" + (f" ({len(worn)} worn)" if worn else ""))
+            tip.append(source + ":\n  " + "\n  ".join(n + ("  (worn)" if n in worn else "") for n in names))
+        rows.append((p.get("name") or f"slot {p['slot'] + 1}", "  \u00b7  ".join(parts), "\n".join(tip)))
     return rows
 
 

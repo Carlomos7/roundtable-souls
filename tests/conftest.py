@@ -1,8 +1,10 @@
-"""Shared fixtures: an isolated settings file so tests never read or write the developer's own."""
+"""Shared fixtures: an isolated settings file so tests never read or write the developer's own, and no item names from
+whatever mods happen to be installed on the machine running the tests (tests that read names build their own)."""
 
 import pytest
 
 from roundtable_souls import settings
+from roundtable_souls.mods import item_names
 
 
 @pytest.fixture(autouse=True)
@@ -11,3 +13,10 @@ def isolated_settings(tmp_path, monkeypatch):
     settings.get_settings.cache_clear()
     yield
     settings.get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def no_installed_mod_names(request, monkeypatch):
+    if request.module.__name__.endswith("test_gamefiles"):
+        return
+    monkeypatch.setattr(item_names, "item_names", lambda refresh=False: item_names.ItemNames({}))

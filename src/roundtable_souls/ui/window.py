@@ -2946,7 +2946,7 @@ class Launcher(FluentWindow):
             c, cl = card("Remove mod items", FI.BROOM)
             cl.addWidget(
                 hint(
-                    "Items the game does not define. Off by default: tick what to remove. The mods give them back in co-op; a standard save should not carry them."
+                    "Items the game does not define, named from the mods that added them where possible. Off by default: tick what to remove. The mods give them back in co-op; a standard save should not carry them."
                 )
             )
             tools = QHBoxLayout()
@@ -2956,6 +2956,20 @@ class Launcher(FluentWindow):
             self.ws_search.setMaximumWidth(280)
             self.ws_search.textChanged.connect(self._ws_filter_items)
             tools.addWidget(self.ws_search, 1)
+            sources = sorted(
+                {
+                    e.get("source") or "Other mod"
+                    for p in vplan
+                    for e in list(p.get("strip") or []) + list(p.get("blocked") or [])
+                }
+            )
+            self.ws_filter = None
+            if len(sources) > 1:  # a filter by mod only helps when there is more than one
+                self.ws_filter = ComboBox()
+                self.ws_filter.addItems(["All mods", *sources])
+                self.ws_filter.setMinimumWidth(160)
+                self.ws_filter.currentIndexChanged.connect(self._ws_filter_items)
+                tools.addWidget(self.ws_filter)
             tools.addStretch()
             cl.addLayout(tools)
             for p in vplan:
@@ -3092,8 +3106,9 @@ class Launcher(FluentWindow):
 
     def _ws_filter_items(self, *_):
         text = (self.ws_search.text() if self.ws_search else "").strip().lower()
-        for row, name, _source in self.ws_item_rows:
-            row.setVisible(not text or text in name)
+        source = self.ws_filter.currentText() if getattr(self, "ws_filter", None) else "All mods"
+        for row, name, src in self.ws_item_rows:
+            row.setVisible((not text or text in name) and source in ("All mods", src))
 
     def _ws_reset(self):
         self.ws_state = {}

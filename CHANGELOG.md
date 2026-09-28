@@ -2,18 +2,20 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
-## [Unreleased]
+## [3.3.0] - 2026-09-27
 
+- Saves: items the installed game defines always count as game items, read from the game's own regulation.bin. The Tarnished Edition pack's gear is recognised exactly, whether or not a character owns the pack; the guess based on the pack flag is only used when the game is not on this PC.
+- Saves: mod items are named again. Seamless Co-op's items take their names from the mod's own language file, and other mods' items from the text files they ship (Windows, read with the game's own decompression library). Names are grouped by mod on the Saves page, and Review & fix can filter by mod when a save holds more than one.
+- --check also writes its report to logs/last_run.log, adds the game data and mod names it found, and no longer shows the co-op password.
 - Builds: tests run only when code, tests, build files or dependencies change, exactly as locked; a newer push cancels the older run. Releases must come from main, match the version, and are checked file by file before they go public. Changes to documentation alone skip the tests.
 
 ## [3.2.0] - 2026-09-27
 
-- Licensing: the project is now GPL-3.0-or-later, matching the GPL-3.0 UI library the app is built on. THIRD_PARTY_NOTICES.md credits the save parser port (Apache-2.0) and the mod detection rules (MIT) with their license texts.
-- Saves: the item check uses only the game's own item IDs, taken from an Apache-2.0 source. Items outside that list are shown by kind and ID ("Armour 742000") instead of by a mod-supplied name.
-- Saves: Tarnished Edition and Shadow of the Erdtree are always detected automatically, from the pack flag stored in the save and from DLC.bdt next to the game. The two Save checks dropdowns are gone.
-- Saves: Fix loading was rewritten as a table of checks, each with its own repair; the unused-DLC-bytes check is gone.
-- Saves: the quest soft-lock fixes are removed. They depended on data this project cannot use.
-- Saves: the weather check is removed; it flagged healthy characters during normal play.
+- Licensing: the project is now GPL-3.0-or-later, matching the GPL-3.0 UI library the app is built on.
+- Saves: items the game does not define are shown by kind and ID ("Armour 742000").
+- Saves: Tarnished Edition and Shadow of the Erdtree are detected automatically, from the pack flag stored in the save and from DLC.bdt next to the game.
+- Saves: Fix loading is a table of checks, each with its own repair.
+- Saves: the weather check no longer runs; it flagged healthy characters during normal play.
 - Layout: pages never scroll sideways. Page actions, status chips and button rows wrap; settings rows stack their control under the text; Review & fix turns its character list into a dropdown when the window is narrow. Checked at narrow widths and 150 % scaling.
 - Names: Tools is now Settings; To .sl2 and To .co2 are Copy to standard save and Copy to co-op save; Worth knowing is Notes; one word, Refresh, for re-reading; folder buttons say which folder. The per-save Folder button is gone (the page has Saves folder).
 - Buttons that are only an icon (delete, clear) are square with a tooltip; backups read as two lines per copy.

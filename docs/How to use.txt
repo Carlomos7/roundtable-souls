@@ -90,7 +90,9 @@ Saves
                         The fix marks Torrent as fallen, or moves the
                         character to Roundtable Hold.
     Remove mod items    takes items the game does not define off a character.
-                        They are named by kind and ID, for example
+                        They are named from the mod that added them (for
+                        example Seamless Co-op's "Tiny Great Pot"); when a
+                        mod's text cannot be read, by kind and ID, such as
                         "Armour 742000". Worn items have to come off in-game
                         first. Use this before copying a co-op character to
                         a standard save.
@@ -104,9 +106,11 @@ Saves
   Backups lists every copy made before a change. Restore puts one back (the
   current file is copied first, so a restore can be undone too).
 
-  Shadow of the Erdtree is detected from the game folder, and the Tarnished
-  Edition pack from your save; nothing to set. With the pack, its equipment
-  is left alone even though it is not in the game's item list.
+  What counts as a game item comes from the installed game itself, including
+  Shadow of the Erdtree and the Tarnished Edition pack's gear, so official
+  items are never listed as mod items. Shadow of the Erdtree is detected from
+  the game folder and the Tarnished Edition pack from your save; nothing to
+  set.
 
   A save damaged by a crash while saving is named as such and left alone:
   restore a backup from before the crash.
@@ -183,6 +187,6 @@ LICENCE
 -------
 
 Roundtable Souls is free software under the GNU General Public License,
-version 3 or later (LICENSE.txt). THIRD_PARTY_NOTICES.md credits the work it
-builds on. The source code and every version's changes are at
+version 3 or later (LICENSE.txt). See also THIRD_PARTY_NOTICES.md. The source
+code and every version's changes are at
 https://github.com/Carlomos7/roundtable-souls

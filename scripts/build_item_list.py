@@ -1,13 +1,11 @@
 """Rebuild src/roundtable_souls/data/known_item_ids.txt: every item ID the game defines, one per line.
 
-Source: the item ID tables of Elden-Ring-Save-Editor (Apache-2.0), src/db/{item,weapon,armor,accessory,aow}_name.rs.
-Only the numeric IDs are taken, never names. IDs carry the category in the high nibble (weapon 0x0, armour 0x1,
-talisman 0x2, goods 0x4, ash of war 0x8). Weapons get every upgrade level 0..25 on top of the base row, spirit ashes
-+0..+10; affinity rows are handled at lookup time.
+Reads numeric IDs from src/db/{item,weapon,armor,accessory,aow}_name.rs in the folder you pass. IDs carry the
+category in the high nibble (weapon 0x0, armour 0x1, talisman 0x2, goods 0x4, ash of war 0x8). Weapons get every
+upgrade level 0..25 on top of the base row, spirit ashes +0..+10; affinity rows are handled at lookup time.
 
-    uv run python scripts/build_item_list.py [path/to/Elden-Ring-Save-Editor]
-
-Without an argument the editor is looked for next to this repo, or in ER_SAVE_EDITOR.
+    uv run python scripts/build_item_list.py [path]
+    ER_SAVE_EDITOR=path uv run python scripts/build_item_list.py
 """
 
 from __future__ import annotations
@@ -47,7 +45,10 @@ def ids_from(db: Path) -> set[int]:
 
 def main() -> int:
     arg = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("ER_SAVE_EDITOR")
-    editor = Path(arg) if arg else ROOT.parent / "Elden-Ring-Save-Editor"
+    if not arg:
+        print("pass the folder that contains src/db, or set ER_SAVE_EDITOR", file=sys.stderr)
+        return 1
+    editor = Path(arg)
     db = editor / "src" / "db"
     if not db.is_dir():
         print(f"not found: {db}", file=sys.stderr)

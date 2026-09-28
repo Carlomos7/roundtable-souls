@@ -1,8 +1,7 @@
 """Read-only parser for Elden Ring PC saves.
 
-A Python port of the ER-Save-Editor parser (src/save/**, Apache-2.0; see THIRD_PARTY_NOTICES.md), changed to read
-only, to record byte positions for the repairs, and to tolerate slots saved by older game versions. It keeps the
-original's checks, so a file the editor would reject fails here with a readable reason and offset.
+Reads the PC save layout, records byte positions for the repairs, and tolerates slots saved by older game
+versions. A file that does not match fails with a readable reason and offset.
 
 Usage: python -m roundtable_souls.saves.layout <save> [<save> ...]"""
 
