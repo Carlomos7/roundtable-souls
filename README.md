@@ -150,8 +150,8 @@ uv run python scripts/build_item_list.py
 
 ## Branches
 
-- `dev` is where work happens. Every push runs the tests on Windows and Linux.
-- `main` only receives merges from `dev` that passed, and is what releases are cut from. It is protected.
+- `dev` is where work happens. Every push runs lint, type checks and tests on Windows and Linux, exactly as locked in `uv.lock`; a newer push cancels the older run. Changes to docs alone (README, changelog, `docs/`, licence files) skip the tests.
+- `main` only receives merges from `dev` and is what releases are cut from. It requires the `tests-passed` check and refuses force-pushes.
 
 ```bash
 git checkout dev                      # day-to-day work
@@ -160,7 +160,7 @@ git checkout main && git merge dev    # when dev is ready to ship
 
 ## Releases
 
-Pushing a version tag builds on Windows and Linux runners, then publishes one GitHub Release with the installer, the zip, the Linux archive and `SHA256SUMS.txt` (`.github/workflows/release.yml`). The tag must match the package version; a test keeps `pyproject.toml` and `roundtable_souls.__version__` in sync.
+Pushing a version tag releases (`.github/workflows/release.yml`). The workflow first checks that the tagged commit is on `main` and that the tag matches the package version, then builds and tests on Windows and Linux. The release is uploaded as a draft, every file is downloaded back and checked against `SHA256SUMS.txt`, and only then is it published. Only repository admins can create or move `v*` tags. Starting the workflow by hand from the Actions tab builds everything without publishing.
 
 ```bash
 git checkout main && git merge dev
