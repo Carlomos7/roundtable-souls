@@ -219,7 +219,7 @@ def create_profile(name: str, copy_from=None) -> Path:
     folder = common.me3_profiles_dir()
     if not folder:
         raise RuntimeError("me3's profile folder is unknown on this PC (no LOCALAPPDATA).")
-    return mod_manage.create_profile(folder, name, copy_from=copy_from)
+    return mod_manage.create_profile(folder, name, game=common.GAME.key, copy_from=copy_from)
 
 
 def delete_profile(path) -> Path:

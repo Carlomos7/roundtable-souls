@@ -1,16 +1,17 @@
 Roundtable Souls
 ================
 
-A launcher for modded Elden Ring: it starts the game through me3, keeps your
-Seamless Co-op settings in one place, manages your mods, and checks and repairs
-your saves.
+A launcher for modded Elden Ring and Nightreign: it starts the game through
+me3, keeps your Seamless Co-op settings in one place, manages your mods, and
+checks and repairs your saves.
 
 
 GETTING STARTED
 ---------------
 
-You need Steam with Elden Ring, and me3 (https://github.com/garyttierney/me3)
-or a Nightreign Revive installation, which brings its own me3.
+You need Steam with Elden Ring or Nightreign, and me3
+(https://github.com/garyttierney/me3). For Elden Ring, a Nightreign Revive
+installation also works; it brings its own me3.
 
 Windows, installer (recommended)
   Run RoundtableSouls-Setup.exe. It installs for your account only, with no
@@ -29,6 +30,28 @@ Linux and Steam Deck (Desktop Mode)
   me3 for Linux first. The game runs through Proton; Roundtable Souls finds
   your saves inside the game's Proton folder, on the internal drive or an SD
   card.
+
+
+GAMES
+-----
+
+The tabs at the top of the window pick the game: Elden Ring, Nightreign, Dark
+Souls III or Sekiro. Every page below them then works on that game: its
+setups, its Seamless Co-op settings, its mods and its saves. Settings is shared
+by all games. The window opens on the game you used last.
+
+  Elden Ring    everything described below.
+  Nightreign    Play, Co-op, Mods and Saves. Its Seamless Co-op has no
+                password and three difficulty values. Nightreign encrypts its
+                saves, so the Saves page checks that each file is whole and
+                offers backups, restore, and copies between the co-op and
+                standard save, but cannot show characters or repair them.
+  Dark Souls III, Sekiro
+                placeholders for now: the tab shows whether the game, its saves
+                and me3 profiles were found, and nothing on it can change them.
+
+me3 profiles are listed under the game they were made for. Tabs cannot be
+switched while a job is running.
 
 
 THE PAGES
@@ -139,13 +162,16 @@ Roundtable Souls can run Play without its window:
 
   1. In Steam, choose Add a Game > Add a Non-Steam Game and pick
      RoundtableSouls (RoundtableSouls.exe on Windows).
-  2. In that shortcut's Properties, set Launch Options to:  --play
-     Settings > Steam shortcut shows the exact target and option, with Copy
-     buttons.
+  2. In that shortcut's Properties, set Launch Options to the game:
+       --game er --play      Elden Ring
+       --game nr --play      Nightreign
+     Settings > Steam shortcut shows the exact target and options for the
+     game picked at the top, with Copy buttons. Make one shortcut per game.
 
-Starting the shortcut uses the setup Play last used, launches the game, and
-repairs your saves when you quit, just like the Play button. Open the window
-once in Desktop Mode first so a setup is remembered.
+Starting the shortcut uses the setup Play last used for that game, launches
+it, and (Elden Ring) repairs your saves when you quit, just like the Play
+button. Without --game it plays the game the window showed last. Open the
+window once in Desktop Mode first so a setup is remembered.
 
 
 UPDATES

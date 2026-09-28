@@ -25,11 +25,12 @@ PS = ["powershell", "-NoProfile", "-NonInteractive", "-Command"]
 
 
 def dead_shells():
-    """PIDs of eldenring.exe processes with zero threads."""
+    """PIDs of the active game's exe (eldenring.exe for Elden Ring) with zero threads."""
     if sys.platform != "win32":
         return []
+    name = common.game_exe_name().rsplit(".", 1)[0].replace("'", "")
     script = (
-        "Get-Process eldenring -ErrorAction SilentlyContinue | "
+        f"Get-Process -Name '{name}' -ErrorAction SilentlyContinue | "
         "Where-Object { $_.Threads.Count -eq 0 } | ForEach-Object { $_.Id }"
     )
     try:
@@ -61,9 +62,9 @@ def clear(dry_run=False):
     """Find and remove dead shells. Returns (found, remaining)."""
     found = dead_shells()
     if not found:
-        log("no dead eldenring.exe shells")
+        log(f"no dead {common.game_exe_name()} shells")
         return [], []
-    log(f"dead eldenring.exe shell(s): {', '.join(map(str, found))}")
+    log(f"dead {common.game_exe_name()} shell(s): {', '.join(map(str, found))}")
     if dry_run:
         return found, found
     log("asking for administrator rights to remove them (UAC prompt)")

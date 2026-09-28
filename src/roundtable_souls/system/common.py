@@ -1,8 +1,9 @@
 """Where things are on this machine (Steam, the game, the saves, me3) and what is running, on Windows and Linux.
 
-On Linux (desktop or Steam Deck) the game runs through Proton, so its saves live inside the game's Proton prefix and
-the game process is a Wine process whose command line names eldenring.exe. Nothing here writes to disk except the
-run log.
+Every game-specific answer is for the active game (GAME, set with set_game): Elden Ring unless the window's game tabs
+or `--game` picked another. On Linux (desktop or Steam Deck) the game runs through Proton, so its saves live inside
+the game's Proton prefix and the game process is a Wine process whose command line names the game's exe. Nothing
+here writes to disk except the run log.
 """
 
 import os
@@ -12,17 +13,19 @@ import subprocess
 import sys
 from pathlib import Path
 
-from roundtable_souls.settings import data_dir, load_settings
+from roundtable_souls import games
+from roundtable_souls.settings import data_dir, game_setting, load_settings
 from roundtable_souls.system.logging import get_logger, start_run_log
 
 IS_WINDOWS = sys.platform == "win32"
 IS_LINUX = sys.platform.startswith("linux")
-ELDEN_RING_APP_ID = "1245620"
+ELDEN_RING_APP_ID = games.ELDEN_RING.app_id
+GAME: games.Game = games.DEFAULT  # the game every lookup below answers for
 
 LOGS_DIR = data_dir() / "logs"
 LOG_FILE = LOGS_DIR / "last_run.log"
 
-# A real game instance uses gigabytes. Failed launches leave dead eldenring.exe shells behind that sit
+# A real game instance uses gigabytes. Failed launches leave dead game exe shells behind that sit
 # under 1 MB with no threads; Steam counts those as "running", these tools do not.
 REAL_GAME_MIN_KB = 100_000
 # Child consoles must never pop up (the window has no console of its own).
@@ -126,7 +129,7 @@ def apply_overrides(settings: dict | None = None) -> dict:
     global ME3_OVERRIDE, GAME_EXE_OVERRIDE, PROFILE_DIR_OVERRIDE
     s = load_settings() if settings is None else settings
     me3 = str(s.get("me3_path") or "").strip()
-    game = str(s.get("game_exe") or "").strip()
+    game = str(game_setting(s, GAME.key, "game_exe") or "").strip()
     prof = (
         str(s.get("me3_profile_dir") or "").strip()
         or str((s.get("me3_info_cache") or {}).get("profile_dir") or "").strip()
@@ -137,8 +140,16 @@ def apply_overrides(settings: dict | None = None) -> dict:
     return {"me3": me3, "game_exe": game, "profile_dir": prof}
 
 
+def set_game(game: games.Game | str, settings: dict | None = None) -> games.Game:
+    """Make `game` the one every lookup answers for, and load its own location overrides."""
+    global GAME
+    GAME = game if isinstance(game, games.Game) else games.get(game)
+    apply_overrides(settings)
+    return GAME
+
+
 def game_exe_name():
-    return Path(GAME_EXE_OVERRIDE).name if GAME_EXE_OVERRIDE else "eldenring.exe"
+    return Path(GAME_EXE_OVERRIDE).name if GAME_EXE_OVERRIDE else GAME.exe
 
 
 def game_running():
@@ -262,9 +273,14 @@ def steam_libraries():
 def game_dir():
     if GAME_EXE_OVERRIDE and Path(GAME_EXE_OVERRIDE).is_file():
         return Path(GAME_EXE_OVERRIDE).parent
+    return installed_dir(GAME)
+
+
+def installed_dir(game: games.Game):
+    """The folder with this game's exe in any Steam library, or None."""
     for root in steam_libraries():
-        candidate = root / "steamapps" / "common" / "ELDEN RING" / "Game"
-        if (candidate / "eldenring.exe").exists():
+        candidate = root / "steamapps" / "common" / Path(game.install_dir)
+        if (candidate / game.exe).exists():
             return candidate
     return None
 
@@ -279,28 +295,30 @@ def regulation_bin():
 # ------------------------------------------------------------------- saves
 
 
-def save_roots() -> list[Path]:
-    """Folders that hold the per-account save folders: %APPDATA%\\EldenRing on Windows, the same folder inside the
+def save_roots(game: games.Game | None = None) -> list[Path]:
+    """Folders that hold the per-account save folders: %APPDATA%\\<game> on Windows, the same folder inside the
     game's Proton prefix on Linux (in whichever Steam library the prefix lives)."""
+    game = game or GAME
     if IS_WINDOWS:
         appdata = os.environ.get("APPDATA")
-        return [Path(appdata) / "EldenRing"] if appdata else []
-    roaming = Path("pfx") / "drive_c" / "users" / "steamuser" / "AppData" / "Roaming" / "EldenRing"
+        return [Path(appdata) / game.save_dir] if appdata else []
+    roaming = Path("pfx") / "drive_c" / "users" / "steamuser" / "AppData" / "Roaming" / game.save_dir
     roots: list[Path] = []
     for lib in steam_libraries():
-        candidate = lib / "steamapps" / "compatdata" / ELDEN_RING_APP_ID / roaming
+        candidate = lib / "steamapps" / "compatdata" / game.app_id / roaming
         if candidate.is_dir() and candidate.resolve() not in [r.resolve() for r in roots]:
             roots.append(candidate)
     return roots
 
 
-def save_files():
-    """Every ER0000.sl2 / ER0000.co2 in the save folders."""
+def save_files(game: games.Game | None = None):
+    """Every standard and co-op save (ER0000.sl2 / ER0000.co2 for Elden Ring) in the game's save folders."""
+    game = game or GAME
     found = []
-    for root in save_roots():
+    for root in save_roots(game):
         for profile in sorted(root.glob("*")):
             if profile.is_dir():
-                found.extend(p for p in (profile / "ER0000.sl2", profile / "ER0000.co2") if p.exists())
+                found.extend(p for p in (profile / n for n in game.save_names) if p.exists())
     return found
 
 
@@ -336,9 +354,33 @@ def me3_profiles_dir():
     return config / "profiles" if config else None
 
 
-def me3_profiles():
-    """User-made .me3 profiles (the *-default.me3 ones me3 generates are skipped)."""
+def me3_profiles(game: games.Game | None = None):
+    """User-made .me3 profiles for the game (the *-default.me3 ones me3 generates are skipped). A profile that names
+    no game in [[supports]] counts for Elden Ring, the only game older profiles were written for."""
+    game = game or GAME
     root = me3_profiles_dir()
     if not root or not root.exists():
         return []
-    return sorted(p for p in root.rglob("*.me3") if not p.name.endswith("-default.me3"))
+    return sorted(
+        p
+        for p in root.rglob("*.me3")
+        if not p.name.endswith("-default.me3") and game.key in (profile_games(p) or (games.ELDEN_RING.key,))
+    )
+
+
+def profile_games(profile: Path) -> tuple[str, ...]:
+    """The games a .me3 profile says it supports ([[supports]] game = ...), lower-case; empty when it names none."""
+    import tomllib
+
+    try:
+        data = tomllib.loads(Path(profile).read_text(encoding="utf-8", errors="replace"))
+    except OSError, tomllib.TOMLDecodeError:
+        return ()
+    rows = data.get("supports") or []
+    if isinstance(rows, dict):
+        rows = [rows]
+    return tuple(
+        str(r.get("game") or "").strip().lower()
+        for r in rows
+        if isinstance(r, dict) and str(r.get("game") or "").strip()
+    )

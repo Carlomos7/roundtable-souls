@@ -65,3 +65,42 @@ def test_pages_fit_a_narrow_window(launcher, app):
             app.processEvents()
         inner = page.widget()
         assert inner.width() <= page.viewport().width() + 1, page.objectName()
+
+
+def test_game_tabs_switch_every_page(launcher, app):
+    from roundtable_souls import games
+    from roundtable_souls.system import common
+
+    assert list(launcher.game_tabs.items) == [g.key for g in games.GAMES]
+    launcher._on_game_tab("nightreign")
+    for _ in range(10):
+        app.processEvents()
+    assert launcher.game is games.NIGHTREIGN and common.GAME is games.NIGHTREIGN
+    assert launcher.windowTitle().endswith("Nightreign")
+    assert launcher.shortcut_fields["Launch options"].text().endswith("--game nightreign --play")
+    assert not launcher.repair_row.isVisibleTo(launcher.tools_page)  # the regulation repair is Elden Ring's
+
+    launcher._on_game_tab("darksouls3")
+    for _ in range(10):
+        app.processEvents()
+    assert launcher.stackedWidget.currentWidget() is launcher.placeholder_page
+    assert not launcher.navigationInterface.widget(launcher.play_page.objectName()).isEnabled()
+    QTest.keyClick(launcher, Qt.Key_1, Qt.ControlModifier)  # Ctrl+1 cannot open Play for a placeholder game
+    app.processEvents()
+    assert launcher.stackedWidget.currentWidget() is launcher.placeholder_page
+    assert launcher.launched == []
+
+    launcher._on_game_tab("eldenring")
+    for _ in range(10):
+        app.processEvents()
+    assert launcher.stackedWidget.currentWidget() is launcher.play_page
+    assert launcher.navigationInterface.widget(launcher.play_page.objectName()).isEnabled()
+
+
+def test_game_tabs_are_locked_while_a_job_runs(launcher, app):
+    launcher.set_busy(True, "Working...")
+    assert not launcher.game_tabs.isEnabled()
+    launcher._on_game_tab("nightreign")
+    assert launcher.game.key == "eldenring"
+    launcher.set_busy(False, "done")
+    assert launcher.game_tabs.isEnabled()

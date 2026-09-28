@@ -198,6 +198,9 @@ def wait_for_save_flush(saves, timeout=30):
 
 
 def repair_all():
+    if not common.GAME.regulation_repair:
+        log(f"{common.GAME.name}: no save repair after play")
+        return
     source = common.regulation_bin()
     if not source:
         fail("could not find the game's regulation.bin through Steam")
@@ -206,7 +209,7 @@ def repair_all():
         fail(f"{source}: regulation length {len(reg):#x} does not look right")
     saves = common.save_files()
     if not saves:
-        log("no Elden Ring saves found on this PC")
+        log(f"no {common.GAME.name} saves found on this PC")
         return
     if common.game_running():
         fail("the game is still running, not touching the saves", code=2)

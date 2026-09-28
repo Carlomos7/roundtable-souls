@@ -7,8 +7,9 @@ import shutil
 import time
 from pathlib import Path
 
-from roundtable_souls import models
+from roundtable_souls import games, models
 from roundtable_souls.saves import analyze as save_analyze
+from roundtable_souls.saves import container as save_container
 from roundtable_souls.saves import fix as save_fix
 from roundtable_souls.saves import layout as save_layout_check
 from roundtable_souls.saves import loading as save_loading
@@ -47,6 +48,10 @@ def _save_info(path: Path) -> dict:
         info["error"] = str(e)[:120]
         info["findings"] = [{"level": "error", "code": "read", "title": "Cannot read this save", "detail": str(e)}]
         return info
+
+    game = games.for_save(path) or games.ELDEN_RING
+    if game.save_reader != "eldenring":
+        return _container_info(info, data, game)
 
     if not repair_regulation.is_pc_save(data):
         info["error"] = "Not a PC Elden Ring save"
@@ -178,6 +183,41 @@ def _save_info(path: Path) -> dict:
         info["error"] = str(e)[:120]
     info["findings"] = findings
     info["convert_ok"] = path.suffix.lower() == ".co2" and save_analyze.findings_are_clean(findings)
+    return info
+
+
+def _container_info(info: dict, data: bytes, game: games.Game) -> dict:
+    """A save whose contents are not readable yet (Nightreign): only the file structure is checked."""
+    info["block"] = "n/a"
+    try:
+        found = save_container.check(data, game.save_sections)
+    except save_container.ContainerError as e:
+        info["error"] = str(e)[:120]
+        info["findings"] = [
+            {
+                "level": "error",
+                "code": "layout",
+                "title": "Damaged save file",
+                "detail": f"The file structure is broken: {e}. Restore a backup from the list below.",
+            }
+        ]
+        return info
+    info["findings"] = [
+        {
+            "level": "ok",
+            "code": "layout",
+            "title": "File structure OK",
+            "detail": f"All {len(found)} sections are whole.",
+        },
+        {
+            "level": "info",
+            "code": "contents",
+            "title": "Contents not read",
+            "detail": f"{game.name} encrypts its saves, so Roundtable Souls cannot show what is inside yet. "
+            "Backups, restore, and the co-op and standard copies all work.",
+        },
+    ]
+    info["convert_ok"] = Path(info["path"]).suffix.lower() == ".co2"
     return info
 
 
@@ -338,8 +378,15 @@ def restore_backup(bak: Path, save: Path | None = None) -> Path | None:
     if not bak.is_file():
         raise RuntimeError(f"Backup not found: {bak}")
     data = bak.read_bytes()
-    if not repair_regulation.is_pc_save(data):
-        raise RuntimeError("That backup is not a PC Elden Ring save.")
+    game = games.for_save(save) or games.ELDEN_RING
+    if game.save_reader == "eldenring":
+        if not repair_regulation.is_pc_save(data):
+            raise RuntimeError(f"That backup is not a PC {game.name} save.")
+    else:
+        try:
+            save_container.check(data, game.save_sections)
+        except save_container.ContainerError as e:
+            raise RuntimeError(f"That backup is not a whole {game.name} save: {e}.") from e
     safety = None
     if save.exists():
         safety = save_fix.backup(save, {"action": "Before restoring a backup", "changes": [f"restored {bak.name}"]})
@@ -376,7 +423,7 @@ def assert_writable(path: Path, settle_seconds: float = 4.0) -> None:
     """The lock every write goes through: the game must be closed, and the file must not have changed in the
     last few seconds (the game flushes saves for a moment after quitting)."""
     if common.game_running():
-        raise RuntimeError("Elden Ring is running. Close it before changing saves.")
+        raise RuntimeError(f"{common.GAME.name} is running. Close it before changing saves.")
     path = Path(path)
     try:
         age = time.time() - path.stat().st_mtime
@@ -385,7 +432,7 @@ def assert_writable(path: Path, settle_seconds: float = 4.0) -> None:
     if age < settle_seconds:
         time.sleep(settle_seconds - age)
         if common.game_running():
-            raise RuntimeError("Elden Ring started while waiting. Close it before changing saves.")
+            raise RuntimeError(f"{common.GAME.name} started while waiting. Close it before changing saves.")
 
 
 def fix_checksums(path: Path) -> dict:
@@ -443,6 +490,8 @@ def repair_available(info: dict) -> bool:
 def save_summary(info: dict) -> list:
     """Three calm status chips for a save card: (text, tone). Tones: success, warn, muted."""
     chips = []
+    if any(f.get("code") == "contents" for f in info.get("findings") or []):
+        return [("File is whole", "success"), ("Backups and copies work", "muted")]
     if info.get("error") and not info.get("characters"):
         return [("Could not read", "warn")]
     torn = any(f.get("code") == "layout" and f.get("level") == "error" for f in info.get("findings") or [])
@@ -470,14 +519,13 @@ def save_summary(info: dict) -> list:
 def convert_co2_to_sl2(path: Path, dest: Path | None = None, *, force: bool = False) -> Path:
     """Copy a .co2 to .sl2 only when findings are clean (or force=True after an explicit confirm).
 
-    Never overwrites a live ER0000.sl2 without a backup. Default dest is ER0000.sl2.next-to-co2
-    with a timestamp if the standard name already exists — callers pass dest for the live file.
+    Never overwrites a live standard save (ER0000.sl2, NR0000.sl2) without a backup in co2-to-sl2-backups first.
     """
     path = Path(path)
     if path.suffix.lower() != ".co2":
         raise RuntimeError("Only Seamless Co-op .co2 files can be converted this way.")
     if common.game_running():
-        raise RuntimeError("Elden Ring is running. Close it before converting saves.")
+        raise RuntimeError(f"{common.GAME.name} is running. Close it before converting saves.")
     info = save_info(path)
     if not force and not save_analyze.findings_are_clean(info["findings"]):
         raise RuntimeError("Findings are not clean. Repair or clear warnings first, or use force after confirming.")
@@ -497,13 +545,13 @@ def convert_co2_to_sl2(path: Path, dest: Path | None = None, *, force: bool = Fa
 def convert_sl2_to_co2(path: Path, dest: Path | None = None) -> Path:
     """Copy a standard .sl2 to the .co2 Seamless Co-op reads. Same bytes; the mod does not mind extra notes.
 
-    Whatever ER0000.co2 already exists is backed up into sl2-to-co2-backups first, with a copy of the source.
+    Whatever co-op save already exists is backed up into sl2-to-co2-backups first, with a copy of the source.
     """
     path = Path(path)
     if path.suffix.lower() != ".sl2":
         raise RuntimeError("Only standard .sl2 files can be copied this way.")
     if common.game_running():
-        raise RuntimeError("Elden Ring is running. Close it before converting saves.")
+        raise RuntimeError(f"{common.GAME.name} is running. Close it before converting saves.")
     dest = Path(dest) if dest else path.with_suffix(".co2")
     folder = dest.parent / "sl2-to-co2-backups"
     folder.mkdir(exist_ok=True)

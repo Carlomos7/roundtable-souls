@@ -1,5 +1,8 @@
 """The window (PySide6 + Fluent Widgets). All logic lives in core.py.
 
+Game tabs in the title bar pick the game every page works on (Elden Ring, Nightreign; Dark Souls III and Sekiro are
+placeholders until their support lands). Settings is shared by all games.
+
 Pages (navigation rail on the left):
   Play    who you are (from the save), which setup, one big Play button, one line saying what will happen
   Co-op   Seamless Co-op password, difficulty, and a save bar that stays on screen
@@ -50,6 +53,7 @@ from qfluentwidgets import (
     NavigationItemPosition,
     PasswordLineEdit,
     SearchLineEdit,
+    SegmentedWidget,
     SpinBox,
     StrongBodyLabel,
     SwitchButton,
@@ -63,7 +67,7 @@ from qfluentwidgets import (
 )
 from qfluentwidgets import FluentIcon as FI
 
-from roundtable_souls import core
+from roundtable_souls import core, games
 from roundtable_souls.core import (
     CUSTOM,
     LOGS,
@@ -92,6 +96,8 @@ from roundtable_souls.core import (
     export_text,
     fix_checksums,
     fix_loading,
+    game_setting,
+    has_password,
     health_report,
     install_mod,
     job_clear,
@@ -116,6 +122,8 @@ from roundtable_souls.core import (
     read_profile_settings,
     read_scaling,
     read_settings_meta,
+    remember_setup,
+    remembered_setup,
     repair_available,
     repair_save,
     report_exception,
@@ -124,9 +132,11 @@ from roundtable_souls.core import (
     route_logs,
     run_installer,
     run_job,
+    save_game_settings,
     save_info,
     save_settings,
     save_summary,
+    scaling_spec,
     scan_profile_conflicts,
     set_mod_options,
     setting_face,
@@ -134,6 +144,7 @@ from roundtable_souls.core import (
     skip_update,
     steam_state,
     uninstall_mod,
+    use_game,
     write_keys,
     write_password,
     write_profile_setting,
@@ -194,6 +205,7 @@ class Launcher(FluentWindow):
     def __init__(self):
         super().__init__()
         self.settings = load_settings()
+        self.game = use_game(core.STARTUP_GAME or games.get(self.settings.get("game")), self.settings)
         self.bus = Bus()
         self.busy = False
         self.game_running = False
@@ -205,7 +217,7 @@ class Launcher(FluentWindow):
         self.saves_badge = None
         self._undo = None
         self._backups_all = False
-        self.setups = discover(self.settings.get("setup"))
+        self.setups = discover(remembered_setup(self.settings)) if self.game.ready else []
         self.setup = None
         self.ini = None
         self.pw_file = None
@@ -235,6 +247,8 @@ class Launcher(FluentWindow):
         self.addSubInterface(self.mods_page, FI.LIBRARY, "Mods")
         self.addSubInterface(self.saves_page, FI.SAVE, "Saves")
         self.addSubInterface(self.tools_page, FI.SETTING, "Settings", NavigationItemPosition.BOTTOM)
+        self._build_placeholder()
+        self._build_game_tabs()
         # Keyboard: Ctrl+1..5 open the pages in rail order. Nothing has focus at start,
         # so a stray Enter or Space when the window appears cannot press Play.
         self.setFocusPolicy(Qt.StrongFocus)
@@ -242,7 +256,7 @@ class Launcher(FluentWindow):
             (self.play_page, self.coop_page, self.mods_page, self.saves_page, self.tools_page), start=1
         ):
             nav = QShortcut(QKeySequence(f"Ctrl+{n}"), self)
-            nav.activated.connect(lambda pg=target: self.switchTo(pg))
+            nav.activated.connect(lambda pg=target: self._shortcut_page(pg))
         sc = QShortcut(QKeySequence("Ctrl+S"), self)
         sc.activated.connect(self._shortcut_save)
         self.bus.line.connect(self._on_line)
@@ -266,11 +280,180 @@ class Launcher(FluentWindow):
             a.exc_type, a.exc_value, a.exc_traceback, f"thread {a.thread.name}"
         )
         self._fill_setups()
-        self.refresh_saves()
+        self._apply_game_ui()
+        if self.game.ready:
+            self.refresh_saves()
+        else:
+            QTimer.singleShot(0, lambda: self._set_game(self.game))  # opens the placeholder page
         self._watch_game()
         self._refresh_me3()
         self._check_launcher_update()
         QTimer.singleShot(0, lambda: (self.navigationInterface.expand(useAni=False), self._restyle(), self._relayout()))
+
+    # ---------------------------------------------------------------- game tabs
+    def _base_title(self):
+        return f"{TITLE} {VERSION} - {self.game.name}"
+
+    def _shortcut_page(self, pg):
+        """Ctrl+1..5. A game without support yet only has its placeholder and Settings."""
+        if self.game.ready or pg is self.tools_page:
+            self.switchTo(pg)
+
+    def _build_game_tabs(self):
+        """One tab per game in the title bar. The label beside them stays the app name; the window title (taskbar)
+        also carries the game and any running job."""
+        bar = self.titleBar
+        try:
+            self.windowTitleChanged.disconnect(bar.setTitle)
+        except RuntimeError, TypeError:
+            pass
+        bar.titleLabel.setText(TITLE)
+        self.game_tabs = SegmentedWidget(bar)
+        for g in games.GAMES:
+            item = self.game_tabs.addItem(g.key, g.name, onClick=lambda _=False, k=g.key: self._on_game_tab(k))
+            item.setToolTip(g.name if g.ready else f"{g.name}: support is coming. The tab shows what was found.")
+        self.game_tabs.setCurrentItem(self.game.key)
+        self.game_tabs.setFixedHeight(32)
+        at = bar.hBoxLayout.indexOf(bar.titleLabel)
+        bar.hBoxLayout.insertSpacing(at + 1, 16)
+        bar.hBoxLayout.insertWidget(at + 2, self.game_tabs, 0, Qt.AlignVCenter)
+
+    def _on_game_tab(self, key):
+        g = games.get(key)
+        if g is self.game:
+            return
+        if self.busy:
+            self.game_tabs.setCurrentItem(self.game.key)
+            self._toast("Wait for the current job", "Switch games once it finishes.", info=True)
+            return
+        unsaved = []
+        if self.game.ready and self._coop_pending():
+            unsaved.append("co-op settings")
+        if self.game.ready and getattr(self, "profile_save", None) is not None and self.profile_save.isEnabled():
+            unsaved.append("the profile editor")
+        if unsaved and not confirm(
+            self,
+            f"Switch to {g.name} and drop unsaved changes",
+            changes=[f"Unsaved changes in {' and '.join(unsaved)} for {self.game.name} are dropped"],
+            safety="Nothing is written. Stay on this tab and save first if you want to keep them.",
+            apply_text="Switch",
+        ):
+            self.game_tabs.setCurrentItem(self.game.key)
+            return
+        self._set_game(g, remember=True)
+
+    def _set_game(self, g, remember=False):
+        """Point every page at another game: its setups, co-op ini, mods, saves and running checks."""
+        self.game = use_game(g, load_settings())
+        self.settings = load_settings()
+        if remember:
+            save_settings(game=g.key)
+            self.settings["game"] = g.key
+        self.game_tabs.setCurrentItem(g.key)
+        self.game_running = False
+        for bar_name in ("shells_bar",):
+            bar = getattr(self, bar_name, None)
+            if bar is not None:
+                try:
+                    bar.close()
+                except Exception:
+                    pass
+                setattr(self, bar_name, None)
+        self.setups = discover(remembered_setup(self.settings)) if g.ready else []
+        self._fill_setups()
+        self._apply_game_ui()
+        threading.Thread(target=lambda: self.bus.running.emit(core.common.game_running()), daemon=True).start()
+        if g.ready:
+            self.refresh_saves()
+            if self.stackedWidget.currentWidget() in (self.placeholder_page, getattr(self, "workshop_page", None)):
+                self.switchTo(self.play_page)
+        else:
+            self._update_saves_badge(0)
+            self.switchTo(self.placeholder_page)
+            try:  # the placeholder has no rail entry: leave none highlighted
+                panel = self.navigationInterface.panel
+                for item in panel.items.values():
+                    item.widget.setSelected(False)
+                panel._currentRouteKey = None
+            except Exception:
+                pass
+
+    def _apply_game_ui(self):
+        """Everything on screen that names or depends on the active game."""
+        g = self.game
+        self.setWindowTitle(self._base_title())
+        for pg in (self.play_page, self.coop_page, self.mods_page, self.saves_page):
+            try:
+                self.navigationInterface.widget(pg.objectName()).setEnabled(g.ready)
+            except Exception:
+                pass
+        self.repair_row.setVisible(g.regulation_repair)
+        self.play_rows["play_repair_after"].setVisible(g.regulation_repair)
+        self.off_revive_row.setVisible(g is games.ELDEN_RING)
+        target, options = play_command(g)
+        self.shortcut_fields["Target"].setText(target)
+        self.shortcut_fields["Launch options"].setText(options)
+        self.shortcut_hint.setText(
+            f"Play {g.name} without opening this window: add Roundtable Souls to Steam as a non-Steam game with the "
+            "launch options below (one shortcut per game). It uses the setup Play last used for that game"
+            + (", repairs the saves after you quit," if g.regulation_repair else ",")
+            + " then closes. Handy in Big Picture and on Steam Deck in Gaming Mode."
+        )
+        value = self._location_value("game_exe")
+        self.loc["game_exe"].setText(value or "detected")
+        self.loc["game_exe"].setToolTip(value)
+        self.savefile_edit.setPlaceholderText(f"{g.save_stem}.sl2 (default)")
+        if not g.ready:
+            self._fill_placeholder(g)
+
+    def _build_placeholder(self):
+        """The page a game without support yet shows: what Roundtable Souls found for it, and nothing to press
+        that could touch its files."""
+        self.placeholder_page, lay = page("placeholderPage")
+        self.ph_title = TitleLabel("")
+        lay.addWidget(self.ph_title)
+        self.ph_intro = hint("")
+        lay.addWidget(self.ph_intro)
+        c, cl = card("Found on this PC", FI.SEARCH)
+        self.ph_rows = QVBoxLayout()
+        self.ph_rows.setSpacing(8)
+        cl.addLayout(self.ph_rows)
+        row_w, row = action_row()
+        self.ph_game_btn = ghost_btn("Game folder", FI.GAME)
+        self.ph_game_btn.clicked.connect(lambda: core.common.open_path(self.ph_game_btn.toolTip()))
+        row.addWidget(self.ph_game_btn)
+        self.ph_saves_btn = ghost_btn("Saves folder", FI.FOLDER)
+        self.ph_saves_btn.clicked.connect(lambda: core.common.open_path(self.ph_saves_btn.toolTip()))
+        row.addWidget(self.ph_saves_btn)
+        cl.addWidget(row_w)
+        lay.addWidget(c)
+        lay.addStretch(1)
+        self.stackedWidget.addWidget(self.placeholder_page)
+
+    def _fill_placeholder(self, g):
+        common = core.common
+        self.ph_title.setText(g.name)
+        self.ph_intro.setText(
+            f"Support for {g.name} is coming. Play, co-op, mods and saves stay off on this tab until then, so "
+            "nothing here can change its files. Pick Elden Ring or Nightreign at the top to use the launcher."
+        )
+        clear_layout(self.ph_rows)
+        game_dir = common.installed_dir(g)
+        saves = common.save_files(g)
+        profiles = common.me3_profiles(g)
+        rows = (
+            ("Game", str(game_dir) if game_dir else "Not found in any Steam library."),
+            ("Saves", f"{count_label(len(saves), 'save file')} in {saves[0].parent}" if saves else "None found."),
+            ("me3 profiles", ", ".join(p.name for p in profiles) if profiles else "None made for this game yet."),
+        )
+        for label, value in rows:
+            line = BodyLabel(f"{label}:  {value}")
+            line.setWordWrap(True)
+            self.ph_rows.addWidget(line)
+        self.ph_game_btn.setEnabled(bool(game_dir))
+        self.ph_game_btn.setToolTip(str(game_dir or ""))
+        self.ph_saves_btn.setEnabled(bool(saves))
+        self.ph_saves_btn.setToolTip(str(saves[0].parent) if saves else "")
 
     # ---------------------------------------------------------------- Play page
     def _build_play(self):
@@ -302,7 +485,7 @@ class Launcher(FluentWindow):
         b.clicked.connect(self.browse)
         row.addWidget(self.setup_box, 1)
         row.addWidget(b)
-        row.addWidget(self._folder_btn("game", "Game folder", FI.GAME, "The folder with eldenring.exe."))
+        row.addWidget(self._folder_btn("game", "Game folder", FI.GAME, "The game's own folder, with its exe."))
         cl.addLayout(row)
         self.setup_hint = hint()
         cl.addWidget(self.setup_hint)
@@ -332,6 +515,9 @@ class Launcher(FluentWindow):
             return
         self._compact = compact
         self.hero.set_compact(compact)
+        if getattr(self, "game_tabs", None) is not None:
+            for g in games.GAMES:
+                self.game_tabs.items[g.key].setText(g.short if compact else g.name)
         self._layout_scaling(2 if compact else 3)
         if hasattr(self, "save_box"):
             self.save_box.setDirection(QBoxLayout.TopToBottom if compact else QBoxLayout.LeftToRight)
@@ -374,7 +560,7 @@ class Launcher(FluentWindow):
         hl = QVBoxLayout(self.coop_head)
         hl.setContentsMargins(40, 28, 40, 8)
         hl.setSpacing(0)
-        titled(hl, "Co-op", FI.PEOPLE, "Seamless Co-op password and difficulty.")
+        titled(hl, "Co-op", FI.PEOPLE, "Seamless Co-op: difficulty, options, and the password where the mod has one.")
         outer.addWidget(self.coop_head)
         self.coop_scroll, lay = page("coopScroll")
         lay.setContentsMargins(40, 12, 40, 16)
@@ -390,6 +576,7 @@ class Launcher(FluentWindow):
         off.hide()
         self.coop_form = []
         c, cl = card("Session password", FI.CERTIFICATE)
+        self.pw_card = c
         row = QHBoxLayout()
         self.pw = PasswordLineEdit()
         self.pw.setMinimumWidth(120)
@@ -402,8 +589,12 @@ class Launcher(FluentWindow):
         lay.addWidget(c)
         self.coop_form.append(c)
         c, cl = card("Difficulty", FI.SPEED_HIGH)
-        cl.addWidget(hint("Percent per extra player. Only the host's numbers count."))
-        row = QHBoxLayout()
+        self.scal_about = hint("Percent per extra player. Only the host's numbers count.")
+        cl.addWidget(self.scal_about)
+        self.scaling = None  # the ScalingSpec of the loaded ini: which keys, labels and presets
+        preset_row = QWidget()
+        row = QHBoxLayout(preset_row)
+        row.setContentsMargins(0, 0, 0, 0)
         self.preset = ComboBox()
         self.preset.addItems(list(SCALING_PRESETS) + [CUSTOM])
         self.preset.setMinimumWidth(160)
@@ -411,7 +602,8 @@ class Launcher(FluentWindow):
         self.preset.currentTextChanged.connect(self._on_preset)
         row.addWidget(BodyLabel("Preset"))
         row.addWidget(self.preset, 1)
-        cl.addLayout(row)
+        cl.addWidget(preset_row)
+        self.preset_row = preset_row
         self.scal_grid = QGridLayout()
         self.scal_grid.setHorizontalSpacing(12)
         self.scal_grid.setVerticalSpacing(6)
@@ -581,8 +773,9 @@ class Launcher(FluentWindow):
         le = PasswordLineEdit()
         le.setPasswordVisible(True)
         le.setClearButtonEnabled(True)
-        le.setPlaceholderText("ER0000.sl2 (default)")
+        le.setPlaceholderText(f"{self.game.save_stem}.sl2 (default)")
         le.setMinimumWidth(200)
+        self.savefile_edit = le
         le.editingFinished.connect(lambda: self._on_profile_setting("savefile", le.text().strip()))
         self.ps["savefile"] = le
         title, blurb = core.profile_tools.SETTING_TEXT["savefile"]
@@ -1052,7 +1245,8 @@ class Launcher(FluentWindow):
             return
         self._log(f"profile: created {p}")
         self.setups = discover(str(p))
-        save_settings(setup=str(p))
+        remember_setup(str(p))
+        self.settings = load_settings()
         self._fill_setups(select=str(p))
         self._toast("Profile created", f"{p.name} is now the setup on Play.")
 
@@ -1150,7 +1344,7 @@ class Launcher(FluentWindow):
         acts, al = action_row()
         al.addWidget(
             self._folder_btn(
-                "saves", "Saves folder", FI.FOLDER, "The folder with ER0000.sl2 / ER0000.co2 and the backup folders."
+                "saves", "Saves folder", FI.FOLDER, "The folder with your save files and the backup folders."
             )
         )
         b = ghost_btn("Refresh", FI.SYNC)
@@ -1222,13 +1416,9 @@ class Launcher(FluentWindow):
         )
         lay.addWidget(c)
         c, cl = card("Steam shortcut", FI.GAME)
-        cl.addWidget(
-            hint(
-                "Play without opening this window: add Roundtable Souls to Steam as a non-Steam game with the launch "
-                "option below. It uses the setup Play last used, repairs the saves after you quit, then closes. Handy in "
-                "Big Picture and on Steam Deck in Gaming Mode."
-            )
-        )
+        self.shortcut_hint = hint("")
+        cl.addWidget(self.shortcut_hint)
+        self.shortcut_fields = {}
         target, options = play_command()
         for label, value in (("Target", target), ("Launch options", options)):
             row_w, row = action_row()
@@ -1237,12 +1427,13 @@ class Launcher(FluentWindow):
             field.setReadOnly(True)
             field.setMinimumWidth(220)
             field.setAccessibleName(label)
+            self.shortcut_fields[label] = field
             row.addWidget(BodyLabel(label))
             row.addWidget(field)
             copy = ghost_btn("Copy", FI.COPY)
             copy.clicked.connect(
-                lambda _=False, v=value, n=label: (
-                    QApplication.clipboard().setText(v),
+                lambda _=False, f=field, n=label: (
+                    QApplication.clipboard().setText(f.text()),
                     self._toast("Copied", n, info=True),
                 )
             )
@@ -1282,11 +1473,14 @@ class Launcher(FluentWindow):
         c, cl = card("Maintenance", FI.UPDATE)
         b = ghost_btn("Repair", FI.UPDATE)
         b.clicked.connect(lambda: self.start(job_repair, "Repairing saves...", need_setup=False))
-        cl.addWidget(PairRow("Repair saves", "Runs after every session. Use this if the window was closed first.", b))
+        self.repair_row = PairRow(
+            "Repair saves", "Runs after every Elden Ring session. Use this if the window was closed first.", b
+        )
+        cl.addWidget(self.repair_row)
         b = ghost_btn("Clear", FI.DELETE)
         b.clicked.connect(lambda: self.start(job_clear, "Clearing leftover processes...", need_setup=False))
         cl.addWidget(
-            PairRow("Leftover processes", "A dead eldenring.exe can make Discord think the game is still open.", b)
+            PairRow("Leftover processes", "A dead copy of the game can make Discord think it is still open.", b)
         )
         lay.addWidget(c)
         c, cl = card("Play session", FI.PLAY)
@@ -1321,13 +1515,13 @@ class Launcher(FluentWindow):
             (
                 "play_clear_before",
                 "Clear leftover processes before launch",
-                "Ends dead eldenring.exe shells so Steam agrees to start the game.",
-                "A dead shell is an eldenring.exe with no window. Steam refuses to launch while one exists.",
+                "Ends dead copies of the game so Steam agrees to start it.",
+                "A dead shell is a copy of the game's exe with no window. Steam refuses to launch while one exists.",
             ),
             (
                 "play_repair_after",
                 "Repair saves after quitting",
-                "Puts the real regulation.bin back in the save block me3 dirties.",
+                "Elden Ring: puts the real regulation.bin back in the save block me3 dirties.",
                 "The game does not mind the dirty block; save editors do. Turn this off if you never use editors.",
             ),
             (
@@ -1339,10 +1533,11 @@ class Launcher(FluentWindow):
             (
                 "warn_dead_shells",
                 "Warn about leftover processes",
-                "The bar at the top of the window when a dead eldenring.exe is found.",
+                "The bar at the top of the window when a dead copy of the game is found.",
                 "The Clear button on Tools still works with the warning off.",
             ),
         )
+        self.play_rows = {}
         for key, title, blurb, help_text in rows:
             sw = SwitchButton()
             sw.setOnText("On")
@@ -1350,12 +1545,13 @@ class Launcher(FluentWindow):
             sw.setChecked(bool(self.settings.get(key, PLAY_DEFAULTS[key])))
             sw.checkedChanged.connect(lambda checked, k=key: self._remember_play(k, checked))
             self.play_sw[key] = sw
-            cl.addWidget(SettingRow(title, blurb, sw, help_text))
+            self.play_rows[key] = SettingRow(title, blurb, sw, help_text)
+            cl.addWidget(self.play_rows[key])
         lay.addWidget(c)
         c, cl = card("Locations", FI.FOLDER)
         cl.addWidget(
             hint(
-                "Blank means detect: me3 from PATH or its installer, the game from Steam, profiles from where me3 info says. Set one only when that is wrong for this PC."
+                "Blank means detect: me3 from PATH or its installer, the game from Steam, profiles from where me3 info says. Set one only when that is wrong for this PC. The game executable is kept per game."
             )
         )
         self.loc = {}
@@ -1364,9 +1560,9 @@ class Launcher(FluentWindow):
             (
                 "game_exe",
                 "Game executable",
-                "eldenring.exe outside Steam's usual folder. me3 then launches it directly.",
+                "The game's exe outside Steam's usual folder, for the game picked at the top. me3 then launches it directly.",
                 False,
-                "Elden Ring (eldenring.exe)",
+                "Game (*.exe)",
             ),
             ("me3_profile_dir", "Profile folder", "Where .me3 profiles are listed from.", True, ""),
         ):
@@ -1374,7 +1570,7 @@ class Launcher(FluentWindow):
             bl = QHBoxLayout(box)
             bl.setContentsMargins(0, 0, 0, 0)
             bl.setSpacing(6)
-            lab = hint(str(self.settings.get(key) or "") or "detected")
+            lab = hint(str(self._location_value(key)) or "detected")
             lab.setMaximumWidth(360)
             bl.addWidget(lab, 1)
             b = ghost_btn("Browse", FI.FOLDER)
@@ -1449,14 +1645,13 @@ class Launcher(FluentWindow):
         self.off_quiet.setOnText("On")
         self.off_quiet.setOffText("Off")
         self.off_quiet.setChecked(bool(self.settings.get("offline_skip_confirm", False)))
-        bl.addWidget(
-            SettingRow(
-                "Skip Revive too",
-                "Leave Nightreign Revive off for this launch.",
-                self.off_revive,
-                "Turns Revive packages and natives off in a temporary copy. Your real profile is not changed.",
-            )
+        self.off_revive_row = SettingRow(
+            "Skip Revive too",
+            "Leave Nightreign Revive (an Elden Ring mod) off for this launch.",
+            self.off_revive,
+            "Turns Revive packages and natives off in a temporary copy. Your real profile is not changed.",
         )
+        bl.addWidget(self.off_revive_row)
         bl.addWidget(
             SettingRow(
                 "Start Steam if needed",
@@ -1497,13 +1692,11 @@ class Launcher(FluentWindow):
         row.addWidget(self._folder_btn("me3", "me3", FI.CODE, "Where me3.exe lives."))
         row.addWidget(
             self._folder_btn(
-                "game", "Game", FI.GAME, "The folder with eldenring.exe: ReShade, ERSS and regulation.bin live here."
+                "game", "Game", FI.GAME, "The game's own folder: its exe, regulation.bin, and mods that install there."
             )
         )
         row.addWidget(
-            self._folder_btn(
-                "saves", "Saves", FI.SAVE, "The folder with ER0000.sl2 / ER0000.co2 and the backup folders."
-            )
+            self._folder_btn("saves", "Saves", FI.SAVE, "The folder with your save files and the backup folders.")
         )
         b = ghost_btn("Logs", FI.DOCUMENT)
         b.setToolTip("The launcher's own logs.")
@@ -1529,7 +1722,7 @@ class Launcher(FluentWindow):
         self.setup_box.clear()
         for s in self.setups:
             self.setup_box.addItem(s.label)
-        pick = select or self.settings.get("setup")
+        pick = select or remembered_setup(self.settings)
         idx = next((i for i, s in enumerate(self.setups) if pick and s.source.lower() == str(pick).lower()), 0)
         if self.setups:
             self.setup_box.setCurrentIndex(idx)
@@ -1542,7 +1735,12 @@ class Launcher(FluentWindow):
         self.setup = s
         if not s:
             self.setup_hint.setText(
-                "Browse to a .me3 profile, or to an installation.json from a launcher such as Nightreign Revive."
+                f"No me3 profile for {self.game.name} yet. Create one on the Mods page, or Browse to a .me3 profile"
+                + (
+                    ", or to an installation.json from a launcher such as Nightreign Revive."
+                    if self.game is games.ELDEN_RING
+                    else "."
+                )
             )
             self.setup_exp.card.setContent("None")
             self.setup_exp.setExpand(True)
@@ -1558,7 +1756,7 @@ class Launcher(FluentWindow):
             self.setup_exp.card.setContent("Cannot launch")
         else:
             me3 = s.me3_path()
-            game = Path(s.exe).name if s.exe else "Elden Ring"
+            game = Path(s.exe).name if s.exe else s.game.name
             self.setup_hint.setText(f"{me3.name if me3 else 'me3 not found'}  ·  {game}")
             self.setup_hint.setToolTip(s.summary())
             self.setup_exp.card.setContent(s.label)
@@ -1571,10 +1769,10 @@ class Launcher(FluentWindow):
         self._update_plan()
         if getattr(self, "me3_line", None) is not None:
             self._refresh_me3()
-        remembered = str(self.settings.get("setup") or "")
+        remembered = str(remembered_setup(self.settings) or "")
         if remembered.lower() != s.source.lower():
-            save_settings(setup=s.source)
-            self.settings["setup"] = s.source
+            remember_setup(s.source, s.game)
+            self.settings = load_settings()
 
     def _update_plan(self):
         s = self.setup
@@ -1646,17 +1844,22 @@ class Launcher(FluentWindow):
                 sp.setEnabled(False)
             self._refresh_coop_actions()
             return
+        self.pw_card.setVisible(has_password(ini))  # Nightreign's Seamless Co-op has no password
         self.pw_file = read_password(ini)
         self.pw.blockSignals(True)
         self.pw.setText(self.pw_file or "")
         self.pw.blockSignals(False)
         self._on_pw_edit()
-        self.scaling_file = read_scaling(ini)
+        self.scaling = scaling_spec(ini)
+        self.scaling_file = read_scaling(ini, self.scaling) if self.scaling else None
+        self._show_scaling(self.scaling)
         if self.scaling_file is None:
             self.preset.setEnabled(False)
-            self.scal_hint.setText("No [SCALING] section in this ersc_settings.ini.")
+            for sp in self.spins:
+                sp.setEnabled(False)
+            self.scal_hint.setText(f"No difficulty values in {ini.name}.")
         else:
-            name = preset_of(self.scaling_file)
+            name = preset_of(self.scaling_file, self.scaling)
             self.preset.blockSignals(True)
             self.preset.setCurrentText(name)
             self.preset.blockSignals(False)
@@ -1776,8 +1979,29 @@ class Launcher(FluentWindow):
         self._refresh_coop_actions()
         self._update_plan()
 
+    def _show_scaling(self, spec):
+        """Labels, visible fields and presets for this ini's set of difficulty keys (six for Elden Ring, three for
+        Nightreign)."""
+        n = len(spec.keys) if spec else len(self.spins)
+        labels = spec.labels if spec else SCALING_LABELS
+        for i, (lab, sp) in enumerate(zip(self.scal_labs, self.spins, strict=True)):
+            lab.setVisible(i < n)
+            sp.setVisible(i < n)
+            if i < n:
+                lab.setText(labels[i])
+        presets = list(spec.presets) if spec else []
+        self.preset.blockSignals(True)
+        self.preset.clear()
+        self.preset.addItems(presets + [CUSTOM])
+        self.preset.blockSignals(False)
+        self.preset.setEnabled(bool(presets))
+        self.preset_row.setVisible(bool(presets))
+        if spec:
+            self.scal_about.setText(spec.hint)
+
     def _scaling_values(self):
-        return tuple(sp.value() for sp in self.spins)
+        n = len(self.scaling.keys) if self.scaling else len(self.spins)
+        return tuple(sp.value() for sp in self.spins[:n])
 
     def _set_spins(self, values, enabled):
         for sp, v in zip(self.spins, values):
@@ -1789,8 +2013,9 @@ class Launcher(FluentWindow):
     def _on_preset(self, name):
         if self.scaling_file is None:
             return
-        if name in SCALING_PRESETS:
-            self._set_spins(SCALING_PRESETS[name], False)
+        presets = self.scaling.presets if self.scaling else SCALING_PRESETS
+        if name in presets:
+            self._set_spins(presets[name], False)
         else:
             self._set_spins(self._scaling_values() or self.scaling_file, True)
         self._on_scaling_edit()
@@ -1864,19 +2089,21 @@ class Launcher(FluentWindow):
             wrote.append("Password")
         if self.scaling_file is not None and self._scaling_values() != self.scaling_file:
             vals = self._scaling_values()
-            missing = write_keys(self.ini, dict(zip(SCALING_KEYS, vals)))
+            keys = self.scaling.keys if self.scaling else SCALING_KEYS
+            labels = self.scaling.labels if self.scaling else SCALING_LABELS
+            missing = write_keys(self.ini, dict(zip(keys, vals, strict=True)))
             if missing:
-                self._toast("Missing keys", "Not in ersc_settings.ini: " + ", ".join(missing), error=True)
+                self._toast("Missing keys", f"Not in {self.ini.name}: " + ", ".join(missing), error=True)
                 return None
             self.scaling_file = vals
             self._on_scaling_edit()
-            self._log("scaling changed to " + ", ".join(f"{l} {v}%" for l, v in zip(SCALING_LABELS, vals)))
+            self._log("scaling changed to " + ", ".join(f"{l} {v}%" for l, v in zip(labels, vals, strict=True)))
             wrote.append("Difficulty")
         if self.all_dirty:
             labels = [label_of(k) for k in self.all_dirty]
             missing = write_keys(self.ini, dict(self.all_dirty))
             if missing:
-                self._toast("Missing keys", "Not in ersc_settings.ini: " + ", ".join(missing), error=True)
+                self._toast("Missing keys", f"Not in {self.ini.name}: " + ", ".join(missing), error=True)
                 return None
             self._log("settings changed: " + ", ".join(f"{k}={v}" for k, v in self.all_dirty.items()))
             wrote.extend(labels)
@@ -1991,6 +2218,8 @@ class Launcher(FluentWindow):
         threading.Thread(target=work, daemon=True).start()
 
     def _fill_saves(self, infos):
+        # A scan started before a tab switch can land after it: keep only this game's saves.
+        infos = [i for i in infos if games.for_save(i["path"]) in (self.game, None)]
         self.saves = infos
         for w in getattr(self, "_save_cards", []):
             self.saves_lay.removeWidget(w)
@@ -2001,11 +2230,16 @@ class Launcher(FluentWindow):
             note = count_label(len(infos), "save")
             if n_bad and not self.game_running:
                 note += f"  ·  {n_bad} can be repaired for editors"
+            if self.game.save_reader == "container":
+                note += (
+                    f"  ·  {self.game.name} encrypts its saves, so characters and repairs are not shown yet. "
+                    "Backups, restore, and copies between the co-op and standard save work."
+                )
             self.saves_note.setText(note)
             self.saves_note.setToolTip(str(infos[0]["path"].parent))
             tone_label(self.saves_note, "muted")
         else:
-            self.saves_note.setText("No Elden Ring saves in this Windows account.")
+            self.saves_note.setText(f"No {self.game.name} saves in this Windows account.")
             self.saves_note.setToolTip("")
             tone_label(self.saves_note)
         self._update_saves_badge(sum(1 for s in infos if repair_available(s)) if not self.game_running else 0)
@@ -2082,7 +2316,7 @@ class Launcher(FluentWindow):
                 table_h = t.horizontalHeader().height() + 38 * max(1, len(s["characters"])) + 8
                 t.setFixedHeight(table_h)
                 cl.addWidget(t)
-            else:
+            elif not any(f.get("code") == "contents" for f in s.get("findings") or []):
                 cl.addWidget(hint("No active characters in this file."))
 
             notes = save_check_notes(s)
@@ -2131,7 +2365,18 @@ class Launcher(FluentWindow):
         pick = next((s for s in ordered if s["kind"] == "Seamless Co-op" and s["characters"]), None) or next(
             (s for s in ordered if s["characters"]), None
         )
-        if pick and pick["characters"]:
+        contents_unread = [s for s in ordered if any(f.get("code") == "contents" for f in s.get("findings") or [])]
+        if contents_unread and not (pick and pick["characters"]):
+            newest = max(contents_unread, key=lambda s: str(s.get("modified")))
+            self.hero.name.setText(self.game.name)
+            self.hero.sub.setText(f"Last saved {newest['modified']}")
+            self.stat_level.setVisible(False)  # no character data to show for this game yet
+            self.stat_body.setVisible(False)
+            self.stat_save.value.setText("Co-op" if newest["kind"] == "Seamless Co-op" else newest["kind"])
+            self.stat_save.value.setToolTip(newest["kind"])
+        elif pick and pick["characters"]:
+            self.stat_level.setVisible(True)
+            self.stat_body.setVisible(True)
             ch = pick["characters"][0]
             self.hero.name.setText(ch["name"])
             extra = f"  ·  {len(pick['characters'])} characters" if len(pick["characters"]) > 1 else ""
@@ -2142,6 +2387,8 @@ class Launcher(FluentWindow):
             self.stat_body.value.setText(ch["body"])
             self.stat_body.value.setToolTip(ch["body"])
         else:
+            self.stat_level.setVisible(True)
+            self.stat_body.setVisible(True)
             self.hero.name.setText("No characters yet")
             self.hero.sub.setText("Your saves show here once you have played.")
             for s in (self.stat_level, self.stat_save, self.stat_body):
@@ -2159,7 +2406,7 @@ class Launcher(FluentWindow):
         if self.busy or self.game_running:
             self._toast(
                 "Cannot convert now",
-                "Close Elden Ring first." if self.game_running else "Wait for the current job.",
+                f"Close {self.game.name} first." if self.game_running else "Wait for the current job.",
                 error=True,
             )
             return
@@ -2207,7 +2454,7 @@ class Launcher(FluentWindow):
         if self.busy or self.game_running:
             self._toast(
                 "Cannot convert now",
-                "Close Elden Ring first." if self.game_running else "Wait for the current job.",
+                f"Close {self.game.name} first." if self.game_running else "Wait for the current job.",
                 error=True,
             )
             return
@@ -2221,7 +2468,7 @@ class Launcher(FluentWindow):
             "Make a Seamless Co-op copy",
             changes=changes,
             safety="Anything overwritten goes into sl2-to-co2-backups first, with a copy of the source.",
-            detail="Seamless Co-op reads ER0000.co2. Your standard progress continues in co-op from this copy.",
+            detail=f"Seamless Co-op reads {dest.name}. Your standard progress continues in co-op from this copy.",
             apply_text="Copy",
         ):
             return
@@ -2263,8 +2510,8 @@ class Launcher(FluentWindow):
         if not p:
             why = {
                 "me3": "me3 was not found on this PC. Set it under Locations, or install it.",
-                "game": "The game folder is unknown: Steam did not report Elden Ring, and no game exe is set under Locations.",
-                "saves": "No Elden Ring save folder in this Windows account yet.",
+                "game": f"The game folder is unknown: Steam did not report {self.game.name}, and no game exe is set under Locations.",
+                "saves": f"No {self.game.name} save folder in this Windows account yet.",
                 "profile": "Pick a setup on Play first.",
                 "mods": "Pick a setup on Play first.",
             }.get(key, "Unknown folder.")
@@ -2278,23 +2525,32 @@ class Launcher(FluentWindow):
         b.clicked.connect(lambda _=False, k=key, l=label: self._open_place(k, l))
         return b
 
+    def _location_value(self, key):
+        """A Locations value; the game executable is the active game's own."""
+        if key == "game_exe":
+            return str(game_setting(self.settings, self.game.key, "game_exe") or "")
+        return str(self.settings.get(key) or "")
+
     def _pick_location(self, key, is_dir, filt):
         if is_dir:
-            p = QFileDialog.getExistingDirectory(self, "Pick the folder", str(self.settings.get(key) or ""))
+            p = QFileDialog.getExistingDirectory(self, "Pick the folder", self._location_value(key))
         else:
             p, _ = QFileDialog.getOpenFileName(
-                self, "Pick the file", str(self.settings.get(key) or ""), filt + ";;All files (*)"
+                self, "Pick the file", self._location_value(key), filt + ";;All files (*)"
             )
         if p:
             self._set_location(key, p)
 
     def _set_location(self, key, value):
-        save_settings(**{key: value})
-        self.settings[key] = value
+        if key == "game_exe":
+            save_game_settings(self.game.key, game_exe=value)
+        else:
+            save_settings(**{key: value})
+        self.settings = load_settings()
         apply_overrides(self.settings)
         self.loc[key].setText(value or "detected")
         self.loc[key].setToolTip(value)
-        self.setups = discover(self.settings.get("setup"))
+        self.setups = discover(remembered_setup(self.settings)) if self.game.ready else []
         self._fill_setups()
         self._refresh_me3()
         self._fill_mods()
@@ -2379,7 +2635,7 @@ class Launcher(FluentWindow):
         if self.busy or self.game_running:
             self._toast(
                 "Cannot update now",
-                "Close Elden Ring first." if self.game_running else "Wait for the current job.",
+                f"Close {self.game.name} first." if self.game_running else "Wait for the current job.",
                 error=True,
             )
             return
@@ -2524,7 +2780,7 @@ class Launcher(FluentWindow):
             r = ghost_btn("Restore", FI.RETURN)
             r.setEnabled(not self.game_running and not self.busy)
             r.setToolTip(
-                "Close Elden Ring first."
+                f"Close {self.game.name} first."
                 if self.game_running
                 else "Put this copy back over the live save. The current file is copied first."
             )
@@ -2558,7 +2814,7 @@ class Launcher(FluentWindow):
         if self.busy or self.game_running:
             self._toast(
                 "Cannot restore now",
-                "Close Elden Ring first." if self.game_running else "Wait for the current job.",
+                f"Close {self.game.name} first." if self.game_running else "Wait for the current job.",
                 error=True,
             )
             return
@@ -2608,7 +2864,7 @@ class Launcher(FluentWindow):
         if self.busy or self.game_running:
             self._toast(
                 "Cannot undo now",
-                "Close Elden Ring first." if self.game_running else "Wait for the current job.",
+                f"Close {self.game.name} first." if self.game_running else "Wait for the current job.",
                 error=True,
             )
             return
@@ -3154,7 +3410,7 @@ class Launcher(FluentWindow):
             )
         if self.game_running:
             self.ws_note.setText(
-                "Elden Ring is running. You can review and tick, but nothing is written until you quit the game."
+                f"{self.game.name} is running. You can review and tick, but nothing is written until you quit the game."
                 + (f"  ({len(keys)} ticked)" if keys else "")
             )
         elif self.busy:
@@ -3164,7 +3420,7 @@ class Launcher(FluentWindow):
         self.ws_apply.setEnabled(bool(keys) and not self.busy and not self.game_running)
         self.ws_apply.setText("Apply" if not keys else f"Apply {len(keys)}")
         self.ws_apply.setToolTip(
-            "Close Elden Ring first."
+            f"Close {self.game.name} first."
             if self.game_running
             else ("Wait for the current job." if self.busy else "Write the ticked changes, after one more confirm.")
         )
@@ -3173,7 +3429,7 @@ class Launcher(FluentWindow):
         if self.busy or self.game_running:
             self._toast(
                 "Cannot apply now",
-                "Close Elden Ring first." if self.game_running else "Wait for the current job.",
+                f"Close {self.game.name} first." if self.game_running else "Wait for the current job.",
                 error=True,
             )
             return
@@ -3296,7 +3552,9 @@ class Launcher(FluentWindow):
             self._ws_recount()
         if status:
             self.status.setText(status)
-        self.setWindowTitle(f"{TITLE} {VERSION}" + (f" - {status}" if busy and status else ""))
+        if getattr(self, "game_tabs", None) is not None:
+            self.game_tabs.setEnabled(not busy)  # never switch games under a running job
+        self.setWindowTitle(self._base_title() + (f" - {status}" if busy and status else ""))
 
     def _on_done(self, ok, status):
         self.set_busy(False, f"{status} at {datetime.datetime.now():%H:%M}")
@@ -3344,9 +3602,9 @@ class Launcher(FluentWindow):
             if probs:
                 self._toast("Cannot launch", "\n".join(probs), error=True)
                 return
-            save_settings(setup=s.source)
+            remember_setup(s.source, s.game)
         if self.game_running and job is not job_clear:
-            self._toast("Elden Ring is already running", "Close it first.", error=True)
+            self._toast(f"{self.game.name} is already running", "Close it first.", error=True)
             return
         self.set_busy(True, status)
         self.log_pane.banner(status)
@@ -3389,7 +3647,7 @@ class Launcher(FluentWindow):
             self.play_btn.setEnabled(not r and self.setup is not None and not self.setup.problems())
             if changed:
                 self._pill("Game running" if r else "Ready", "warning" if r else "success")
-                self.status.setText("Elden Ring is running, Play is off until you quit." if r else "")
+                self.status.setText(f"{self.game.name} is running, Play is off until you quit." if r else "")
 
     def _on_steam(self, running, signed):
         """Steam running but not signed in for 20 s: say why Play would hang, and offer offline play."""
@@ -3420,10 +3678,11 @@ class Launcher(FluentWindow):
             self.steam_bar = None
 
     def _on_shells(self, n):
-        """Dead eldenring.exe shells make Steam and Discord think the game is still open."""
+        """Dead copies of the game's exe make Steam and Discord think the game is still open."""
         show = n > 0 and not self.game_running and not self.busy and bool(self.settings.get("warn_dead_shells", True))
         if show and self.shells_bar is None:
-            msg = f"{n} leftover eldenring.exe process{'es' if n != 1 else ''} with no game window. Steam may refuse to launch."
+            exe = core.common.game_exe_name()
+            msg = f"{n} leftover {exe} process{'es' if n != 1 else ''} with no game window. Steam may refuse to launch."
             bar = InfoBar.warning(
                 "Dead game process", msg, isClosable=True, duration=-1, position=InfoBarPosition.TOP, parent=self
             )

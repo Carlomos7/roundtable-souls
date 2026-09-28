@@ -1,4 +1,8 @@
-"""The Seamless Co-op ini: password, difficulty scaling, every setting typed from its comment, and the whole-file share JSON."""
+"""The Seamless Co-op ini: password, difficulty scaling, every setting typed from its comment, and the whole-file share JSON.
+
+Elden Ring's Seamless Co-op (ersc.dll) and Nightreign's (nrsc.dll) use the same ini format with different keys:
+Nightreign's has no password and scales with three values instead of six. ScalingSpec says which keys a file has.
+"""
 
 from __future__ import annotations
 
@@ -6,8 +10,10 @@ import datetime
 import json
 import re
 import tomllib
+from dataclasses import dataclass
 from pathlib import Path
 
+from roundtable_souls import games
 from roundtable_souls.files import atomic_write
 
 
@@ -33,8 +39,13 @@ def _profile_rows(text: str):
     return out
 
 
-def ersc_ini_for(profile: str) -> Path | None:
-    """The ersc_settings.ini of the Seamless Co-op dll this profile loads (paths in .me3 are relative to it)."""
+def coop_ini_for(profile: str, game: games.Game | None = None) -> Path | None:
+    """The settings ini of the Seamless Co-op dll this profile loads (paths in .me3 are relative to it): ersc.dll and
+    ersc_settings.ini for Elden Ring, nrsc.dll and nrsc_settings.ini for Nightreign. None for games without one."""
+    game = game or games.ELDEN_RING
+    if not game.coop_dll or not game.coop_ini:
+        return None
+    dll = game.coop_dll.lower()
     try:
         text = Path(profile).read_text(encoding="utf-8", errors="replace")
     except OSError:
@@ -47,17 +58,22 @@ def ersc_ini_for(profile: str) -> Path | None:
             for kind, row in rows
             if kind == "native"
             and row.get("enabled", True) is not False
-            and Path(str(row.get("path") or "")).name.lower() == "ersc.dll"
+            and Path(str(row.get("path") or "")).name.lower() == dll
         ]
     if not paths:
-        paths = re.findall(r"""(?m)^[^#\n]*path\s*=\s*['"]([^'"]*ersc\.dll)['"]""", text, re.I)
+        paths = re.findall(r"""(?m)^[^#\n]*path\s*=\s*['"]([^'"]*""" + re.escape(dll) + r""")['"]""", text, re.I)
     for raw in paths:
         p = Path(raw)
         p = p if p.is_absolute() else Path(profile).parent / p
-        ini = p.parent / "ersc_settings.ini"
+        ini = p.parent / game.coop_ini
         if ini.is_file():
             return ini
     return None
+
+
+def ersc_ini_for(profile: str) -> Path | None:
+    """Elden Ring's Seamless Co-op ini for this profile."""
+    return coop_ini_for(profile, games.ELDEN_RING)
 
 
 PW_RE = re.compile(
@@ -72,6 +88,11 @@ def _read(ini: Path) -> str:
 
 def _write(ini: Path, text: str):
     atomic_write(ini, text, backup=True)  # ersc_settings.ini.bak = the version before this write
+
+
+def has_password(ini: Path) -> bool:
+    """Whether this ini has a cooppassword line at all (Nightreign's Seamless Co-op has none)."""
+    return bool(PW_RE.search(_read(ini)))
 
 
 def read_password(ini: Path) -> str | None:
@@ -112,6 +133,37 @@ SCALING_PRESETS = {  # % per extra player (Seamless applies each value once per 
 CUSTOM = "Custom"
 
 
+@dataclass(frozen=True)
+class ScalingSpec:
+    """The difficulty keys one Seamless Co-op flavour uses, their labels, and the presets offered for them."""
+
+    keys: tuple[str, ...]
+    labels: tuple[str, ...]
+    presets: dict
+    hint: str
+
+
+ELDEN_RING_SCALING = ScalingSpec(
+    SCALING_KEYS, SCALING_LABELS, SCALING_PRESETS, "Percent per extra player. Only the host's numbers count."
+)
+NIGHTREIGN_SCALING = ScalingSpec(
+    ("health_scaling", "damage_scaling", "posture_scaling"),
+    ("Enemy HP", "Enemy damage", "Enemy posture"),
+    {},
+    "Percent, as Seamless Co-op for Nightreign reads them. Only the host's numbers count.",
+)
+SCALING_SPECS = (ELDEN_RING_SCALING, NIGHTREIGN_SCALING)
+
+
+def scaling_spec(ini: Path) -> ScalingSpec | None:
+    """Which set of difficulty keys this ini has, or None when it has neither complete set."""
+    text = _read(ini)
+    for spec in SCALING_SPECS:
+        if all(_key_re(k).search(text) for k in spec.keys):
+            return spec
+    return None
+
+
 def _key_re(key):
     return re.compile(r"^([ \t]*" + re.escape(key) + r"[ \t]*=[ \t]*)(.*?)([ \t]*)(?=\r?$)", re.M | re.I)
 
@@ -141,16 +193,21 @@ def write_keys(ini: Path, values: dict):
     return missing
 
 
-def read_scaling(ini: Path):
-    vals = read_keys(ini, SCALING_KEYS)
+def read_scaling(ini: Path, spec: ScalingSpec | None = None):
+    """The difficulty values in key order, or None when the ini has no complete set (or a value is not a number)."""
+    spec = spec or scaling_spec(ini)
+    if spec is None:
+        return None
+    vals = read_keys(ini, spec.keys)
     try:
-        return tuple(int(vals[k]) for k in SCALING_KEYS)
+        return tuple(int(vals[k]) for k in spec.keys)
     except KeyError, ValueError:
         return None
 
 
-def preset_of(values):
-    return next((n for n, v in SCALING_PRESETS.items() if tuple(v) == tuple(values)), CUSTOM)
+def preset_of(values, spec: ScalingSpec | None = None):
+    presets = (spec or ELDEN_RING_SCALING).presets
+    return next((n for n, v in presets.items() if tuple(v) == tuple(values)), CUSTOM)
 
 
 SECTION_TITLES = {

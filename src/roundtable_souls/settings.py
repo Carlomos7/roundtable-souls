@@ -67,7 +67,9 @@ class LauncherSettings(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    setup: str | None = None
+    setup: str | None = None  # Elden Ring's remembered setup; other games keep theirs under `games`
+    game: str = "eldenring"  # the tab the window opens on
+    games: dict[str, dict[str, Any]] = Field(default_factory=dict)  # per-game values for games other than Elden Ring
     theme: Literal["dark", "light"] = "dark"
     logo: Literal["auto", "dark", "light"] = "auto"
 
@@ -130,6 +132,30 @@ def save_settings(**changes: Any) -> None:
         tmp.replace(path)
     except OSError:
         pass
+
+
+GAME_KEYS = ("setup", "game_exe")  # values each game keeps for itself
+
+
+def game_setting(settings: dict[str, Any], game: str, key: str, default: Any = None) -> Any:
+    """One per-game value. Elden Ring's live at the top level, where builds before multi-game support kept them, so
+    an older build still finds them; every other game keeps its own under `games`."""
+    if game == "eldenring":
+        value = settings.get(key)
+    else:
+        value = ((settings.get("games") or {}).get(game) or {}).get(key)
+    return default if value is None else value
+
+
+def save_game_settings(game: str, **changes: Any) -> None:
+    """Merge per-game values for one game into the file."""
+    if game == "eldenring":
+        save_settings(**changes)
+        return
+    current = load_settings()
+    games = dict(current.get("games") or {})
+    games[game] = {**(games.get(game) or {}), **changes}
+    save_settings(games=games)
 
 
 @lru_cache

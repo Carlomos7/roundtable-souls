@@ -2,6 +2,13 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
+## [Unreleased]
+
+- Games: tabs at the top of the window pick the game every page works on. Elden Ring and Nightreign are supported; Dark Souls III and Sekiro have placeholder tabs that only show what was found on the PC. Settings stays shared, and each game remembers its own setup and custom game exe.
+- Nightreign: Play through me3 (online, or offline without Seamless Co-op), its me3 profiles and mods, and its Seamless Co-op settings (three difficulty values, no password in that mod). Saves are listed with a structure check, backups, restore, and copies between the co-op and standard save; Nightreign encrypts its saves, so characters are not shown.
+- `--game <name>` picks the game for `--play` and `--check`, or the tab the window opens on for that run. Settings > Steam shortcut shows the launch options for the game on screen, one shortcut per game. An unknown name lists the valid ones.
+- me3 profiles are listed under the game they name in `[[supports]]`; a profile that names none counts as Elden Ring's. Picking a profile made for another game says so instead of launching it.
+
 ## [3.3.0] - 2026-09-27
 
 - Saves: items the installed game defines always count as game items, read from the game's own regulation.bin. The Tarnished Edition pack's gear is recognised exactly, whether or not a character owns the pack; the guess based on the pack flag is only used when the game is not on this PC.
