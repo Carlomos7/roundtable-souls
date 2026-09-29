@@ -10,7 +10,10 @@ QtTest = pytest.importorskip("PySide6.QtTest")
 from PySide6.QtCore import Qt  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
+from roundtable_souls.system import common as _common  # noqa: E402
 from roundtable_souls.ui import window  # noqa: E402
+
+REAL_SAVE_FILES = _common.save_files
 
 QTest = QtTest.QTest
 
@@ -168,3 +171,286 @@ def test_ctrl_tab_cycles_games(launcher, app):
     for _ in range(5):
         app.processEvents()
     assert launcher.game is games.ELDEN_RING
+
+
+SANDBOX_PROFILE = (
+    'profileVersion = "v1"\n\n[[supports]]\ngame = "eldenring"\n\n'
+    "[[natives]]\npath = 'natives/SeamlessCoop/ersc.dll'\nload_early = true\n"
+)
+SANDBOX_INI = "[PASSWORD]\ncooppassword = start\n[SCALING]\nenemy_health_scaling = 35\n"
+
+
+@pytest.fixture
+def sandbox(app, monkeypatch, tmp_path):
+    """The real window pointed at a temp me3 profile and co-op ini, with no saves, so tests can type and save."""
+    from roundtable_souls.system import common
+
+    profiles = tmp_path / "profiles"
+    seamless = profiles / "natives" / "SeamlessCoop"
+    seamless.mkdir(parents=True)
+    (seamless / "ersc.dll").write_bytes(b"d")
+    (seamless / "ersc_settings.ini").write_text(SANDBOX_INI, encoding="utf-8")
+    (profiles / "sandbox.me3").write_text(SANDBOX_PROFILE, encoding="utf-8")
+    monkeypatch.setattr(common, "me3_profiles_dir", lambda: profiles)
+    monkeypatch.setattr(common, "save_files", lambda game=None: [])
+    monkeypatch.setattr(window, "launcher_update", lambda *a, **k: None)
+    monkeypatch.setattr(window, "me3_facts", lambda setup: {"version": None, "info": {}, "latest": None})
+    monkeypatch.setattr(window.Launcher, "launch", lambda self: None)
+    monkeypatch.setattr(window.Launcher, "_watch_game", lambda self: None)
+    w = window.Launcher()
+    w.resize(1080, 760)
+    w.show()
+    QTest.qWait(300)
+    w.profiles = profiles
+    yield w
+    w.hide()
+    w.deleteLater()
+    app.processEvents()
+
+
+def test_save_rows_use_one_button_size(sandbox):
+    w = sandbox
+    pairs = [
+        (w.save_bar.primary, w.save_bar.secondary),
+        (w.profile_panel.bar.primary, w.profile_panel.bar.secondary),
+        (w.share_panel.bar.primary, w.share_panel.bar.secondary),
+    ]
+    heights = {b.height() for pair in pairs for b in pair if b.isVisible()}
+    heights |= {b.minimumHeight() for pair in pairs for b in pair}
+    assert heights == {36}, heights  # primary and secondary alike, in every save row
+
+
+def test_profile_editor_saves_and_discards_in_its_own_footer(sandbox):
+    w = sandbox
+    panel, path = w.profile_panel, w.profiles / "sandbox.me3"
+    assert not panel.dirty and not panel.bar.primary.isEnabled()
+    panel.edit.setPlainText(panel.text() + "# note\n")
+    assert panel.dirty and panel.bar.primary.isEnabled() and "Not saved" in panel.bar.note.text()
+    QTest.mouseClick(panel.bar.secondary, Qt.LeftButton)  # Discard reads the file again
+    assert not panel.dirty and "# note" not in panel.text()
+    panel.edit.setPlainText(panel.text() + "# kept\n")
+    QTest.mouseClick(panel.bar.primary, Qt.LeftButton)
+    QTest.qWait(50)
+    assert "# kept" in path.read_text(encoding="utf-8") and not panel.dirty
+
+
+def test_closing_with_unsaved_edits_asks_save_discard_or_cancel(sandbox, monkeypatch):
+    w = sandbox
+    ini = w.profiles / "natives" / "SeamlessCoop" / "ersc_settings.ini"
+    w._do_page_fill(w._page_fill_token)
+    w.pw.setText("changed")
+    asked = []
+    monkeypatch.setattr(window, "ask_unsaved", lambda parent, what, action: asked.append(what) or None)
+    w.close()
+    assert w.isVisible() and asked and "Password" in asked[0][0]  # Cancel keeps the window open
+    monkeypatch.setattr(window, "ask_unsaved", lambda parent, what, action: "discard")
+    w.close()
+    assert not w.isVisible() and "cooppassword = start" in ini.read_text(encoding="utf-8")  # nothing written
+
+
+def test_update_notice_fits_a_narrow_window(sandbox, monkeypatch):
+    w = sandbox
+    monkeypatch.setattr(window, "FROZEN", True)
+    monkeypatch.setattr(window, "can_self_update", lambda *a, **k: True)
+    w.resize(740, 640)
+    QTest.qWait(100)
+    w._on_update({"version": "9.9.9", "url": "https://example.invalid"})
+    QTest.qWait(400)
+    from qfluentwidgets import InfoBar
+
+    bars = [b for b in w.findChildren(InfoBar) if b.isVisible()]
+    assert bars and all(b.width() <= w.width() for b in bars)
+
+
+def test_saves_page_names_the_file_play_uses_and_lists_the_library(sandbox, monkeypatch, tmp_path):
+    from PySide6.QtCore import QEventLoop, QTimer
+
+    from roundtable_souls import games
+    from roundtable_souls.saves import library, regulation
+    from roundtable_souls.system import common
+
+    acct = tmp_path / "EldenRing" / "7656"
+    acct.mkdir(parents=True)
+    data = bytearray(regulation.FILE_SIZE)
+    data[:4] = b"BND4"
+    (acct / "ER0000.sl2").write_bytes(bytes(data))
+    monkeypatch.setattr(common, "save_roots", lambda game=None: [tmp_path / "EldenRing"])
+    monkeypatch.setattr(common, "save_files", REAL_SAVE_FILES)  # the sandbox hides saves; this test brings its own
+    library.add(acct, acct / "ER0000.sl2", "first run", games.ELDEN_RING)
+    w = sandbox
+    w._on_setup()  # the sandbox setup loads Seamless Co-op, so Play uses the co-op save
+    assert w._saves_in_use["active"] == "ER0000.co2" and w._save_role("ER0000.co2") == "Play uses this"
+    assert w._save_role("ER0000.sl2") == "Play offline uses this"
+    w.refresh_saves()
+    loop = QEventLoop()
+    for _ in range(100):  # the read runs on a worker thread
+        if w.saves:
+            break
+        QTimer.singleShot(50, loop.quit)
+        loop.exec()
+    assert [s["name"] for s in w.saves] == ["ER0000.sl2"]
+    targets = [t.name for _label, t in w._save_targets(acct)]
+    assert targets == ["ER0000.sl2", "ER0000.co2"]  # the co-op file does not exist yet but can be swapped into
+    assert "1 saved copy" in w.library_note.text() and w.library_rows.count() == 1
+
+
+def test_folder_of_mods_entry_shows_as_its_folder_and_can_be_removed(sandbox, monkeypatch):
+    from roundtable_souls.mods import manage
+
+    w = sandbox
+    prof = w.profiles / "sandbox.me3"
+    (w.profiles / "mod" / "hud" / "menu").mkdir(parents=True)
+    (w.profiles / "mod" / "skin" / "parts").mkdir(parents=True)
+    prof.write_text(
+        prof.read_text(encoding="utf-8")
+        + "\n[[packages]]\nid = \"all\"\npath = 'mod'\n\n[[packages]]\nid = \"hud\"\npath = 'mod/hud'\n",
+        encoding="utf-8",
+    )
+    w.switchTo(w.mods_page)
+    w._fill_mods()
+    QTest.qWait(100)
+    assert w.pack_exp.card.contentLabel.text() == "1 loaded"  # the folder entry is not counted as a mod
+    labels = [lab.full_text() for lab in w.pack_exp.findChildren(window.ElideLabel)]
+    assert "all" not in labels and "hud" in labels and "mod" in labels  # shown as the folder it is
+    from PySide6.QtWidgets import QAbstractButton
+
+    buttons = [b for b in w.pack_exp.findChildren(QAbstractButton) if b.isVisible()]
+    assert any(b.text() == "Not loaded (1)" for b in buttons)
+    remove = next(b for b in buttons if b.toolTip().startswith("Remove 'all'"))  # the trash in the delete column
+    monkeypatch.setattr(window, "confirm", lambda *a, **k: True)
+    QTest.mouseClick(remove, Qt.LeftButton)
+    QTest.qWait(100)
+    assert [e["name"] for e in manage.entries(prof) if e["kind"] == "package"] == ["hud"]
+    assert (w.profiles / "mod" / "skin").is_dir()  # folders stay
+
+
+def test_mod_actions_follow_the_file_when_it_changed_outside_the_window(sandbox, monkeypatch):
+    from roundtable_souls.mods import manage
+
+    w = sandbox
+    prof = w.profiles / "sandbox.me3"
+    (w.profiles / "natives" / "a.dll").write_bytes(b"a")
+    prof.write_text(prof.read_text(encoding="utf-8") + "\n[[natives]]\npath = 'natives/a.dll'\n", encoding="utf-8")
+    w.switchTo(w.mods_page)
+    w._fill_mods()
+    shown = {e["name"]: e for e in manage.entries(prof)}
+    text = prof.read_text(encoding="utf-8")  # someone adds an entry above both, outside the window
+    (w.profiles / "natives" / "b.dll").write_bytes(b"b")
+    prof.write_text(
+        text.replace("[[natives]]", "[[natives]]\npath = 'natives/b.dll'\n\n[[natives]]", 1), encoding="utf-8"
+    )
+    w._toggle_mod(shown["a.dll"], False)  # the row still holds the old position
+    now = {e["name"]: e["enabled"] for e in manage.entries(prof)}
+    assert now == {"b.dll": True, "ersc.dll": True, "a.dll": False}  # the right entry changed, by name not position
+
+
+def test_saving_the_editor_over_outside_changes_asks_first(sandbox, monkeypatch):
+    w = sandbox
+    prof = w.profiles / "sandbox.me3"
+    w._load_profile_editor(force=True)
+    w.profile_panel.edit.setPlainText(w.profile_panel.text() + "# mine\n")
+    prof.write_text(prof.read_text(encoding="utf-8") + "# theirs\n", encoding="utf-8")
+    asked = []
+    monkeypatch.setattr(window, "confirm", lambda *a, **k: asked.append(a[1]) or False)
+    assert w._save_profile() is False and asked and "changed on disk" in asked[0]
+    assert "# theirs" in prof.read_text(encoding="utf-8") and "# mine" not in prof.read_text(encoding="utf-8")
+    QTest.mouseClick(w.profile_panel.bar.secondary, Qt.LeftButton)  # Discard reads the file again
+    assert "# theirs" in w.profile_panel.text()
+
+
+def test_right_aligned_rows_end_at_the_right_edge_and_wrap(app):
+    from PySide6.QtWidgets import QPushButton
+
+    from roundtable_souls.ui.widgets import action_row
+
+    w, flow = action_row("right")
+    buttons = [QPushButton(t) for t in ("One", "Two", "Three")]
+    for b in buttons:
+        b.setFixedSize(100, 30)
+        flow.addWidget(b)
+    w.resize(400, 80)
+    w.show()
+    QTest.qWait(50)
+    assert buttons[-1].geometry().right() == w.width() - 1 and buttons[0].x() > 0  # one line, pushed right
+    w.resize(230, 120)
+    QTest.qWait(50)
+    assert buttons[2].y() > buttons[0].y() and buttons[2].geometry().right() == w.width() - 1  # wraps, still right
+    w.hide()
+
+
+def test_seamless_settings_button_opens_the_coop_page(sandbox, monkeypatch):
+    w = sandbox
+    w.switchTo(w.mods_page)
+    w._fill_mods()
+    ersc = next(e for e in window.profile_entries(w.setup.profile) if e["name"] == "ersc.dll")
+    opened = []
+    monkeypatch.setattr(window.ConfigFilesDialog, "exec", lambda self: opened.append(self))
+    w._native_settings(ersc)
+    assert w.stackedWidget.currentWidget() is w.coop_page and opened == []  # its ini belongs to the Co-op page
+    (w.profiles / "natives" / "SeamlessCoop" / "ersc.dll").with_name("extra_settings.ini").write_text("a = 1\n")
+    w._native_settings(ersc)
+    assert opened and [f["path"].name for f in opened[0].files] == ["extra_settings.ini"]
+
+
+def _drag(target, paths, kind="enter"):
+    """Send a real drag enter or drop event carrying local files to a widget."""
+    from PySide6.QtCore import QMimeData, QPointF, QUrl
+    from PySide6.QtGui import QDragEnterEvent, QDragMoveEvent, QDropEvent
+
+    md = QMimeData()
+    md.setUrls([QUrl.fromLocalFile(str(p)) for p in paths])
+    point = target.rect().center()
+    events = [QDragEnterEvent(point, Qt.CopyAction, md, Qt.LeftButton, Qt.NoModifier)]
+    if kind == "drop":  # Qt only delivers a drop to a widget the drag entered and moved over
+        events += [
+            QDragMoveEvent(point, Qt.CopyAction, md, Qt.LeftButton, Qt.NoModifier),
+            QDropEvent(QPointF(point), Qt.CopyAction, md, Qt.LeftButton, Qt.NoModifier),
+        ]
+    for e in events:
+        QApplication.sendEvent(target, e)
+    return events[-1], md  # the mime data must outlive the events
+
+
+def test_dropping_mods_on_the_mods_page_installs_each_in_turn(sandbox, monkeypatch, tmp_path):
+    from PySide6.QtCore import QEventLoop, QTimer
+
+    from roundtable_souls.mods import manage
+    from roundtable_souls.system import common
+
+    monkeypatch.setattr(common, "start_log", lambda *a, **k: None)  # the job's log stays out of the real logs folder
+    monkeypatch.setattr(common, "log", lambda *a, **k: None)
+    asked = []
+
+    def answer(dlg):
+        asked.append(dlg.plan["name"])
+        return dlg.validate()
+
+    monkeypatch.setattr(window.InstallDialog, "exec", answer)
+    toasts = []
+    monkeypatch.setattr(window.Launcher, "_toast", lambda self, title, msg, **k: toasts.append(title))
+    w = sandbox
+    dl = tmp_path / "downloads"
+    for name in ("Armor", "Hud"):
+        (dl / name / "parts").mkdir(parents=True)
+        (dl / name / "parts" / "x.partsbnd.dcx").write_bytes(b"p")
+    (dl / "notes.pdf").write_bytes(b"n")
+    w.switchTo(w.mods_page)
+    QTest.qWait(50)
+    paths = [dl / "Armor", dl / "Hud", dl / "notes.pdf"]
+    held = _drag(w.mods_page.viewport(), paths)
+    assert held[0].isAccepted() and w.mods_drop.isVisible()
+    assert w.mods_drop._usable == paths[:2] and w.mods_drop._refused == paths[2:]
+    held = _drag(w.mods_drop, paths, "drop")
+    loop = QEventLoop()
+    prof = w.profiles / "sandbox.me3"
+    for _ in range(200):  # each install runs on a worker thread, then the next one starts
+        if not w.busy and {"armor", "hud"} <= {e["name"] for e in manage.entries(prof)}:
+            break
+        QTimer.singleShot(50, loop.quit)
+        loop.exec()
+    assert asked == ["armor", "hud"] and "Skipped" in toasts, toasts
+    assert (w.profiles / "mod" / "hud" / "parts" / "x.partsbnd.dcx").is_file()
+    for _ in range(20):  # the overlay fades out
+        QTimer.singleShot(50, loop.quit)
+        loop.exec()
+    assert not w.mods_drop.isVisible()

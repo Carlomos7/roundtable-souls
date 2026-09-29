@@ -21,13 +21,13 @@ import threading
 import time
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QEvent, Qt, QTimer
 from PySide6.QtGui import QIcon, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
-    QBoxLayout,
     QFileDialog,
     QFrame,
+    QGraphicsOpacityEffect,
     QGridLayout,
     QHBoxLayout,
     QHeaderView,
@@ -48,10 +48,7 @@ from qfluentwidgets import (
     IconWidget,
     InfoBadge,
     InfoBadgePosition,
-    InfoBar,
-    InfoBarPosition,
     LineEdit,
-    MessageBox,
     NavigationItemPosition,
     PasswordLineEdit,
     SearchLineEdit,
@@ -86,8 +83,6 @@ from roundtable_souls.core import (
     can_self_update,
     character_detail,
     choice_label,
-    convert_co2_to_sl2,
-    convert_sl2_to_co2,
     create_profile,
     dead_shells_count,
     delete_backup,
@@ -128,6 +123,7 @@ from roundtable_souls.core import (
     remembered_setup,
     repair_available,
     repair_save,
+    replan_mod_install,
     report_exception,
     restore_backup,
     restore_vanilla,
@@ -152,18 +148,23 @@ from roundtable_souls.core import (
     write_password,
     write_profile_setting,
 )
+from roundtable_souls.mods import configs as mod_configs
 from roundtable_souls.resources import ASSETS_DIR
 from roundtable_souls.settings import FROZEN, is_installed
+from roundtable_souls.ui.config_files import ConfigFilesDialog
 from roundtable_souls.ui.dialogs import (
     WRITE_SAFETY,
     WRITE_WARNING,
+    ChoiceListDialog,
     ConfirmDialog,
     ModOptionsDialog,
     TextDialog,
+    ask_unsaved,
     confirm,
 )
-from roundtable_souls.ui.editor import code_edit
+from roundtable_souls.ui.install_dialog import InstallDialog
 from roundtable_souls.ui.notes import _save_note_widget, save_check_notes
+from roundtable_souls.ui.save_dialogs import CopyCharacterDialog, CopyFileDialog, SwapDialog
 from roundtable_souls.ui.theme import (
     ACCENT,
     ACCENT_LIGHT,
@@ -175,20 +176,24 @@ from roundtable_souls.ui.theme import (
     ghost_btn,
     hint,
     primary_btn,
-    style_editor,
     style_ghost,
     style_primary,
 )
 from roundtable_souls.ui.widgets import (
+    ActionBar,
     Bus,
+    DropOverlay,
+    EditorPanel,
+    ElideLabel,
     ExpandGroupSettingCard,
     GlassCard,
     HeroBanner,
     LogoPreview,
     LogPane,
     MenuButton,
+    NameWithTag,
     PairRow,
-    SaveBar,
+    PathTag,
     SettingRow,
     StatusMenu,
     action_row,
@@ -197,6 +202,7 @@ from roundtable_souls.ui.widgets import (
     count_label,
     dispose,
     icon_btn,
+    notice,
     page,
     short_problem,
     tidy_log_line,
@@ -204,11 +210,14 @@ from roundtable_souls.ui.widgets import (
     tone_label,
 )
 
+ROW_ACTION_W = 156  # the action button on each Mods row
+
 
 # ----------------------------------------------------------------------------- window
 class Launcher(FluentWindow):
     def __init__(self):
         super().__init__()
+        core.folders.clear_temp()  # unpacks left by an install that crashed
         self.settings = load_settings()
         self.game = use_game(core.STARTUP_GAME or games.get(self.settings.get("game")), self.settings)
         self.bus = Bus()
@@ -277,9 +286,7 @@ class Launcher(FluentWindow):
         self.bus.update_ready.connect(self._on_update_ready)
         self._update_bar = None
         self.bus.conflicts.connect(self._fill_conflicts)
-        core.NOTIFY = lambda title, msg: InfoBar.error(
-            title, msg, duration=-1, position=InfoBarPosition.TOP, parent=self
-        )
+        core.NOTIFY = lambda title, msg: notice(self, "error", title, msg)
         sys.excepthook = lambda t, e, tb: report_exception(t, e, tb, "main thread")
         threading.excepthook = lambda a: report_exception(
             a.exc_type, a.exc_value, a.exc_traceback, f"thread {a.thread.name}"
@@ -374,18 +381,7 @@ class Launcher(FluentWindow):
         if self.busy:
             self._toast("Wait for the current job", "Switch games once it finishes.", info=True)
             return
-        unsaved = []
-        if self.game.ready and self._coop_pending():
-            unsaved.append("co-op settings")
-        if self.game.ready and getattr(self, "profile_save", None) is not None and self.profile_save.isEnabled():
-            unsaved.append("the profile editor")
-        if unsaved and not confirm(
-            self,
-            f"Switch to {g.name} and drop unsaved changes",
-            changes=[f"Unsaved changes in {' and '.join(unsaved)} for {self.game.name} are dropped"],
-            safety="Nothing is written. Stay on this tab and save first if you want to keep them.",
-            apply_text="Switch",
-        ):
+        if self.game.ready and not self._settle_unsaved(f"switching to {g.name}"):
             return
         self._set_game(g, remember=True)
 
@@ -575,8 +571,6 @@ class Launcher(FluentWindow):
             self.game_btn.fit_texts((g.short if compact else g.name) for g in games.GAMES)
             self._sync_game_btn()
         self._layout_scaling(2 if compact else 3)
-        if hasattr(self, "save_box"):
-            self.save_box.setDirection(QBoxLayout.TopToBottom if compact else QBoxLayout.LeftToRight)
         self._set_pads(compact)
         if hasattr(self, "ws_body_lay"):
             self._ws_layout(compact)
@@ -693,36 +687,27 @@ class Launcher(FluentWindow):
         share = ExpandGroupSettingCard(FI.SHARE, "Share with a friend", "Copy yours, or paste a friend's and apply.")
         body = QWidget()
         bl = QVBoxLayout(body)
-        bl.setContentsMargins(16, 8, 16, 12)
-        self.share = code_edit("Paste a friend's settings, or copy yours.", wrap=True, lang="json")
-        self.share.setMinimumHeight(190)
-        bl.addWidget(self.share)
-        row = QHBoxLayout()
-        for text, icon, fn in (
-            ("Copy", FI.COPY, self.share_copy),
-            ("Paste", FI.PASTE, self.share_paste),
-            ("Reset", FI.SYNC, self.share_fill),
-        ):
-            b = ghost_btn(text, icon)
-            b.clicked.connect(fn)
-            row.addWidget(b)
-        row.addStretch()
-        apply = primary_btn("Apply")
-        apply.clicked.connect(self.share_apply)
-        row.addWidget(apply)
-        bl.addLayout(row)
-        row2 = QHBoxLayout()
-        for text, icon, fn in (
-            ("Save file...", FI.DOWNLOAD, self.share_save),
-            ("Load file...", FI.FOLDER, self.share_load),
-        ):
-            b = ghost_btn(text, icon)
-            b.clicked.connect(fn)
-            row2.addWidget(b)
-        row2.addStretch()
-        bl.addLayout(row2)
-        self.share_hint = hint()
-        bl.addWidget(self.share_hint)
+        bl.setContentsMargins(16, 12, 16, 14)
+        self.share_panel = EditorPanel(
+            "Paste a friend's settings, or copy yours.",
+            "Apply",
+            self.share_apply,
+            tools=(
+                ("Copy", FI.COPY, self.share_copy, "Copy the text to send it to a friend."),
+                ("Paste", FI.PASTE, self.share_paste, "Replace the text with what is on the clipboard."),
+                ("Open file...", FI.FOLDER, self.share_load, "Load settings someone saved to a file."),
+                ("Save as...", FI.DOWNLOAD, self.share_save, "Save the text to a file."),
+            ),
+            on_discard=self.share_fill,
+            lang="json",
+            wrap=True,
+            min_height=190,
+            clean_note="Your current settings.",
+            dirty_note="Different from your settings. Apply writes the differences, after a confirm.",
+            primary_tip="Write the settings in the text to your co-op ini (you see every change first).",
+        )
+        self.share = self.share_panel.edit
+        bl.addWidget(self.share_panel)
         share.addGroupWidget(body)
         lay.addWidget(share)
         self.coop_form.append(share)
@@ -730,28 +715,23 @@ class Launcher(FluentWindow):
         wrap = QWidget()
         wl = QVBoxLayout(wrap)
         wl.setContentsMargins(40, 8, 40, 20)
-        self.save_bar = SaveBar()
-        self.save_box = QBoxLayout(QBoxLayout.LeftToRight, self.save_bar)
-        self.save_box.setContentsMargins(20, 12, 16, 12)
-        self.save_box.setSpacing(12)
-        self.all_note = BodyLabel("All changes are saved.")
-        self.all_note.setWordWrap(True)
-        self.save_box.addWidget(self.all_note, 1)
-        acts = QWidget()
-        al = QHBoxLayout(acts)
-        al.setContentsMargins(0, 0, 0, 0)
-        al.setSpacing(8)
-        self.all_discard = ghost_btn("Discard", FI.CANCEL)
-        self.all_discard.setToolTip("Puts the password, difficulty, and other options back to the file.")
-        self.all_discard.clicked.connect(self._discard_coop)
-        al.addWidget(self.all_discard)
-        self.all_save = primary_btn("Save changes")
-        self.all_save.setToolTip("Writes the password, difficulty, and any other options you changed. Ctrl+S.")
-        self.all_save.setMinimumHeight(40)
-        self.all_save.setMinimumWidth(120)
-        self.all_save.clicked.connect(lambda: self._announce_saved(self.save_seamless(), "next"))
-        al.addWidget(self.all_save)
-        self.save_box.addWidget(acts)
+        self.save_bar = ActionBar(
+            "Save",
+            lambda: self._announce_saved(self.save_seamless(), "next"),
+            (
+                "Discard",
+                FI.CANCEL,
+                self._discard_coop,
+                "Put the password, difficulty and other options back to what the file says.",
+            ),
+            note="Saved.",
+        )
+        self.save_bar.primary.setToolTip("Write the password, difficulty and any other options you changed. Ctrl+S.")
+        self.all_note, self.all_save, self.all_discard = (
+            self.save_bar.note,
+            self.save_bar.primary,
+            self.save_bar.secondary,
+        )
         wl.addWidget(self.save_bar)
         outer.addWidget(wrap)
         self.coop_bar = wrap
@@ -760,14 +740,14 @@ class Launcher(FluentWindow):
     # ---------------------------------------------------------------- Mods page
     def _build_mods(self):
         self.mods_page, lay = page("modsPage")
+        self.mods_page.setAcceptDrops(True)
+        self.mods_page.viewport().setAcceptDrops(True)
+        self.mods_drop = DropOverlay(self.mods_page, self._drop_accepts)
+        self.mods_drop.dropped.connect(self._install_paths)
+        QApplication.instance().installEventFilter(self)
         acts, al = action_row()
         self.mods_refresh = ghost_btn("Refresh", FI.SYNC)
         self.mods_refresh.clicked.connect(self._fill_mods)
-        self.profile_save = primary_btn("Save profile")
-        self.profile_save.setToolTip("Writes the me3 file and keeps one .bak. Ctrl+S.")
-        self.profile_save.clicked.connect(self._save_profile)
-        self.profile_save.setEnabled(False)
-        self.profile_save.setVisible(False)
         self.mods_install = ghost_btn("Install mod", FI.DOWNLOAD)
         self.mods_install.setToolTip(
             "A .zip, .7z or .rar, or a folder. Roundtable Souls works out whether it is a package or a DLL and adds it at the end of the load order."
@@ -777,7 +757,7 @@ class Launcher(FluentWindow):
         self.prof_new.setToolTip("A fresh .me3 in me3's profile folder, empty or copied from the current one.")
         self.prof_new.clicked.connect(self._new_profile)
         self.prof_del = ghost_btn("Delete profile", FI.DELETE)
-        self.prof_del.setToolTip("Moves the .me3 into deleted-profiles beside it. Mod folders stay.")
+        self.prof_del.setToolTip("Moves the .me3 into the launcher's deleted profiles. Mod folders stay.")
         self.prof_del.clicked.connect(self._delete_profile)
         al.addWidget(
             self._folder_btn("profile", "Profile folder", FI.FOLDER, "The folder holding this .me3 and its mods.")
@@ -786,7 +766,6 @@ class Launcher(FluentWindow):
         al.addWidget(self.prof_new)
         al.addWidget(self.prof_del)
         al.addWidget(self.mods_refresh)
-        al.addWidget(self.profile_save)
         titled(lay, "Mods", FI.LIBRARY, "What this profile loads.", acts)
         self.mods_note = hint("")
         lay.addWidget(self.mods_note)
@@ -826,8 +805,7 @@ class Launcher(FluentWindow):
         self.ps["mem_patch_heap_size"] = sp
         title, blurb = core.profile_tools.SETTING_TEXT["mem_patch_heap_size"]
         cl.addWidget(SettingRow(title, blurb, sp, blurb))
-        le = PasswordLineEdit()
-        le.setPasswordVisible(True)
+        le = LineEdit()
         le.setClearButtonEnabled(True)
         le.setPlaceholderText(f"{self.game.save_stem}.sl2 (default)")
         le.setMinimumWidth(200)
@@ -868,26 +846,24 @@ class Launcher(FluentWindow):
         edit = ExpandGroupSettingCard(FI.EDIT, "Edit profile", "The me3 file for the setup on Play.")
         body = QWidget()
         bl = QVBoxLayout(body)
-        bl.setContentsMargins(16, 8, 16, 12)
-        self.profile_path = hint("")
-        bl.addWidget(self.profile_path)
-        self.profile_edit = code_edit("The me3 file for the setup on Play.")
-        self.profile_edit.setMinimumHeight(320)
-        self.profile_edit.textChanged.connect(self._profile_dirty)
-        bl.addWidget(self.profile_edit)
-        self.profile_note = hint("Matches the file.")
-        bl.addWidget(self.profile_note)
-        row = QHBoxLayout()
-        self.profile_reload = ghost_btn("Reload file", FI.SYNC)
-        self.profile_reload.clicked.connect(lambda: self._load_profile_editor(force=True))
-        row.addWidget(self.profile_reload)
-        row.addStretch()
-        bl.addLayout(row)
+        bl.setContentsMargins(16, 12, 16, 14)
+        self.profile_panel = EditorPanel(
+            "The me3 file for the setup on Play.",
+            "Save",
+            self._save_profile,
+            on_discard=lambda: self._load_profile_editor(force=True),
+            min_height=320,
+            clean_note="Matches the file.",
+            dirty_note="Edited. Not saved yet.",
+            primary_tip="Write the me3 file; one .bak of the previous version is kept. Ctrl+S.",
+        )
+        self.profile_panel.bar.secondary.setToolTip("Read the file again and drop the edits.")
+        self.profile_edit = self.profile_panel.edit
+        bl.addWidget(self.profile_panel)
         edit.addGroupWidget(body)
         lay.addWidget(edit)
         self.profile_exp = edit
         lay.addStretch(1)
-        self._profile_disk = ""
         self._profile_file = None
         self._profile_crlf = False
 
@@ -904,6 +880,8 @@ class Launcher(FluentWindow):
         sp.blockSignals(True)
         sp.setValue(int(vals.get("mem_patch_heap_size") or 0))
         sp.blockSignals(False)
+        sp.setEnabled(vals.get("mem_patch") is not False)  # me3 only uses it with the memory patch on
+        sp.setToolTip("" if vals.get("mem_patch") is not False else "Turn the memory patch on to use this.")
         le = self.ps["savefile"]
         le.blockSignals(True)
         le.setText(str(vals.get("savefile") or ""))
@@ -921,7 +899,7 @@ class Launcher(FluentWindow):
     def _on_profile_setting(self, key, value):
         if not self.setup or getattr(self, "_loading_setups", False):
             return
-        if self._profile_file is not None and self.profile_edit.toPlainText() != self._profile_disk:
+        if self.profile_panel.dirty:
             self._toast(
                 "Profile has unsaved edits",
                 "Save or reload the profile editor first, then change this setting.",
@@ -1013,10 +991,12 @@ class Launcher(FluentWindow):
             cat.setFixedWidth(96)
             tone_label(cat, "muted")
             rl.addWidget(cat)
-            lab = BodyLabel(c["path"])
-            lab.setToolTip(c["path"])
+            lab = ElideLabel(c["path"])
+            lab.elide_mode = Qt.ElideMiddle
+            lab.setText(c["path"])
             rl.addWidget(lab, 1)
             who = hint(f"{c['winner']} wins over " + ", ".join(l["id"] for l in c["losers"]))
+            who.setWordWrap(True)
             rl.addWidget(who, 1)
             self.conf_rows.addWidget(row)
         self.conf_more.setVisible(len(cf) > 12)
@@ -1039,36 +1019,47 @@ class Launcher(FluentWindow):
             self.mods_note.setText("Pick a setup on Play.")
             self.pack_exp.card.setContent("None")
             self.nat_exp.card.setContent("None")
-            self._mod_group(self.pack_exp, [])
-            self._mod_group(self.nat_exp, [])
+            self._mod_group(self.pack_exp, [], "package")
+            self._mod_group(self.nat_exp, [], "native")
             self._load_profile_editor()
             return
         mods = profile_entries(s.profile)
+        self._profile_seen = self._profile_stamp()
         packs = [m for m in mods if m["kind"] == "package"]
         nats = [m for m in mods if m["kind"] == "native"]
         self.mods_note.setText(Path(s.profile).name)
         self.mods_note.setToolTip(s.profile)
-        on_p = sum(1 for m in packs if m["enabled"])
-        on_n = sum(1 for m in nats if m["enabled"])
-        self.pack_exp.card.setContent(
-            (f"{on_p} loaded" + (f", {len(packs) - on_p} off" if len(packs) != on_p else "")) if packs else "None"
-        )
-        self.nat_exp.card.setContent(
-            (f"{on_n} loaded" + (f", {len(nats) - on_n} off" if len(nats) != on_n else "")) if nats else "None"
-        )
-        self._mod_group(self.pack_exp, packs)
-        self._mod_group(self.nat_exp, nats)
+        try:
+            self._pack_tree = core.mod_manage.package_tree(Path(s.profile), mods)
+            self._mod_problems = core.mod_manage.entry_problems(Path(s.profile), mods)
+            self._mod_roots = core.mod_manage.roots(Path(s.profile), core.mod_manage.read_text(Path(s.profile)))
+            folders = core.mod_manage.folder_overview(Path(s.profile), mods, self._pack_tree)
+        except OSError:
+            self._pack_tree, self._mod_roots, self._mod_problems = {}, (None, None), {}
+            folders = {"packages": None, "natives": None}
+        holders = set((folders["packages"] or {}).get("holders") or [])
+        packs = [m for m in packs if m["index"] not in holders]  # folders of mods are shown as folders, not mods
+        for exp, group in ((self.pack_exp, packs), (self.nat_exp, nats)):
+            on = sum(1 for m in group if m["enabled"])
+            exp.card.setContent(
+                (f"{on} loaded" + (f", {len(group) - on} off" if len(group) != on else "")) if group else "None"
+            )
+        self._mod_group(self.pack_exp, packs, "package", folders["packages"], mods)
+        self._mod_group(self.nat_exp, nats, "native", folders["natives"], mods)
         self.pack_exp.setExpand(True if first else keep_p)
         self.nat_exp.setExpand(True if first else keep_n)
         self._mods_seen = True
         self._load_profile_editor()
 
-    def _mod_group(self, exp, mods):
+    def _mod_group(self, exp, mods, kind, folder=None, entries=()):
+        for row in self._folder_rows(kind, folder, entries) if folder else []:
+            exp.addGroupWidget(row)
         if not mods:
             lab = hint("Nothing in this profile.")
             lab.setContentsMargins(20, 12, 20, 12)
             exp.addGroupWidget(lab)
             return
+        tree = getattr(self, "_pack_tree", {}) or {}
         for m in mods:
             row = QWidget()
             row.setMinimumHeight(52)
@@ -1076,31 +1067,65 @@ class Launcher(FluentWindow):
             h.setContentsMargins(20, 6, 16, 6)
             h.setSpacing(10)
             text = QVBoxLayout()
-            text.setSpacing(0)
-            name = BodyLabel(m["name"])
-            text.addWidget(name)
+            text.setSpacing(2)
+            line = NameWithTag(m["name"], self._where_parts(m), self._where_tip(m))
+            name = line.name
+            text.addWidget(line)
+            node = tree.get(m["index"]) if m["kind"] == "package" else None
             bits = []
             if m["kind"] == "native" and m.get("load_early"):
-                bits.append("early")
-            if m.get("load_after"):
-                bits.append("after " + ", ".join(d["id"] for d in m["load_after"]))
-            if m.get("load_before"):
-                bits.append("before " + ", ".join(d["id"] for d in m["load_before"]))
-            if m.get("initializer"):
-                bits.append("initializer")
+                bits.append("loads early")
+            for key, word in (("load_after", "after"), ("load_before", "before")):
+                deps = [d["id"] for d in m.get(key) or []]
+                if deps:
+                    bits.append(f"{word} {', '.join(deps)}" if len(deps) <= 3 else f"{word} {len(deps)} others")
+            init = m.get("initializer") or {}
+            if init.get("function"):
+                bits.append(f"calls {init['function']}")
+            elif isinstance(init.get("delay"), dict):
+                bits.append(f"waits {init['delay'].get('ms', 0)} ms")
+            if m["kind"] == "native" and m.get("optional"):
+                bits.append("optional")
+            if node and node["folder"].is_dir() and not node["own_files"]:
+                empty = not any(node["folder"].iterdir())
+                bits.append(
+                    "Empty for now: game folders put here (parts, chr, msg, ...) load"
+                    if empty
+                    else "No game folders at its top level (parts, chr, msg, ...), so me3 loads nothing from it"
+                )
             if bits:
                 detail = hint("  \u00b7  ".join(bits))
                 detail.setWordWrap(True)
+                deps = [
+                    f"{w} {d['id']}" + (" (optional)" if d.get("optional") else "")
+                    for w, k in (("after", "load_after"), ("before", "load_before"))
+                    for d in m.get(k) or []
+                ]
+                if deps:
+                    detail.setToolTip("\n".join(deps))
                 text.addWidget(detail)
+            for problem in (getattr(self, "_mod_problems", {}) or {}).get(m["index"], []):
+                warn = hint(problem)
+                warn.setWordWrap(True)
+                tone_label(warn, "error")
+                text.addWidget(warn)
             h.addLayout(text, 1)
             sw = SwitchButton()
-            sw.setOnText("On")
-            sw.setOffText("Off")
+            sw.setOnText("")
+            sw.setOffText("")
             sw.setChecked(bool(m.get("enabled", True)))
-            sw.checkedChanged.connect(lambda checked, idx=m["index"]: self._toggle_mod(idx, checked))
+            sw.setToolTip("Loaded" if m.get("enabled", True) else "Off: kept in the profile, me3 skips it")
+            sw.checkedChanged.connect(lambda checked, e=m: self._toggle_mod(e, checked))
             h.addWidget(sw)
+            if m["kind"] == "native" and m.get("path"):
+                h.addWidget(self._settings_button(m))
+            else:
+                spacer = QWidget()  # keeps the columns of package and DLL rows in line
+                spacer.setFixedSize(36, 36)
+                h.addWidget(spacer)
             b = ghost_btn("Options", FI.SETTING)
             b.clicked.connect(lambda _=False, e=m: self._mod_options(e))
+            b.setFixedWidth(ROW_ACTION_W)  # one width for Options and Not loaded, so switches line up down the list
             h.addWidget(b)
             b = icon_btn(FI.DELETE, "Remove from the profile (and optionally delete its folder)")
             b.clicked.connect(lambda _=False, e=m: self._remove_mod(e))
@@ -1111,6 +1136,287 @@ class Launcher(FluentWindow):
                 tone_label(name, "muted")
             exp.addGroupWidget(row)
 
+    def _entry_place(self, entry):
+        """The folder an entry sits in (a DLL's folder, a package folder's parent), below the profile's natives or
+        packages folder when it is inside it (that folder itself is where they all live, so it names nothing), else
+        below the profile's folder. None without a path."""
+        if not entry.get("path") or not self.setup:
+            return None, None
+        prof = Path(self.setup.profile)
+        target = core.mod_manage.resolve(prof, entry["path"])
+        place = target.parent
+        pk_root, nt_root = getattr(self, "_mod_roots", (None, None))
+        for base in (nt_root if entry["kind"] == "native" else pk_root, prof.parent):
+            if base is None:
+                continue
+            try:
+                return place.resolve().relative_to(base.resolve()), target
+            except OSError, ValueError:
+                continue
+        return place, target
+
+    def _where_parts(self, entry):
+        """The one folder an entry sits in, as its tag (the full path is in the tag's tooltip)."""
+        place, _target = self._entry_place(entry)
+        if place is None:
+            return []
+        parts = [x for x in place.parts[1 if place.anchor else 0 :] if x != "."]  # an outside folder drops its drive
+        return parts[-1:]
+
+    def _where_tip(self, entry):
+        _place, target = self._entry_place(entry)
+        return str(target) if target is not None else ""
+
+    @staticmethod
+    def _slot(widget):
+        """A hidden copy of a row control that still takes its exact space, so a column stays in line."""
+        policy = widget.sizePolicy()
+        policy.setRetainSizeWhenHidden(True)
+        widget.setSizePolicy(policy)
+        widget.hide()
+        return widget
+
+    def _folder_rows(self, kind, info, entries):
+        """The packages or natives folder as a line at the top of its list, laid out in the mod rows' columns:
+        the text where the names are, Open folder in the settings-icon column, Not loaded in the Options column and
+        removing a folder-only entry in the delete column. A folder-only entry elsewhere gets a line of its own."""
+        by_index = {e["index"]: e for e in entries}
+        holders = [by_index[i] for i in info.get("holders") or [] if i in by_index]
+        unlisted = info.get("unlisted") or []
+        if not holders and not unlisted:
+            return []
+        root = info.get("root")
+        prof = Path(self.setup.profile)
+        at_root = [
+            e
+            for e in holders
+            if root is not None and core.mod_manage.same_folder(core.mod_manage.resolve(prof, e["path"]), root)
+        ]
+        elsewhere = [e for e in holders if e not in at_root]
+        n = len(unlisted)
+        unit = "folder" if kind == "package" else "DLL"
+        rows = []
+        if root is not None:
+            lines = [
+                f"{info.get('listed', 0)} listed below"
+                + (f", {n} {unit}{'s' if n != 1 else ''} in here {'are' if n != 1 else 'is'} not loaded" if n else "")
+            ]
+            for e in at_root:
+                lines.append(
+                    f"The profile also lists this folder itself, as '{e['name']}'. It only holds the mods below, "
+                    "so that entry loads nothing and can be removed."
+                )
+            rows.append(
+                self._folder_line(
+                    root.name,
+                    f"{'packages' if kind == 'package' else 'DLL mods'} folder",
+                    str(root),
+                    lines,
+                    root,
+                    (kind, unlisted, root) if n else None,
+                    at_root[0] if at_root else None,
+                )
+            )
+        for e in elsewhere:
+            folder = core.mod_manage.resolve(prof, e["path"])
+            rows.append(
+                self._folder_line(
+                    e["name"],
+                    "folder of mods",
+                    str(folder),
+                    [f"Points at {folder.name}, a folder that only holds other mods, so it loads nothing."],
+                    folder,
+                    None if root is not None else ((kind, unlisted, None) if n else None),
+                    e,
+                )
+            )
+        return rows
+
+    def _folder_line(self, name, tag, tip, lines, folder, not_loaded, holder):
+        row = QWidget()
+        row.setMinimumHeight(52)
+        h = QHBoxLayout(row)
+        h.setContentsMargins(20, 6, 16, 6)  # the mod rows' margins and spacing, so the columns meet
+        h.setSpacing(10)
+        text = QVBoxLayout()
+        text.setSpacing(2)
+        text.addWidget(NameWithTag(name, [tag], tip))
+        for line in lines:
+            lab = hint(line)
+            lab.setWordWrap(True)
+            text.addWidget(lab)
+        h.addLayout(text, 1)
+        switch = SwitchButton()
+        switch.setOnText("")
+        switch.setOffText("")
+        h.addWidget(self._slot(switch))
+        if folder is not None:
+            b = icon_btn(FI.FOLDER, f"Open {folder}")
+            b.clicked.connect(lambda _=False, f=folder: core.common.open_path(str(f)))
+        else:
+            b = self._slot(icon_btn(FI.FOLDER, ""))
+        h.addWidget(b)
+        if not_loaded:
+            kind, unlisted, root = not_loaded
+            b = ghost_btn(f"Not loaded ({len(unlisted)})", FI.ADD)
+            b.setToolTip(
+                ("Mod folders" if kind == "package" else "DLLs")
+                + " here that no entry points at, so me3 never loads them. Pick any to add."
+            )
+            b.clicked.connect(lambda _=False, k=kind, u=list(unlisted), r=root: self._add_unlisted(k, u, r))
+        else:
+            b = self._slot(ghost_btn("Options", FI.SETTING))
+        b.setFixedWidth(ROW_ACTION_W)
+        h.addWidget(b)
+        if holder is not None:
+            b = icon_btn(FI.DELETE, f"Remove '{holder['name']}' from the profile. The folder and every mod in it stay.")
+            b.clicked.connect(lambda _=False, en=holder: self._remove_holder(en))
+        else:
+            b = self._slot(icon_btn(FI.DELETE, ""))
+        h.addWidget(b)
+        return row
+
+    def _add_unlisted(self, kind, unlisted, root):
+        if self._mods_locked():
+            return
+        choices = []
+        for f in unlisted:
+            try:
+                label = f.relative_to(root).as_posix() if root else str(f)
+            except ValueError:
+                label = str(f)
+            choices.append((label, f))
+        what = "Mod folders" if kind == "package" else "DLLs"
+        dlg = ChoiceListDialog(
+            f"{what} that are not loaded",
+            (
+                "me3 loads a package only when an entry points at its folder."
+                if kind == "package"
+                else "me3 loads a DLL only when an entry points at it."
+            )
+            + " Tick the ones to add; each gets its own entry, last in the load order. Nothing is copied or moved. "
+            "Leave alternates you keep switched off unticked.",
+            [c[0] for c in choices],
+            self,
+            apply_text="Add",
+        )
+        if not dlg.exec():
+            return
+        picked = [choices[i][1] for i in dlg.selected()]
+        if not picked:
+            return
+        try:
+            out = core.mod_manage.add_existing(Path(self.setup.profile), picked, kind=kind)
+        except Exception as e:
+            self._toast("Could not add", str(e), error=True)
+            return
+        names = ", ".join(r.get("id") or Path(r["path"]).name for r in out["entries"])
+        self._after_profile_change(f"profile: added {names}")
+        noun = "package" if kind == "package" else "DLL"
+        self._toast(
+            f"Added {len(out['entries'])} {noun}{'s' if len(out['entries']) != 1 else ''}",
+            f"{names}. They load at the next launch; the profile kept a .bak.",
+        )
+
+    def _remove_holder(self, entry):
+        """Take out an entry that points at a folder of mods. It loaded nothing, so the game does not change."""
+        if self._mods_locked():
+            return
+        ref = core.mod_manage.entry_ref(entry).lower()
+        needs = [
+            o["name"]
+            for o in profile_entries(self.setup.profile)
+            if o["kind"] == "package"
+            and any(
+                str(d["id"]).lower() == ref and not d.get("optional")
+                for d in (o.get("load_after") or []) + (o.get("load_before") or [])
+            )
+        ]
+        if not confirm(
+            self,
+            f"Remove '{entry['name']}' from the profile",
+            changes=[
+                f"Its [[packages]] entry is deleted from {Path(self.setup.profile).name}",
+                "Nothing changes in the game: it loaded no files of its own",
+                "The folder and every mod in it stay, and so do their entries",
+            ]
+            + ([f"{', '.join(needs)} must load after it: that setting is taken out too"] if needs else []),
+            safety="The profile keeps a .bak.",
+            apply_text="Remove",
+        ):
+            return
+        try:
+            fresh = self._fresh_entry(entry)
+            if fresh is None:
+                return
+            uninstall_mod(self.setup.profile, fresh["index"], delete_folder=False)
+            if needs:
+                for o in profile_entries(self.setup.profile):
+                    if o["name"] in needs:
+                        keep = lambda ds: [d for d in ds if str(d["id"]).lower() != ref]  # noqa: E731
+                        set_mod_options(
+                            self.setup.profile,
+                            o["index"],
+                            {
+                                "load_after": keep(o.get("load_after") or []),
+                                "load_before": keep(o.get("load_before") or []),
+                            },
+                        )
+        except Exception as e:
+            self._toast("Could not remove", str(e), error=True)
+            return
+        self._after_profile_change(f"profile: removed {entry['name']} (a folder of mods)")
+        self._toast("Removed", f"'{entry['name']}' is out of the profile. Nothing in the game changes.")
+
+    def _coop_ini_key(self):
+        return mod_configs.key_for(self.ini) if self.ini else None
+
+    def _settings_button(self, entry):
+        """The DLL's settings files: an icon on its row that opens them (or the Co-op page for Seamless)."""
+        dll = core.mod_manage.resolve(Path(self.setup.profile), entry["path"])
+        coop = self._coop_ini_key()
+        files = mod_configs.files_for(self.settings, dll, skip={coop} if coop else set())
+        on_coop = not files and coop and any(mod_configs.key_for(p) == coop for p in mod_configs.found(dll))
+        b = icon_btn(FI.DOCUMENT, "")
+        if on_coop:
+            b.setToolTip("Seamless Co-op's settings are on the Co-op page.")
+        elif files:
+            names = ", ".join(f["path"].name for f in files[:3]) + (f" +{len(files) - 3}" if len(files) > 3 else "")
+            b.setToolTip(f"Edit its settings: {names}")
+        else:
+            b.setToolTip("No settings file found beside it. Click to tie one the mod reads.")
+            quiet = QGraphicsOpacityEffect(b)  # present in every row, but quiet when there is nothing to edit yet
+            quiet.setOpacity(0.45)
+            b.setGraphicsEffect(quiet)
+        b.clicked.connect(lambda _=False, e=entry: self._native_settings(e))
+        return b
+
+    def _native_settings(self, entry):
+        dll = core.mod_manage.resolve(Path(self.setup.profile), entry["path"])
+        coop = self._coop_ini_key()
+        skip = {coop} if coop else set()
+        files = mod_configs.files_for(self.settings, dll, skip=skip)
+        if not files and coop and any(mod_configs.key_for(p) == coop for p in mod_configs.found(dll)):
+            self.switchTo(self.coop_page)
+            self._toast("Seamless Co-op settings", "They are on this page, with an explanation for each.", info=True)
+            return
+
+        def store(ties):
+            save_settings(native_configs=ties)
+            self.settings["native_configs"] = ties
+            return mod_configs.files_for(self.settings, dll, skip=skip)
+
+        dlg = ConfigFilesDialog(
+            self,
+            dll,
+            files,
+            tie=lambda path: store(mod_configs.with_tie(self.settings, dll, path)),
+            untie=lambda path: store(mod_configs.without_tie(self.settings, dll, path)),
+            toast=self._toast,
+        )
+        dlg.exec()
+        self._fill_mods()  # the row's tooltip names the files
+
     def _mods_locked(self) -> bool:
         if self.busy:
             self._toast(
@@ -1120,7 +1426,7 @@ class Launcher(FluentWindow):
         if not self.setup or not Path(self.setup.profile).is_file():
             self._toast("No profile", "Pick a setup on Play first.", error=True)
             return True
-        if self._profile_file is not None and self.profile_edit.toPlainText() != self._profile_disk:
+        if self.profile_panel.dirty:
             self._toast("Profile has unsaved edits", "Save or reload the profile editor first.", error=True)
             return True
         return False
@@ -1131,13 +1437,36 @@ class Launcher(FluentWindow):
         self._fill_mods()
         self._update_plan()
 
-    def _toggle_mod(self, index, checked):
+    def _fresh_entry(self, entry):
+        """The same entry as it is in the file now (matched by kind, path and id, not by position), or None after
+        refreshing the list when the profile changed outside this window and the entry is gone."""
+        prof = Path(self.setup.profile)
+        want = core.mod_manage.resolve(prof, entry.get("path") or "")
+        for e in profile_entries(self.setup.profile):
+            if (
+                e["kind"] == entry["kind"]
+                and (e.get("id") or "") == (entry.get("id") or "")
+                and core.mod_manage.same_folder(core.mod_manage.resolve(prof, e.get("path") or ""), want)
+            ):
+                return e
+        self._toast(
+            "The profile changed",
+            f"{entry['name']} is no longer where it was; the file was edited outside this window. The list is refreshed.",
+            info=True,
+        )
+        self._fill_mods()
+        return None
+
+    def _toggle_mod(self, entry, checked):
         if self._mods_locked():
             self._fill_mods()
             return
+        entry = self._fresh_entry(entry)
+        if entry is None:
+            return
         try:
-            set_mod_options(self.setup.profile, index, {"enabled": bool(checked)})
-            self._after_profile_change(f"profile: entry {index + 1} {'on' if checked else 'off'}")
+            set_mod_options(self.setup.profile, entry["index"], {"enabled": bool(checked)})
+            self._after_profile_change(f"profile: {entry['name']} {'on' if checked else 'off'}")
         except Exception as e:
             self._toast("Could not change the profile", str(e), error=True)
             self._fill_mods()
@@ -1145,12 +1474,21 @@ class Launcher(FluentWindow):
     def _mod_options(self, entry):
         if self._mods_locked():
             return
-        others = [e["name"] for e in profile_entries(self.setup.profile) if e["index"] != entry["index"]]
+        others = [
+            core.mod_manage.entry_ref(e)
+            for e in profile_entries(self.setup.profile)
+            if e["index"] != entry["index"]
+            and e["kind"] == entry["kind"]
+            and (e["kind"] == "native" or e.get("id"))  # a package is named by its id
+        ]
         dlg = ModOptionsDialog(entry, others, self)
         if not dlg.exec():
             return
         try:
-            set_mod_options(self.setup.profile, entry["index"], dlg.options())
+            fresh = self._fresh_entry(entry)
+            if fresh is None:
+                return
+            set_mod_options(self.setup.profile, fresh["index"], dlg.options())
             self._after_profile_change(f"profile: options saved for {entry['name']}")
             self._toast("Options saved", f"{entry['name']} applies at the next launch.")
         except Exception as e:
@@ -1159,24 +1497,44 @@ class Launcher(FluentWindow):
     def _remove_mod(self, entry):
         if self._mods_locked():
             return
-        where = core.mod_manage.resolve(Path(self.setup.profile), entry["path"]) if entry.get("path") else None
+        prof = Path(self.setup.profile)
+        where = core.mod_manage.resolve(prof, entry["path"]) if entry.get("path") else None
         folder = (where if entry["kind"] == "package" else where.parent) if where else None
+        users = []
+        if folder is not None:
+            for o in profile_entries(self.setup.profile):
+                if o["index"] == entry["index"] or not o.get("path"):
+                    continue
+                other = core.mod_manage.resolve(prof, o["path"])
+                if other == folder or folder in other.parents:
+                    users.append(o["name"])
+        keep = (
+            [
+                f"The folder {folder.name} stays: {', '.join(users[:4])}{' ...' if len(users) > 4 else ''} still load from it"
+            ]
+            if users
+            else []
+        )
         dlg = ConfirmDialog(
             f"Remove {entry['name']} from the profile",
             self,
             changes=[
-                f"The [[{'packages' if entry['kind'] == 'package' else 'natives'}]] entry is deleted from {Path(self.setup.profile).name}"
-            ],
+                f"The [[{'packages' if entry['kind'] == 'package' else 'natives'}]] entry is deleted from {prof.name}"
+            ]
+            + keep,
             warning="me3 stops loading it at the next launch. Removing a mod other entries load_after may leave them waiting on a missing id.",
             safety="The profile keeps a .bak. A deleted folder is gone for good, so leave the box unticked to keep the files.",
-            option=(f"Also delete the folder {folder}" if folder and folder.is_dir() else None),
+            option=(f"Also delete the folder {folder}" if folder and folder.is_dir() and not users else None),
             option_checked=False,
             apply_text="Remove",
         )
         if not dlg.exec():
             return
         try:
-            out = uninstall_mod(self.setup.profile, entry["index"], delete_folder=dlg.option_on())
+            fresh = self._fresh_entry(entry)
+            if fresh is None:
+                return
+            out = uninstall_mod(self.setup.profile, fresh["index"], delete_folder=dlg.option_on())
             self._after_profile_change(
                 f"profile: removed {entry['name']}" + (" and its folder" if out["removed_folder"] else "")
             )
@@ -1194,78 +1552,80 @@ class Launcher(FluentWindow):
             self,
             "Install a mod: pick an archive (or Cancel to pick a folder)",
             "",
-            "Mod archive (*.zip *.7z *.rar);;All files (*)",
+            "Mod archive or DLL (*.zip *.7z *.rar *.dll);;All files (*)",
         )
         if not src:
             src = QFileDialog.getExistingDirectory(self, "Install a mod: pick its folder", "")
             if not src:
                 return
+        self._install_paths([Path(src)])
+
+    @staticmethod
+    def _drop_accepts(paths):
+        """(installable, skipped): folders, .zip / .7z / .rar archives and DLL mods can be installed."""
+        kinds = (*core.mod_manage.ARCHIVE_EXTENSIONS, ".dll")
+        usable = [x for x in paths if x.is_dir() or x.suffix.lower() in kinds]
+        return usable, [x for x in paths if x not in usable]
+
+    def _install_paths(self, paths):
+        """Install one or more mods, one after another: each is unpacked, named in InstallDialog, then copied in."""
+        if self._mods_locked():
+            return
+        usable, skipped = self._drop_accepts([Path(x) for x in paths])
+        if skipped:
+            self._toast(
+                "Skipped",
+                f"{', '.join(x.name for x in skipped[:4])}: not an archive (.zip, .7z, .rar), a .dll or a folder.",
+                info=True,
+            )
+        self._install_queue = list(getattr(self, "_install_queue", [])) + usable
+        if not self.busy:
+            self._install_next()
+
+    def _install_next(self):
+        queue = getattr(self, "_install_queue", [])
+        if not queue or self.busy:
+            return
+        src = queue.pop(0)
+        if self._mods_locked():
+            self._install_queue = []
+            return
         prof = self.setup.profile
+        QApplication.setOverrideCursor(Qt.WaitCursor)  # unpacking a big archive takes a moment
         try:
             plan = plan_mod_install(prof, src)
         except Exception as e:
-            self._toast("Could not read that", str(e), error=True)
+            QApplication.restoreOverrideCursor()
+            self._toast(f"Could not read {src.name}", str(e), error=True)
+            QTimer.singleShot(0, self._install_next)
             return
+        QApplication.restoreOverrideCursor()
+
+        def drop_unpacked(pl):
+            if pl.get("staging"):
+                core.mod_manage.shutil.rmtree(pl["staging"], ignore_errors=True)
+
         if plan.get("error"):
-            self._toast("Not a mod Roundtable Souls can install", plan["error"], error=True)
-            if plan.get("staging"):
-                core.mod_manage.shutil.rmtree(plan["staging"], ignore_errors=True)
+            self._toast(f"{src.name} is not a mod Roundtable Souls can install", plan["error"], error=True)
+            drop_unpacked(plan)
+            QTimer.singleShot(0, self._install_next)
             return
-        name_dlg = TextDialog(
-            "Install " + ("package" if plan["kind"] == "package" else "native DLL mod"),
-            (
-                "Game folders: " + ", ".join(plan["assets"])
-                if plan["kind"] == "package"
-                else "DLLs: " + ", ".join(p.name for p in plan["dlls"])
-            )
-            + f"  \u00b7  {plan['size'] / 1048576:.1f} MB",
-            self,
-            placeholder="folder name",
-            text=plan["name"],
-            apply_text="Next",
-        )
-        if not name_dlg.exec():
-            if plan.get("staging"):
-                core.mod_manage.shutil.rmtree(plan["staging"], ignore_errors=True)
-            return
-        if name_dlg.edit.text().strip() != plan["name"]:
-            plan = plan_mod_install(
-                prof, Path(plan["root"]) if plan.get("staging") else src, name_dlg.edit.text().strip()
-            ) | ({"staging": plan["staging"]} if plan.get("staging") else {})
-        listed = set(plan.get("already_listed") or [])
-        changes = ([] if plan.get("in_place") else [f"Copy into {plan['dest']}"]) + [
-            f"Add [[{'packages' if e['kind'] == 'package' else 'natives'}]] path = {e['path']}"
-            for e in plan["entries"]
-            if e["path"] not in listed
-        ]
-        if listed:
-            changes.append("Already in the profile: " + ", ".join(listed) + " (kept as is)")
-        if not plan.get("in_place"):
-            changes.append("It goes last in the load order, so it overrides earlier packages on shared files")
-        else:
-            changes.append("The folder is already in place; only the profile changes")
-        if plan.get("array_form"):
-            changes.append("This profile uses the inline list form; it is rewritten as blocks first")
-        if plan.get("exists") and not plan.get("in_place"):
-            changes.append(f"{Path(plan['dest']).name} already exists there and will be replaced")
-        if plan.get("in_place") and not [e for e in plan["entries"] if e["path"] not in listed]:
+        if plan.get("in_place") and plan.get("already_listed") and len(plan["already_listed"]) == len(plan["entries"]):
             self._toast("Nothing to do", f"{plan['name']} is already installed and listed in the profile.")
+            drop_unpacked(plan)
+            QTimer.singleShot(0, self._install_next)
             return
-        if not confirm(
+        dlg = InstallDialog(
             self,
-            f"Install {plan['name']}",
-            changes=changes,
-            warning=(
-                "The existing folder is deleted and replaced."
-                if plan.get("exists") and not plan.get("in_place")
-                else ""
-            ),
-            safety="The profile keeps a .bak. Conflicts rescan afterwards so you see what it overrides before you play.",
-            apply_text="Install",
-        ):
-            if plan.get("staging"):
-                core.mod_manage.shutil.rmtree(plan["staging"], ignore_errors=True)
+            plan,
+            lambda name, pkg_id, variant: replan_mod_install(prof, plan, name, pkg_id, variant),
+            Path(prof),
+        )
+        if not dlg.exec():
+            drop_unpacked(plan)
+            QTimer.singleShot(0, self._install_next)
             return
+        plan = dlg.plan
 
         def job(_setup):
             common = core.common
@@ -1278,6 +1638,27 @@ class Launcher(FluentWindow):
                 raise SystemExit(1) from e
 
         self.start(job, f"Installing {plan['name']}...", need_setup=False)
+
+    def eventFilter(self, obj, e):
+        # A drag entering the Mods page (or anything on it, such as the profile editor, which would take the file
+        # itself) shows the drop overlay on top; the overlay then gets the rest of the drag.
+        if e.type() == QEvent.DragEnter and self._on_mods_drop_area(obj):
+            if self.mods_drop.begin(DropOverlay.paths_of(e)):
+                e.acceptProposedAction()
+                return True
+        return super().eventFilter(obj, e)
+
+    def _on_mods_drop_area(self, obj) -> bool:
+        page = getattr(self, "mods_page", None)
+        return (
+            page is not None
+            and isinstance(obj, QWidget)
+            and obj is not getattr(self, "mods_drop", None)
+            and (obj is page or page.isAncestorOf(obj))
+            and self.stackedWidget.currentWidget() is page
+            and self.game.ready
+            and not self.busy
+        )
 
     def _new_profile(self):
         cur = self.setup.profile if self.setup and Path(self.setup.profile).is_file() else None
@@ -1317,7 +1698,10 @@ class Launcher(FluentWindow):
         if not confirm(
             self,
             f"Delete {p.name}",
-            changes=[f"{p.name} moves into deleted-profiles beside it", "Mod folders and natives stay where they are"],
+            changes=[
+                f"{p.name} moves into the launcher's deleted profiles, with a note of where it lived",
+                "Mod folders and natives stay where they are",
+            ],
             warning="This setup disappears from the Play list.",
             safety="The moved file can be copied back by hand at any time.",
             apply_text="Delete",
@@ -1336,49 +1720,77 @@ class Launcher(FluentWindow):
         self._toast("Profile deleted", f"Moved to {gone.parent.name}.")
 
     def _load_profile_editor(self, force=False):
+        """Show the setup's .me3. Unsaved edits to the same file survive a refresh unless force (Discard, or a change
+        written elsewhere) asks for the file again."""
         path = Path(self.setup.profile) if self.setup and Path(self.setup.profile).is_file() else None
+        panel = self.profile_panel
         if path is None:
             self._profile_file = None
-            self._profile_disk = ""
             self._profile_crlf = False
-            self.profile_edit.blockSignals(True)
-            self.profile_edit.setPlainText("")
-            self.profile_edit.blockSignals(False)
-            self.profile_path.setText("No me3 profile for this setup.")
-            self.profile_path.setToolTip("")
-            self._profile_dirty()
+            panel.set_baseline("", "No me3 profile for this setup.")
+            panel.bar.setEnabled(False)
             return
-        dirty = self._profile_file is not None and self.profile_edit.toPlainText() != self._profile_disk
-        if dirty and not force and self._profile_file == path:
-            return
-        if (
-            dirty
-            and force
-            and not MessageBox("Discard edits?", "Reload the profile from disk and lose unsaved edits?", self).exec()
-        ):
+        if panel.dirty and not force and self._profile_file == path:
             return
         raw = path.read_bytes()
         self._profile_crlf = b"\r\n" in raw
         text = raw.decode("utf-8", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
         self._profile_file = path
-        self._profile_disk = text
-        self.profile_edit.blockSignals(True)
-        self.profile_edit.setPlainText(text)
-        self.profile_edit.blockSignals(False)
-        self.profile_path.setText(path.name)
-        self.profile_path.setToolTip(str(path))
-        self._profile_dirty()
+        panel.bar.setEnabled(True)
+        panel.set_baseline(text, path.name, str(path))
 
-    def _profile_dirty(self, *_):
-        dirty = self._profile_file is not None and self.profile_edit.toPlainText() != self._profile_disk
-        self.profile_note.setText("Unsaved edits." if dirty else "Matches the file.")
-        self.profile_note.setTextColor(ACCENT_LIGHT if dirty else HINT_ON_LIGHT, ACCENT if dirty else HINT)
-        self.profile_save.setEnabled(dirty)
-        self.profile_save.setVisible(dirty)
-        self.profile_reload.setEnabled(self._profile_file is not None)
+    def _profile_stamp(self):
+        try:
+            st = Path(self.setup.profile).stat() if self.setup else None
+        except OSError:
+            return None
+        return (st.st_mtime_ns, st.st_size) if st else None
+
+    def _profile_changed_outside(self) -> bool:
+        """The .me3 on disk no longer matches what the editor loaded."""
+        if self._profile_file is None:
+            return False
+        try:
+            disk = self._profile_file.read_bytes().decode("utf-8", errors="replace")
+        except OSError:
+            return False
+        return disk.replace("\r\n", "\n").replace("\r", "\n") != self.profile_panel.baseline()
+
+    def changeEvent(self, e):
+        super().changeEvent(e)
+        if e.type() == QEvent.ActivationChange and self.isActiveWindow():
+            QTimer.singleShot(0, self._check_profile_on_disk)
+
+    def _check_profile_on_disk(self):
+        """Coming back to the window: pick up a profile changed elsewhere (me3, a text editor, Revive's installer)."""
+        if not self.setup or self.busy or getattr(self, "_profile_seen", None) is None:
+            return
+        stamp = self._profile_stamp()
+        if stamp == self._profile_seen:
+            return
+        self._profile_seen = stamp
+        if self.profile_panel.dirty:
+            self._toast(
+                "The profile changed on disk",
+                "It was edited outside this window. Your unsaved editor text is kept; Discard loads the new file.",
+                info=True,
+            )
+            return
+        self._fill_mods()
 
     def _save_profile(self):
         if self._profile_file is None:
+            return False
+        if self._profile_changed_outside() and not confirm(
+            self,
+            f"{self._profile_file.name} changed on disk",
+            changes=[
+                "It was edited outside this window after the editor loaded it",
+                "Saving writes your text over those changes",
+            ],
+            safety="The file keeps one .bak of the version being replaced. Cancel, then Discard, to load the new file instead.",
+            apply_text="Save anyway",
+        ):
             return False
         text = self.profile_edit.toPlainText()
         try:
@@ -1388,8 +1800,7 @@ class Launcher(FluentWindow):
         except Exception as e:
             self._toast("Could not save the profile", str(e), error=True)
             return False
-        self._profile_disk = self.profile_edit.toPlainText()
-        self._profile_dirty()
+        self.profile_panel.mark_clean()
         self._toast("Profile saved", "It applies the next time you start the game.")
         self._load_coop()
         self._fill_mods()
@@ -1410,10 +1821,37 @@ class Launcher(FluentWindow):
         titled(lay, "Saves", FI.SAVE, "Your characters, with checks and repairs.", acts)
         self.saves_note = hint("Reading saves...")
         lay.addWidget(self.saves_note)
+        self.library_card, ll = card("Save library", FI.LIBRARY)
+        ll.addWidget(
+            hint(
+                "Named copies of whole saves, kept in the launcher's own folder. Swap in puts one in place of a live "
+                "save; the save it replaces is added here first, under a name you choose. Copies here are never "
+                "removed unless you remove them."
+            )
+        )
+        self.library_rows = QVBoxLayout()
+        self.library_rows.setSpacing(6)
+        ll.addLayout(self.library_rows)
+        foot = QHBoxLayout()
+        foot.setSpacing(8)
+        self.library_note = hint("")
+        foot.addWidget(self.library_note, 1)
+        b = ghost_btn("Import a save file...", FI.DOWNLOAD)
+        b.setToolTip("Add a .sl2 or .co2 from anywhere (a friend's, an old backup) to the library. The file is copied.")
+        b.clicked.connect(self._import_save)
+        foot.addWidget(b)
+        b = ghost_btn("Library folder", FI.FOLDER)
+        b.clicked.connect(self._open_library)
+        foot.addWidget(b)
+        ll.addLayout(foot)
+        lay.addWidget(self.library_card)
+        self._libs = {}
         self.backups_card, bl = card("Backups", FI.HISTORY)
         bl.addWidget(
             hint(
-                "Every repair keeps a dated copy of the file as it was. Restore puts one back (the current file is copied first, so a restore can be undone)."
+                f"A backup is taken before every change to a save. The newest {core.folders.KEEP_NEWEST} of each save "
+                f"and everything from the last {core.folders.KEEP_DAYS} days are kept; Keep holds on to one for good. "
+                "Restore puts a backup back, and backs up the save as it is then, so a restore can be undone."
             )
         )
         self.backups_rows = QVBoxLayout()
@@ -1568,7 +2006,7 @@ class Launcher(FluentWindow):
             (
                 "play_backup_before",
                 "Back up saves before Play",
-                "A dated copy of every save into save-fix-backups, listed under Backups on the Saves page.",
+                "A backup of every save before each session, listed under Backups on the Saves page.",
                 "Off by default: the game keeps its own .bak, and each repair makes a copy anyway. Turn it on for a copy before every session.",
             ),
             (
@@ -1808,6 +2246,7 @@ class Launcher(FluentWindow):
             self.setup_exp.setExpand(True)
             self.play_btn.setEnabled(False)
             self.ini = None
+            self._note_saves_in_use(None)
             self._coop_ready = False
             self._schedule_page_fill()
             return
@@ -1826,6 +2265,7 @@ class Launcher(FluentWindow):
         self.setup_exp.setExpand(bool(probs))
         self.play_btn.setEnabled(not probs and not self.game_running and not self.busy)
         self.ini = s.ini
+        self._note_saves_in_use(s)
         self._coop_ready = False  # the Co-op and Mods pages are rebuilt just after this paint (see _schedule_page_fill)
         self._update_plan()
         self._schedule_page_fill()
@@ -2128,17 +2568,8 @@ class Launcher(FluentWindow):
             return
         labels = self._pending_labels()
         pending = bool(labels)
-        self.all_save.setEnabled(pending)
-        self.all_discard.setEnabled(pending)
-        self.save_bar.pending = pending
-        self.save_bar.update()
-        if not pending:
-            text = "Saved."
-        else:
-            shown = ", ".join(labels[:4]) + (" ..." if len(labels) > 4 else "")
-            text = "Not saved: " + shown
-        self.all_note.setText(text)
-        self.all_note.setTextColor(ACCENT_LIGHT if pending else HINT_ON_LIGHT, ACCENT if pending else HINT)
+        shown = ", ".join(labels[:4]) + (" ..." if len(labels) > 4 else "")
+        self.save_bar.set_state(pending, ("Not saved: " + shown) if pending else "Saved.")
 
     def _discard_coop(self):
         self._load_coop()
@@ -2211,23 +2642,19 @@ class Launcher(FluentWindow):
 
     def share_fill(self):
         if self.ini:
-            self.share.setPlainText(export_text(self.ini))
-            self.share_hint.setText("Current settings.")
+            self.share_panel.set_baseline(export_text(self.ini), f"Your settings, from {self.ini.name}", str(self.ini))
 
     def share_copy(self):
         QApplication.clipboard().setText(self.share.toPlainText())
-        self.share_hint.setText("Copied. Paste it to your friend.")
         self._toast("Copied", "Settings are on the clipboard.")
 
     def share_paste(self):
         t = QApplication.clipboard().text()
         if not t.strip():
-            self.share_hint.setText("The clipboard has no text.")
             self._toast("Clipboard is empty", "Copy settings from your friend first.", info=True)
             return
-        self.share.setPlainText(t)
-        self.share_hint.setText("Pasted. Click Apply to use these settings.")
-        self._toast("Pasted", "Click Apply to use these settings.", info=True)
+        self.share_panel.set_text(t)
+        self._toast("Pasted", "Apply writes the settings that differ from yours, after a confirm.", info=True)
 
     def share_apply(self):
         if self.ini is None:
@@ -2235,7 +2662,7 @@ class Launcher(FluentWindow):
         try:
             incoming = parse_settings_json(self.share.toPlainText())
         except Exception as e:
-            self.share_hint.setText(f"That is not valid settings text: {e}")
+            self._toast("Not settings text", f"The text could not be read as co-op settings: {e}", error=True)
             return
         changes, unknown = plan_import(self.ini, incoming)
         if not changes:
@@ -2274,15 +2701,17 @@ class Launcher(FluentWindow):
         )
         if p:
             Path(p).write_text(self.share.toPlainText(), encoding="utf-8")
-            self.share_hint.setText(f"Saved {Path(p).name}.")
             self._toast("File saved", Path(p).name)
 
     def share_load(self):
         p, _ = QFileDialog.getOpenFileName(self, "Load settings file", "", "Settings export (*.json)")
         if p:
-            self.share.setPlainText(Path(p).read_text(encoding="utf-8"))
-            self.share_hint.setText(f"Loaded {Path(p).name}. Click Apply to use these settings.")
-            self._toast("File loaded", "Click Apply to use these settings.", info=True)
+            self.share_panel.set_text(Path(p).read_text(encoding="utf-8"))
+            self._toast(
+                f"Opened {Path(p).name}",
+                "Apply writes the settings that differ from yours, after a confirm.",
+                info=True,
+            )
 
     # ---------------------------------------------------------------- saves
     def refresh_saves(self):
@@ -2293,8 +2722,12 @@ class Launcher(FluentWindow):
         token, game = self._saves_token, self.game
 
         def work():
-            infos = [save_info(p) for p in core.common.save_files(game)]
-            self.bus.saves.emit({"token": token, "infos": infos})
+            files = core.common.save_files(game)
+            for d in {p.parent for p in files}:  # older tools may still drop backup folders beside the saves
+                core.folders.adopt_legacy_save_folders(d, game, again=True)
+            infos = [save_info(p, game) for p in files]
+            libs = {str(f): core.save_library.load(f) for f in sorted({p.parent for p in files})}
+            self.bus.saves.emit({"token": token, "infos": infos, "libs": libs})
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -2317,6 +2750,11 @@ class Launcher(FluentWindow):
                 note += (
                     f"  ·  {self.game.name} encrypts its saves, so characters and repairs are not shown yet. "
                     "Backups, restore, and copies between the co-op and standard save work."
+                )
+            used = getattr(self, "_saves_in_use", None)
+            if used:
+                note += f"  ·  Play uses {used['active']}" + (
+                    f", Play offline uses {used['standard']}" if used.get("coop") else ""
                 )
             self.saves_note.setText(note)
             self.saves_note.setToolTip(str(infos[0]["path"].parent))
@@ -2344,6 +2782,9 @@ class Launcher(FluentWindow):
             titles.setContentsMargins(0, 0, 0, 0)
             titles.addWidget(StrongBodyLabel(s["kind"]))
             sub = f"{s['name']}  ·  {s['modified']}"
+            role = self._save_role(s["name"])
+            if role:
+                sub += f"  ·  {role}"
             if s.get("needs_repair") and not self.game_running:
                 sub += "  ·  repair available"
             elif s.get("needs_repair") and self.game_running:
@@ -2419,8 +2860,6 @@ class Launcher(FluentWindow):
             fixable = repair_available(s) and not self.game_running
             if s.get("characters") or fixable:
                 b = primary_btn("Review && fix") if fixable else ghost_btn("Review", FI.VIEW)
-                if fixable:
-                    b.setMinimumHeight(34)
                 b.setToolTip(
                     "Open this save: every character, every finding, and tick boxes for each fix. Nothing changes until you press Apply."
                 )
@@ -2430,21 +2869,29 @@ class Launcher(FluentWindow):
             b.setToolTip("Full plain-text check for sharing or notes.")
             b.clicked.connect(lambda _=False, info=s: self._copy_health_report(info))
             row.addWidget(b)
-            if s["kind"] == "Seamless Co-op" and not self.game_running:
-                b = ghost_btn("Copy to standard save", FI.SAVE_AS)
-                b.setToolTip("Make a standard-save copy. Best when the check is clear.")
-                b.clicked.connect(lambda _=False, p=s["path"], ok=s.get("convert_ok"): self._convert_co2(p, ok))
+            if not self.game_running and not (s.get("error") and not s.get("characters")):
+                b = ghost_btn("Copy to...", FI.SAVE_AS)
+                b.setToolTip(
+                    "Copy this whole file over another save (that one is kept in the library first), or only add "
+                    "a named copy to the library. You see every character before and after."
+                )
+                b.clicked.connect(lambda _=False, info=s: self._copy_save_file(info))
                 row.addWidget(b)
-            if s["kind"] == "Standard" and not self.game_running and not s.get("error"):
-                b = ghost_btn("Copy to co-op save", FI.SAVE_AS)
-                b.setToolTip("Make a Seamless Co-op copy of this standard save.")
-                b.clicked.connect(lambda _=False, p=s["path"]: self._convert_sl2(p))
+                if s.get("characters") and self.game.save_reader == "eldenring":
+                    b = ghost_btn("Copy a character...", FI.PEOPLE)
+                    b.setToolTip("Copy one character into a slot of this or another save: a free slot, or replace one.")
+                    b.clicked.connect(lambda _=False, info=s: self._copy_character(info))
+                    row.addWidget(b)
+                b = ghost_btn("Add to library...", FI.ADD)
+                b.setToolTip("Keep a named copy of this file in the save library, to swap back in later.")
+                b.clicked.connect(lambda _=False, info=s: self._stash_save(info))
                 row.addWidget(b)
             cl.addLayout(row)
 
-            self.saves_lay.insertWidget(self.saves_lay.indexOf(self.backups_card), c)
+            self.saves_lay.insertWidget(self.saves_lay.indexOf(self.library_card), c)
             self._save_cards.append(c)
 
+        self._fill_library(payload.get("libs") or {})
         self._fill_backups()
         self._ws_refresh(infos)
         pick = next((s for s in ordered if s["kind"] == "Seamless Co-op" and s["characters"]), None) or next(
@@ -2487,89 +2934,6 @@ class Launcher(FluentWindow):
             self._toast("Copied", f"Report for {info.get('name', 'save')} is on the clipboard.")
         except Exception as e:
             self._toast("Could not copy", str(e), error=True)
-
-    def _convert_co2(self, path, convert_ok):
-        if self.busy or self.game_running:
-            self._toast(
-                "Cannot convert now",
-                f"Close {self.game.name} first." if self.game_running else "Wait for the current job.",
-                error=True,
-            )
-            return
-        path = Path(path)
-        dest = path.with_suffix(".sl2")
-        force = False
-        changes = [f"{path.name} is copied to {dest.name}", "The .co2 itself is left alone"]
-        if dest.exists():
-            changes.append(f"{dest.name} already exists and is backed up first")
-        if not convert_ok:
-            if not confirm(
-                self,
-                "Copy to a standard save with notes still open",
-                changes=changes,
-                warning="This co-op save still has notes on the Saves page (mod items or repairs). The standard copy carries them over.",
-                safety="Anything overwritten goes into co2-to-sl2-backups first, with a copy of the source.",
-                apply_text="Copy anyway",
-            ):
-                return
-            force = True
-        else:
-            if not confirm(
-                self,
-                "Make a standard copy",
-                changes=changes,
-                safety="Anything overwritten goes into co2-to-sl2-backups first, with a copy of the source.",
-                detail="Use the standard save when Seamless is off.",
-                apply_text="Copy",
-            ):
-                return
-
-        def job(_setup):
-            common = core.common
-            common.start_log(f"launcher: convert {path.name} -> .sl2")
-            try:
-                out = convert_co2_to_sl2(path, dest, force=force)
-                common.log(f"done: wrote {out}")
-            except Exception as e:
-                common.log(f"error: {e}")
-                raise SystemExit(1) from e
-
-        self.start(job, f"Converting {path.name}...", need_setup=False)
-
-    def _convert_sl2(self, path):
-        if self.busy or self.game_running:
-            self._toast(
-                "Cannot convert now",
-                f"Close {self.game.name} first." if self.game_running else "Wait for the current job.",
-                error=True,
-            )
-            return
-        path = Path(path)
-        dest = path.with_suffix(".co2")
-        changes = [f"{path.name} is copied to {dest.name}", "The .sl2 itself is left alone"]
-        if dest.exists():
-            changes.append(f"{dest.name} already exists and is backed up first")
-        if not confirm(
-            self,
-            "Make a Seamless Co-op copy",
-            changes=changes,
-            safety="Anything overwritten goes into sl2-to-co2-backups first, with a copy of the source.",
-            detail=f"Seamless Co-op reads {dest.name}. Your standard progress continues in co-op from this copy.",
-            apply_text="Copy",
-        ):
-            return
-
-        def job(_setup):
-            common = core.common
-            common.start_log(f"launcher: convert {path.name} -> .co2")
-            try:
-                out = convert_sl2_to_co2(path, dest)
-                common.log(f"done: wrote {out}")
-            except Exception as e:
-                common.log(f"error: {e}")
-                raise SystemExit(1) from e
-
-        self.start(job, f"Converting {path.name}...", need_setup=False)
 
     def _update_saves_badge(self, n):
         """Count on the Saves nav item only when Roundtable Souls can repair something (never for mod-item notes)."""
@@ -2688,34 +3052,30 @@ class Launcher(FluentWindow):
         self.launcher_line.setText(f"{TITLE} {VERSION}  \u00b7  {self._install_kind()}  \u00b7  {version} is available")
         tone_label(self.launcher_line, "accent")
         can_apply = FROZEN and can_self_update(info, is_installed())
-        bar = InfoBar.info(
+        if can_apply:
+            go = primary_btn("Update now")
+            go.setToolTip(
+                "Download the release, check its checksum, swap the exe and restart. The releases page is on Settings."
+            )
+        else:
+            go = ghost_btn("Download", FI.DOWNLOAD)
+            go.setToolTip("Open the releases page in the browser.")
+        skip = ghost_btn("Skip this version")
+        skip.setToolTip("Do not mention this version again; the next one will show.")
+        bar = notice(
+            self,
+            "info",
             f"{TITLE} {version} is available",
             "One click, then a restart. Settings stay."
             if can_apply
             else "Get the zip, replace the exe. Settings stay.",
-            duration=-1,
-            position=InfoBarPosition.TOP,
-            parent=self,
+            actions=(go, skip),
         )
         if can_apply:
-            b = primary_btn("Update now")
-            b.setMinimumWidth(150)
-            b.setToolTip(
-                "Download the release, check its checksum, swap the exe and restart. The releases page is under Tools."
-            )
-            b.clicked.connect(lambda: self._start_update(info, bar))
-            bar.addWidget(b)
+            go.clicked.connect(lambda: self._start_update(info, bar))
         else:
-            b = ghost_btn("Download", FI.DOWNLOAD)
-            b.setMinimumWidth(130)
-            b.setToolTip("Open the releases page in the browser.")
-            b.clicked.connect(lambda: core.common.open_path(info["url"]))
-            bar.addWidget(b)
-        b = ghost_btn("Skip", FI.CANCEL)
-        b.setMinimumWidth(100)
-        b.setToolTip("Do not mention this version again; the next one will show.")
-        b.clicked.connect(lambda: (skip_update(version), bar.close()))
-        bar.addWidget(b)
+            go.clicked.connect(lambda: core.common.open_path(info["url"]))
+        skip.clicked.connect(lambda: (skip_update(version), bar.close()))
 
     def _start_update(self, info, bar):
         if self.busy or self.game_running:
@@ -2726,13 +3086,7 @@ class Launcher(FluentWindow):
             )
             return
         bar.close()
-        self._update_bar = InfoBar.info(
-            f"Downloading {TITLE} {info['version']}",
-            "Starting...",
-            duration=-1,
-            position=InfoBarPosition.TOP,
-            parent=self,
-        )
+        self._update_bar = notice(self, "info", f"Downloading {TITLE} {info['version']}", "Starting...", closable=False)
         version = info["version"]
 
         def progress(done, total):
@@ -2763,25 +3117,21 @@ class Launcher(FluentWindow):
                 pass
             self._update_bar = None
         if result.get("error"):
-            InfoBar.error("Update not applied", result["error"], duration=-1, position=InfoBarPosition.TOP, parent=self)
+            notice(self, "error", "Update not applied", result["error"])
             return
         new_exe = Path(result["exe"])
-        bar = InfoBar.success(
+        go = primary_btn("Restart now")
+        later = ghost_btn("Later")
+        later.setToolTip("Keep using this version; the notice returns next time.")
+        bar = notice(
+            self,
+            "success",
             f"{TITLE} {result['version']} is ready",
             "Restart to finish. Nothing changes until you do.",
-            duration=-1,
-            position=InfoBarPosition.TOP,
-            parent=self,
+            actions=(go, later),
         )
-        b = primary_btn("Restart now")
-        b.setMinimumWidth(130)
-        b.clicked.connect(lambda: self._restart_updated(new_exe))
-        bar.addWidget(b)
-        b = ghost_btn("Later", FI.CANCEL)
-        b.setMinimumWidth(100)
-        b.setToolTip("Keep using this version; the notice returns next time.")
-        b.clicked.connect(bar.close)
-        bar.addWidget(b)
+        go.clicked.connect(lambda: self._restart_updated(new_exe))
+        later.clicked.connect(bar.close)
 
     def _restart_updated(self, new_exe):
         if self.busy or self.game_running:
@@ -2863,12 +3213,20 @@ class Launcher(FluentWindow):
             text.addWidget(sub)
             row.setToolTip(detail or "No change list recorded.")
             rl.addLayout(text, 1)
+            k = icon_btn(
+                FI.PIN if b["keep"] else FI.UNPIN,
+                "Kept for good. Click to let it age out like the others."
+                if b["keep"]
+                else "Keep this backup whatever its age.",
+            )
+            k.clicked.connect(lambda _=False, bk=b: self._keep_backup(bk))
+            rl.addWidget(k, 0, Qt.AlignVCenter)
             r = ghost_btn("Restore", FI.RETURN)
             r.setEnabled(not self.game_running and not self.busy)
             r.setToolTip(
                 f"Close {self.game.name} first."
                 if self.game_running
-                else "Put this copy back over the live save. The current file is copied first."
+                else "Put this backup back over the save. The save as it is now is backed up first."
             )
             r.clicked.connect(lambda _=False, bk=b: self._restore_backup(bk))
             rl.addWidget(r, 0, Qt.AlignVCenter)
@@ -2877,10 +3235,13 @@ class Launcher(FluentWindow):
             rl.addWidget(d, 0, Qt.AlignVCenter)
             self.backups_rows.addWidget(row)
         n = len(rows)
+        size = sum(b["size"] for b in rows) / 1_000_000
         self.backups_note.setText(
-            "No backups yet. One is made the first time a save is repaired or fixed."
+            "No backups yet. One is taken before the first change to a save."
             if not n
-            else count_label(n, "backup") + ("" if self._backups_all or n <= 6 else f", newest {len(shown)} shown")
+            else count_label(n, "backup")
+            + f", {size:,.0f} MB"
+            + ("" if self._backups_all or n <= 6 else f"  ·  newest {len(shown)} shown")
         )
         self.backups_more.setVisible(n > 6)
         self.backups_more.setText("Show fewer" if self._backups_all else "Show all")
@@ -2889,12 +3250,21 @@ class Launcher(FluentWindow):
         self._backups_all = not self._backups_all
         self._fill_backups()
 
+    def _keep_backup(self, b):
+        try:
+            core.keep_backup(b["path"], not b["keep"])
+        except OSError as e:
+            self._toast("Could not change it", str(e), error=True)
+            return
+        self._fill_backups()
+
     def _open_backups_folder(self):
-        rows = list_backups()
-        if rows:
-            core.common.open_path(str(rows[0]["path"].parent))
-        else:
-            self._toast("No backups yet", "A backup is made the first time a save is repaired or fixed.")
+        folders = core.saves_service.backup_folders()
+        if not folders:
+            self._toast("No saves yet", f"Play {self.game.name} once so it creates its save folder.", info=True)
+            return
+        folders[0].mkdir(parents=True, exist_ok=True)
+        core.common.open_path(str(folders[0]))
 
     def _restore_backup(self, b):
         if self.busy or self.game_running:
@@ -2908,10 +3278,10 @@ class Launcher(FluentWindow):
         if not confirm(
             self,
             f"Restore {save.name} from {b['when'][:16]}",
-            changes=[f"{save.name} becomes the copy taken before: {b['action']}"]
-            + [f"That copy predates: {c}" for c in b["changes"][:6]],
+            changes=[f"{save.name} goes back to the backup taken {b['action'][:1].lower()}{b['action'][1:]}"]
+            + [f"Undone with it: {c}" for c in b["changes"][:6]],
             warning=WRITE_WARNING,
-            safety="The file as it is now is copied into save-fix-backups first, so this restore can itself be undone from the Backups list.",
+            safety="The save as it is now is backed up first, so this restore can itself be undone from Backups.",
             apply_text="Restore",
         ):
             return
@@ -2944,6 +3314,337 @@ class Launcher(FluentWindow):
             self._toast("Backup deleted", b["path"].name)
         except Exception as e:
             self._toast("Could not delete", str(e), error=True)
+
+    # ---------------------------------------------------------------- saves in use, library, copies
+    def _note_saves_in_use(self, setup):
+        names = core.note_setup_saves(setup)
+        if names == getattr(self, "_saves_in_use", None):
+            return
+        self._saves_in_use = names
+        if getattr(self, "_saves_token", 0) and self.game.ready:
+            self.refresh_saves()  # a different setup can mean different files
+
+    def _save_role(self, name) -> str:
+        used = getattr(self, "_saves_in_use", None) or {}
+        if name.lower() == str(used.get("active") or "").lower():
+            return "Play uses this"
+        if used.get("coop") and name.lower() == str(used.get("standard") or "").lower():
+            return "Play offline uses this"
+        return ""
+
+    def _save_targets(self, folder, exclude=None):
+        """(label, path) for the live saves in one account folder, plus the files the setup uses that do not exist
+        yet (a swap or copy can create them)."""
+        folder = Path(folder)
+        out, seen = [], set()
+        for info in self.saves:
+            p = Path(info["path"])
+            if p.parent != folder or (exclude and p == Path(exclude)):
+                continue
+            role = self._save_role(p.name)
+            out.append((f"{p.name}  ·  {info['kind']}" + (f"  ·  {role}" if role else ""), p))
+            seen.add(p.name.lower())
+        used = getattr(self, "_saves_in_use", None) or {}
+        for key in ("coop", "standard"):
+            name = used.get(key)
+            if name and name.lower() not in seen and not (exclude and Path(exclude).name.lower() == name.lower()):
+                made_by = "me3 makes it at the next launch" if key == "standard" else "not created yet"
+                out.append((f"{name}  ·  {made_by}  ·  {self._save_role(name)}", folder / name))
+        return out
+
+    def _saves_blocked(self, what) -> bool:
+        if self.busy or self.game_running:
+            self._toast(
+                f"Cannot {what} now",
+                f"Close {self.game.name} first." if self.game_running else "Wait for the current job.",
+                error=True,
+            )
+            return True
+        return False
+
+    def _fill_library(self, libs):
+        self._libs = libs
+        for i in reversed(range(self.library_rows.count())):
+            it = self.library_rows.takeAt(i)
+            dispose(it.widget())
+        total = 0
+        several = len(libs) > 1
+        for folder, doc in libs.items():
+            entries = sorted(doc.get("entries") or [], key=lambda e: e.get("added") or "", reverse=True)
+            total += len(entries)
+            for e in entries:
+                row = QWidget()
+                rl = QHBoxLayout(row)
+                rl.setContentsMargins(0, 4, 0, 4)
+                rl.setSpacing(10)
+                text = QVBoxLayout()
+                text.setSpacing(2)
+                title = QHBoxLayout()
+                title.setSpacing(8)
+                title.addWidget(ElideLabel(e["name"]))
+                kind = "Co-op" if e.get("format") != "sl2" else "Standard"
+                title.addWidget(PathTag([kind], f"A {kind.lower()} save (.{e.get('format')})"))
+                if several:
+                    title.addWidget(PathTag([Path(folder).name], folder))
+                title.addStretch(1)
+                text.addLayout(title)
+                chars = e.get("characters") or []
+                who = ", ".join(f"{c['name']} {c['level']}" for c in chars[:3]) + (
+                    f" +{len(chars) - 3}" if len(chars) > 3 else ""
+                )
+                bits = [
+                    who or "no characters read",
+                    f"from {e.get('from', '?')}",
+                    (e.get("added") or "")[:16].replace("T", " "),
+                ]
+                if e.get("missing"):
+                    bits.insert(0, "file missing")
+                sub = hint("  ·  ".join(b for b in bits if b))
+                sub.setWordWrap(True)
+                text.addWidget(sub)
+                row.setToolTip(
+                    "\n".join(f"Slot {c['slot']}: {c['name']}, level {c['level']}" for c in chars) or e["name"]
+                )
+                rl.addLayout(text, 1)
+                b = ghost_btn("Swap in", FI.SYNC)
+                b.setEnabled(not e.get("missing") and not self.game_running and not self.busy)
+                b.setToolTip(
+                    f"Close {self.game.name} first." if self.game_running else "Put this copy in place of a live save."
+                )
+                b.clicked.connect(lambda _=False, f=folder, en=e: self._swap_in(f, en))
+                rl.addWidget(b, 0, Qt.AlignVCenter)
+                b = ghost_btn("Rename", FI.EDIT)
+                b.clicked.connect(lambda _=False, f=folder, en=e: self._rename_entry(f, en))
+                rl.addWidget(b, 0, Qt.AlignVCenter)
+                d = icon_btn(
+                    FI.DELETE, "Take this copy out of the library (its file moves to the library's removed folder)"
+                )
+                d.clicked.connect(lambda _=False, f=folder, en=e: self._delete_entry(f, en))
+                rl.addWidget(d, 0, Qt.AlignVCenter)
+                self.library_rows.addWidget(row)
+        self.library_note.setText(
+            (f"{total} saved cop{'y' if total == 1 else 'ies'}")
+            if total
+            else "Nothing here yet. Add to library on a save, or import a file."
+        )
+
+    def _stash_save(self, info):
+        if self._saves_blocked("add to the library"):
+            return
+        path = Path(info["path"])
+        dlg = TextDialog(
+            f"Add {path.name} to the library",
+            "A copy of the whole file is kept under this name. The save itself does not change.",
+            self,
+            text=core.save_library.default_name(path, self.game),
+            apply_text="Add",
+        )
+        if not dlg.exec():
+            return
+        name, game = dlg.edit.text().strip(), self.game
+
+        def job(_setup):
+            common = core.common
+            common.start_log(f"launcher: add {path.name} to the library")
+            try:
+                core.saves_service.assert_writable(path)
+                e = core.save_library.add(path.parent, path, name, game, action="stash")
+                common.log(f"done: '{e['name']}' ({e['file']}) added from {path.name}")
+            except Exception as ex:
+                common.log(f"error: {ex}")
+                raise SystemExit(1) from ex
+
+        self.start(job, f"Adding {path.name} to the library...", need_setup=False)
+
+    def _swap_in(self, folder, entry):
+        if self._saves_blocked("swap saves"):
+            return
+        targets = self._save_targets(folder)
+        if not targets:
+            self._toast("No save to swap into", "Play once so the game creates its save file.", error=True)
+            return
+        src = core.save_library.entry_path(Path(folder), entry)
+        dlg = SwapDialog(self, entry, src, targets, self.game, (self._saves_in_use or {}).get("active"))
+        if not dlg.exec():
+            return
+        target, keep_as, game = dlg.target_path(), dlg.outgoing_name(), self.game
+        if core.save_library.changed_outside(Path(folder), entry) and not confirm(
+            self,
+            f"'{entry['name']}' changed outside the launcher",
+            changes=["Its file no longer matches what the library recorded when it was added"],
+            safety="The save it replaces still goes into the library first.",
+            apply_text="Swap in anyway",
+        ):
+            return
+
+        def job(_setup):
+            common = core.common
+            common.start_log(f"launcher: swap '{entry['name']}' into {target.name}")
+            try:
+                core.saves_service.assert_writable(target)
+                out = core.save_library.swap_in(Path(folder), entry["id"], target, keep_as, game)
+                if out["backup"]:
+                    self._undo = (target, out["backup"])
+                if out["outgoing"]:
+                    common.log(f"kept the replaced save as '{out['outgoing']['name']}'")
+                common.log(f"done: '{entry['name']}' is now {target.name}")
+            except Exception as ex:
+                common.log(f"error: {ex}")
+                raise SystemExit(1) from ex
+
+        self.start(job, f"Swapping '{entry['name']}' in...", need_setup=False)
+
+    def _copy_save_file(self, info):
+        if self._saves_blocked("copy saves"):
+            return
+        path = Path(info["path"])
+        used = self._saves_in_use or {}
+        other = used.get("standard") if info["kind"] == "Seamless Co-op" else used.get("coop")
+        dlg = CopyFileDialog(self, path, self._save_targets(path.parent, exclude=path), self.game, other)
+        if not dlg.exec():
+            return
+        mode, target, name, game = dlg.mode(), dlg.target_path(), dlg.kept_name(), self.game
+        target_kind = next((i["kind"] for i in self.saves if Path(i["path"]) == target), None) or (
+            "Standard" if target.name == used.get("standard") else "Seamless Co-op"
+        )
+        holders = [p for p in info.get("vanilla_plan") or [] if p.get("strip") or p.get("blocked")]
+        if mode == "replace" and target_kind == "Standard" and holders:
+            if not confirm(
+                self,
+                "The copy carries mod items into a standard save",
+                changes=[
+                    f"{len(holders)} character{'s' if len(holders) != 1 else ''} hold items the game does not define"
+                ],
+                safety="Remove mod items on the Saves page can take them off afterwards; the replaced save is kept in the library.",
+                apply_text="Copy anyway",
+            ):
+                return
+
+        def job(_setup):
+            common = core.common
+            try:
+                if mode == "replace":
+                    common.start_log(f"launcher: copy {path.name} over {target.name}")
+                    core.saves_service.assert_writable(target)
+                    out = core.save_transfer.copy_file(path, target, game, keep_as=name)
+                    if out["backup"]:
+                        self._undo = (target, out["backup"])
+                    if out["kept"]:
+                        common.log(f"kept the replaced save as '{out['kept']['name']}'")
+                    common.log(f"done: {target.name} now holds {path.name}'s characters")
+                else:
+                    common.start_log(f"launcher: add {path.name} to the library")
+                    core.saves_service.assert_writable(path)
+                    e = core.save_library.add(path.parent, path, name, game, action="copy")
+                    common.log(f"done: '{e['name']}' added from {path.name}")
+            except Exception as ex:
+                common.log(f"error: {ex}")
+                raise SystemExit(1) from ex
+
+        self.start(job, f"Copying {path.name}...", need_setup=False)
+
+    def _copy_character(self, info):
+        if self._saves_blocked("copy characters"):
+            return
+        path = Path(info["path"])
+        dlg = CopyCharacterDialog(self, path, info, self._save_targets(path.parent), self.game)
+        if not dlg.exec():
+            return
+        src_slot, target, dst_slot = dlg.source_slot(), dlg.target_path(), dlg.target_slot()
+        if not target.is_file():
+            self._toast("No file to copy into yet", f"{target.name} does not exist. Use Copy to... first.", error=True)
+            return
+
+        def job(_setup):
+            common = core.common
+            common.start_log(f"launcher: copy slot {src_slot} of {path.name} into slot {dst_slot} of {target.name}")
+            try:
+                core.saves_service.assert_writable(target)
+                out = core.save_transfer.copy_character(path, src_slot, target, dst_slot)
+                self._undo = (target, out["backup"])
+                who = out["character"] or {}
+                common.log(f"done: {who.get('name', '?')} is in slot {dst_slot} of {target.name}")
+            except Exception as ex:
+                common.log(f"error: {ex}")
+                raise SystemExit(1) from ex
+
+        self.start(job, f"Copying a character into {target.name}...", need_setup=False)
+
+    def _rename_entry(self, folder, entry):
+        dlg = TextDialog("Rename", entry.get("from", ""), self, text=entry["name"], apply_text="Rename")
+        if not dlg.exec():
+            return
+        try:
+            core.save_library.rename(Path(folder), entry["id"], dlg.edit.text())
+        except Exception as ex:
+            self._toast("Could not rename", str(ex), error=True)
+            return
+        self.refresh_saves()
+
+    def _delete_entry(self, folder, entry):
+        if not confirm(
+            self,
+            f"Take '{entry['name']}' out of the library",
+            changes=[
+                "It no longer shows here",
+                "Its file moves to the library's removed folder, with a note of what it was",
+            ],
+            safety="No live save changes. The moved file can be copied back by hand.",
+            apply_text="Remove",
+        ):
+            return
+        try:
+            core.save_library.remove(Path(folder), entry["id"])
+        except Exception as ex:
+            self._toast("Could not remove", str(ex), error=True)
+            return
+        self.refresh_saves()
+
+    def _library_folder(self):
+        folders = [Path(f) for f in self._libs] or sorted({Path(i["path"]).parent for i in self.saves})
+        return folders[0] if folders else None
+
+    def _import_save(self):
+        folder = self._library_folder()
+        if folder is None:
+            self._toast("No save folder yet", f"Play {self.game.name} once so it creates one.", error=True)
+            return
+        src, _ = QFileDialog.getOpenFileName(
+            self, "Import a save file into the library", "", "Save files (*.sl2 *.co2);;All files (*)"
+        )
+        if not src:
+            return
+        dlg = TextDialog(
+            "Import into the library",
+            f"{Path(src).name} is copied into the library under this name. Nothing live changes.",
+            self,
+            text=core.save_library.default_name(Path(src), self.game),
+            apply_text="Import",
+        )
+        if not dlg.exec():
+            return
+        name, game = dlg.edit.text().strip(), self.game
+
+        def job(_setup):
+            common = core.common
+            common.start_log(f"launcher: import {src} into the library")
+            try:
+                e = core.save_library.add(folder, Path(src), name, game, action="import")
+                common.log(f"done: '{e['name']}' imported")
+            except Exception as ex:
+                common.log(f"error: {ex}")
+                raise SystemExit(1) from ex
+
+        self.start(job, f"Adding {Path(src).name} to the library...", need_setup=False)
+
+    def _open_library(self):
+        folder = self._library_folder()
+        if folder is None:
+            self._toast("No save folder yet", f"Play {self.game.name} once so it creates one.", error=True)
+            return
+        lib = core.save_library.folder_for(folder)
+        lib.mkdir(exist_ok=True)
+        core.common.open_path(str(lib))
 
     def _undo_last(self, undo):
         save, bak = undo
@@ -3034,23 +3735,13 @@ class Launcher(FluentWindow):
         wl = QVBoxLayout(wrap)
         wl.setContentsMargins(40, 4, 40, 20)
         self.ws_wrap_lay = wl
-        self.ws_bar = SaveBar()
-        box = QBoxLayout(QBoxLayout.LeftToRight, self.ws_bar)
-        self.ws_box = box
-        box.setContentsMargins(20, 12, 16, 12)
-        box.setSpacing(12)
-        self.ws_note = BodyLabel("Nothing selected.")
-        self.ws_note.setWordWrap(True)
-        box.addWidget(self.ws_note, 1)
-        self.ws_reset = ghost_btn("Reset", FI.CANCEL)
-        self.ws_reset.setToolTip("Put every tick box back to its default.")
-        self.ws_reset.clicked.connect(self._ws_reset)
-        box.addWidget(self.ws_reset)
-        self.ws_apply = primary_btn("Apply")
-        self.ws_apply.setMinimumHeight(40)
-        self.ws_apply.setMinimumWidth(150)
-        self.ws_apply.clicked.connect(self._ws_apply)
-        box.addWidget(self.ws_apply)
+        self.ws_bar = ActionBar(
+            "Apply",
+            self._ws_apply,
+            ("Reset", FI.CANCEL, self._ws_reset, "Put every tick box back to its default."),
+            note="Nothing selected.",
+        )
+        self.ws_note, self.ws_reset, self.ws_apply = self.ws_bar.note, self.ws_bar.secondary, self.ws_bar.primary
         wl.addWidget(self.ws_bar)
         outer.addWidget(wrap)
         self.workshop_page = root
@@ -3074,7 +3765,6 @@ class Launcher(FluentWindow):
         self.ws_wrap_lay.setContentsMargins(side, 4, side, 16 if compact else 20)
         self.ws_rail_w.setVisible(not compact)
         self.ws_picker.setVisible(compact and bool(self._ws_picker_slots))
-        self.ws_box.setDirection(QBoxLayout.TopToBottom if compact else QBoxLayout.LeftToRight)
 
     def _ws_picker_changed(self, index):
         if 0 <= index < len(self._ws_picker_slots) and self._ws_picker_slots[index] != self.ws_slot:
@@ -3648,6 +4338,7 @@ class Launcher(FluentWindow):
         self.setWindowTitle(self._base_title() + (f" - {status}" if busy and status else ""))
 
     def _on_done(self, ok, status):
+        label = getattr(self, "_job_label", "")  # what start() was told the job does; status is only how it ended
         self.set_busy(False, f"{status} at {datetime.datetime.now():%H:%M}")
         self._pill("Finished" if ok else "Stopped", "success" if ok else "error")
         self.refresh_saves()
@@ -3657,28 +4348,40 @@ class Launcher(FluentWindow):
             else (
                 "Done."
                 if any(
-                    w in (status or "")
-                    for w in ("Repairing", "Clearing", "Fixing", "Converting", "Restoring", "Installing")
+                    w in label
+                    for w in (
+                        "Repairing",
+                        "Clearing",
+                        "Fixing",
+                        "Converting",
+                        "Restoring",
+                        "Installing",
+                        "Swapping",
+                        "Copying",
+                        "Adding",
+                    )
                 )
                 else "Saves repaired and cleanup done."
             )
         )
-        if "Installing" in (status or ""):
+        if label.startswith("Installing"):
             self._load_profile_editor(force=True)
             self._fill_mods()
             self._update_plan()
+            if getattr(self, "_install_queue", None):
+                QTimer.singleShot(0, self._install_next)  # the next dropped mod
         undo = self._undo if ok else None
-        bar = (InfoBar.success if ok else InfoBar.error)(
+        undo_btn = ghost_btn("Undo", FI.RETURN) if undo else None
+        bar = notice(
+            self,
+            "success" if ok else "error",
             status,
             detail + (" Undo puts the file back as it was." if undo else ""),
+            actions=(undo_btn,) if undo_btn else (),
             duration=-1 if (undo or not ok) else 6000,
-            position=InfoBarPosition.TOP,
-            parent=self,
         )
-        if undo:
-            b = ghost_btn("Undo", FI.RETURN)
-            b.clicked.connect(lambda _=False, u=undo, bar=bar: (bar.close(), self._undo_last(u)))
-            bar.addWidget(b)
+        if undo_btn:
+            undo_btn.clicked.connect(lambda _=False, u=undo, bar=bar: (bar.close(), self._undo_last(u)))
         self._undo = None
 
     def start(self, job, status, need_setup=True):
@@ -3697,6 +4400,7 @@ class Launcher(FluentWindow):
         if self.game_running and job is not job_clear:
             self._toast(f"{self.game.name} is already running", "Close it first.", error=True)
             return
+        self._job_label = status
         self.set_busy(True, status)
         self.log_pane.banner(status)
         route_logs(self._log)
@@ -3749,18 +4453,16 @@ class Launcher(FluentWindow):
             self.steam_bad_since = None
         show = bad and time.time() - self.steam_bad_since >= 20 and not self.busy
         if show and self.steam_bar is None:
-            bar = InfoBar.warning(
-                "Steam is not signed in",
-                "Steam's login network may be down, so Play would wait and co-op cannot start. You can still play solo on the standard save.",
-                isClosable=False,
-                duration=-1,
-                position=InfoBarPosition.TOP,
-                parent=self,
-            )
             b = ghost_btn("Play offline")
             b.clicked.connect(self.launch_offline)
-            bar.addWidget(b)
-            self.steam_bar = bar
+            self.steam_bar = notice(
+                self,
+                "warning",
+                "Steam is not signed in",
+                "Steam's login network may be down, so Play would wait and co-op cannot start. You can still play solo on the standard save.",
+                actions=(b,),
+                closable=False,
+            )
         elif not show and self.steam_bar is not None:
             try:
                 self.steam_bar.close()
@@ -3774,13 +4476,9 @@ class Launcher(FluentWindow):
         if show and self.shells_bar is None:
             exe = core.common.game_exe_name()
             msg = f"{n} leftover {exe} process{'es' if n != 1 else ''} with no game window. Steam may refuse to launch."
-            bar = InfoBar.warning(
-                "Dead game process", msg, isClosable=True, duration=-1, position=InfoBarPosition.TOP, parent=self
-            )
             b = ghost_btn("Clear")
             b.clicked.connect(lambda: self.start(job_clear, "Clearing leftover processes...", need_setup=False))
-            bar.addWidget(b)
-            self.shells_bar = bar
+            self.shells_bar = notice(self, "warning", "Dead game process", msg, actions=(b,))
         elif not show and self.shells_bar is not None:
             try:
                 self.shells_bar.close()
@@ -3830,8 +4528,8 @@ class Launcher(FluentWindow):
                 self._toast_bar.close()
             except Exception:
                 pass
-        kind = InfoBar.error if error else (InfoBar.info if info else InfoBar.success)
-        self._toast_bar = kind(title, msg, duration=-1 if error else 4500, position=InfoBarPosition.TOP, parent=self)
+        kind = "error" if error else ("info" if info else "success")
+        self._toast_bar = notice(self, kind, title, msg, duration=-1 if error else 4500)
 
     def _on_theme(self, dark):
         save_settings(theme="dark" if dark else "light")
@@ -3883,8 +4581,8 @@ class Launcher(FluentWindow):
             w.card.update()
             w.borderWidget.update()
         self.log_pane.restyle()
-        style_editor(self.profile_edit)
-        style_editor(self.share)
+        self.profile_panel.restyle()
+        self.share_panel.restyle()
         self._apply_logo()
         self._frost()
 
@@ -3908,43 +4606,52 @@ class Launcher(FluentWindow):
         self.setCustomBackgroundColor(BG_LIGHT, BG_DARK)
 
     def closeEvent(self, e):
-        if (
-            self.busy
-            and not MessageBox(
-                "Close anyway?",
-                "A job is still running. Closing now leaves the game alone but skips the save repair and the cleanup afterwards.",
-                self,
-            ).exec()
+        if self.busy and not confirm(
+            self,
+            "Close while a job runs?",
+            changes=["The game is left alone", "The save repair and the cleanup after it are skipped"],
+            safety="Nothing is written by closing. Run Repair saves on Settings later if the game was played.",
+            apply_text="Close anyway",
         ):
             e.ignore()
             return
-        coop = self._coop_pending()
-        profile = self._profile_file is not None and self.profile_edit.toPlainText() != self._profile_disk
-        if coop or profile:
-            bits = (["Co-op settings"] if coop else []) + (["the me3 profile"] if profile else [])
-            box = MessageBox(
-                "Save before closing?",
-                " and ".join(bits) + (" have" if len(bits) > 1 else " has") + " unsaved changes.",
-                self,
-            )
-            box.yesButton.setText("Save")
-            box.cancelButton.setText("Cancel")
-            if not box.exec():
-                e.ignore()
-                return
-            if coop and self.save_seamless() is None:
-                e.ignore()
-                return
-            if profile and not self._save_profile():
-                e.ignore()
-                return
+        if not self._settle_unsaved("closing"):
+            e.ignore()
+            return
         e.accept()
+
+    def _unsaved(self) -> list[str]:
+        """What has edits that are not written yet, in words for a prompt."""
+        out = []
+        if self._coop_pending():
+            out.append("Co-op settings: " + ", ".join(self._pending_labels()))
+        if self.profile_panel.dirty:
+            out.append(f"The me3 profile ({self._profile_file.name if self._profile_file else 'editor'})")
+        return out
+
+    def _settle_unsaved(self, action) -> bool:
+        """Ask Save / Discard / Cancel when something is unsaved. True when it is fine to go on."""
+        what = self._unsaved()
+        if not what:
+            return True
+        choice = ask_unsaved(self, what, action)
+        if choice is None:
+            return False
+        if choice == "discard":
+            if self._coop_pending():
+                self._load_coop()
+            if self.profile_panel.dirty:
+                self._load_profile_editor(force=True)
+            return True
+        if self._coop_pending() and self.save_seamless() is None:
+            return False
+        return not (self.profile_panel.dirty and not self._save_profile())
 
     def _shortcut_save(self):
         page = self.stackedWidget.currentWidget()
         if page is self.coop_page and self._coop_pending():
             self._announce_saved(self.save_seamless(), "next")
-        elif page is self.mods_page and self.profile_save.isEnabled():
+        elif page is self.mods_page and self.profile_panel.dirty:
             self._save_profile()
 
 

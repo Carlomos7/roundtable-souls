@@ -22,7 +22,8 @@ from roundtable_souls.ui.theme import RADIUS, style_editor, tokens
 
 
 class CodeHighlighter(QSyntaxHighlighter):
-    """TOML for the me3 profile, JSON for share-with-a-friend. Colours follow the theme."""
+    """TOML for the me3 profile, JSON for share-with-a-friend, INI and plain text for mods' own settings files.
+    Colours follow the theme."""
 
     def __init__(self, document, kind="toml"):
         super().__init__(document)
@@ -64,6 +65,16 @@ class CodeHighlighter(QSyntaxHighlighter):
                 (r"\b-?\d+(\.\d+)?\b", "number"),
                 (r"\b(true|false|null)\b", "keyword"),
                 (r"^\s*//.*$", "comment"),
+            )
+        elif self.kind == "text":
+            specs = ((r"^\s*[#;].*$", "comment"),)  # a mod's own list format: only comment lines stand out
+        elif self.kind == "ini":
+            specs = (
+                (r"^\s*\[[^\]]+\]", "header"),
+                (r"(?<![A-Za-z0-9_])[A-Za-z_][A-Za-z0-9_. -]*(?=\s*=)", "key"),
+                (r"\b(true|false|on|off|yes|no)\b", "keyword"),
+                (r"\b-?\d+(\.\d+)?\b", "number"),
+                (r"^\s*[;#].*$", "comment"),
             )
         else:
             specs = (

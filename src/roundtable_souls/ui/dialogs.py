@@ -15,10 +15,71 @@ from qfluentwidgets import (
     SwitchButton,
 )
 
-from roundtable_souls.ui.theme import hint
+from roundtable_souls.ui.theme import BTN_H, ghost_btn, hint, style_ghost, style_primary
 
 
-class ConfirmDialog(MessageBoxBase):
+class Dialog(MessageBoxBase):
+    """Every dialog's buttons in the launcher's own styles and height: the commit action primary, the rest ghost."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        style_primary(self.yesButton)
+        style_ghost(self.cancelButton)
+        self.buttonGroup.setFixedHeight(BTN_H + 48)  # the base strip is sized for the library's shorter buttons
+
+
+class InfoDialog(Dialog):
+    """A title and some text to read, closed with one button."""
+
+    def __init__(self, title, text, parent):
+        super().__init__(parent)
+        self.widget.setMinimumWidth(min(560, max(400, (parent.width() - 200) if parent else 480)))
+        self.viewLayout.addWidget(SubtitleLabel(title))
+        body = BodyLabel(text)
+        body.setWordWrap(True)
+        self.viewLayout.addWidget(body)
+        self.yesButton.setText("Close")
+        self.hideCancelButton()
+
+
+class UnsavedDialog(Dialog):
+    """Unsaved changes stand in the way of something (closing, switching games): Save first, Discard them, or Cancel.
+    After exec(), `choice` is "save", "discard" or None."""
+
+    def __init__(self, parent, what, action="closing"):
+        super().__init__(parent)
+        self.choice = None
+        self.widget.setMinimumWidth(min(560, max(420, (parent.width() - 200) if parent else 480)))
+        self.viewLayout.setSpacing(8)
+        self.viewLayout.addWidget(SubtitleLabel(f"Save changes before {action}?"))
+        self.viewLayout.addWidget(hint("Not saved yet"))
+        for w in what:
+            lab = BodyLabel("•  " + w)
+            lab.setWordWrap(True)
+            self.viewLayout.addWidget(lab)
+        self.yesButton.setText("Save")
+        self.discardButton = ghost_btn("Discard")
+        self.discardButton.setToolTip("Drop the changes and carry on.")
+        self.discardButton.clicked.connect(self._discard)
+        self.buttonLayout.insertWidget(1, self.discardButton, 1, Qt.AlignVCenter)
+        self.cancelButton.setText("Cancel")
+
+    def validate(self):
+        self.choice = self.choice or "save"
+        return True
+
+    def _discard(self):
+        self.choice = "discard"
+        self.accept()
+
+
+def ask_unsaved(parent, what, action="closing"):
+    """Save / Discard / Cancel for unsaved changes. Returns "save", "discard", or None when cancelled."""
+    dlg = UnsavedDialog(parent, what, action)
+    return dlg.choice if dlg.exec() else None
+
+
+class ConfirmDialog(Dialog):
     """A confirm that reads top to bottom: what it is, what will happen (bullets), what keeps you safe, then the buttons.
 
     changes: bullet lines. safety: one line about the backup / undo. warning: the red strip for writes.
@@ -88,7 +149,7 @@ def confirm(parent, title, changes=(), safety="", warning="", detail="", apply_t
     )
 
 
-class ModOptionsDialog(MessageBoxBase):
+class ModOptionsDialog(Dialog):
     """Per-mod options me3 v1 knows: enabled, and for natives optional / load_early / initializer / finalizer,
     plus load order (load_after, load_before) against the other entries of the profile."""
 
@@ -237,7 +298,7 @@ class ModOptionsDialog(MessageBoxBase):
         return opts
 
 
-class TextDialog(MessageBoxBase):
+class TextDialog(Dialog):
     """One line of text with a title, a blurb and an optional tick box."""
 
     def __init__(
@@ -266,4 +327,56 @@ class TextDialog(MessageBoxBase):
 
 
 WRITE_WARNING = "This writes to your save file. Elden Ring must stay closed until it finishes."
-WRITE_SAFETY = "A copy of the file as it is now goes into save-fix-backups first. Undo appears at the top of the window afterwards, and the Backups list can put any copy back."
+WRITE_SAFETY = "A backup of the file as it is now is taken first. Undo appears at the top of the window afterwards, and Backups on the Saves page can put any backup back."
+
+
+class ChoiceListDialog(Dialog):
+    """Pick any of a list, all unticked to start. selected() gives the ticked indexes."""
+
+    def __init__(self, title, blurb, labels, parent, apply_text="Continue"):
+        super().__init__(parent)
+        self.widget.setMinimumWidth(min(640, max(460, (parent.width() - 200) if parent else 540)))
+        self.viewLayout.setSpacing(8)
+        self.viewLayout.addWidget(SubtitleLabel(title))
+        if blurb:
+            self.viewLayout.addWidget(hint(blurb))
+        body = QWidget()
+        body.setStyleSheet("background:transparent")
+        bl = QVBoxLayout(body)
+        bl.setContentsMargins(0, 4, 0, 4)
+        bl.setSpacing(6)
+        self.boxes = []
+        for label in labels:
+            cb = CheckBox(label)
+            cb.stateChanged.connect(self._count)
+            bl.addWidget(cb)
+            self.boxes.append(cb)
+        bl.addStretch(1)
+        scroll = ScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setStyleSheet("QScrollArea{background:transparent;border:none}")
+        scroll.viewport().setStyleSheet("background:transparent")
+        screen_h = parent.screen().availableGeometry().height() if parent and parent.screen() else 900
+        scroll.setMaximumHeight(max(220, min(420, screen_h - 360)))
+        scroll.setWidget(body)
+        self.viewLayout.addWidget(scroll)
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        for text, state in (("Tick all", True), ("Clear", False)):
+            b = ghost_btn(text)
+            b.clicked.connect(lambda _=False, on=state: [cb.setChecked(on) for cb in self.boxes])
+            row.addWidget(b)
+        row.addStretch(1)
+        self.viewLayout.addLayout(row)
+        self._apply_text = apply_text
+        self.cancelButton.setText("Cancel")
+        self._count()
+
+    def _count(self, *_):
+        n = len(self.selected())
+        self.yesButton.setText(f"{self._apply_text} {n}" if n else self._apply_text)
+        self.yesButton.setEnabled(bool(n))
+
+    def selected(self) -> list[int]:
+        return [i for i, cb in enumerate(self.boxes) if cb.isChecked()]

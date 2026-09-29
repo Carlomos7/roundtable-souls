@@ -86,14 +86,26 @@ def hint(text=""):
     return l
 
 
+# Every button in a row shares one height, radius and type size, so a primary next to a secondary never looks off.
+# Only the Play button is larger (hero=True).
+BTN_H = 36
+BTN_MIN_W = 96
+BTN_FONT = 14
+
+
 def style_primary(btn):
     """Solid gold CTA. Own stylesheet so Fluent cannot wash it into a pale pill."""
     t = tokens()
+    hero = bool(btn.property("hero"))
     btn.setAttribute(Qt.WA_StyledBackground, True)
     btn.setFlat(True)
+    if not hero:
+        btn.setMinimumHeight(BTN_H)
+        btn.setMinimumWidth(max(BTN_MIN_W, btn.minimumWidth()))
     btn.setStyleSheet(
         f"QPushButton{{background:{t['accent']};color:{t['on_accent']};border:1px solid {t['accent_press']};"
-        f"border-radius:{RADIUS_BTN}px;padding:0 28px;font-size:15px;font-weight:600;}}"
+        f"border-radius:{RADIUS_BTN}px;padding:0 {28 if hero else 18}px;"
+        f"font-size:{15 if hero else BTN_FONT}px;font-weight:600;}}"
         f"QPushButton:hover{{background:{t['accent_hover']};}}"
         f"QPushButton:pressed{{background:{t['accent_press']};}}"
         f"QPushButton:focus{{border:2px solid {t['ghost_fg']};}}"
@@ -107,27 +119,26 @@ def style_ghost(btn):
     t = tokens()
     btn.setAttribute(Qt.WA_StyledBackground, True)
     btn.setCursor(Qt.PointingHandCursor)
-    btn.setMinimumHeight(36)
+    btn.setMinimumHeight(BTN_H)
     if btn.property("hasIcon"):
         btn.setMinimumWidth(max(104, btn.minimumWidth()))
     btn.setStyleSheet(
-        f"PushButton{{background:{t['ghost']};color:{t['ghost_fg']};border:1px solid {t['ghost_bd']};"
-        f"border-radius:{RADIUS}px;padding:5px 14px 6px 14px;}}"
-        f"PushButton[hasIcon=true]{{padding-left:36px;}}"
-        f"PushButton:hover{{background:{t['ghost_hv']};}}"
-        f"PushButton:focus{{border:2px solid {t['accent']};}}"
-        f"PushButton:disabled{{color:{t['accent_off_fg']};border:1px solid {t['accent_off_bd']};}}"
+        f"QPushButton{{background:{t['ghost']};color:{t['ghost_fg']};border:1px solid {t['ghost_bd']};"
+        f"border-radius:{RADIUS_BTN}px;padding:0 14px;font-size:{BTN_FONT}px;}}"
+        f"QPushButton[hasIcon=true]{{padding-left:36px;}}"
+        f"QPushButton:hover{{background:{t['ghost_hv']};}}"
+        f"QPushButton:focus{{border:2px solid {t['accent']};}}"
+        f"QPushButton:disabled{{color:{t['accent_off_fg']};border:1px solid {t['accent_off_bd']};}}"
     )
     btn.setStyle(QApplication.style())
     return btn
 
 
-def primary_btn(text):
+def primary_btn(text, hero=False):
     b = QPushBtn(text)
     b.setObjectName("cta")
+    b.setProperty("hero", hero)
     b.setCursor(Qt.PointingHandCursor)
-    b.setMinimumHeight(44)
-    b.setMinimumWidth(128)
     return style_primary(b)
 
 
