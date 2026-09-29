@@ -2,6 +2,16 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
+## [Unreleased]
+
+- Mods: merge health for Elden Ring profiles. When the package that must stay last comes with a rebuild tool that folds earlier packages' regulation.bin (and similar shared files) into its own, the Mods page says whether that merge is up to date, why not (a pack added, changed, turned off, reordered or removed, or a game update), and offers Rebuild. The tool is found from its files, never from a mod's name, and the launcher only runs and checks it.
+- Mods: installing a pack with a regulation.bin before such a package offers to rebuild afterwards, notes which of the pack's files the rebuild will take, and warns when another pack stops being the source. Without a rebuild tool, placing a pack before the last one says its parameters will not apply; placing it last says the other one's will not.
+- Mods: a rebuild saves the profile first, keeps your commented profile when the tool only rewrote it (updating just the tool's own load order lists), and is verified against the tool's list of sources; a run that did not use the right files is reported as failed. Play warns about out-of-date or failed combined parameters but never rebuilds by itself.
+- Mods: rebuild tools are described in one documented format, rebuild.json (docs/Rebuild tools.md), so any overhaul can ship one: the command, what it combines and where it lists its sources. Tools that keep an installation.json with a refresh protocol are recognised as before. The launcher shows a tool's command and asks once before it first runs, and again when it changes.
+- Mods: Parameter overlay in a package's Options marks it as the package that must stay last when the launcher does not recognise it by its files; its rebuild tool is then looked for with looser rules, or a rebuild.json can be picked for it. Nothing else asks for per-mod labels.
+- Mods: a folder holding only a leftover regulation.bin no longer hides the real mod folder below it when installing.
+- Mods: changed load order lists keep their place in the entry and their one-per-line layout.
+
 ## [3.5.0] - 2026-09-29
 
 - Buttons: one size and shape everywhere; a primary action and the button beside it always match. Only Play stays larger.

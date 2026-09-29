@@ -113,6 +113,45 @@ Mods
   New mods otherwise go at the end of the load order; Options changes it,
   and anything else, once the mod is in.
 
+  Combined parameters (Elden Ring). Some packages that must stay last come
+  with a rebuild tool: a program that folds the regulation.bin (and files
+  such as the talk file behind the menus at graces) of the packages before
+  it into its own copy. The launcher finds one from the files next to that
+  package: a rebuild.json describing the tool (docs/Rebuild tools.md in the
+  project explains it), or a record of what it merged, with checksums,
+  beside its setup files. It never merges anything itself, and it asks once
+  before a tool runs for the first time (and again when the tool changes).
+  When there is one:
+    Install          a pack with a regulation.bin placed before that package
+                     offers Rebuild combined parameters after install
+                     (ticked). The pack's parameters apply only once the
+                     rebuild succeeds. Only one pack can be the rebuild's
+                     source: the last one before the rebuild tool's package.
+    Mods page        a line under the profile name says whether the
+                     combined parameters are up to date. Turning a pack on
+                     or off, reordering, removing or updating one, or a game
+                     update makes them out of date, and Rebuild runs the
+                     rebuild tool again (the game must be closed).
+    Rebuild          the profile is saved as a .bak first. Mergers usually
+                     rewrite the profile without comments; when it still
+                     loads the same things, your own text comes back with
+                     only the tool's own load order lists updated. The result
+                     is checked against the tool's list: a rebuild that
+                     did not take each file from the right pack is reported
+                     as failed, never as done.
+    Play             warns when the parameters in use are out of date, only
+                     one of several packs applies, or the last rebuild
+                     failed. It does not rebuild by itself.
+  Without a rebuild tool, only the last package with a regulation.bin applies,
+  and the Mods page says so when several have one.
+  Which files a pack has is always read from the pack itself; nothing asks
+  you to label a mod. If the launcher does not recognise a package that
+  must stay last (a fork, or a newer version that names its files
+  differently), turn on Parameter overlay in that package's Options. Its
+  rebuild tool is then looked for with looser rules, or you can pick a
+  rebuild.json for it there; installs place new packs before it even when no
+  tool is found.
+
   Each package and DLL has a tag naming the folder it sits in (SeamlessCoop
   for ersc.dll); hover it for the full path. The packages folder (mod) and
   the natives folder show at the top of their lists when something there
