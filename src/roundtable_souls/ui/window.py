@@ -22,13 +22,12 @@ import time
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QIcon, QKeySequence, QPixmap, QShortcut
+from PySide6.QtGui import QColor, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QBoxLayout,
     QFileDialog,
     QFrame,
-    QGraphicsOpacityEffect,
     QGridLayout,
     QHBoxLayout,
     QHeaderView,
@@ -39,10 +38,12 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtWidgets import QPushButton as QPushBtn
 from qfluentwidgets import (
+    Action,
     BodyLabel,
     CaptionLabel,
     CheckBox,
     ComboBox,
+    DropDownPushButton,
     FlowLayout,
     FluentWindow,
     IconWidget,
@@ -54,8 +55,8 @@ from qfluentwidgets import (
     MessageBox,
     NavigationItemPosition,
     PasswordLineEdit,
+    RoundMenu,
     SearchLineEdit,
-    SegmentedWidget,
     SpinBox,
     StrongBodyLabel,
     SwitchButton,
@@ -301,40 +302,87 @@ class Launcher(FluentWindow):
         if self.game.ready or pg is self.tools_page:
             self.switchTo(pg)
 
+    @staticmethod
+    def _game_dot(color: str, size: int = 12) -> QIcon:
+        """A small filled disc in the game's tint colour, used as its icon in the switcher and its menu."""
+        pix = QPixmap(size, size)
+        pix.fill(Qt.transparent)
+        p = QPainter(pix)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(color))
+        p.drawEllipse(1, 1, size - 2, size - 2)
+        p.end()
+        return QIcon(pix)
+
     def _build_game_tabs(self):
-        """One tab per game in the title bar. The label beside them stays the app name; the window title (taskbar)
-        also carries the game and any running job."""
+        """A compact switcher in the title bar: one button showing the current game and its dot, opening a menu of
+        every game with its status. The label beside it stays the app name; the window title carries the game."""
         bar = self.titleBar
         try:
             self.windowTitleChanged.disconnect(bar.setTitle)
         except RuntimeError, TypeError:
             pass
         bar.titleLabel.setText(TITLE)
-        self.game_tabs = SegmentedWidget(bar)
-        for g in games.GAMES:
-            item = self.game_tabs.addItem(g.key, g.name, onClick=lambda _=False, k=g.key: self._on_game_tab(k))
-            item.setToolTip(g.name if g.ready else f"{g.name}: support is coming. The tab shows what was found.")
-            if not g.ready:  # dim the games that are not playable yet, so Elden Ring and Nightreign read as active
-                fade = QGraphicsOpacityEffect(item)
-                fade.setOpacity(0.4)
-                item.setGraphicsEffect(fade)
-        self.game_tabs.setCurrentItem(self.game.key)
-        self.game_tabs.setFixedHeight(32)
+        self.game_btn = DropDownPushButton(self.game.name, bar)
+        self.game_btn.setFixedHeight(30)
+        self.game_btn.setMenu(self._game_menu())
+        self._sync_game_btn()
         sep = QFrame(bar)
         sep.setFixedSize(1, 16)
         sep.setStyleSheet("background: rgba(196, 160, 106, 90); border: none;")  # a faint gold hairline
         at = bar.hBoxLayout.indexOf(bar.titleLabel)
-        bar.hBoxLayout.insertSpacing(at + 1, 16)
+        bar.hBoxLayout.insertSpacing(at + 1, 14)
         bar.hBoxLayout.insertWidget(at + 2, sep, 0, Qt.AlignVCenter)
-        bar.hBoxLayout.insertSpacing(at + 3, 16)
-        bar.hBoxLayout.insertWidget(at + 4, self.game_tabs, 0, Qt.AlignVCenter)
+        bar.hBoxLayout.insertSpacing(at + 3, 14)
+        bar.hBoxLayout.insertWidget(at + 4, self.game_btn, 0, Qt.AlignVCenter)
+        # Ctrl+Tab / Ctrl+Shift+Tab cycle games; the button and menu still work with the mouse.
+        QShortcut(QKeySequence("Ctrl+Tab"), self, activated=lambda: self._cycle_game(1))
+        QShortcut(QKeySequence("Ctrl+Shift+Tab"), self, activated=lambda: self._cycle_game(-1))
+
+    def _game_menu(self):
+        """The switcher's drop-down: every game with its dot, a check on the current one, and a status line
+        (setup found / installed / not installed for ready games, 'coming soon' for the rest)."""
+        menu = RoundMenu(parent=self)
+        self._game_actions = {}
+        for g in games.GAMES:
+            act = Action(self._game_dot(g.tint), g.name, self)
+            act.triggered.connect(lambda _=False, k=g.key: self._on_game_tab(k))
+            menu.addAction(act)
+            self._game_actions[g.key] = act
+        return menu
+
+    def _game_status(self, g) -> str:
+        if not g.ready:
+            return "coming soon"
+        if core.common.installed_dir(g):
+            return "installed"
+        return "not installed"
+
+    def _sync_game_btn(self):
+        """Point the switcher button at the active game, and refresh each menu row's dot, check and status."""
+        if getattr(self, "game_btn", None) is None:
+            return
+        self.game_btn.setText(self.game.name)
+        self.game_btn.setIcon(self._game_dot(self.game.tint))
+        self.game_btn.setToolTip(f"{self.game.name} — click to switch game (Ctrl+Tab)")
+        for g, act in ((g, self._game_actions[g.key]) for g in games.GAMES):
+            current = g is self.game
+            act.setIcon(self._game_dot(g.tint, 14) if current else self._game_dot(g.tint))
+            act.setText(f"{'✓  ' if current else ''}{g.name}   ·   {self._game_status(g)}")
+
+    def _cycle_game(self, step):
+        if self.busy:
+            return
+        order = [g.key for g in games.GAMES]
+        nxt = order[(order.index(self.game.key) + step) % len(order)]
+        self._on_game_tab(nxt)
 
     def _on_game_tab(self, key):
         g = games.get(key)
         if g is self.game:
             return
         if self.busy:
-            self.game_tabs.setCurrentItem(self.game.key)
             self._toast("Wait for the current job", "Switch games once it finishes.", info=True)
             return
         unsaved = []
@@ -349,17 +397,22 @@ class Launcher(FluentWindow):
             safety="Nothing is written. Stay on this tab and save first if you want to keep them.",
             apply_text="Switch",
         ):
-            self.game_tabs.setCurrentItem(self.game.key)
             return
         self._set_game(g, remember=True)
 
     def _set_game(self, g, remember=False):
         """Point every page at another game: its setups, co-op ini, mods, saves and running checks."""
+        # Remember which page the game we are leaving was on, so switching back returns there.
+        self._game_last_page = getattr(self, "_game_last_page", {})
+        game_pages = (self.play_page, self.coop_page, self.mods_page, self.saves_page)
+        if self.game.ready and self.stackedWidget.currentWidget() in game_pages:
+            self._game_last_page[self.game.key] = self.stackedWidget.currentWidget().objectName()
+        on_settings = self.stackedWidget.currentWidget() is self.tools_page
         if remember:
             save_settings(game=g.key)
         self.settings = load_settings()
         self.game = use_game(g, self.settings)
-        self.game_tabs.setCurrentItem(g.key)
+        self._sync_game_btn()
         self.game_running = False
         for bar_name in ("shells_bar",):
             bar = getattr(self, bar_name, None)
@@ -369,12 +422,12 @@ class Launcher(FluentWindow):
                 except Exception:
                     pass
                 setattr(self, bar_name, None)
-        # Show the destination page at once so the tab feels instant; the per-page fills below then populate it.
-        if g.ready and self.stackedWidget.currentWidget() in (
-            self.placeholder_page,
-            getattr(self, "workshop_page", None),
-        ):
-            self.switchTo(self.play_page)
+        # Show the destination page at once so the switch feels instant; the per-page fills below then populate it.
+        # Land on the page this game was last on (default Play); Settings is shared, so stay there if that is open.
+        if g.ready and not on_settings:
+            want = self._game_last_page.get(g.key)
+            target = {p.objectName(): p for p in game_pages}.get(want, self.play_page)
+            self.switchTo(target)
         self.setups = discover(remembered_setup(self.settings)) if g.ready else []
         self._fill_setups()
         self._apply_game_ui()
@@ -529,9 +582,8 @@ class Launcher(FluentWindow):
             return
         self._compact = compact
         self.hero.set_compact(compact)
-        if getattr(self, "game_tabs", None) is not None:
-            for g in games.GAMES:
-                self.game_tabs.items[g.key].setText(g.short if compact else g.name)
+        if getattr(self, "game_btn", None) is not None:
+            self.game_btn.setText(self.game.short if compact else self.game.name)
         self._layout_scaling(2 if compact else 3)
         if hasattr(self, "save_box"):
             self.save_box.setDirection(QBoxLayout.TopToBottom if compact else QBoxLayout.LeftToRight)
@@ -3598,8 +3650,8 @@ class Launcher(FluentWindow):
             self._ws_recount()
         if status:
             self.status.setText(status)
-        if getattr(self, "game_tabs", None) is not None:
-            self.game_tabs.setEnabled(not busy)  # never switch games under a running job
+        if getattr(self, "game_btn", None) is not None:
+            self.game_btn.setEnabled(not busy)  # never switch games under a running job
         self.setWindowTitle(self._base_title() + (f" - {status}" if busy and status else ""))
 
     def _on_done(self, ok, status):

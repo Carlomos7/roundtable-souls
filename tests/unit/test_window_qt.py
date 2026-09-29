@@ -71,11 +71,13 @@ def test_game_tabs_switch_every_page(launcher, app):
     from roundtable_souls import games
     from roundtable_souls.system import common
 
-    assert list(launcher.game_tabs.items) == [g.key for g in games.GAMES]
+    assert list(launcher._game_actions) == [g.key for g in games.GAMES]
+    assert launcher.game_btn.text() == "Elden Ring"
     launcher._on_game_tab("nightreign")
     for _ in range(10):
         app.processEvents()
     assert launcher.game is games.NIGHTREIGN and common.GAME is games.NIGHTREIGN
+    assert launcher.game_btn.text() == "Nightreign"
     assert launcher.windowTitle().endswith("Nightreign")
     assert launcher.shortcut_fields["Launch options"].text().endswith("--game nightreign --play")
     assert launcher.repair_row.isVisibleTo(launcher.tools_page)  # Nightreign re-signs encrypted sections after play
@@ -100,8 +102,38 @@ def test_game_tabs_switch_every_page(launcher, app):
 
 def test_game_tabs_are_locked_while_a_job_runs(launcher, app):
     launcher.set_busy(True, "Working...")
-    assert not launcher.game_tabs.isEnabled()
+    assert not launcher.game_btn.isEnabled()
     launcher._on_game_tab("nightreign")
     assert launcher.game.key == "eldenring"
     launcher.set_busy(False, "done")
-    assert launcher.game_tabs.isEnabled()
+    assert launcher.game_btn.isEnabled()
+
+
+def test_switcher_remembers_the_last_page_per_game(launcher, app):
+    launcher.switchTo(launcher.mods_page)  # leave Elden Ring on Mods
+    launcher._on_game_tab("nightreign")
+    for _ in range(10):
+        app.processEvents()
+    assert launcher.stackedWidget.currentWidget() is launcher.play_page  # Nightreign, first visit, opens on Play
+    launcher.switchTo(launcher.saves_page)  # leave Nightreign on Saves
+    launcher._on_game_tab("eldenring")
+    for _ in range(10):
+        app.processEvents()
+    assert launcher.stackedWidget.currentWidget() is launcher.mods_page  # Elden Ring returns to Mods
+    launcher._on_game_tab("nightreign")
+    for _ in range(10):
+        app.processEvents()
+    assert launcher.stackedWidget.currentWidget() is launcher.saves_page  # Nightreign returns to Saves
+
+
+def test_ctrl_tab_cycles_games(launcher, app):
+    from roundtable_souls import games
+
+    launcher._cycle_game(1)
+    for _ in range(5):
+        app.processEvents()
+    assert launcher.game is games.NIGHTREIGN
+    launcher._cycle_game(-1)
+    for _ in range(5):
+        app.processEvents()
+    assert launcher.game is games.ELDEN_RING

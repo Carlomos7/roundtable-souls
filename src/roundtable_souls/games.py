@@ -26,6 +26,7 @@ class Game:
     save_reader: str | None = None  # "eldenring": characters; "nightreign": checksums; "container": structure only
     save_sections: int | None = None  # sections the game writes into a save, for the structure check
     regulation_repair: bool = False  # me3 leaves the save's regulation block dirty; repaired after play
+    tint: str = "#F9C043"  # the game's dot colour in the switcher menu, so each game is told apart at a glance
     ready: bool = False
 
     @property
@@ -46,6 +47,7 @@ ELDEN_RING = Game(
     coop_dll="ersc.dll",
     coop_ini="ersc_settings.ini",
     save_reader="eldenring",
+    tint="#F9C043",
     regulation_repair=True,
     ready=True,
 )
@@ -64,6 +66,7 @@ NIGHTREIGN = Game(
     save_reader="nightreign",
     save_sections=14,
     regulation_repair=True,
+    tint="#6E8BE0",
     ready=True,
 )
 DARK_SOULS_3 = Game(
@@ -76,6 +79,7 @@ DARK_SOULS_3 = Game(
     exe="DarkSoulsIII.exe",
     save_dir="DarkSoulsIII",
     save_stem="DS30000",
+    tint="#C25A32",
 )
 SEKIRO = Game(
     key="sekiro",
@@ -87,6 +91,7 @@ SEKIRO = Game(
     exe="sekiro.exe",
     save_dir="Sekiro",
     save_stem="S0000",
+    tint="#4FA890",
 )
 
 GAMES: tuple[Game, ...] = (ELDEN_RING, NIGHTREIGN, DARK_SOULS_3, SEKIRO)
