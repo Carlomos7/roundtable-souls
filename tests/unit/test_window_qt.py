@@ -524,7 +524,7 @@ def test_an_install_that_asked_for_it_rebuilds_afterwards(sandbox, monkeypatch, 
     monkeypatch.setattr(window.core.mod_merge, "find_backend", lambda p: tool)
     monkeypatch.setattr(window.core.mod_merge, "approved", lambda t: True)
     monkeypatch.setattr(
-        window.core.mod_merge, "rebuild", lambda p, log: rebuilt.append(p) or {"backend": "m", "profile_note": ""}
+        window.core.mod_merge, "rebuild", lambda p, log, **k: rebuilt.append(p) or {"backend": "m", "profile_note": ""}
     )
 
     def answer(dlg):
@@ -579,3 +579,40 @@ def test_a_rebuild_tool_runs_only_after_it_is_allowed_once(sandbox, monkeypatch,
     assert started == ["Rebuilding combined parameters..."] and merge.approved(merge.find_backend(prof))
     w._rebuild_merge(prof)
     assert asked.count("again") == 1 and len(started) == 2  # allowed once, not asked again
+
+
+def test_stacked_packs_offer_combine_on_the_mods_page(sandbox, monkeypatch):
+    w = sandbox
+    started = []
+    monkeypatch.setattr(window.Launcher, "start", lambda self, job, status, **k: started.append(status))
+    monkeypatch.setattr(window.core.mod_merge, "health", lambda p: {"state": "stacked", "can_combine": True})
+    prof = str(w.profiles / "sandbox.me3")
+    w.switchTo(w.mods_page)
+    w._on_merge(
+        {"profile": prof, "state": "stacked", "text": "Several packages ship parameters", "winner": "b",
+         "reasons": [], "backend": None, "can_combine": True}
+    )  # fmt: skip
+    assert not w.merge_btn.isHidden() and w.merge_btn.text() == "Combine"
+    QTest.mouseClick(w.merge_btn, Qt.LeftButton)
+    assert started == ["Combining parameters..."]
+
+
+def test_install_dialog_names_a_combine_when_there_is_no_tool(app, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QWidget
+    from test_mod_merge import World, _pack_source
+
+    from roundtable_souls.mods import manage
+
+    world = World(tmp_path, monkeypatch)
+    (world.base / "Merger" / "installation.json").unlink()
+    world.pack("a")
+    plan = manage.plan_install(world.profile, _pack_source(tmp_path / "dl"))
+    parent = QWidget()
+    parent.resize(1000, 800)
+    dlg = window.InstallDialog(parent, plan, lambda *a: plan, world.profile)
+    assert not dlg.rebuild.isHidden() and dlg.rebuild.text() == "Combine parameters with the other packs after install"
+    dlg.reg_place.setCurrentIndex(dlg.reg_place.count() - 1)  # Last: still combined, placement only orders overlaps
+    assert not dlg.rebuild.isHidden() and "combined with the other packs" in dlg.reg_effect.text()
+    dlg.validate()
+    assert plan["merge"] is True
+    parent.deleteLater()

@@ -780,7 +780,11 @@ class Launcher(FluentWindow):
         self.merge_btn.setToolTip(
             "Run the profile's rebuild tool so the package that must stay last combines the others."
         )
-        self.merge_btn.clicked.connect(lambda: self._rebuild_merge())
+        self.merge_btn.clicked.connect(
+            lambda: self._rebuild_merge(
+                combine=True if (getattr(self, "_merge_health", None) or {}).get("state") == "stacked" else None
+            )
+        )
         mr.addWidget(self.merge_text, 1)
         mr.addWidget(self.merge_btn, 0, Qt.AlignTop)
         self.merge_row.hide()
@@ -1470,13 +1474,16 @@ class Launcher(FluentWindow):
         state = h.get("state")
         show = state in ("stacked", "current", "stale", "failed")
         self.merge_row.setVisible(show)
-        self.merge_btn.setVisible(bool(h.get("backend")) and state in ("stale", "failed"))
+        self.merge_btn.setVisible(
+            (bool(h.get("backend")) and state in ("stale", "failed")) or (state == "stacked" and h.get("can_combine"))
+        )
+        self.merge_btn.setText("Combine" if state == "stacked" else "Rebuild")
         if not show:
             return
         reasons = h.get("reasons") or []
         text = h["text"]
         if state == "stacked":
-            text += f": {h['winner']}'s is used. Packs before it keep their file, but it does not apply."
+            text += f": {h['winner']}'s is used. " + (reasons[0] if reasons else "Combine them so all apply.")
         elif state == "current":
             text += f" ({h['backend']})."
         else:
@@ -1504,27 +1511,30 @@ class Launcher(FluentWindow):
                 self,
                 "warning",
                 "Only one parameter pack applies",
-                f"{h['winner']}'s regulation.bin is used.",
+                f"{h['winner']}'s regulation.bin is used. Combine them from the Mods page.",
                 duration=8000,
             )
         elif h.get("state") in ("stale", "failed"):
             notice(self, "warning", h["text"], "Rebuild them from the Mods page.", duration=8000)
 
-    def _rebuild_merge(self, profile=None):
+    def _rebuild_merge(self, profile=None, combine=None):
         prof = Path(profile or (self.setup.profile if self.setup else ""))
         if self.busy or not prof.is_file():
             return
         if self.game_running:
-            self._toast("Close the game first", "The rebuild tool rewrites files the game has open.", error=True)
+            self._toast("Close the game first", "The rebuild rewrites files the game has open.", error=True)
             return
         tool = core.mod_merge.find_backend(prof)
-        if tool is None:
-            self._toast("No rebuild tool", "This profile has no rebuild tool for combined parameters.", error=True)
+        h = core.mod_merge.health(prof)
+        if tool is None and not (h.get("combine") or h.get("can_combine") or combine):
+            self._toast(
+                "Nothing to rebuild", "Fewer than two packs ship parameters and there is no rebuild tool.", error=True
+            )
             return
-        if tool.problem():
+        if tool is not None and tool.problem():
             self._toast(f"{tool.label} cannot run", tool.problem(), error=True)
             return
-        if not core.mod_merge.approved(tool):
+        if tool is not None and not core.mod_merge.approved(tool):
             ok = confirm(
                 self,
                 f"Run {tool.label}?",
@@ -1541,13 +1551,17 @@ class Launcher(FluentWindow):
             common = core.common
             common.start_log("launcher: rebuild combined parameters")
             try:
-                out = core.mod_merge.rebuild(prof, common.log)
+                out = core.mod_merge.rebuild(prof, common.log, combine=combine)
                 common.log(f"done: combined parameters rebuilt by {out['backend']}; {out['profile_note']}")
             except core.mod_merge.MergeError as e:
                 common.log(f"error: {e}")
                 raise SystemExit(1) from e
 
-        self.start(job, "Rebuilding combined parameters...", need_setup=False)
+        self.start(
+            job,
+            "Rebuilding combined parameters..." if tool is not None or h.get("combine") else "Combining parameters...",
+            need_setup=False,
+        )
 
     def _after_profile_change(self, msg):
         self._log(msg)
@@ -4491,6 +4505,7 @@ class Launcher(FluentWindow):
                         "Restoring",
                         "Installing",
                         "Rebuilding",
+                        "Combining",
                         "Swapping",
                         "Copying",
                         "Adding",
@@ -4499,7 +4514,7 @@ class Launcher(FluentWindow):
                 else "Saves repaired and cleanup done."
             )
         )
-        if label.startswith(("Installing", "Rebuilding")):
+        if label.startswith(("Installing", "Rebuilding", "Combining")):
             self._load_profile_editor(force=True)
             self._fill_mods()
             self._update_plan()
