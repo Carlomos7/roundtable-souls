@@ -2,7 +2,7 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
-## [Unreleased]
+## [3.6.0] - 2026-09-29
 
 - Mods: combine parameter packs. When several packages ship a regulation.bin, Combine on the Mods page (or the box in the install dialog) applies each pack's changes to the game's own file, row by row in load order, so all of them apply: packs changing different parts of a row both apply, overlapping values go to the later pack and are listed, rows a pack lacks are kept, and tables made for another game version are left out and named. The result is a launcher-managed package, combined-parameters, checked against what went in like any rebuild.
 - Mods: with a package that must stay last and has its own rebuild tool, the combined package goes right before it, so that tool takes the combined file and every pack applies, not only the last one.
