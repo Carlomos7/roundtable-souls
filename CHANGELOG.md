@@ -2,6 +2,12 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
+## [Unreleased]
+
+- Logs: every job (Play, a repair, an install, a rebuild...) keeps its own log in logs\jobs, with how it ended, instead of one last_run.log overwritten by the next job. jobs.jsonl lists them. me3's output is kept with each Play instead of one file overwritten per launch. launcher.log (rotated) holds everything else and every crash with its details, replacing launcher-errors.log, which only grew. Jobs are kept for 14 days or the newest 50; older log files move to logs\old and go after 30 days.
+- Logs: lines carry real levels (errors, warnings) and where they came from, with milliseconds. A job's log only has that job's lines; background checks no longer mix in. The Log on the Play page shows the running job and warnings from anywhere, wraps long lines under the message, and has a Logs folder button; its buttons wrap in a narrow window. Changes made in the window itself (profile options, co-op settings) are kept in launcher.log too.
+- Logs: a folder the launcher cannot write no longer stops logging; the window still shows every line.
+
 ## [3.6.0] - 2026-09-29
 
 - Mods: combine parameter packs. When several packages ship a regulation.bin, Combine on the Mods page (or the box in the install dialog) applies each pack's changes to the game's own file, row by row in load order, so all of them apply: packs changing different parts of a row both apply, overlapping values go to the later pack and are listed, rows a pack lacks are kept, and tables made for another game version are left out and named. The result is a launcher-managed package, combined-parameters, checked against what went in like any rebuild.

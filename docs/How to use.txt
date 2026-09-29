@@ -321,6 +321,7 @@ Everything Roundtable Souls keeps is in one folder, its data folder:
 Inside it:
   launcher_settings.json                 your settings
   logs\                                  what happened, for when something goes wrong
+  cache\                                 checksums of large mod files, so checks stay quick
   saves\<game>\<Steam account>\backups\  a backup before every change to a save
   saves\<game>\<Steam account>\library\  the save library (library.json, copies, removed\)
   profiles\deleted\                      .me3 files deleted on the Mods page
@@ -333,8 +334,17 @@ folder), one .bak next to a .me3 or settings file you edited, and a moment's
 temporary file while a save is written. Backups and deleted profiles from
 earlier versions are moved into the data folder automatically.
 
-If something goes wrong, logs/launcher-errors.log and logs/last_run.log say
-what happened.
+If something goes wrong, the logs folder says what happened (Logs folder under
+Log on the Play page opens it):
+  jobs\<date>_<what>.log    one file per job (Play, a repair, an install, a
+                            rebuild...) with every step, and how it ended
+  jobs\<...>.me3.log        me3's own output for that Play
+  jobs.jsonl                what each job was, when, how long and how it ended
+  launcher.log              everything else worth keeping, and any crash with
+                            its details (the newest 2 MB and five older files)
+  old\                      logs from earlier versions, kept for 30 days
+Jobs and their files are kept for 14 days, or the newest 50, whichever keeps
+more. Nothing is sent anywhere.
 
 
 LICENCE
