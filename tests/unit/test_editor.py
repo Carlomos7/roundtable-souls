@@ -34,4 +34,4 @@ def test_indent_and_outdent():
     assert g.indent_lines(lines) == ["  a", "", "    b"]
     assert g.indent_lines(g.indent_lines(lines), outdent=True) == lines
     assert g.indent_lines([" x", "\ty", "z"], outdent=True) == ["x", "y", "z"]
-    assert g.COMMENT_PREFIX == {"toml": "#", "json": "//"}
+    assert g.COMMENT_PREFIX == {"toml": "#", "json": "//", "ini": ";", "text": "#"}

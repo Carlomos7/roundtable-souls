@@ -431,7 +431,7 @@ def export_text(ini: Path) -> str:
     return json.dumps(doc, indent=2)
 
 
-COMMENT_PREFIX = {"toml": "#", "json": "//"}
+COMMENT_PREFIX = {"toml": "#", "json": "//", "ini": ";", "text": "#"}
 
 
 def strip_json_comments(text: str) -> str:

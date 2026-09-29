@@ -12,12 +12,19 @@ import re
 import tomllib
 from pathlib import Path
 
+from roundtable_souls.mods.manage import ACCEPTABLE_FOLDERS, NOT_GAME_FOLDERS
+
 SETTING_KEYS = ("savefile", "start_online", "disable_arxan", "mem_patch", "mem_patch_heap_size")
 SETTING_TEXT = {
-    "savefile": ("Save file", "Use a different save file name for this profile (in the game's save folder)."),
+    "savefile": (
+        "Save file",
+        "A different save file name for this profile, in the game's save folder. When it does not exist yet, me3 "
+        "starts it as a copy of the normal save.",
+    ),
     "start_online": (
         "Online matchmaking",
-        "me3 blocks the official servers by default. Turning this on with mods risks a ban.",
+        "me3 blocks the official servers by default. Only private-server mods need this on; Seamless Co-op does "
+        "not. On with mods risks a ban.",
     ),
     "disable_arxan": ("Neutralise Arxan", "Disables the game's tamper protection; helps some mods stay stable."),
     "mem_patch": ("Memory patch", "Lifts the game's memory limits for heavy mods (me3 default: on for Elden Ring)."),
@@ -178,7 +185,9 @@ def category_of(rel: str) -> str:
 
 
 def scan_conflicts(profile: Path, text: str | None = None, max_files: int = 400000) -> dict:
-    """Walk every enabled package and report paths two or more provide.
+    """Walk every enabled package and report paths two or more provide. Only the game folders at a package's top
+    level (parts, chr, ...) are walked: me3 serves a package's files at their path below it, so anything else (a
+    folder of other mods, backups, notes) is never asked for by the game and cannot conflict.
 
     Returns {packages: [{id, path, files, wins, loses, missing}], conflicts: [{path, category, winner, losers}],
              files: total, by_category: {cat: n}, truncated: bool}."""
@@ -196,8 +205,12 @@ def scan_conflicts(profile: Path, text: str | None = None, max_files: int = 4000
         packages.append(info)
         if info["missing"]:
             continue
+        game_folders = ACCEPTABLE_FOLDERS - NOT_GAME_FOLDERS
         for dirpath, dirnames, filenames in os.walk(root):
-            dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+            if Path(dirpath) == root:
+                dirnames[:] = [d for d in dirnames if d.lower() in game_folders]
+            else:
+                dirnames[:] = [d for d in dirnames if not d.startswith(".")]
             for fn in filenames:
                 low = fn.lower()
                 if low in IGNORED_NAMES or Path(low).suffix in IGNORED_SUFFIXES:

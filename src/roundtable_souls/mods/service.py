@@ -191,10 +191,17 @@ def profile_entries(profile) -> list:
         return []
 
 
-def plan_mod_install(profile, source, name=None) -> dict:
-    plan = mod_manage.plan_install(Path(profile), Path(source), name)
+def plan_mod_install(profile, source, name=None, pkg_id=None, variant=None) -> dict:
+    plan = mod_manage.plan_install(Path(profile), Path(source), name, pkg_id, variant)
     models.ModPlan.model_validate(plan)
     return plan
+
+
+def replan_mod_install(profile, plan, name=None, pkg_id=None, variant=None) -> dict:
+    """The same unpacked mod with another folder name, id or variant (nothing is unpacked again)."""
+    new = mod_manage.replan(Path(profile), plan, name, pkg_id, variant)
+    models.ModPlan.model_validate(new)
+    return new
 
 
 def install_mod(profile, plan, overwrite=False) -> dict:

@@ -143,7 +143,7 @@ def test_7z_install_and_safety(tmp_path):
     p.parent.mkdir()
     p.write_text('profileVersion = "v1"\n', encoding="utf-8")
     plan = M.plan_install(p, a)
-    assert plan["kind"] == "package" and plan["name"] == "Nice-Mod" and plan["assets"] == ["msg"] and plan["staging"]
+    assert plan["kind"] == "package" and plan["name"] == "nice-mod" and plan["assets"] == ["msg"] and plan["staging"]
     out = M.install(p, plan)
     assert (out["dest"] / "msg" / "x.msgbnd.dcx").read_bytes() == b"m" and not plan["staging"].exists()
     assert (
@@ -176,8 +176,8 @@ def test_install_package_from_zip_and_native_from_folder(tmp_path):
     plan = M.plan_install(p, z)
     assert (
         plan["kind"] == "package"
-        and plan["name"] == "Cool-Armor"
-        and plan["dest"] == tmp_path / "mod" / "Cool-Armor"
+        and plan["name"] == "cool-armor"
+        and plan["dest"] == tmp_path / "mod" / "cool-armor"
         and plan["staging"]
     )
     out = M.install(p, plan)
@@ -189,18 +189,18 @@ def test_install_package_from_zip_and_native_from_folder(tmp_path):
     text = _read(p)
     data = tomllib.loads(text)
     assert (
-        data["packages"][-1] == {"id": "Cool-Armor", "path": "mod/Cool-Armor"}
+        data["packages"][-1] == {"id": "cool-armor", "path": "mod/cool-armor"}
         and "# keep this" in text
         and "\r\n" in text
     )
-    assert [e["name"] for e in M.entries(p)] == ["flora", "ersc.dll", "other.dll", "Cool-Armor"]
+    assert [e["name"] for e in M.entries(p)] == ["flora", "ersc.dll", "other.dll", "cool-armor"]
     with pytest.raises(M.ModError):
         M.install(p, M.plan_install(p, z))  # exists
     plan = M.plan_install(p, z)
-    assert plan["already_listed"] == ["mod/Cool-Armor"]
+    assert plan["already_listed"] == ["mod/cool-armor"]
     out = M.install(p, plan, overwrite=True)
     assert (
-        out["entries"] == [] and sum(1 for e in M.entries(p) if e["id"] == "Cool-Armor") == 1
+        out["entries"] == [] and sum(1 for e in M.entries(p) if e["id"] == "cool-armor") == 1
     )  # files replaced, no second entry
     # a folder already inside mod/ installs in place: nothing copied, nothing deleted, one entry added
     here = tmp_path / "mod" / "Solo"
@@ -248,9 +248,9 @@ def test_install_into_array_form_profile_converts_it(tmp_path):
         and data["natives"][0]["load_early"] is True
         and data["natives"][0]["path"] == "SeamlessCoop/ersc.dll"
     )
-    assert [x["id"] for x in data["packages"]] == ["nightreign-revive", "Tex"] and data["packages"][1][
+    assert [x["id"] for x in data["packages"]] == ["nightreign-revive", "tex"] and data["packages"][1][
         "path"
-    ] == "mod/Tex"  # never inside Revive's own folder
+    ] == "mod/tex"  # never inside Revive's own folder
     assert "[[packages]]" in p.read_text(encoding="utf-8")
 
 
@@ -349,6 +349,378 @@ def test_create_and_delete_profile(tmp_path):
     c = M.create_profile(tmp_path / "profiles", "copy.me3", copy_from=src)
     assert c.name == "copy.me3" and "flora" in c.read_text(encoding="utf-8")
     gone = M.delete_profile(c)
-    assert not c.exists() and gone.parent.name == "deleted-profiles" and gone.suffix == ".me3"
+    from roundtable_souls import folders
+
+    assert not c.exists() and gone.parent == folders.deleted_profiles(c.parent) and gone.suffix == ".me3"
+    assert '"from"' in Path(str(gone) + ".json").read_text(encoding="utf-8")  # a note of where it lived
     with pytest.raises(M.ModError):
         M.delete_profile(c)
+
+
+FOLDER_OF_MODS = (
+    'profileVersion = "v1"\n\n[[packages]]\nid = "all"\npath = \'mod\'\n\n'
+    "[[packages]]\nid = \"flora\"\npath = 'mod/pack/flora'\n\n[[packages]]\nid = \"hud\"\npath = 'mod/hud'\n"
+)
+
+
+def _tree_layout(tmp_path):
+    p = tmp_path / "my.me3"
+    p.write_text(FOLDER_OF_MODS, encoding="utf-8")
+    for rel in ("mod/hud/menu", "mod/pack/flora/parts", "mod/pack/sky/parts", "mod/skin/parts", "mod/_backup/parts"):
+        (tmp_path / rel).mkdir(parents=True)
+    (tmp_path / "mod" / "notes").mkdir()
+    return p
+
+
+def test_package_tree_finds_a_folder_of_mods_and_what_it_leaves_unloaded(tmp_path):
+    p = _tree_layout(tmp_path)
+    tree = M.package_tree(p, M.entries(p))
+    root, flora, hud = tree[0], tree[1], tree[2]
+    assert not root["own_files"] and sorted(root["children"]) == [1, 2]  # 'mod' only holds other mods
+    assert flora["own_files"] and flora["parent"] == 0 and hud["parent"] == 0
+    unlisted = sorted(f.relative_to(tmp_path / "mod").as_posix() for f in root["unlisted"])
+    assert unlisted == ["pack/sky", "skin"]  # _backup and a folder with no game files are not mods
+    assert flora["unlisted"] == [] and hud["unlisted"] == []  # ordinary packages are not walked
+
+
+def test_add_existing_lists_folders_in_place_without_copying(tmp_path):
+    p = _tree_layout(tmp_path)
+    before = sorted(x.as_posix() for x in (tmp_path / "mod").rglob("*"))
+    out = M.add_existing(p, [tmp_path / "mod" / "pack" / "sky", tmp_path / "mod" / "skin"])
+    assert [r["id"] for r in out["entries"]] == ["pack-sky", "skin"]
+    assert sorted(x.as_posix() for x in (tmp_path / "mod").rglob("*")) == before  # nothing copied or moved
+    rows = tomllib.loads(p.read_text(encoding="utf-8"))["packages"]
+    assert [r["path"] for r in rows[-2:]] == ["mod/pack/sky", "mod/skin"] and out["backup"].is_file()
+    again = M.add_existing(p, [tmp_path / "mod" / "skin"])  # a clash gets a numbered id, never a duplicate
+    assert again["entries"][0]["id"] == "skin-2"
+
+
+CHECKS = (
+    'profileVersion = "v1"\n\n'
+    '[[packages]]\nid = "a"\npath = \'mod/a\'\nload_after = [{ id = "b", optional = false }]\n\n'
+    '[[packages]]\nid = "b"\npath = \'mod/b\'\nload_after = [{ id = "a", optional = false }]\n\n'
+    "[[packages]]\nid = \"a\"\npath = 'mod/gone'\n\n"
+    '[[packages]]\nid = "c"\npath = \'mod/c\'\nload_after = [{ id = "nowhere", optional = false }, { id = "fine", optional = true }]\n\n'
+    '[[natives]]\npath = \'natives/x.dll\'\nload_after = [{ id = "off.dll", optional = false }, { id = "a", optional = false }]\n\n'
+    "[[natives]]\npath = 'natives/off.dll'\nenabled = false\n\n"
+    "[[natives]]\npath = 'natives/readme.txt'\n"
+)
+
+
+def test_entry_problems_follow_me3_rules(tmp_path):
+    p = tmp_path / "my.me3"
+    p.write_text(CHECKS, encoding="utf-8")
+    for d in ("mod/a/parts", "mod/b/parts", "mod/c/parts"):
+        (tmp_path / d).mkdir(parents=True)
+    (tmp_path / "natives").mkdir()
+    for f in ("x.dll", "off.dll", "readme.txt"):
+        (tmp_path / "natives" / f).write_bytes(b"x")
+    items = M.entries(p)
+    got = M.entry_problems(p, items)
+    by = {i: " | ".join(v) for i, v in got.items()}
+    assert "Load order loops: a" in by[0] and "Load order loops" in by[1]
+    assert "used twice" in by[0] and "Folder missing" in by[2]
+    assert "'nowhere', which is not in this profile" in by[3] and "fine" not in by[3]  # optional is fine
+    assert "'off.dll', which is off" in by[4]
+    assert "'a', which is not in this profile" in by[4]  # a native cannot wait for a package
+    assert by[5] == "" and "Not a .dll" in by[6]
+
+
+def test_conflicts_count_only_what_the_game_can_ask_for(tmp_path):
+    from roundtable_souls.mods import profile as P
+
+    p = tmp_path / "my.me3"
+    p.write_text(
+        'profileVersion = "v1"\n[[packages]]\nid = "all"\npath = \'mod\'\n[[packages]]\nid = "x"\npath = \'mod/x\'\n'
+        "[[packages]]\nid = \"y\"\npath = 'mod/y'\n",
+        encoding="utf-8",
+    )
+    for d in ("x", "y"):
+        (tmp_path / "mod" / d / "parts").mkdir(parents=True)
+        (tmp_path / "mod" / d / "parts" / "am_m_1000.partsbnd.dcx").write_bytes(b"p")
+        (tmp_path / "mod" / d / "_backup").mkdir()
+        (tmp_path / "mod" / d / "_backup" / "old.partsbnd.dcx").write_bytes(b"o")
+    r = P.scan_conflicts(p)
+    assert [(c["path"], c["winner"]) for c in r["conflicts"]] == [("parts/am_m_1000.partsbnd.dcx", "y")]
+    assert r["files"] == 2 and r["packages"][0]["files"] == 0  # the folder of mods adds nothing
+
+
+def _layout(tmp_path, profile_text, folders=(), files=()):
+    p = tmp_path / "my.me3"
+    p.write_text(profile_text, encoding="utf-8")
+    for d in folders:
+        (tmp_path / d).mkdir(parents=True, exist_ok=True)
+    for f in files:
+        (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / f).write_bytes(b"x")
+    return p
+
+
+def test_an_entry_for_the_folder_of_mods_is_a_folder_not_a_mod(tmp_path):
+    p = _layout(
+        tmp_path,
+        'profileVersion = "v1"\n[[packages]]\nid = "all"\npath = \'mod\'\n[[packages]]\nid = "hud"\npath = \'mod/hud\'\n',
+        ("mod/hud/menu", "mod/skin/parts"),
+    )
+    items = M.entries(p)
+    o = M.folder_overview(p, items)
+    pk = o["packages"]
+    assert pk["root"].name == "mod" and pk["holders"] == [0] and pk["listed"] == 1
+    assert [u.name for u in pk["unlisted"]] == ["skin"]
+
+
+def test_one_package_for_everything_as_in_the_me3_guide_is_just_a_mod(tmp_path):
+    p = _layout(tmp_path, 'profileVersion = "v1"\n[[packages]]\nid = "nightmods"\npath = \'mod\'\n', ("mod/parts",))
+    items = M.entries(p)
+    o = M.folder_overview(p, items)
+    assert o["packages"] is None  # mod/ serves game files itself: no folder row, no holder
+    assert not M.package_tree(p, items)[0]["holder"]
+
+
+def test_unloaded_mod_folders_show_without_an_entry_for_the_folder(tmp_path):
+    p = _layout(
+        tmp_path,
+        'profileVersion = "v1"\n[[packages]]\nid = "hud"\npath = \'mod/hud\'\n',
+        ("mod/hud/menu", "mod/skin/parts", "mod/_backup/parts", "mod/notes"),
+    )
+    pk = M.folder_overview(p, M.entries(p))["packages"]
+    assert pk["holders"] == [] and [u.name for u in pk["unlisted"]] == ["skin"]
+
+
+def test_listed_folders_match_whatever_the_letter_case(tmp_path):
+    import os
+
+    if os.name != "nt":
+        pytest.skip("case-insensitive paths are a Windows thing")
+    p = _layout(tmp_path, 'profileVersion = "v1"\n[[packages]]\nid = "hud"\npath = \'MOD\\\\HUD\'\n', ("mod/hud/menu",))
+    pk = M.folder_overview(p, M.entries(p))["packages"]
+    assert pk is None or pk["unlisted"] == []
+
+
+def test_unloaded_dlls_leave_out_helpers_runtimes_and_reshade_addons(tmp_path):
+    p = _layout(
+        tmp_path,
+        "profileVersion = \"v1\"\n[[natives]]\npath = 'natives/SeamlessCoop/ersc.dll'\n[[natives]]\npath = 'natives/a.dll'\n",
+        (),
+        (
+            "natives/a.dll",
+            "natives/b.dll",
+            "natives/SeamlessCoop/ersc.dll",
+            "natives/SeamlessCoop/helper.dll",
+            "natives/Fps/UnlockTheFps.dll",
+            "natives/RenoDX/nvngx_dlssnr.dll",
+            "natives/RenoDX/renodx.addon64",
+            "natives/Other/extra.dll",
+            "natives/sl.dlss.dll",
+        ),
+    )
+    nt = M.folder_overview(p, M.entries(p))["natives"]
+    assert sorted(x.name for x in nt["unlisted"]) == ["UnlockTheFps.dll", "b.dll", "extra.dll"] and nt["listed"] == 2
+    out = M.add_existing(p, [tmp_path / "natives" / "b.dll"], kind="native")
+    assert out["entries"] == [{"kind": "native", "path": "natives/b.dll"}]
+    assert "b.dll" not in [x.name for x in M.folder_overview(p, M.entries(p))["natives"]["unlisted"]]
+
+
+def _goblins(root, langs=("English", "Italian")):
+    """An archive laid out like Map for Goblins Expanded: a mod/ folder per language, a readme and an example .me3."""
+    for lang in langs:
+        m = root / lang / "mod"
+        (m / "menu").mkdir(parents=True)
+        (m / "menu" / "02_120_worldmap.gfx").write_bytes(b"g")
+        for code in ("engus", "itait"):
+            (m / "msg" / code).mkdir(parents=True)
+            (m / "msg" / code / "item_dlc02.msgbnd.dcx").write_bytes(lang.encode())
+        (m / "script" / "talk").mkdir(parents=True)
+        (m / "script" / "talk" / "m00_00_00_00.talkesdbnd.dcx").write_bytes(b"t")
+        (m / "regulation.bin").write_bytes(b"R")
+        (m / "readme.txt").write_text("r")
+    (root / "example.me3").write_text('profileVersion = "v1"\n')
+    (root / "Readme.txt").write_text("r")
+
+
+REVIVE_LAST = (
+    'profileVersion = "v1"\n\n[[packages]]\nid = "solo"\npath = \'mod/solo\'\n\n'
+    "# Revive: must stay last\n# (its regulation.bin)\n[[packages]]\nid = \"nightreign-revive\"\npath = 'revive/mod'\n"
+)
+
+
+def _revive_profile(tmp_path):
+    base = tmp_path / "prof"
+    (base / "mod" / "solo" / "parts").mkdir(parents=True)
+    (base / "revive" / "mod").mkdir(parents=True)
+    (base / "revive" / "mod" / "regulation.bin").write_bytes(b"V")
+    p = base / "p.me3"
+    p.write_text(REVIVE_LAST, encoding="utf-8")
+    return p
+
+
+def test_find_roots_picks_mod_folders_below_wrappers_and_offers_each_language(tmp_path):
+    _goblins(tmp_path / "Map for Goblins Expanded")
+    roots = M.find_roots(tmp_path)
+    assert [r.relative_to(tmp_path).as_posix() for r in roots] == [
+        "Map for Goblins Expanded/English/mod",
+        "Map for Goblins Expanded/Italian/mod",
+    ]
+    one = tmp_path / "one"
+    _goblins(one / "Wrap", langs=("x",))
+    assert [r.relative_to(one).as_posix() for r in M.find_roots(one)] == ["Wrap/x/mod"]
+
+
+def test_contents_tick_what_the_game_reads_and_leave_docs_and_profiles_out(tmp_path):
+    _goblins(tmp_path, langs=("x",))
+    got = {c["name"]: (c["group"], c["on"]) for c in M.contents(tmp_path / "x" / "mod", "package")}
+    assert got == {
+        "menu": ("game", True),
+        "msg": ("game", True),
+        "script": ("game", True),
+        "regulation.bin": ("regulation", True),
+        "readme.txt": ("doc", False),
+    }
+    n = tmp_path / "dll"
+    (n / "locale").mkdir(parents=True)
+    for f in ("Fps.dll", "Fps.ini", "skeleton_mods.txt", "README.md", "sample.me3"):
+        (n / f).write_text("x")
+    got = {c["name"]: (c["group"], c["on"]) for c in M.contents(n, "native")}
+    assert got == {
+        "locale": ("files", True),
+        "Fps.dll": ("dll", True),
+        "Fps.ini": ("settings", True),
+        "skeleton_mods.txt": ("settings", True),
+        "README.md": ("doc", False),
+        "sample.me3": ("profile", False),
+    }
+
+
+def test_plan_offers_variants_and_replans_without_unpacking_again(tmp_path):
+    py7zr = pytest.importorskip("py7zr")
+    src = tmp_path / "src" / "Map for Goblins Expanded"
+    _goblins(src)
+    a = tmp_path / "Map for Goblins Expanded-1234-1-0.7z"
+    with py7zr.SevenZipFile(a, "w") as z:
+        z.writeall(src, arcname=src.name)
+    p = _revive_profile(tmp_path)
+    plan = M.plan_install(p, a)
+    assert (
+        plan["kind"] == "package"
+        and plan["variants"] == ["Map for Goblins Expanded/English/mod", "Map for Goblins Expanded/Italian/mod"]
+        and plan["languages"] == ["engus", "itait"]
+        and plan["profiles_inside"]  # the example .me3 is noted, not what makes it a mod
+        and plan["regulation_winner"] == "nightreign-revive"
+    )
+    again = M.replan(p, plan, name="Goblin Maps", pkg_id="goblins", variant=plan["variants"][1])
+    assert (
+        again["unpacked"] == plan["unpacked"]
+        and again["name"] == "Goblin-Maps"
+        and again["id"] == "goblins"
+        and again["root"].parent.name == "Italian"
+    )
+    assert M.replan(p, plan, pkg_id="solo")["id_taken"]
+    again["exclude"] = [c["name"] for c in again["contents"] if not c["on"]]
+    again["insert_before"] = again["regulation_packages"][-1]["index"]
+    out = M.install(p, again)
+    got = sorted(x.relative_to(out["dest"]).as_posix() for x in out["dest"].rglob("*") if x.is_file())
+    assert "readme.txt" not in got and "regulation.bin" in got
+    assert (out["dest"] / "msg" / "engus" / "item_dlc02.msgbnd.dcx").read_bytes() == b"Italian"
+    text = p.read_text(encoding="utf-8")
+    assert [x["id"] for x in tomllib.loads(text)["packages"]] == ["solo", "goblins", "nightreign-revive"]
+    assert text.index("goblins") < text.index("# Revive: must stay last")  # the note stays with its entry
+    assert not Path(plan["unpacked"]).exists()
+
+
+def test_regulation_order_follows_load_order_and_skips_disabled(tmp_path):
+    p = _revive_profile(tmp_path)
+    (p.parent / "mod" / "solo" / "regulation.bin").write_bytes(b"S")
+    assert [x["name"] for x in M.regulation_order(p)["regulation_packages"]] == ["solo", "nightreign-revive"]
+    p.write_text(
+        p.read_text(encoding="utf-8").replace(
+            "path = 'mod/solo'", "path = 'mod/solo'\nload_after = [{ id = \"nightreign-revive\" }]"
+        ),
+        encoding="utf-8",
+    )
+    assert M.regulation_order(p)["regulation_winner"] == "solo"
+    p.write_text(
+        p.read_text(encoding="utf-8").replace("path = 'revive/mod'", "path = 'revive/mod'\nenabled = false"),
+        encoding="utf-8",
+    )
+    assert [x["name"] for x in M.regulation_order(p)["regulation_packages"]] == ["solo"]
+
+
+def test_insert_entry_goes_above_the_note_but_not_above_commented_out_entries():
+    text = REVIVE_LAST
+    blk = next(b for b in M.blocks(text) if "nightreign-revive" in text.splitlines()[b["start"] + 1])
+    out = M.insert_entry(text, "package", {"id": "new", "path": "mod/new"}, blk["index"])
+    assert out.index('id = "new"') < out.index("# Revive: must stay last") and tomllib.loads(out)
+    commented = text.replace("# (its regulation.bin)", '# [[packages]]\n# id = "old"')
+    out = M.insert_entry(commented, "package", {"id": "new", "path": "mod/new"}, blk["index"])
+    assert out.index('# id = "old"') < out.index('id = "new"') < out.index('id = "nightreign-revive"')
+
+
+def test_excluded_dll_folders_get_no_entry(tmp_path):
+    p = _profile(tmp_path / "p")
+    src = tmp_path / "dl" / "Pack"
+    (src / "extra").mkdir(parents=True)
+    (src / "Main.dll").write_bytes(b"m")
+    (src / "extra" / "Helper.dll").write_bytes(b"h")
+    plan = M.plan_install(p, src)
+    plan["exclude"] = ["extra"]
+    out = M.install(p, plan)
+    assert [e["path"] for e in out["entries"]] == ["natives/pack/Main.dll"] and not (out["dest"] / "extra").exists()
+
+
+def test_unrecognised_files_install_and_loader_dlls_and_extras_do_not(tmp_path):
+    p = _profile(tmp_path / "p")
+    src = tmp_path / "dl" / "Wrap"
+    (src / "Thing" / "parts").mkdir(parents=True)
+    (src / "Thing" / "parts" / "a.partsbnd.dcx").write_bytes(b"a")
+    (src / "Thing" / "mystery.bin").write_bytes(b"m")
+    (src / "Thing" / "dinput8.dll").write_bytes(b"d")
+    (src / "example.me3").write_text('profileVersion = "v1"\n')
+    (src / "Notes.txt").write_text("n")
+    plan = M.plan_install(p, src)
+    got = {c["name"]: (c["group"], c["on"], c.get("extra")) for c in plan["contents"]}
+    assert got == {
+        "parts": ("game", True, None),
+        "dinput8.dll": ("loader", False, None),
+        "mystery.bin": ("other", True, None),
+        "example.me3": ("profile", False, "example.me3"),
+        "Notes.txt": ("doc", False, "Notes.txt"),
+    }
+    plan["exclude"] = [c["name"] for c in plan["contents"] if not c["on"] and c["name"] != "example.me3"]
+    out = M.install(p, plan)  # the .me3 ticked: kept as a copy with the mod
+    names = sorted(x.name for x in out["dest"].iterdir())
+    assert names == ["example.me3", "mystery.bin", "parts"]
+
+
+def test_a_lone_dll_installs_as_a_dll_mod(tmp_path):
+    p = _profile(tmp_path / "p")
+    dll = tmp_path / "dl" / "UnlockTheFps.dll"
+    dll.parent.mkdir(parents=True)
+    dll.write_bytes(b"u")
+    plan = M.plan_install(p, dll)
+    assert plan["kind"] == "native" and plan["name"] == "unlockthefps"
+    out = M.install(p, plan)
+    assert [e["path"] for e in out["entries"]] == ["natives/unlockthefps/UnlockTheFps.dll"] and dll.is_file()
+
+
+def test_regulation_placement_follows_the_package_if_the_profile_changed_meanwhile(tmp_path):
+    p = _revive_profile(tmp_path)
+    src = tmp_path / "dl" / "Params"
+    src.mkdir(parents=True)
+    (src / "regulation.bin").write_bytes(b"R")
+    plan = M.plan_install(p, src)
+    assert [x["name"] for x in plan["regulation_packages"]] == ["nightreign-revive"]
+    plan["insert_before"] = "nightreign-revive"
+    # edited outside the launcher before Install: a new entry above Revive moves it down one block
+    p.write_text(
+        p.read_text(encoding="utf-8").replace("# Revive", "[[packages]]\nid = \"late\"\npath = 'mod/late'\n\n# Revive"),
+        encoding="utf-8",
+    )
+    M.install(p, plan)
+    ids = [x["id"] for x in tomllib.loads(p.read_text(encoding="utf-8"))["packages"]]
+    assert ids == ["solo", "late", "params", "nightreign-revive"]
+    again = M.plan_install(p, src)  # a reinstall: its own entry is not the one to place before
+    assert again["already_listed"] and [x["name"] for x in again["regulation_packages"]] == ["nightreign-revive"]
+    plan = M.plan_install(p, src, name="other")
+    plan["insert_before"] = "gone"  # the package was removed meanwhile: goes last
+    M.install(p, plan)
+    assert [x["id"] for x in tomllib.loads(p.read_text(encoding="utf-8"))["packages"]][-1] == "other"

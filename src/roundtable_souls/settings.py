@@ -72,6 +72,7 @@ class LauncherSettings(BaseModel):
     games: dict[str, dict[str, Any]] = Field(default_factory=dict)  # per-game values for games other than Elden Ring
     theme: Literal["dark", "light"] = "dark"
     logo: Literal["auto", "dark", "light"] = "auto"
+    native_configs: dict[str, list[str]] = Field(default_factory=dict)  # DLL path -> settings files tied to it
 
     offline_strip_revive: bool = False
     offline_start_steam: bool = True

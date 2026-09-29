@@ -72,6 +72,7 @@ from roundtable_souls.mods.service import (
     profile_entries,
     read_profile_mods,
     read_profile_settings,
+    replan_mod_install,
     scan_profile_conflicts,
     set_mod_options,
     set_profile_mod_enabled,

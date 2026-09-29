@@ -125,8 +125,6 @@ def _children(folder: Path) -> list[Path]:
 def detect_kind(folder: Path) -> str:
     """'me3' | 'native' | 'package' | 'unknown' for one folder."""
     folder = Path(folder)
-    if any(folder.rglob("*.me3")):
-        return "me3"
     kids = _children(folder)
     dlls = [c for c in kids if c.is_file() and c.suffix.lower() == ".dll" and c.name.lower() not in IGNORED_DLLS]
     assets = (
@@ -140,23 +138,151 @@ def detect_kind(folder: Path) -> str:
         return "native"
     if loose_files(folder):
         return "package"
+    if any(folder.rglob("*.me3")):
+        return "me3"  # only a profile, no mod files of its own
     return "unknown"
 
 
+JUNK_FOLDERS = {"__macosx", "screenshots", "images", "docs", "documentation", "readme", "optional files"}
+
+
+def _is_mod_root(d: Path) -> bool:
+    """A folder that is a mod itself: game folders / regulation.bin / loose game files (a package), DLLs (a native)
+    or a .me3 (a whole profile) directly inside it."""
+    kids = _children(d)
+    return (
+        any(c.is_dir() and c.name.lower() in ACCEPTABLE_FOLDERS - {"_backup", "_unknown"} for c in kids)
+        or (d / "regulation.bin").is_file()
+        or bool(loose_files(d))
+        or any(c.is_file() and c.suffix.lower() == ".dll" and c.name.lower() not in IGNORED_DLLS for c in kids)
+    )
+
+
+DOC_SUFFIXES = {
+    ".txt",
+    ".md",
+    ".pdf",
+    ".url",
+    ".html",
+    ".htm",
+    ".rtf",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".bmp",
+}
+SETTINGS_SUFFIXES = {".ini", ".toml", ".json", ".cfg", ".conf", ".yaml", ".yml", ".xml"}
+
+
+LOADER_DLLS = {"dinput8.dll", "modengine2.dll", "mod_loader.dll", "me3-mod-host.dll"}  # me3 loads mods itself
+
+
+def contents(root: Path, kind: str) -> list[dict]:
+    """What sits at the top of a mod, grouped, with whether it installs by default:
+    game (game folders and files), regulation (regulation.bin), dll, settings (a DLL mod's own files), doc
+    (readmes, licences, images), profile (a .me3 shipped as an example), loader (another mod loader's DLL, which me3
+    replaces) and other (not recognised: kept as shipped, since a mod may need a file this launcher does not know)."""
+    root = Path(root)
+    loose = {Path(f).name for f, _ in loose_files(root)}
+    out = []
+    for c in sorted(_children(root), key=lambda x: (x.is_file(), x.name.lower())):
+        low, suf = c.name.lower(), c.suffix.lower()
+        if c.is_dir():
+            if low in ACCEPTABLE_FOLDERS - {"_backup", "_unknown"}:
+                group = "game"
+            elif kind == "native":
+                group = "files"  # a DLL mod's own folder (its data, locale, a helper DLL)
+            else:
+                group = "other"
+        elif low == "regulation.bin":
+            group = "regulation"
+        elif c.name in loose:
+            group = "game"
+        elif suf == ".dll":
+            group = "dll" if low not in IGNORED_DLLS else "loader" if low in LOADER_DLLS else "other"
+        elif suf == ".me3":
+            group = "profile"
+        elif kind == "native" and (
+            suf in SETTINGS_SUFFIXES
+            or (suf == ".txt" and not re.match(r"(?i)^(readme|license|licence|changelog|credits)", low))
+        ):
+            group = "settings"
+        elif suf in DOC_SUFFIXES or re.match(r"(?i)^(readme|license|licence|changelog|credits|notice)", low):
+            group = "doc"
+        else:
+            group = "other"
+        try:
+            size = c.stat().st_size if c.is_file() else sum(x.stat().st_size for x in c.rglob("*") if x.is_file())
+        except OSError:
+            size = 0
+        out.append(
+            {
+                "name": c.name,
+                "group": group,
+                "size": size,
+                "on": group not in ("doc", "profile", "loader"),
+            }
+        )
+    return out
+
+
+def extras(top: Path, root: Path) -> list[dict]:
+    """Files the archive has beside the mod folder rather than in it (a readme or an example .me3 next to mod/). Not
+    part of the mod, so left out unless ticked; a ticked one is copied into the mod's folder. 'extra' is its path
+    from the top of the unpacked archive."""
+    top, root = Path(top), Path(root)
+    out, seen = [], {c.name.lower() for c in _children(root)}
+    here = root.parent
+    while here == top or top in here.parents:
+        for c in sorted(_children(here), key=lambda x: x.name.lower()):
+            if not c.is_file() or c.name.lower() in seen:
+                continue
+            seen.add(c.name.lower())
+            suf, low = c.suffix.lower(), c.name.lower()
+            doc = suf in DOC_SUFFIXES or re.match(r"(?i)^(readme|license|licence|changelog|credits|notice)", low)
+            group = "profile" if suf == ".me3" else "doc" if doc else "other"
+            size = c.stat().st_size
+            out.append(
+                {"name": c.name, "group": group, "size": size, "on": False, "extra": c.relative_to(top).as_posix()}
+            )
+        if here == top:
+            break
+        here = here.parent
+    return out
+
+
+def find_roots(folder: Path, max_depth: int = 4) -> list[Path]:
+    """Every mod inside an unpacked archive or folder, however it is wrapped: a folder named after the mod, a mod/
+    folder next to a readme, or several variants side by side (English/mod and Italian/mod). A mod folder is not
+    looked inside further."""
+    found: list[Path] = []
+
+    def walk(d: Path, depth: int):
+        if _is_mod_root(d):
+            found.append(d)
+            return
+        if depth >= max_depth:
+            return
+        for c in sorted(_children(d), key=lambda x: x.name.lower()):
+            if c.is_dir() and c.name.lower() not in JUNK_FOLDERS:
+                walk(c, depth + 1)
+
+    walk(Path(folder), 0)
+    return found
+
+
 def find_root(folder: Path) -> Path:
-    """Unwrap single-child wrapper folders until something recognisable appears."""
-    folder = Path(folder)
-    if detect_kind(folder) != "unknown":
-        return folder
-    kids = _children(folder)
-    if len(kids) == 1 and kids[0].is_dir():
-        return find_root(kids[0])
-    return folder
+    """The one mod inside (see find_roots); the folder itself when there is none."""
+    roots_found = find_roots(folder)
+    return roots_found[0] if roots_found else Path(folder)
 
 
-def detect(source: Path) -> dict:
-    """What a folder (already extracted) contains: root, kind, asset folders, DLLs, the .me3 if any."""
-    root = find_root(Path(source))
+def detect(source: Path, root: Path | None = None) -> dict:
+    """What a folder (already extracted) contains: root, kind, asset folders, DLLs, the .me3 if any. root picks one
+    of several mods inside (find_roots); otherwise the first."""
+    root = Path(root) if root is not None else find_root(Path(source))
     kind = detect_kind(root)
     kids = _children(root)
     assets = sorted(c.name for c in kids if c.is_dir() and c.name.lower() in ACCEPTABLE_FOLDERS)
@@ -170,6 +296,8 @@ def detect(source: Path) -> dict:
         label = sub or "regulation.bin"
         if label not in assets:
             assets.append(label)
+    msg = root / "msg"
+    languages = sorted(c.name for c in _children(msg) if c.is_dir()) if kind == "package" and msg.is_dir() else []
     return {
         "root": root,
         "kind": kind,
@@ -177,6 +305,7 @@ def detect(source: Path) -> dict:
         "dlls": dlls,
         "me3": me3,
         "loose": loose,
+        "languages": languages,
         "size": sum(p.stat().st_size for p in root.rglob("*") if p.is_file()),
     }
 
@@ -302,7 +431,8 @@ def extract_archive(archive: Path, dest: Path) -> Path:
 
 
 def stage(source: Path, staging_root: Path) -> tuple[Path, bool]:
-    """(folder to detect from, is_temporary). Archives are extracted into a temp folder under staging_root."""
+    """(folder to detect from, is_temporary). Archives are extracted, and a lone .dll copied, into a temp folder under
+    staging_root."""
     source = Path(source)
     if source.is_dir():
         return source, False
@@ -314,7 +444,12 @@ def stage(source: Path, staging_root: Path) -> tuple[Path, bool]:
             shutil.rmtree(tmp, ignore_errors=True)
             raise
         return tmp, True
-    raise ModError("pick a .zip, .7z or .rar archive, or a folder")
+    if source.suffix.lower() == ".dll" and source.is_file():  # a DLL mod on its own
+        tmp = Path(tempfile.mkdtemp(prefix="install-", dir=str(staging_root)))
+        (tmp / source.stem).mkdir()
+        shutil.copy2(source, tmp / source.stem / source.name)
+        return tmp, True
+    raise ModError("pick a .zip, .7z or .rar archive, a .dll, or a folder")
 
 
 # ----------------------------------------------------------------------------- profile text
@@ -526,6 +661,24 @@ def remove_block(text: str, index: int) -> str:
     return "".join(all_lines)
 
 
+def insert_entry(text: str, kind: str, row: dict, before: int) -> str:
+    """Add an entry just above block number `before` (and above the comment lines that describe that block)."""
+    b = next((x for x in blocks(text) if x["index"] == before), None)
+    if b is None:
+        return append_entry(text, kind, row)
+    nl = "\r\n" if "\r\n" in text else "\n"
+    lines = text.splitlines(keepends=True)
+    at = b["start"]
+    while at > 0:
+        prev = lines[at - 1].strip()
+        body = prev.lstrip("#").strip()
+        if not prev.startswith("#") or "=" in body or body.startswith(("[", "{", "]")):
+            break  # a blank line, a real line, or a commented-out entry: the note above ends here
+        at -= 1
+    new = "".join(_entry_lines(kind, row, nl)) + nl
+    return "".join(lines[:at]) + new + "".join(lines[at:])
+
+
 def append_entry(text: str, kind: str, row: dict) -> str:
     nl = "\r\n" if "\r\n" in text else "\n"
     if text and not text.endswith(("\n", "\r\n")):
@@ -599,11 +752,16 @@ def _write(profile: Path, new_text: str) -> Path:
     return bak
 
 
-def plan_install(profile: Path, source: Path, name: str | None = None) -> dict:
-    """Detect and describe what install() would do. Leaves a temp folder behind for zips ('staging')."""
+def plan_install(
+    profile: Path, source: Path, name: str | None = None, pkg_id: str | None = None, variant: str | None = None
+) -> dict:
+    """Unpack (archives, into the launcher's temp folder) and describe what install() would do. The unpacked copy is
+    kept in the plan ('unpacked'), so replan() can change the folder name, id or variant without unpacking again."""
     profile = Path(profile)
-    staging_root = profile.parent / ".roundtable-staging"
-    staging_root.mkdir(exist_ok=True)
+    from roundtable_souls import folders
+
+    folders.adopt_legacy_profile_folders(profile.parent)
+    staging_root = folders.temp("installing")
     for old in staging_root.iterdir():  # a crash mid-install can leave a temp folder behind
         try:
             if old.is_dir() and time.time() - old.stat().st_mtime > 3600:
@@ -611,11 +769,45 @@ def plan_install(profile: Path, source: Path, name: str | None = None) -> dict:
         except OSError:
             pass
     folder, temp = stage(source, staging_root)
-    d = detect(folder)
+    source = Path(source)
+    default = source.stem if source.suffix.lower() in (*ARCHIVE_EXTENSIONS, ".dll") else source.name
+    return _plan(profile, folder, temp, default, name, pkg_id, variant)
+
+
+def replan(
+    profile: Path, plan: dict, name: str | None = None, pkg_id: str | None = None, variant: str | None = None
+) -> dict:
+    """The same unpacked source with another folder name, id or variant."""
+    return _plan(
+        Path(profile), Path(plan["unpacked"]), bool(plan.get("staging")), plan["default_name"], name, pkg_id, variant
+    )
+
+
+def _plan(profile: Path, folder: Path, temp: bool, default_name: str, name, pkg_id, variant) -> dict:
+    candidates = find_roots(folder)
+    labels = []
+    for c in candidates:
+        try:
+            labels.append(c.relative_to(folder).as_posix() or folder.name)
+        except ValueError:
+            labels.append(c.name)
+    pick = labels.index(variant) if variant in labels else 0
+    d = detect(folder, candidates[pick] if candidates else folder)
     text = read_text(profile)
     pk_root, nt_root = roots(profile, text)
-    base = slug(name or (Path(source).stem if Path(source).suffix.lower() in ARCHIVE_EXTENSIONS else Path(source).name))
-    plan = {**d, "name": base, "staging": folder if temp else None, "array_form": is_array_form(text)}
+    base = slug(name) if name else slug(default_name).lower()  # typed names are kept as typed
+    if not name and not temp and same_folder(Path(d["root"]).parent, pk_root if d["kind"] == "package" else nt_root):
+        base = Path(d["root"]).name  # already in place: keep the folder's own name
+    plan = {
+        **d,
+        "name": base,
+        "default_name": default_name,
+        "unpacked": folder,
+        "staging": folder if temp else None,
+        "array_form": is_array_form(text),
+        "variants": labels if len(labels) > 1 else [],
+        "variant": labels[pick] if labels else "",
+    }
     if d["kind"] == "me3":
         plan["error"] = (
             "This is a whole me3 profile, not a mod. Copy its .me3 next to yours and pick it as a setup instead."
@@ -626,7 +818,11 @@ def plan_install(profile: Path, source: Path, name: str | None = None) -> dict:
         )
     elif d["kind"] == "package":
         plan["dest"] = pk_root / base
-        plan["entries"] = [{"kind": "package", "id": base, "path": rel(profile, plan["dest"])}]
+        ident = slug(pkg_id) if pkg_id else base
+        plan["id"] = ident
+        plan["entries"] = [{"kind": "package", "id": ident, "path": rel(profile, plan["dest"])}]
+        taken = {(e.get("id") or "").lower() for e in entries(profile) if e["kind"] == "package"}
+        plan["id_taken"] = ident.lower() in taken
     else:
         plan["dest"] = nt_root / base
         plan["entries"] = [
@@ -642,7 +838,38 @@ def plan_install(profile: Path, source: Path, name: str | None = None) -> dict:
     plan["already_listed"] = [
         e["path"] for e in plan.get("entries") or [] if resolve(profile, e["path"]).resolve() in existing
     ]
+    if plan.get("already_listed") and plan.get("id_taken"):
+        plan["id_taken"] = False  # reinstalling over itself keeps its own id
+    if d["kind"] in ("package", "native"):
+        plan["contents"] = contents(d["root"], d["kind"]) + extras(folder, d["root"])
+        plan["profiles_inside"] = [str(m.relative_to(folder)) for m in folder.rglob("*.me3")]
+    if d["kind"] == "package" and (d["root"] / "regulation.bin").is_file():
+        plan.update(regulation_order(profile, skip=plan.get("dest")))
     return plan
+
+
+def regulation_order(profile: Path, skip: Path | None = None) -> dict:
+    """The enabled packages that ship a regulation.bin, in me3's effective load order. me3 serves one regulation.bin:
+    the last of these. {regulation_packages: [{index, name}], regulation_winner: name or None}. skip leaves out the
+    package in that folder (the mod being reinstalled)."""
+    from roundtable_souls.mods import profile as profile_tools
+
+    profile = Path(profile)
+    text = read_text(profile)
+    items = {e["index"]: e for e in entries(profile)}
+    order = profile_tools.effective_order(profile_tools.package_rows(text))
+    by_id = {
+        (e.get("id") or Path(e.get("path") or "").name).lower(): e for e in items.values() if e["kind"] == "package"
+    }
+    ships = []
+    for row in order:
+        e = by_id.get(str(row["id"]).lower())
+        folder = resolve(profile, e["path"]) if e else None
+        if skip is not None and folder is not None and same_folder(folder, Path(skip)):
+            continue
+        if e and folder is not None and e.get("enabled", True) and (folder / "regulation.bin").is_file():
+            ships.append({"index": e["index"], "name": e["name"]})
+    return {"regulation_packages": ships, "regulation_winner": ships[-1]["name"] if ships else None}
 
 
 def install(profile: Path, plan: dict, overwrite: bool = False) -> dict:
@@ -657,30 +884,55 @@ def install(profile: Path, plan: dict, overwrite: bool = False) -> dict:
             raise ModError(f"{dest.name} already exists in {dest.parent}")
         shutil.rmtree(dest)
     loose = {Path(f).name: sub for f, sub in (plan.get("loose") or [])}
+    skip = {n.lower() for n in plan.get("exclude") or []}
+    root = Path(plan["root"])
+
+    def left_out(folder, names):
+        junk = {"__MACOSX", "Thumbs.db", ".DS_Store"}
+        top = Path(folder) == root
+        return [n for n in names if n in junk or (top and n.lower() in skip)]
+
     if in_place:
         pass  # the files are already where they belong: only the profile changes
     elif loose:
         # loose game files go into the folder the game serves them from; everything else copies as it is
         dest.mkdir(parents=True, exist_ok=True)
-        for c in _children(Path(plan["root"])):
+        for c in _children(root):
+            if c.name.lower() in skip:
+                continue
             sub = loose.get(c.name)
             if c.is_file() and sub is not None:
                 target = (dest / sub) if sub else dest
                 target.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(c, target / c.name)
             elif c.is_dir():
-                shutil.copytree(c, dest / c.name, ignore=shutil.ignore_patterns("__MACOSX", "Thumbs.db", ".DS_Store"))
+                shutil.copytree(c, dest / c.name, ignore=left_out)
             else:
                 shutil.copy2(c, dest / c.name)
     else:
-        shutil.copytree(plan["root"], dest, ignore=shutil.ignore_patterns("__MACOSX", "Thumbs.db", ".DS_Store"))
+        shutil.copytree(root, dest, ignore=left_out)
+    if not in_place:  # ticked files from beside the mod folder
+        for c in plan.get("contents") or []:
+            if c.get("extra") and c["name"].lower() not in skip:
+                shutil.copy2(Path(plan["unpacked"]) / c["extra"], dest / c["name"])
     text = read_text(profile)
     if is_array_form(text):
         text = to_blocks(text)
     listed = set(plan.get("already_listed") or [])
-    added = [e for e in plan["entries"] if e["path"] not in listed]
+    added = [
+        e
+        for e in plan["entries"]
+        if e["path"] not in listed
+        and not (e["kind"] == "native" and Path(e["path"]).relative_to(rel(profile, dest)).parts[0].lower() in skip)
+    ]
+    before = plan.get("insert_before")  # a package's name: where it is now, not where it was when the plan was made
+    if isinstance(before, str):
+        before = next(
+            (x["index"] for x in entries(profile) if x["kind"] == "package" and x["name"].lower() == before.lower()),
+            None,
+        )
     for e in added:
-        text = append_entry(text, e["kind"], e)
+        text = append_entry(text, e["kind"], e) if before is None else insert_entry(text, e["kind"], e, before)
     bak = _write(profile, text) if added or text != read_text(profile) else None
     if plan.get("staging"):
         shutil.rmtree(plan["staging"], ignore_errors=True)
@@ -741,6 +993,286 @@ def entries(profile: Path) -> list[dict]:
     return out
 
 
+# ----------------------------------------------------------------------------- package folders in a profile
+NOT_GAME_FOLDERS = {"_backup", "_unknown"}  # accepted when installing, but me3 serves nothing from them
+
+
+def has_game_files(folder: Path) -> bool:
+    """Whether a package folder holds game files at its own top level (game folders, regulation.bin, loose files):
+    what me3 actually serves from it. A folder of other mods' folders has none."""
+    folder = Path(folder)
+    kids = _children(folder)
+    return (
+        any(c.is_dir() and c.name.lower() in ACCEPTABLE_FOLDERS - NOT_GAME_FOLDERS for c in kids)
+        or (folder / "regulation.bin").is_file()
+        or bool(loose_files(folder))
+    )
+
+
+def _canon(p: Path) -> Path:
+    """A path for comparing: resolved, and on Windows lower-cased with one kind of slash."""
+    try:
+        p = Path(p).resolve()
+    except OSError:
+        p = Path(os.path.abspath(p))
+    return Path(os.path.normcase(str(p)))
+
+
+def same_folder(a: Path, b: Path) -> bool:
+    """Two paths name the same place (case and slash direction ignored on Windows)."""
+    return _canon(a) == _canon(b)
+
+
+def _within(inner: Path, outer: Path) -> bool:
+    """inner lies below outer (both _canon'd)."""
+    return inner != outer and outer in inner.parents
+
+
+def _unlisted_packages(folder: Path, listed: set[Path], max_depth: int = 3) -> list[Path]:
+    """Package folders (game files at their top level) below folder that no entry points at. A folder that holds
+    listed packages deeper down is looked past; folders starting with _ (backups) are skipped."""
+    found: list[Path] = []
+
+    def walk(d: Path, depth: int):
+        for c in sorted(_children(d), key=lambda x: x.name.lower()):
+            key = _canon(c)
+            if not c.is_dir() or c.name.startswith("_") or key in listed:
+                continue
+            if any(_within(g, key) for g in listed):
+                walk(c, depth + 1)
+            elif has_game_files(c):
+                found.append(c)
+            elif depth < max_depth:
+                walk(c, depth + 1)
+
+    if Path(folder).is_dir():
+        walk(Path(folder), 1)
+    return found
+
+
+def package_tree(profile: Path, items: list[dict], max_depth: int = 3) -> dict[int, dict]:
+    """How the profile's package folders sit inside each other, by entry index:
+
+    folder: the resolved folder. own_files: it serves game files itself (see has_game_files). children: indexes of
+    listed packages inside it. parent: the closest listed package it sits inside, or None. holder: it serves nothing
+    itself and only holds other mods (listed or not), so it is a folder, not a mod. unlisted: package folders inside
+    a holder that no entry points at, so me3 never loads them."""
+    profile = Path(profile)
+    folders = {e["index"]: resolve(profile, e["path"]) for e in items if e.get("kind") == "package" and e.get("path")}
+    keys = {i: _canon(f) for i, f in folders.items()}
+    listed = set(keys.values())
+    out = {}
+    for i, f in folders.items():
+        out[i] = {
+            "folder": f,
+            "own_files": f.is_dir() and has_game_files(f),
+            "children": [j for j, g in keys.items() if _within(g, keys[i])],
+            "parent": None,
+            "unlisted": [],
+            "holder": False,
+        }
+    for i in folders:
+        around = [j for j, g in keys.items() if _within(keys[i], g)]
+        if around:
+            out[i]["parent"] = max(around, key=lambda j: len(keys[j].parts))
+    for info in out.values():
+        if info["folder"].is_dir() and not info["own_files"]:
+            info["unlisted"] = _unlisted_packages(info["folder"], listed, max_depth)
+            info["holder"] = bool(info["children"] or info["unlisted"])
+    return out
+
+
+# Libraries other programs load (upscalers, compilers, C runtimes): never a me3 native on their own.
+RUNTIME_DLL = re.compile(
+    r"^(nvngx|sl\.|amd_fidelityfx|ffx_|libxess|d3dcompiler|dxcompiler|dxil|msvcp|vcruntime|ucrtbase|concrt|api-ms-)",
+    re.I,
+)
+
+
+def _unlisted_natives(root: Path, listed: set[Path]) -> list[Path]:
+    """DLLs in the natives folder that no entry loads. Every DLL directly in it counts (one file per mod is the
+    usual layout); in a subfolder that already has a listed DLL the others are taken as that mod's helpers. Runtime
+    libraries and folders of ReShade add-ons (*.addon, *.addon64) are not me3 mods and are left out."""
+    root = Path(root)
+    if not root.is_dir():
+        return []
+    helper_dirs = {p.parent for p in listed}
+    found = []
+    for dll in sorted(root.rglob("*.dll"), key=lambda x: str(x).lower()):
+        key = _canon(dll)
+        if key in listed or dll.name.lower() in IGNORED_DLLS or RUNTIME_DLL.match(dll.name):
+            continue
+        if len(dll.relative_to(root).parts) > 3:
+            continue
+        if dll.parent != root and (key.parent in helper_dirs or any(dll.parent.glob("*.addon*"))):
+            continue
+        found.append(dll)
+    return found
+
+
+def folder_overview(profile: Path, items: list[dict], tree: dict[int, dict] | None = None) -> dict:
+    """The profile's mod folders as folders, beside the entries:
+
+    packages: {root, holders, unlisted, listed}: the packages folder new mods go into (mod/ by default); entries
+      that point at a folder of mods instead of a mod (they load nothing themselves, so the page shows them here,
+      not as mods); package folders no entry loads; how many listed packages sit in the root. root is None when the
+      folder is missing or is itself a package with game files (one package for everything, as in me3's guide).
+    natives: {root, unlisted, listed} for the natives folder, None when it is missing."""
+    profile = Path(profile)
+    tree = tree if tree is not None else package_tree(profile, items)
+    try:
+        pk_root, nt_root = roots(profile, read_text(profile))
+    except OSError:
+        return {"packages": None, "natives": None}
+    listed = {_canon(n["folder"]) for n in tree.values()}
+    root_key = _canon(pk_root)
+    holders = [i for i, n in tree.items() if n["holder"]]
+    root_is_mod = any(_canon(n["folder"]) == root_key and n["own_files"] for n in tree.values())
+    unlisted: list[Path] = []
+    seen: set[Path] = set()
+    root = pk_root if pk_root.is_dir() and not root_is_mod else None
+    for u in (_unlisted_packages(root, listed) if root else []) + [u for i in holders for u in tree[i]["unlisted"]]:
+        if _canon(u) not in seen:
+            seen.add(_canon(u))
+            unlisted.append(u)
+    packages = None
+    if root or holders:
+        packages = {
+            "root": root,
+            "holders": holders,
+            "unlisted": unlisted,
+            "listed": sum(
+                1 for i, n in tree.items() if i not in holders and root and _within(_canon(n["folder"]), root_key)
+            ),
+        }
+    natives = None
+    if nt_root.is_dir():
+        dlls = {_canon(resolve(profile, e["path"])) for e in items if e.get("kind") == "native" and e.get("path")}
+        natives = {
+            "root": nt_root,
+            "unlisted": _unlisted_natives(nt_root, dlls),
+            "listed": sum(1 for d in dlls if _within(d, _canon(nt_root))),
+        }
+    return {"packages": packages, "natives": natives}
+
+
+def entry_ref(entry: dict) -> str:
+    """The name other entries use in load_after / load_before: a package's id (its folder name when it has none),
+    a native's DLL file name."""
+    if entry.get("kind") == "package" and entry.get("id"):
+        return entry["id"]
+    return Path(entry.get("path") or "").name
+
+
+def _find_loop(after: dict[int, set[int]]) -> list[int] | None:
+    """One cycle in 'i loads after each of after[i]', as the path around it, or None."""
+    state: dict[int, int] = {}  # 1 on the current path, 2 done
+
+    def visit(i: int, trail: list[int]) -> list[int] | None:
+        state[i] = 1
+        for j in sorted(after.get(i, ())):
+            if state.get(j) == 1:
+                return trail[trail.index(j) :] + [j]
+            if not state.get(j):
+                found = visit(j, trail + [j])
+                if found:
+                    return found
+        state[i] = 2
+        return None
+
+    for i in sorted(after):
+        if not state.get(i):
+            found = visit(i, [i])
+            if found:
+                return found
+    return None
+
+
+def entry_problems(profile: Path, items: list[dict]) -> dict[int, list[str]]:
+    """What would make me3 refuse or skip an entry, by index. Load order only links entries of the same kind, and a
+    dependency that is not optional must be present and enabled, or me3 stops."""
+    profile = Path(profile)
+    out: dict[int, list[str]] = {e["index"]: [] for e in items}
+    for kind in ("package", "native"):
+        group = [e for e in items if e["kind"] == kind]
+        refs: dict[str, list[dict]] = {}
+        for e in group:
+            refs.setdefault(entry_ref(e).lower(), []).append(e)
+        for e in group:
+            say = out[e["index"]]
+            target = resolve(profile, e["path"]) if e.get("path") else None
+            if target is None:
+                say.append("No path")
+            elif kind == "package" and not target.is_dir():
+                say.append("Folder missing" if not target.exists() else "Path is a file, not a folder")
+            elif kind == "native" and not target.is_file():
+                say.append("DLL missing")
+            elif kind == "native" and target.suffix.lower() != ".dll":
+                say.append("Not a .dll")
+            same = [o for o in refs.get(entry_ref(e).lower(), []) if o is not e]
+            if kind == "package" and e.get("id") and same:
+                say.append(f"Id '{e['id']}' is used twice; me3 needs each id once")
+            for key, word in (("load_after", "after"), ("load_before", "before")):
+                for d in e.get(key) or []:
+                    if d.get("optional"):
+                        continue
+                    hits = refs.get(str(d["id"]).lower()) or []
+                    if not hits:
+                        say.append(f"Must load {word} '{d['id']}', which is not in this profile: me3 stops")
+                    elif not any(h.get("enabled", True) for h in hits):
+                        say.append(f"Must load {word} '{d['id']}', which is off: me3 stops")
+        # a loop in the order (a after b, b after a) cannot be satisfied
+        after: dict[int, set[int]] = {e["index"]: set() for e in group}
+        for e in group:
+            for d in e.get("load_after") or []:
+                for h in refs.get(str(d["id"]).lower()) or []:
+                    after[e["index"]].add(h["index"])
+            for d in e.get("load_before") or []:
+                for h in refs.get(str(d["id"]).lower()) or []:
+                    after[h["index"]].add(e["index"])
+        names = {e["index"]: entry_ref(e) for e in group}
+        loop = _find_loop(after)
+        if loop:
+            text = "Load order loops: " + " → ".join(names[i] for i in loop)
+            for i in set(loop):
+                out[i].append(text)
+    return out
+
+
+def add_existing(profile: Path, folders: list[Path], kind: str = "package") -> dict:
+    """List files that already sit in place as entries, last in the load order. Nothing is copied. Packages are
+    folders and get an id from the path below the packages folder ('improved-textures/architecture' ->
+    improved-textures-architecture); natives are DLL files, named by their file."""
+    profile = Path(profile)
+    text = read_text(profile)
+    if is_array_form(text):
+        text = to_blocks(text)
+    pk_root, _nt = roots(profile, text)
+    have = {(block_options(text, b["index"]).get("id") or "").lower() for b in blocks(text) if b["kind"] == "package"}
+    added = []
+    for f in folders:
+        f = Path(f)
+        if kind == "native":
+            row = {"kind": "native", "path": rel(profile, f)}
+            text = append_entry(text, "native", row)
+            added.append(row)
+            continue
+        try:
+            below = f.resolve().relative_to(pk_root.resolve())
+        except OSError, ValueError:
+            below = Path(f.name)
+        ident = slug("-".join(below.parts)) or slug(f.name)
+        base, n = ident, 2
+        while ident.lower() in have:
+            ident, n = f"{base}-{n}", n + 1
+        have.add(ident.lower())
+        row = {"kind": "package", "id": ident, "path": rel(profile, f)}
+        text = append_entry(text, "package", row)
+        added.append(row)
+    bak = _write(profile, text) if added else None
+    return {"entries": added, "backup": bak}
+
+
 # ----------------------------------------------------------------------------- profiles
 def create_profile(folder: Path, name: str, game: str = "eldenring", copy_from: Path | None = None) -> Path:
     folder = Path(folder)
@@ -762,14 +1294,22 @@ def create_profile(folder: Path, name: str, game: str = "eldenring", copy_from: 
 
 
 def delete_profile(path: Path) -> Path:
-    """Move the .me3 into deleted-profiles beside it (mods folders are never touched)."""
+    """Move the .me3 into the launcher's deleted profiles (folders.deleted_profiles), with a note of where it
+    lived. Mod folders are never touched; its .bak goes along, its offline copy is regenerated when needed."""
+    import json
+
+    from roundtable_souls import folders
+
     path = Path(path)
     if not path.is_file():
         raise ModError(f"{path} is not a file")
-    trash = path.parent / "deleted-profiles"
-    trash.mkdir(exist_ok=True)
+    trash = folders.deleted_profiles(path.parent)
+    trash.mkdir(parents=True, exist_ok=True)
     dest = trash / f"{path.stem}.{time.strftime('%Y%m%d-%H%M%S')}.me3"
     shutil.move(str(path), str(dest))
+    Path(str(dest) + ".json").write_text(
+        json.dumps({"from": str(path), "when": time.strftime("%Y-%m-%d %H:%M:%S")}, indent=1), encoding="utf-8"
+    )
     for extra in (path.with_name(path.name + ".bak"), path.with_name(path.stem + ".offline.me3")):
         if extra.exists():
             try:
