@@ -35,8 +35,9 @@ Linux and Steam Deck (Desktop Mode)
 GAMES
 -----
 
-The tabs at the top of the window pick the game: Elden Ring, Nightreign, Dark
-Souls III or Sekiro. Every page below them then works on that game: its
+The game button at the top of the window picks the game: click it for Elden
+Ring, Nightreign, Dark Souls III or Sekiro, or press Ctrl+Tab and
+Ctrl+Shift+Tab to step through them. Every page then works on that game: its
 setups, its Seamless Co-op settings, its mods and its saves. Settings is shared
 by all games. The window opens on the game you used last.
 
@@ -47,10 +48,11 @@ by all games. The window opens on the game you used last.
                 offers backups, restore, and copies between the co-op and
                 standard save, but cannot show characters or repair them.
   Dark Souls III, Sekiro
-                placeholders for now: the tab shows whether the game, its saves
-                and me3 profiles were found, and nothing on it can change them.
+                placeholders for now: their page shows whether the game, its
+                saves and me3 profiles were found, and nothing on it can change
+                them.
 
-me3 profiles are listed under the game they were made for. Tabs cannot be
+me3 profiles are listed under the game they were made for. The game cannot be
 switched while a job is running.
 
 

@@ -2,12 +2,15 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
-## [Unreleased]
+## [3.4.0] - 2026-09-28
 
-- Games: tabs at the top of the window pick the game every page works on. Elden Ring and Nightreign are supported; Dark Souls III and Sekiro have placeholder tabs that only show what was found on the PC. Settings stays shared, and each game remembers its own setup and custom game exe.
+- Games: a game button at the top of the window picks the game every page works on; its menu lists every game with whether it is installed, and Ctrl+Tab / Ctrl+Shift+Tab step through them. Elden Ring and Nightreign are supported; Dark Souls III and Sekiro have placeholder pages that only show what was found on the PC. Settings stays shared, and each game remembers its own setup and custom game exe.
 - Nightreign: Play through me3 (online, or offline without Seamless Co-op), its me3 profiles and mods, and its Seamless Co-op settings (three difficulty values, no password in that mod). Saves are listed with a structure check, backups, restore, and copies between the co-op and standard save; Nightreign encrypts its saves, so characters are not shown.
 - `--game <name>` picks the game for `--play` and `--check`, or the tab the window opens on for that run. Settings > Steam shortcut shows the launch options for the game on screen, one shortcut per game. An unknown name lists the valid ones.
 - me3 profiles are listed under the game they name in `[[supports]]`; a profile that names none counts as Elden Ring's. Picking a profile made for another game says so instead of launching it.
+- Setups: switching games no longer reads every profile's co-op settings up front, only the one in use. Two profiles with the same file name show their folder in the list, and the list is sorted by name.
+- Fixed: deleting a profile on the Nightreign page cleared Elden Ring's remembered setup instead of Nightreign's.
+- Fixed: a remembered setup written with different letter case or slashes was not found again, so Play could pick another one.
 
 ## [3.3.0] - 2026-09-27
 

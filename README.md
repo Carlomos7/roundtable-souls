@@ -2,7 +2,7 @@
 
 > Launcher and save toolkit for modded Elden Ring and Nightreign, on Windows, Linux and Steam Deck
 
-A desktop app (PySide6 + Fluent Widgets) that starts Elden Ring and Nightreign through [me3](https://github.com/garyttierney/me3), keeps Seamless Co-op settings in one place, manages me3 profiles and mods, and checks and repairs PC save files. It is the one window a co-op group needs open: pick the game at the top, pick a setup, press Play, and the saves are looked after when the game closes. From Steam or a Steam Deck in Gaming Mode, a `--game <name> --play` shortcut does the same without the window. Dark Souls III and Sekiro have placeholder tabs until their support lands.
+A desktop app (PySide6 + Fluent Widgets) that starts Elden Ring and Nightreign through [me3](https://github.com/garyttierney/me3), keeps Seamless Co-op settings in one place, manages me3 profiles and mods, and checks and repairs PC save files. It is the one window a co-op group needs open: pick the game at the top, pick a setup, press Play, and the saves are looked after when the game closes. From Steam or a Steam Deck in Gaming Mode, a `--game <name> --play` shortcut does the same without the window. Dark Souls III and Sekiro have placeholder pages until their support lands.
 
 ## Architecture Overview
 
@@ -31,7 +31,7 @@ The window never touches a save directly. Every read goes through `save_info`, e
 
 ## Key Features
 
-- Game tabs: Elden Ring and Nightreign, each with its own setup, co-op settings, mods and saves; placeholder tabs for Dark Souls III and Sekiro
+- Game switcher: Elden Ring and Nightreign, each with its own setup, co-op settings, mods and saves; placeholder pages for Dark Souls III and Sekiro
 - One-click Play through me3 (or, for Elden Ring, a Nightreign Revive installation), with Steam sign-in wait, leftover-process cleanup and save repair after the game closes
 - `--game <name> --play` for a Steam shortcut, Big Picture or Steam Deck Gaming Mode: the same session without the window, one shortcut per game
 - Seamless Co-op for both games: password where the mod has one, difficulty (presets by party size for Elden Ring), every other setting explained, and a share format for a group
@@ -133,7 +133,7 @@ The same checks run before every commit once `uv run pre-commit install` has bee
 
 ```bash
 uv run roundtable-souls                      # the window, on the game used last
-uv run roundtable-souls --game nr            # the window, on Nightreign's tab (this run only)
+uv run roundtable-souls --game nr            # the window, on Nightreign (this run only)
 uv run roundtable-souls --game er --play     # Play Elden Ring without the window (Steam shortcut)
 uv run roundtable-souls --game nr --check    # print what was detected for Nightreign
 uv run roundtable-souls --shots DIR          # render every page to PNG files
