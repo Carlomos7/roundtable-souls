@@ -126,6 +126,37 @@ def test_switcher_remembers_the_last_page_per_game(launcher, app):
     assert launcher.stackedWidget.currentWidget() is launcher.saves_page  # Nightreign returns to Saves
 
 
+def test_switcher_menu_opens_under_the_button_and_picks_a_game(launcher, app):
+    from PySide6.QtCore import QPoint
+
+    from roundtable_souls import games
+
+    btn, menu = launcher.game_btn, launcher._game_menu_view
+    QTest.mouseClick(btn, Qt.LeftButton)  # the real click path: button -> _showMenu -> menu.exec with its animation
+    for _ in range(40):
+        app.processEvents()
+    assert menu.isVisible()
+    list_left = menu.view.mapToGlobal(QPoint(0, 0)).x()
+    assert list_left == btn.mapToGlobal(QPoint(0, 0)).x()  # flush with the button's left edge, not centred
+    assert [a.isChecked() for a in launcher._game_actions.values()] == [g is launcher.game for g in games.GAMES]
+
+    def click_row(key):
+        item = launcher._game_actions[key].property("item")
+        QTest.mouseClick(menu.view.viewport(), Qt.LeftButton, pos=menu.view.visualItemRect(item).center())
+        for _ in range(20):
+            app.processEvents()
+
+    click_row("eldenring")  # the current game: nothing switches and its check stays on
+    assert launcher.game is games.ELDEN_RING and launcher._game_actions["eldenring"].isChecked()
+    QTest.mouseClick(btn, Qt.LeftButton)
+    for _ in range(40):
+        app.processEvents()
+    click_row("nightreign")
+    assert launcher.game is games.NIGHTREIGN
+    assert [k for k, a in launcher._game_actions.items() if a.isChecked()] == ["nightreign"]
+    assert launcher.launched == []
+
+
 def test_ctrl_tab_cycles_games(launcher, app):
     from roundtable_souls import games
 

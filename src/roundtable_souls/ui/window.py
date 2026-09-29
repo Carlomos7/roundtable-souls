@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QColor, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
+from PySide6.QtGui import QIcon, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QBoxLayout,
@@ -43,7 +43,6 @@ from qfluentwidgets import (
     CaptionLabel,
     CheckBox,
     ComboBox,
-    DropDownPushButton,
     FlowLayout,
     FluentWindow,
     IconWidget,
@@ -55,7 +54,6 @@ from qfluentwidgets import (
     MessageBox,
     NavigationItemPosition,
     PasswordLineEdit,
-    RoundMenu,
     SearchLineEdit,
     SpinBox,
     StrongBodyLabel,
@@ -188,9 +186,11 @@ from roundtable_souls.ui.widgets import (
     HeroBanner,
     LogoPreview,
     LogPane,
+    MenuButton,
     PairRow,
     SaveBar,
     SettingRow,
+    StatusMenu,
     action_row,
     card,
     clear_layout,
@@ -304,19 +304,6 @@ class Launcher(FluentWindow):
         if self.game.ready or pg is self.tools_page:
             self.switchTo(pg)
 
-    @staticmethod
-    def _game_dot(color: str, size: int = 12) -> QIcon:
-        """A small filled disc in the game's tint colour, used as its icon in the switcher and its menu."""
-        pix = QPixmap(size, size)
-        pix.fill(Qt.transparent)
-        p = QPainter(pix)
-        p.setRenderHint(QPainter.Antialiasing)
-        p.setPen(Qt.NoPen)
-        p.setBrush(QColor(color))
-        p.drawEllipse(1, 1, size - 2, size - 2)
-        p.end()
-        return QIcon(pix)
-
     def _build_game_tabs(self):
         """A compact switcher in the title bar: one button showing the current game and its dot, opening a menu of
         every game with its status. The label beside it stays the app name; the window title carries the game."""
@@ -326,8 +313,8 @@ class Launcher(FluentWindow):
         except RuntimeError, TypeError:
             pass
         bar.titleLabel.setText(TITLE)
-        self.game_btn = DropDownPushButton(self.game.name, bar)
-        self.game_btn.setFixedHeight(30)
+        self.game_btn = MenuButton(self.game.name, bar)
+        self.game_btn.fit_texts(g.name for g in games.GAMES)
         self.game_btn.setMenu(self._game_menu())
         self._sync_game_btn()
         sep = QFrame(bar)
@@ -343,14 +330,15 @@ class Launcher(FluentWindow):
         QShortcut(QKeySequence("Ctrl+Shift+Tab"), self, activated=lambda: self._cycle_game(-1))
 
     def _game_menu(self):
-        """The switcher's drop-down: every game with its dot, a check on the current one, and a status line
-        (setup found / installed / not installed for ready games, 'coming soon' for the rest)."""
-        menu = RoundMenu(parent=self)
+        """The switcher's drop-down: every game with its dot, a check on the current one, and its status
+        (installed / not installed for ready games, 'coming soon' for the rest) right-aligned in one column."""
+        self._game_menu_view = menu = StatusMenu(parent=self)
         self._game_actions = {}
         for g in games.GAMES:
-            act = Action(self._game_dot(g.tint), g.name, self)
-            act.triggered.connect(lambda _=False, k=g.key: self._on_game_tab(k))
-            menu.addAction(act)
+            act = Action(g.name, self)
+            # Qt flips the check on click before we decide (a cancelled switch, or the current game): resync after.
+            act.triggered.connect(lambda _=False, k=g.key: (self._on_game_tab(k), self._sync_game_btn()))
+            menu.add_choice(act, g.tint)
             self._game_actions[g.key] = act
         return menu
 
@@ -365,13 +353,12 @@ class Launcher(FluentWindow):
         """Point the switcher button at the active game, and refresh each menu row's dot, check and status."""
         if getattr(self, "game_btn", None) is None:
             return
-        self.game_btn.setText(self.game.name)
-        self.game_btn.setIcon(self._game_dot(self.game.tint))
+        compact = getattr(self, "_compact", False)
+        self.game_btn.set_choice(self.game.short if compact else self.game.name, self.game.tint)
         self.game_btn.setToolTip(f"{self.game.name} — click to switch game (Ctrl+Tab)")
-        for g, act in ((g, self._game_actions[g.key]) for g in games.GAMES):
-            current = g is self.game
-            act.setIcon(self._game_dot(g.tint, 14) if current else self._game_dot(g.tint))
-            act.setText(f"{'✓  ' if current else ''}{g.name}   ·   {self._game_status(g)}")
+        for g in games.GAMES:
+            self._game_actions[g.key].setChecked(g is self.game)
+        self._game_menu_view.set_statuses({self._game_actions[g.key]: self._game_status(g) for g in games.GAMES})
 
     def _cycle_game(self, step):
         if self.busy:
@@ -585,7 +572,8 @@ class Launcher(FluentWindow):
         self._compact = compact
         self.hero.set_compact(compact)
         if getattr(self, "game_btn", None) is not None:
-            self.game_btn.setText(self.game.short if compact else self.game.name)
+            self.game_btn.fit_texts((g.short if compact else g.name) for g in games.GAMES)
+            self._sync_game_btn()
         self._layout_scaling(2 if compact else 3)
         if hasattr(self, "save_box"):
             self.save_box.setDirection(QBoxLayout.TopToBottom if compact else QBoxLayout.LeftToRight)
@@ -3879,6 +3867,9 @@ class Launcher(FluentWindow):
                 style_primary(b)
             elif b.metaObject().className() == "PushButton":
                 style_ghost(b)
+        if getattr(self, "game_btn", None) is not None:
+            self._game_menu_view.restyle()
+            self.game_btn.update()
         tone_label(self.ready)
         tone_label(self.status)
         tone_label(self.plan, "accent" if self.ini and self._coop_pending() else "muted")
