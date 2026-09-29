@@ -287,14 +287,16 @@ def test_install_offers_a_rebuild_before_the_merger(world):
     assert any("talk file" in n for n in plan["merge_notes"])
     world.pack("older")
     plan = M.plan_install(world.profile, src)
-    assert plan["merge_source_now"] == "older"  # only one parameter pack can be the source
+    assert plan["merge_combine"] and plan["merge_tool"]  # combined with older first, so both apply
+    assert any("combined with older" in n for n in plan["merge_notes"])
 
 
-def test_no_offer_without_a_merger_or_for_other_games(tmp_path, world):
+def test_without_a_tool_the_offer_is_to_combine(tmp_path, world):
     (world.base / "Merger" / "installation.json").unlink()
     world.pack("a")
     plan = M.plan_install(world.profile, _pack_source(tmp_path / "dl"))
-    assert not plan["merge_offered"] and [x["name"] for x in plan["regulation_packages"]] == ["a", "last"]
+    assert [x["name"] for x in plan["regulation_packages"]] == ["a", "last"]
+    assert not plan["merge_tool"] and plan["merge_combine"]  # no tool: the launcher combines the packs itself
 
 
 def test_a_zip_and_a_folder_with_the_same_layout_plan_alike(world, tmp_path):

@@ -177,9 +177,12 @@ def set_overlay_override(profile: Path, folder: Path | None, rebuild_file: Path 
 
 
 def approved(tool) -> bool:
-    """Whether the user allowed this rebuild tool (this version of it) to run."""
+    """Whether the user allowed this rebuild tool (this version of it) to run. The launcher's own combine needs no
+    permission."""
     from roundtable_souls.settings import load_settings
 
+    if getattr(tool, "builtin", False):
+        return True
     return tool.approval_key() in (load_settings().get("rebuild_approved") or [])
 
 
@@ -234,9 +237,19 @@ def note_run(profile: Path, ok: bool, message: str) -> None:
 
 
 # ----------------------------------------------------------------------------- health
+def _combine_inputs(all_layers: list[dict], target: dict | None, combine) -> list[dict]:
+    """Packs with parameters that a combine would take: before the overlay (when there is one), other than the
+    overlay and the combined package."""
+    skip = {x["index"] for x in (target, combine.package if combine else None) if x}
+    order = [l["index"] for l in all_layers]
+    stop = order.index(target["index"]) if target is not None and target["index"] in order else len(order)
+    return [l for l in all_layers[:stop] if l["index"] not in skip and (l["folder"] / REGULATION).is_file()]
+
+
 def health(profile: Path) -> dict:
-    """{state, text, packs, winner, backend, reasons, run} for the profile; state None when this does not apply
-    (not an Elden Ring profile, or no profile)."""
+    """{state, text, packs, winner, backend, reasons, run, combine, can_combine, ...} for the profile; state None
+    when this does not apply (not an Elden Ring profile, or no profile)."""
+    from roundtable_souls.mods.backends import builtin
     from roundtable_souls.system import common
 
     profile = Path(profile)
@@ -250,6 +263,8 @@ def health(profile: Path) -> dict:
         "run": None,
         "overlay": None,
         "overlay_set": False,
+        "combine": False,
+        "can_combine": False,
     }
     if not profile.is_file() or not is_elden_ring(profile):
         return out
@@ -257,29 +272,45 @@ def health(profile: Path) -> dict:
     packs = [l for l in all_layers if (l["folder"] / REGULATION).is_file()]
     out["packs"] = [p["name"] for p in packs]
     out["winner"] = packs[-1]["name"] if packs else None
-    target, backend, by_hand = overlay(profile, all_layers)
+    target, tool, by_hand = overlay(profile, all_layers)
+    combine = builtin.find(profile, all_layers)
     out["overlay"] = target["name"] if target else None
     out["overlay_set"] = by_hand
-    if backend is None:
+    out["combine"] = combine is not None
+    inputs = _combine_inputs(all_layers, target, combine)
+    out["can_combine"] = len(inputs) >= 2 or (combine is not None and bool(inputs))
+    reasons: list[str] = []
+    if target is not None and tool is None:
+        reasons.append(f"{target['name']} is set as the parameter overlay, but no rebuild tool was found next to it")
+        late = _after(all_layers, packs, target)
+        if late:
+            reasons.append(f"{late} loads after {target['name']}, the package that must stay last")
+    if tool is None and combine is None:
         out["state"] = "stacked" if len(packs) > 1 else "single"
         out["text"] = STATE_TEXT[out["state"]]
-        if target is not None:
-            out["reasons"] = [
-                f"{target['name']} is set as the parameter overlay, but no rebuild tool was found next to it"
-            ]
-            late = _after(all_layers, packs, target)
-            if late:
-                out["reasons"].append(f"{late} loads after {target['name']}, the package that must stay last")
+        out["reasons"] = reasons
         return out
-    out["backend"] = backend.label
+    out["backend"] = tool.label if tool is not None else combine.label
     out["run"] = last_run(profile)
-    reasons = stale_reasons(profile, all_layers, packs, backend, common.game_dir())
+    if combine is not None:
+        reasons += [f"Combined parameters: {r}" for r in combine.reasons(all_layers, target)]
+    if tool is not None:
+        reasons += stale_reasons(profile, all_layers, packs, tool, common.game_dir())
     run = out["run"]
-    if run and not run["ok"] and run["when"] >= backend.report_time() - 1:
+    made = max(t.report_time() for t in (tool, combine) if t is not None)
+    if run and not run["ok"] and run["when"] >= made - 1:
         out["state"] = "failed"
         reasons = [run["message"], *reasons]
+    elif reasons:
+        out["state"] = "stale"
+    elif combine is None and len(inputs) >= 2:
+        out["state"] = "stacked"  # the tool takes only the last pack before it: the others' parameters are lost
+        reasons = [
+            f"{len(inputs)} packs ship parameters before {target['name']}, but only {inputs[-1]['name']}'s reach "
+            "it. Combine them so all apply."
+        ]
     else:
-        out["state"] = "stale" if reasons else "current"
+        out["state"] = "current"
     out["reasons"] = reasons
     out["text"] = STATE_TEXT[out["state"]]
     return out
@@ -376,46 +407,134 @@ class MergeError(RuntimeError):
 
 
 def find_backend(profile: Path):
-    """The rebuild tool declared for this profile (set by hand in Options, or found), or None."""
+    """The rebuild tool declared for this profile (set by hand in Options, or found), or None. The launcher's own
+    combine is not one: see rebuild()."""
     return overlay(Path(profile))[1]
 
 
-def rebuild(profile: Path, log) -> dict:
-    """Run the profile's rebuild tool, keep the profile's own text (comments, layout) when the rebuild tool only rewrote it, and
-    verify the result from the rebuild tool's list of sources. Raises MergeError (and records the failure) otherwise.
-    Returns {backend, profile_note}."""
+def ensure_combined(profile: Path, target: dict | None):
+    """The combined-parameters package: made (an empty folder with its record, and an entry right before the
+    overlay, or after the last package with parameters) when the profile has none, and moved there when a pack
+    ended up after it. Returns its CombineTool."""
+    from roundtable_souls.mods.backends import builtin
+
+    profile = Path(profile)
+    all_layers = layers(profile)
+    combine = builtin.find(profile, all_layers)
+    text = mod_manage.read_text(profile)
+    if mod_manage.is_array_form(text):
+        text = mod_manage.to_blocks(text)
+    if combine is None:
+        pk_root, _nt = mod_manage.roots(profile, text)
+        folder = pk_root / builtin.FOLDER
+        n = 2
+        while folder.exists() and not builtin.is_combined(folder):
+            folder = pk_root / f"{builtin.FOLDER}-{n}"
+            n += 1
+        folder.mkdir(parents=True, exist_ok=True)
+        if not (folder / builtin.RECORD).is_file():
+            (folder / builtin.RECORD).write_text(json.dumps({"combined": 1, "packs": []}), encoding="utf-8")
+        taken = {(e.get("id") or "").lower() for e in mod_manage.entries(profile) if e["kind"] == "package"}
+        ident, n = builtin.FOLDER, 2
+        while ident in taken:
+            ident, n = f"{builtin.FOLDER}-{n}", n + 1
+        row = {"kind": "package", "id": ident, "path": mod_manage.rel(profile, folder)}
+        text = _place(profile, text, row, target, all_layers)
+        mod_manage._write(profile, text)
+    else:
+        order = [l["index"] for l in all_layers]
+        at = order.index(combine.package["index"])
+        packs_after = [
+            l
+            for l in all_layers[at + 1 :]
+            if (l["folder"] / REGULATION).is_file() and (target is None or l["index"] != target["index"])
+        ]
+        before_target = target is None or order.index(target["index"]) > at
+        if packs_after or not before_target:  # move it back into place
+            o = mod_manage.block_options(text, combine.package["index"])
+            row = {"kind": "package", "id": o["id"], "path": o["path"]}
+            text = mod_manage.remove_block(text, combine.package["index"])
+            mod_manage._write(profile, text)
+            text = _place(profile, mod_manage.read_text(profile), row, overlay(profile)[0], layers(profile))
+            mod_manage._write(profile, text)
+    found = builtin.find(profile, layers(profile))
+    if found is None:
+        raise MergeError("The combined-parameters package could not be added to the profile.")
+    return found
+
+
+def _place(profile: Path, text: str, row: dict, target: dict | None, all_layers: list[dict]) -> str:
+    """Add the combined package's entry: right before the overlay, else right after the last package with
+    parameters (before whatever follows it), else at the end."""
+    if target is not None:
+        return mod_manage.insert_entry(text, "package", row, target["index"])
+    packs = [l for l in all_layers if (l["folder"] / REGULATION).is_file()]
+    if packs:
+        following = [
+            b["index"] for b in mod_manage.blocks(text) if b["index"] > packs[-1]["index"] and b["kind"] == "package"
+        ]
+        if following:
+            return mod_manage.insert_entry(text, "package", row, following[0])
+    return mod_manage.append_entry(text, "package", row)
+
+
+def rebuild(profile: Path, log, combine: bool | None = None) -> dict:
+    """Bring the profile's combined parameters up to date: the launcher's own combine (made when two or more packs
+    ship parameters, or when combine is True), then the overlay's rebuild tool, if there is one. Keeps the profile's
+    own text when a tool only rewrote it and verifies the result. Raises MergeError (and records the failure)
+    otherwise. Returns {backend, profile_note}."""
+    from roundtable_souls.mods.backends import builtin
     from roundtable_souls.system import common
 
     profile = Path(profile)
     if not is_elden_ring(profile):
         raise MergeError("Combined parameters are only rebuilt for Elden Ring profiles.")
     if common.game_running():
-        raise MergeError("Close the game first: the rebuild tool rewrites files the game has open.")
-    backend = find_backend(profile)
-    if backend is None:
-        raise MergeError("This profile has no rebuild tool for combined parameters.")
-    if not approved(backend):
-        raise MergeError(f"{backend.label} has not been allowed to run yet.")
+        raise MergeError("Close the game first: the rebuild rewrites files the game has open.")
+    all_layers = layers(profile)
+    target, tool, _by_hand = overlay(profile, all_layers)
+    comb = builtin.find(profile, all_layers)
+    inputs = _combine_inputs(all_layers, target, comb)
+    if tool is not None and not approved(tool):
+        raise MergeError(f"{tool.label} has not been allowed to run yet.")
+    wants = combine is True or (combine is None and (comb is not None or len(inputs) >= 2))
+    if tool is None and not wants:
+        raise MergeError(
+            "There is nothing to combine: fewer than two packs ship parameters and there is no rebuild tool."
+        )
     original = mod_manage.read_text(profile)
     bak = profile.with_name(profile.name + ".bak")
     bak.write_text(original, encoding="utf-8", newline="")
-    log(f"merge: profile saved to {bak.name}; running {backend.label}")
+    log(f"merge: profile saved to {bak.name}")
+    labels = []
     try:
-        backend.run(log)
+        if wants and combine is not False:
+            comb = ensure_combined(profile, target)
+            all_layers = layers(profile)
+            target, tool, _by_hand = overlay(profile, all_layers)
+            comb.run(log, all_layers, target)
+            labels.append(comb.label)
+        before_tool = mod_manage.read_text(profile)
+        note = "the profile was not changed by a rebuild tool"
+        if tool is not None:
+            log(f"merge: running {tool.label}")
+            tool.run(log)
+            labels.append(tool.label)
+            note = keep_profile_text(profile, before_tool, tool)
+            log(f"merge: {note}")
     except backends.BackendError as e:
-        if mod_manage.read_text(profile) != original:
-            _put(profile, original)
+        if mod_manage.read_text(profile) != original and tool is not None:
+            _put(profile, mod_manage.read_text(profile) if comb is not None else original)
         note_run(profile, False, str(e))
         raise MergeError(str(e)) from e
-    note = keep_profile_text(profile, original, backend)
-    log(f"merge: {note}")
     note_run(profile, True, "")
     h = health(profile)
-    if h["state"] != "current":
+    declined = combine is False and h["state"] == "stacked"  # asked for the tool alone: stacking is known
+    if h["state"] != "current" and not declined:
         why = "; ".join(h["reasons"][:3]) or h["text"]
         note_run(profile, False, f"The rebuild finished but does not match the packages: {why}")
         raise MergeError(f"The rebuild finished but does not match the packages: {why}")
-    return {"backend": backend.label, "profile_note": note}
+    return {"backend": " then ".join(labels), "profile_note": note}
 
 
 def _put(profile: Path, text: str) -> None:
@@ -475,32 +594,51 @@ def keep_profile_text(profile: Path, original: str, backend) -> str:
 
 # ----------------------------------------------------------------------------- install offers
 def offer(profile: Path, root: Path, regulation_packages: list[dict]) -> dict:
-    """For installing a package with a regulation.bin: whether a rebuild can be offered, and plain notes on what
-    the rebuild tool and the package that must stay last will do with this pack's files. Placement before that package is
-    what a rebuild needs; the dialog offers it only then."""
+    """For installing a package with a regulation.bin: what can be offered after the install and plain notes about
+    it. merge_combine: the launcher would combine this pack's parameters with the other packs'. merge_tool: the
+    overlay's rebuild tool would run. merge_target: the package new packs go before."""
+    from roundtable_souls.mods.backends import builtin
+
     out: dict = {
         "merge_offered": False,
         "merge_label": None,
         "merge_notes": [],
         "merge_source_now": None,
         "merge_target": None,
+        "merge_combine": False,
+        "merge_tool": False,
     }
     profile, root = Path(profile), Path(root)
     if not is_elden_ring(profile):
         return out
-    target, backend, _by_hand = overlay(profile)
+    all_layers = layers(profile)
+    target, backend, _by_hand = overlay(profile, all_layers)
+    comb = builtin.find(profile, all_layers)
     if target is not None:
         out["merge_target"] = target["name"]  # where "Before" places the pack
-    if backend is None or not regulation_packages:
+    elif comb is not None:
+        out["merge_target"] = comb.package["name"]
+    others = [
+        p
+        for p in regulation_packages
+        if (target is None or p["index"] != target["index"]) and (comb is None or p["index"] != comb.package["index"])
+    ]
+    tool_ok = backend is not None and bool(regulation_packages) and regulation_packages[-1]["index"] == target["index"]
+    out["merge_combine"] = bool(others)
+    out["merge_tool"] = tool_ok
+    out["merge_offered"] = out["merge_combine"] or tool_ok
+    if not out["merge_offered"]:
         return out
-    if regulation_packages[-1]["index"] != target["index"]:
-        return out  # another pack already loads after the overlay: nothing honest to offer
+    out["merge_label"] = backend.label if tool_ok else builtin.CombineTool.__name__
+    if out["merge_combine"]:
+        names = ", ".join(p["name"] for p in others[:3]) + (f" and {len(others) - 3} more" if len(others) > 3 else "")
+        out["merge_notes"].append(
+            f"Its parameters are combined with {names}'s into one file, so all of them apply; where two packs change "
+            "the same row, the later one in load order wins."
+        )
+    if not tool_ok:
+        return out
     winner = backend.package["name"]
-    out["merge_offered"] = True
-    out["merge_label"] = backend.label
-    if len(regulation_packages) > 1:
-        out["merge_source_now"] = regulation_packages[-2]["name"]
-    out["merge_label"] = backend.label
     mine = set(_winner_files(root))
     merged = {f.lower() for f in backend.merges()} | covered(backend)
     theirs = set(_winner_files(backend.package["folder"]))
@@ -508,7 +646,7 @@ def offer(profile: Path, root: Path, regulation_packages: list[dict]) -> dict:
     if taken:
         talk = " (including its talk file, which holds menus such as the one at graces)" if TALK in taken else ""
         out["merge_notes"].append(
-            f"The rebuild also takes {_few(taken)} from this pack{talk}, since it will be the last package before {winner} with them."
+            f"{backend.label.capitalize()} also takes {_few(taken)} from this pack{talk}, since it will be the last package before {winner} with them."
         )
     replaced = sorted((mine & theirs) - merged - {REGULATION})
     if replaced:
