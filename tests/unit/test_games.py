@@ -94,6 +94,30 @@ def test_settings_are_kept_per_game():
     assert common.GAME_EXE_OVERRIDE == "C:/er/eldenring.exe"
 
 
+def test_forget_setup_only_touches_its_own_game():
+    settings.save_game_settings("eldenring", setup="er.me3")
+    settings.save_game_settings("nightreign", setup="nr.me3")
+    core.forget_setup(NR)
+    s = settings.load_settings()
+    assert core.remembered_setup(s, NR) is None and core.remembered_setup(s, ER) == "er.me3"
+
+
+def test_same_source_matches_remembered_paths_loosely():
+    assert core.same_source("a/b.me3", "a/b.me3")
+    assert not core.same_source("a/b.me3", None) and not core.same_source(None, "a/b.me3")
+    if os.name == "nt":  # normcase folds case and slash direction on Windows only
+        assert core.same_source("C:/profiles/Er.me3", "c:\\profiles\\er.me3")
+
+
+def test_setup_reads_its_coop_ini_once_and_only_on_use(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(core, "coop_ini_for", lambda *a: calls.append(a))
+    s = core.Setup("me3", tmp_path / "a.me3", game=ER)
+    assert calls == []  # discover() builds a Setup per profile on disk; none reads its file until picked
+    assert s.ini is None and s.ini is None
+    assert len(calls) == 1  # looked once, remembered the answer, even "this profile has none"
+
+
 def test_nightreign_coop_ini_has_three_scaling_values_and_no_password(tmp_path):
     folder = tmp_path / "natives" / "SeamlessCoop"
     folder.mkdir(parents=True)

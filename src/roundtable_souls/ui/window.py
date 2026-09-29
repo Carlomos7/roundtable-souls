@@ -99,6 +99,7 @@ from roundtable_souls.core import (
     export_text,
     fix_checksums,
     fix_loading,
+    forget_setup,
     game_setting,
     has_password,
     health_report,
@@ -135,6 +136,7 @@ from roundtable_souls.core import (
     route_logs,
     run_installer,
     run_job,
+    same_source,
     save_game_settings,
     save_info,
     save_settings,
@@ -1311,7 +1313,7 @@ class Launcher(FluentWindow):
             return
         self._log(f"profile: created {p}")
         self.setups = discover(str(p))
-        remember_setup(str(p))
+        remember_setup(str(p), self.game)
         self.settings = load_settings()
         self._fill_setups(select=str(p))
         self._toast("Profile created", f"{p.name} is now the setup on Play.")
@@ -1339,8 +1341,9 @@ class Launcher(FluentWindow):
             self._toast("Could not delete", str(e), error=True)
             return
         self._log(f"profile: moved {p.name} to {gone}")
+        forget_setup(self.game)  # per game: save_settings(setup=None) would wipe Elden Ring's from any tab
+        self.settings = load_settings()
         self.setups = discover(None)
-        save_settings(setup=None)
         self._fill_setups()
         self._toast("Profile deleted", f"Moved to {gone.parent.name}.")
 
@@ -1788,10 +1791,13 @@ class Launcher(FluentWindow):
         self._loading_setups = True
         self.setup_box.blockSignals(True)
         self.setup_box.clear()
-        for s in self.setups:
-            self.setup_box.addItem(s.label)
+        labels = [s.label for s in self.setups]
+        for s, label in zip(self.setups, labels):
+            if labels.count(label) > 1:  # same file name in two folders: say which folder each one is in
+                label = f"{label}  ·  {Path(s.source).parent.name}"
+            self.setup_box.addItem(label)
         pick = select or remembered_setup(self.settings)
-        idx = next((i for i, s in enumerate(self.setups) if pick and s.source.lower() == str(pick).lower()), 0)
+        idx = next((i for i, s in enumerate(self.setups) if same_source(s.source, pick)), 0)
         if self.setups:
             self.setup_box.setCurrentIndex(idx)
         self.setup_box.blockSignals(False)
@@ -1837,8 +1843,7 @@ class Launcher(FluentWindow):
         self._schedule_page_fill()
         if getattr(self, "me3_line", None) is not None:
             self._refresh_me3()
-        remembered = str(remembered_setup(self.settings) or "")
-        if remembered.lower() != s.source.lower():
+        if not same_source(remembered_setup(self.settings), s.source):
             remember_setup(s.source, s.game)
             self.settings = load_settings()
 
@@ -1900,7 +1905,7 @@ class Launcher(FluentWindow):
                 error=True,
             )
             return
-        if s.source.lower() not in {x.source.lower() for x in self.setups}:
+        if not any(same_source(x.source, s.source) for x in self.setups):
             self.setups.append(s)
         self._fill_setups(select=s.source)
 

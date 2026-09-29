@@ -190,7 +190,15 @@ class Setup:
     def __init__(self, kind, profile, me3=None, exe=None, source=None, ini=None, game=None):
         self.kind, self.profile, self.me3, self.exe, self.source = kind, str(profile), me3, exe, str(source or profile)
         self.game = game or common.GAME
-        self.ini = ini or coop_ini_for(self.profile, self.game)
+        self._ini = ini
+
+    @property
+    def ini(self):
+        """The Seamless Co-op ini this profile loads. Found on first use: discover() builds a Setup for every
+        profile on disk, and reading each one there made every game-tab switch pay for inis nobody asked about."""
+        if self._ini is None:
+            self._ini = coop_ini_for(self.profile, self.game) or False  # False: looked, this profile has none
+        return self._ini or None
 
     @property
     def label(self):
@@ -246,6 +254,12 @@ def setup_from_installation(path: Path) -> Setup | None:
     return Setup("revive", cfg["profile"], cfg.get("me3"), cfg.get("game"), source=path, ini=ini)
 
 
+def same_source(a, b) -> bool:
+    """Whether two setup sources name the same file. Sources travel as strings (the combo list, the remembered
+    setup in settings), so every comparison ignores case and slash direction the same way, here."""
+    return bool(a) and bool(b) and os.path.normcase(str(a)) == os.path.normcase(str(b))
+
+
 def setup_from_path(p: str | Path, game: games.Game | None = None) -> Setup | None:
     """A setup for a picked file: a .me3 profile, or (Elden Ring only) a launcher's installation.json."""
     p = Path(p)
@@ -264,8 +278,9 @@ def discover(remembered: str | None, game: games.Game | None = None):
     found, seen = [], set()
 
     def add(s):
-        if s and s.source.lower() not in seen:
-            seen.add(s.source.lower())
+        key = os.path.normcase(s.source) if s else None
+        if s and key not in seen:
+            seen.add(key)
             found.append(s)
 
     if remembered:
@@ -299,6 +314,11 @@ def remembered_setup(settings: dict | None = None, game: games.Game | None = Non
 
 def remember_setup(source: str, game: games.Game | None = None) -> None:
     save_game_settings((game or common.GAME).key, setup=source)
+
+
+def forget_setup(game: games.Game | None = None) -> None:
+    """Drop the setup Play remembered for the game (its profile was deleted, say)."""
+    save_game_settings((game or common.GAME).key, setup=None)
 
 
 def use_game(key: str | games.Game, settings: dict | None = None) -> games.Game:
@@ -623,7 +643,7 @@ def play_headless(game: games.Game | None = None) -> int:
         return 1
     remembered = remembered_setup(settings, game)
     setups = [s for s in discover(remembered, game) if not s.problems()]
-    setup = next((s for s in setups if s.source == remembered), setups[0] if setups else None)
+    setup = next((s for s in setups if same_source(s.source, remembered)), setups[0] if setups else None)
     if setup is None:
         common.start_log("launcher: play (no window)")
         common.log(
@@ -666,8 +686,9 @@ def check(game: games.Game | None = None):
             f"      ini: {s.ini}  password: {password}",
             f"      scaling: {preset_of(sc, spec) if sc else None} {sc}",
         ]
-        if s.problems():
-            lines.append("      PROBLEMS: " + "; ".join(s.problems()))
+        probs = s.problems()
+        if probs:
+            lines.append("      PROBLEMS: " + "; ".join(probs))
     lines.append(f"remembered: {remembered}")
     lines.append(f"steam: {common.steam_exe()}")
     lines.append(f"game folder: {common.game_dir()}")

@@ -411,9 +411,12 @@ def me3_profiles(game: games.Game | None = None):
     if not root or not root.exists():
         return []
     return sorted(
-        p
-        for p in _iter_me3_files(root)
-        if not p.name.endswith("-default.me3") and game.key in (profile_games(p) or (games.ELDEN_RING.key,))
+        (
+            p
+            for p in _iter_me3_files(root)
+            if not p.name.endswith("-default.me3") and game.key in (profile_games(p) or (games.ELDEN_RING.key,))
+        ),
+        key=lambda p: (p.name.lower(), str(p).lower()),  # the Play list shows file names, so order by those
     )
 
 
@@ -436,7 +439,7 @@ def profile_games(profile: Path) -> tuple[str, ...]:
     try:
         data = tomllib.loads(profile.read_text(encoding="utf-8", errors="replace"))
     except OSError, tomllib.TOMLDecodeError:
-        return ()
+        data = {}  # unreadable counts as naming no game, and is cached like any answer until the file changes
     rows = data.get("supports") or []
     if isinstance(rows, dict):
         rows = [rows]
