@@ -61,6 +61,7 @@ from roundtable_souls.files import (
     atomic_write,
 )
 from roundtable_souls.mods import manage as mod_manage
+from roundtable_souls.mods import merge as mod_merge
 from roundtable_souls.mods import profile as profile_tools
 from roundtable_souls.mods import service as mods_service
 from roundtable_souls.mods.service import (

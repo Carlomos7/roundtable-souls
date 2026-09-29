@@ -73,6 +73,8 @@ class LauncherSettings(BaseModel):
     theme: Literal["dark", "light"] = "dark"
     logo: Literal["auto", "dark", "light"] = "auto"
     native_configs: dict[str, list[str]] = Field(default_factory=dict)  # DLL path -> settings files tied to it
+    parameter_overlays: dict[str, Any] = Field(default_factory=dict)  # profile -> {package, rebuild} set in Options
+    rebuild_approved: list[str] = Field(default_factory=list)  # rebuild tools the user allowed to run
 
     offline_strip_revive: bool = False
     offline_start_steam: bool = True

@@ -261,6 +261,14 @@ def find_roots(folder: Path, max_depth: int = 4) -> list[Path]:
 
     def walk(d: Path, depth: int):
         if _is_mod_root(d):
+            if _only_regulation(d) and depth < max_depth:  # a leftover regulation.bin beside the real mod folder
+                inner: list[Path] = []
+                for c in sorted(_children(d), key=lambda x: x.name.lower()):
+                    if c.is_dir() and c.name.lower() not in JUNK_FOLDERS:
+                        inner += [r for r in find_roots(c, max_depth - depth - 1) if not _only_regulation(r)]
+                if inner:
+                    found.extend(inner)
+                    return
             found.append(d)
             return
         if depth >= max_depth:
@@ -271,6 +279,17 @@ def find_roots(folder: Path, max_depth: int = 4) -> list[Path]:
 
     walk(Path(folder), 0)
     return found
+
+
+def _only_regulation(d: Path) -> bool:
+    """A mod folder whose only game file is regulation.bin (no game folders, DLLs or other loose game files)."""
+    kids = _children(d)
+    return (
+        (d / "regulation.bin").is_file()
+        and not any(c.is_dir() and c.name.lower() in ACCEPTABLE_FOLDERS - {"_backup", "_unknown"} for c in kids)
+        and not any(c.is_file() and c.suffix.lower() == ".dll" and c.name.lower() not in IGNORED_DLLS for c in kids)
+        and all(Path(f).name.lower() == "regulation.bin" for f, _ in loose_files(d))
+    )
 
 
 def find_root(folder: Path) -> Path:
@@ -486,7 +505,8 @@ def _path_lit(p: str) -> str:
     return "'" + p + "'" if "'" not in p else _q(p)
 
 
-def _dep_list(deps) -> str:
+def _dep_list(deps, nl: str = "", tall: bool = False) -> str:
+    """A load order list; with nl, written one entry per line when tall or longer than two entries."""
     items = []
     for d in deps or []:
         if isinstance(d, str):
@@ -494,6 +514,8 @@ def _dep_list(deps) -> str:
         items.append(
             "{ id = " + _q(d["id"]) + ", optional = " + ("true" if d.get("optional", True) else "false") + " }"
         )
+    if nl and items and (tall or len(items) > 2):
+        return "[" + nl + "".join(f"  {i},{nl}" for i in items) + "]"
     return "[" + ", ".join(items) + "]"
 
 
@@ -614,7 +636,10 @@ def set_block_options(text: str, index: int, opts: dict) -> str:
         if key not in opts:
             continue
         v = opts[key]
+        was = next((i for i, l in enumerate(lines) if (m := _KEY.match(l.rstrip("\r\n"))) and m.group(1) == key), None)
+        lines_was = lines[was] if was is not None else ""
         lines = _strip_key(lines, key)
+        before = len(new)  # a key that was there is rewritten where it was
         if key == "enabled":
             if v is False:
                 new.append(f"enabled = false{nl}")
@@ -638,7 +663,11 @@ def set_block_options(text: str, index: int, opts: dict) -> str:
                 new.append(f"initializer = {{ delay = {{ ms = {int(v['delay']['ms'])} }} }}{nl}")
         elif key in ("load_after", "load_before"):
             if v:
-                new.append(f"{key} = {_dep_list(v)}{nl}")
+                tall = was is not None and lines_was.rstrip().endswith("[")  # keep a one-per-line list that way
+                new.append(f"{key} = {_dep_list(v, nl, tall)}{nl}")
+        if was is not None:
+            lines[was:was] = new[before:]
+            del new[before:]
     # insert new keys right after the path line (or the header)
     at = 1
     for i, l in enumerate(lines):
@@ -845,6 +874,9 @@ def _plan(profile: Path, folder: Path, temp: bool, default_name: str, name, pkg_
         plan["profiles_inside"] = [str(m.relative_to(folder)) for m in folder.rglob("*.me3")]
     if d["kind"] == "package" and (d["root"] / "regulation.bin").is_file():
         plan.update(regulation_order(profile, skip=plan.get("dest")))
+        from roundtable_souls.mods import merge
+
+        plan.update(merge.offer(profile, d["root"], plan["regulation_packages"]))
     return plan
 
 
