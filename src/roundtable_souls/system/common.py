@@ -48,7 +48,7 @@ def start_log(title):
     if job is not None and not run_logging.is_standalone(job):
         run_logging.rename_job(title)
     else:
-        run_logging.start_standalone(title)
+        run_logging.start_standalone(title, game=GAME.key)
 
 
 def fail(msg, code=1):

@@ -548,12 +548,12 @@ def _index_lines(d: Path):
 
 
 # ----------------------------------------------------------------------------- the command line
-def start_standalone(title: str) -> Job:
+def start_standalone(title: str, game: str = "") -> Job:
     """A job for the command line (--play, --check): the previous one ends, this one ends at exit."""
     global _standalone
     if _standalone is not None:
         end_job(_standalone)
-    _standalone = begin_job(title)
+    _standalone = begin_job(title, game=game)
     return _standalone
 
 

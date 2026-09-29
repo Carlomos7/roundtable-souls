@@ -186,6 +186,7 @@ def test_the_command_line_gets_a_job_that_ends_at_the_next_one_and_at_exit(logs)
     assert first is not second and first.outcome == "done"
     rl.shutdown()
     assert second.outcome == "done" and [r["title"] for r in rl.read_jobs()] == ["play (no window)", "check"]
+    assert {r["game"] for r in rl.read_jobs()} == {common.GAME.key}  # the game the command line runs for
 
 
 def test_attachments_belong_to_the_job(logs):
