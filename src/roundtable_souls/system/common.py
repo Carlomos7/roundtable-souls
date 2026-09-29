@@ -15,15 +15,14 @@ from pathlib import Path
 
 from roundtable_souls import games
 from roundtable_souls.settings import data_dir, game_setting, load_settings
-from roundtable_souls.system.logging import get_logger, start_run_log
+from roundtable_souls.system import logging as run_logging
 
 IS_WINDOWS = sys.platform == "win32"
 IS_LINUX = sys.platform.startswith("linux")
 ELDEN_RING_APP_ID = games.ELDEN_RING.app_id
 GAME: games.Game = games.DEFAULT  # the game every lookup below answers for
 
-LOGS_DIR = data_dir() / "logs"
-LOG_FILE = LOGS_DIR / "last_run.log"
+LOGS_DIR = data_dir() / "logs"  # for opening the folder; code that writes asks run_logging.log_dir()
 
 # A real game instance uses gigabytes. Failed launches leave dead game exe shells behind that sit
 # under 1 MB with no threads; Steam counts those as "running", these tools do not.
@@ -31,24 +30,29 @@ REAL_GAME_MIN_KB = 100_000
 # Child consoles must never pop up (the window has no console of its own).
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
-_log = get_logger("run")
-
 
 # ----------------------------------------------------------------- logging
 
 
 def log(msg=""):
-    """One line to the run log (and to the window, when it is listening)."""
-    _log.info("%s", msg)
+    """One line for the current job's log (and the window), under the calling module's logger. Its level follows
+    its wording: 'error: ...' is an error, 'warning: ...' a warning, anything else information."""
+    caller = sys._getframe(1).f_globals.get("__name__", "")
+    run_logging.log_line(msg, caller or None)
 
 
 def start_log(title):
-    """Start a fresh last_run.log for one job."""
-    start_run_log(LOGS_DIR, title, LOG_FILE.name)
+    """Name the job that is running (the window starts each job as one), or, outside the window (--play, --check),
+    start a job of its own that ends at exit."""
+    job = run_logging.current_job()
+    if job is not None and not run_logging.is_standalone(job):
+        run_logging.rename_job(title)
+    else:
+        run_logging.start_standalone(title)
 
 
 def fail(msg, code=1):
-    log(f"error: {msg}")
+    run_logging.log_line(f"error: {msg}", sys._getframe(1).f_globals.get("__name__", "") or None)
     sys.exit(code)
 
 

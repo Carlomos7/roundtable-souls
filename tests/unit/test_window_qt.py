@@ -616,3 +616,52 @@ def test_install_dialog_names_a_combine_when_there_is_no_tool(app, tmp_path, mon
     dlg.validate()
     assert plan["merge"] is True
     parent.deleteLater()
+
+
+def test_the_log_pane_wraps_its_buttons_and_opens_the_logs_folder(sandbox, monkeypatch):
+    w = sandbox
+    opened = []
+    monkeypatch.setattr(window.core.common, "open_path", lambda p: opened.append(p))
+    w.switchTo(w.play_page) if hasattr(w, "play_page") else None
+    w.log_exp.setExpand(True)
+    pane = w.log_pane
+    assert pane.folder_btn is not None and pane.folder_btn.text() == "Logs folder"
+    QTest.mouseClick(pane.folder_btn, Qt.LeftButton)
+    assert opened and opened[0].endswith("logs")
+    w.resize(560, 700)  # narrow: the row wraps instead of pushing buttons out of view
+    QTest.qWait(200)
+    for b in (pane.copy_btn, pane.clear_btn, pane.folder_btn):
+        assert b.geometry().right() <= pane.width() + 1, b.text()
+
+
+def test_a_jobs_lines_reach_the_pane_with_their_level(sandbox, monkeypatch):
+    from PySide6.QtCore import QEventLoop, QTimer
+
+    w = sandbox
+    seen = []
+    real_add = w.log_pane.add
+    monkeypatch.setattr(w.log_pane, "add", lambda msg, kind=None: (seen.append((msg, kind)), real_add(msg, kind)))
+
+    def job(_setup):
+        window.core.common.log("working")
+        window.core.common.log("warning: something to know")
+
+    w.start(job, "Testing...", need_setup=False)
+    loop = QEventLoop()
+    for _ in range(100):
+        if not w.busy:
+            break
+        QTimer.singleShot(50, loop.quit)
+        loop.exec()
+    assert ("working", "info") in seen and ("warning: something to know", "warning") in seen
+    rec = window.core.run_logging.read_jobs()[0]
+    assert rec["title"] == "Testing" and rec["outcome"] == "warnings"
+
+
+def test_changes_made_in_the_window_are_kept_in_the_logs(sandbox):
+    from roundtable_souls.system import logging as rl
+
+    rl.setup_logging(console=False)
+    sandbox._log("profile: mem_patch = On")
+    rl.shutdown()
+    assert "profile: mem_patch = On" in (rl.log_dir() / rl.APP_LOG).read_text(encoding="utf-8")

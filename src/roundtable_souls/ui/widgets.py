@@ -394,7 +394,7 @@ class ExpandGroupSettingCard(_ExpandGroupSettingCard):
 class Bus(QObject):
     """Signals the worker threads emit; Qt delivers them on the UI thread."""
 
-    line = Signal(str)
+    line = Signal(str, str)  # message, level (info / warning / error, or empty to read it from the text)
     done = Signal(bool, str)
     running = Signal(bool)
     steam = Signal(bool, bool)
@@ -468,31 +468,37 @@ LOG_KEEP = 1500
 
 
 class LogPane(QWidget):
-    """Launch output. Timestamp, one colour per level, Copy and Clear. Newest at the bottom."""
+    """What the running job is doing: timestamp, one colour per level, Copy, Clear and the logs folder. Newest at
+    the bottom. Every job's full log is kept in the logs folder; this pane keeps the last LOG_KEEP lines."""
 
-    def __init__(self):
+    def __init__(self, open_folder=None):
         super().__init__()
         self._rows = []
         self.view = TextEdit()
         self.view.setReadOnly(True)
         self.view.setAcceptRichText(True)
-        self.view.setPlaceholderText("Play, Repair, and Clear write here. Newest line at the bottom.")
+        self.view.setPlaceholderText("Play, repairs, installs and rebuilds write here. Newest line at the bottom.")
         self.view.setLineWrapMode(TextEdit.LineWrapMode.WidgetWidth)
         style_editor(self.view)
-        bar = QHBoxLayout()
-        bar.setContentsMargins(0, 0, 0, 0)
-        bar.setSpacing(8)
+        row, bar = action_row()  # the buttons wrap onto a second line in a narrow window
         self.copy_btn = ghost_btn("Copy", FI.COPY)
+        self.copy_btn.setToolTip("Copy the lines shown here.")
         self.copy_btn.clicked.connect(self.copy)
         self.clear_btn = ghost_btn("Clear", FI.DELETE)
+        self.clear_btn.setToolTip("Clear this view. The job logs in the logs folder are kept.")
         self.clear_btn.clicked.connect(self.clear)
         bar.addWidget(self.copy_btn)
         bar.addWidget(self.clear_btn)
-        bar.addStretch()
+        self.folder_btn = None
+        if open_folder is not None:
+            self.folder_btn = ghost_btn("Logs folder", FI.FOLDER)
+            self.folder_btn.setToolTip("Every job's full log, me3's output and launcher.log.")
+            self.folder_btn.clicked.connect(open_folder)
+            bar.addWidget(self.folder_btn)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(8)
-        lay.addLayout(bar)
+        lay.addWidget(row)
         lay.addWidget(self.view)
 
     def add(self, msg, kind=None):
@@ -525,14 +531,19 @@ class LogPane(QWidget):
 
     def restyle(self):
         style_editor(self.view)
-        style_ghost(self.copy_btn)
-        style_ghost(self.clear_btn)
+        for b in (self.copy_btn, self.clear_btn, self.folder_btn):
+            if b is not None:
+                style_ghost(b)
         self._paint()
 
     def _paint(self):
         t = tokens()
         bg = t["editor"].name()
         colors = {"info": t["editor_fg"], "warning": t["accent"], "error": t["danger"], "banner": t["muted"]}
+        f = QFont("Consolas")
+        f.setStyleHint(QFont.StyleHint.Monospace)
+        f.setPointSize(11)
+        indent = QFontMetrics(f).horizontalAdvance("00:00:00  ")
         bits = []
         for ts, level, part in self._rows:
             color = colors.get(level, t["editor_fg"])
@@ -541,8 +552,9 @@ class LogPane(QWidget):
             else:
                 stamp = ts.strftime("%H:%M:%S") if ts else "&nbsp;" * 8
                 body = html.escape(part) if part else "&nbsp;"
-                bits.append(
-                    f'<div style="color:{color}"><span style="color:{t["muted"]}">{stamp}</span>&nbsp;&nbsp;{body}</div>'
+                bits.append(  # a hanging indent: wrapped text lines up with the message, not under the time
+                    f'<div style="color:{color};margin-left:{indent}px;text-indent:-{indent}px">'
+                    f'<span style="color:{t["muted"]}">{stamp}</span>&nbsp;&nbsp;{body}</div>'
                 )
         self.view.setHtml(
             f"<body style=\"background:{bg};font-family:Consolas,'Cascadia Code',monospace;font-size:11pt\">{''.join(bits)}</body>"

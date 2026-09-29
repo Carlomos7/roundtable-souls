@@ -7,9 +7,15 @@ def main() -> int:
     """Console entry point: the window, or --check / --shots without one."""
     import sys
 
-    from roundtable_souls.system.logging import setup_logging
+    from roundtable_souls.system import logging as run_logging
 
-    setup_logging()
+    run_logging.setup_logging()
+
+    def crashed(exc_type, exc, tb):  # the window replaces this with one that also shows a message
+        run_logging.log_crash(exc_type, exc, tb, "command line")
+        sys.__excepthook__(exc_type, exc, tb)
+
+    sys.excepthook = crashed
     if getattr(sys, "frozen", False):
         from pathlib import Path
 

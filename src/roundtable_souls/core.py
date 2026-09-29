@@ -150,17 +150,12 @@ LOGS = DATA_DIR / "logs"
 
 
 def report_exception(exc_type, exc, tb, where="launcher"):
-    """Every uncaught error, in the UI thread or a worker, goes to logs/launcher-errors.log and a message box."""
-    text = "".join(traceback.format_exception(exc_type, exc, tb))
-    try:
-        LOGS.mkdir(parents=True, exist_ok=True)
-        with open(LOGS / "launcher-errors.log", "a", encoding="utf-8") as f:
-            f.write(f"{datetime.datetime.now():%Y-%m-%d %H:%M:%S}  [{where}]\n{text}\n")
-    except OSError:
-        pass
+    """Every uncaught error, in the UI thread or a worker: to logs/launcher.log with its traceback (and the running
+    job's log), then a message box."""
+    run_logging.log_crash(exc_type, exc, tb, where)
     if NOTIFY is not None:
         try:
-            NOTIFY(TITLE, "Something went wrong:\n" + str(exc) + "\n\nDetails are in logs\\launcher-errors.log")
+            NOTIFY(TITLE, "Something went wrong:\n" + str(exc) + "\n\nDetails are in logs\\launcher.log")
         except Exception:
             pass
 
@@ -632,15 +627,26 @@ def job_clear(setup):
     me3_session.clear_dead_shells("manual")
 
 
-def run_job(job, setup, sink, done):
+def run_job(job, setup, sink, done, title="Job"):
+    """Run one job on this (worker) thread as a logged job of its own: its lines go to its log file and the window,
+    and the jobs index records how it ended."""
+    game = getattr(getattr(setup, "game", None), "key", "") or common.GAME.key
+    profile = str(getattr(setup, "profile", "") or "")
+    record = run_logging.begin_job(title.rstrip(". "), game=game, profile=profile)
+    log = run_logging.get_logger("job")
     try:
         job(setup)
-        done(True, "Finished")
-    except SystemExit:
-        done(False, "Stopped (see details)")
+    except SystemExit as e:
+        stopped = e.code == 130
+        run_logging.end_job(record, "stopped" if stopped else "failed" if e.code not in (0, None) else None)
+        done(e.code in (0, None), "Finished" if e.code in (0, None) else "Stopped (see details)")
     except Exception:
-        sink("error:\n" + traceback.format_exc())
+        log.exception("the job failed with an unexpected error")
+        run_logging.end_job(record, "failed")
         done(False, "Error (see details)")
+    else:
+        run_logging.end_job(record)
+        done(True, "Finished")
 
 
 apply_overrides()

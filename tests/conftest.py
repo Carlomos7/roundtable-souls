@@ -34,6 +34,22 @@ def isolated_settings(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def clean_logging():
+    """No job, sink or standalone run survives a test, so one test's lines never reach another's files."""
+    from roundtable_souls.system import logging as run_logging
+
+    yield
+    job = run_logging.current_job()
+    if job is not None:
+        run_logging.end_job(job)
+    if run_logging._standalone is not None:
+        run_logging.end_job(run_logging._standalone)
+        run_logging._standalone = None
+    run_logging.detach_sink()
+    run_logging._dir_override = None
+
+
+@pytest.fixture(autouse=True)
 def no_installed_mod_names(request, monkeypatch):
     if request.module.__name__.endswith("test_gamefiles"):
         return

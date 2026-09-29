@@ -93,7 +93,11 @@ def clear_dead_shells(when):
         )
 
 
-ME3_LOG = common.LOGS_DIR / "me3_launch.log"
+def me3_log_path():
+    """Where me3's own output goes: an attachment of the running job, else logs/me3-launch.log."""
+    from roundtable_souls.system import logging as run_logging
+
+    return run_logging.attachment("me3") or run_logging.log_dir() / "me3-launch.log"
 
 
 def launch(game, profile, me3=None, exe=None, extra_args=()):
@@ -119,10 +123,12 @@ def launch(game, profile, me3=None, exe=None, extra_args=()):
         + list(extra_args)
     )
     log("launching: " + " ".join(cmd))
-    log(f"me3 output goes to {ME3_LOG}")
+    me3_log = me3_log_path()
+    me3_log.parent.mkdir(parents=True, exist_ok=True)
+    log(f"me3 output goes to {me3_log.name}")
 
     seen_running = False
-    with open(ME3_LOG, "w", encoding="utf-8") as out:
+    with open(me3_log, "w", encoding="utf-8", errors="backslashreplace") as out:
         proc = subprocess.Popen(cmd, stdout=out, stderr=subprocess.STDOUT, creationflags=common.NO_WINDOW)
         try:
             while proc.poll() is None:
@@ -140,7 +146,7 @@ def launch(game, profile, me3=None, exe=None, extra_args=()):
         # grace period in case it launched asynchronously, then move on.
         seen_running = wait_for_game(appear_timeout=20, quiet=True)
         if not seen_running:
-            log("game never appeared; check me3_launch.log for why")
+            log("warning: the game never appeared; me3's own output (in this job's log files) says why")
             return False
     while common.game_running():
         time.sleep(3)

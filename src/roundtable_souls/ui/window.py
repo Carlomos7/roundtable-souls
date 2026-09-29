@@ -544,8 +544,10 @@ class Launcher(FluentWindow):
         cl.addWidget(self.setup_hint)
         self.setup_exp.addGroupWidget(body)
         lay.addWidget(self.setup_exp)
-        self.log_exp = ExpandGroupSettingCard(FI.HISTORY, "Launch log", "Opens on its own if something goes wrong.")
-        self.log_pane = LogPane()
+        self.log_exp = ExpandGroupSettingCard(
+            FI.HISTORY, "Log", "What the running job is doing. Opens on its own if something goes wrong."
+        )
+        self.log_pane = LogPane(open_folder=self._open_logs)
         self.log = self.log_pane.view
         self.log.setMinimumHeight(180)
         log_body = QWidget()
@@ -2149,7 +2151,7 @@ class Launcher(FluentWindow):
                 "play_diagnostics",
                 "me3 diagnostics",
                 "Ask me3 for extra diagnostics on this launch (slower start, bigger log).",
-                "Passes --diagnostics; the output lands in me3_launch.log under Logs.",
+                "Passes --diagnostics; me3's output is kept with that Play in the logs folder.",
             ),
             (
                 "play_backup_before",
@@ -4439,10 +4441,24 @@ class Launcher(FluentWindow):
 
     # ---------------------------------------------------------------- jobs
     def _log(self, msg):
-        self.bus.line.emit(str(msg))
+        """A line about something done in the window itself: shown in the pane and kept in the logs."""
+        self.bus.line.emit(str(msg), "")
+        core.run_logging.log_shown(msg)
 
-    def _on_line(self, msg):
-        self.log_pane.add(msg)
+    def _sink(self, msg, level=""):
+        """Lines from the logging layer (the running job, and warnings from anywhere), for the pane."""
+        self.bus.line.emit(str(msg), level or "")
+
+    def _open_logs(self):
+        d = core.run_logging.log_dir()
+        try:
+            d.mkdir(parents=True, exist_ok=True)
+            core.common.open_path(str(d))
+        except OSError as e:
+            self._toast("Could not open the logs folder", str(e), error=True)
+
+    def _on_line(self, msg, level=""):
+        self.log_pane.add(msg, kind=level or None)
         if self.log_pane.last_level() == "error":
             self.log_exp.setExpand(True)
         shown = tidy_log_line(str(msg))
@@ -4491,7 +4507,7 @@ class Launcher(FluentWindow):
         self._pill("Finished" if ok else "Stopped", "success" if ok else "error")
         self.refresh_saves()
         detail = (
-            "Open Launch log on the Play page."
+            "Open Log on the Play page; every job's log is in the logs folder."
             if not ok
             else (
                 "Done."
@@ -4557,9 +4573,11 @@ class Launcher(FluentWindow):
         self._job_label = status
         self.set_busy(True, status)
         self.log_pane.banner(status)
-        route_logs(self._log)
+        route_logs(self._sink)
         threading.Thread(
-            target=run_job, args=(job, s, self._log, lambda ok, st: self.bus.done.emit(ok, st)), daemon=True
+            target=run_job,
+            args=(job, s, self._sink, lambda ok, st: self.bus.done.emit(ok, st), status),
+            daemon=True,
         ).start()
 
     def launch(self):
