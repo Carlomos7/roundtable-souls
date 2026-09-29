@@ -336,14 +336,40 @@ def save_roots(game: games.Game | None = None) -> list[Path]:
     return roots
 
 
-def save_files(game: games.Game | None = None):
-    """Every standard and co-op save (ER0000.sl2 / ER0000.co2 for Elden Ring) in the game's save folders."""
+# Save names a setup configures beyond the defaults (me3's savefile, Seamless Co-op's save_file_extension), per game.
+# The window and the Play session set them from the setup in use, so those files are listed and repaired too.
+_SETUP_SAVE_NAMES: dict[str, dict[str, str]] = {}
+
+
+def set_setup_save_names(game: games.Game, names: dict[str, str]) -> None:
+    """names: role -> file name, e.g. {"standard": "ER0000.sl2", "coop": "ER0000.co3"}."""
+    _SETUP_SAVE_NAMES[game.key] = {k: v for k, v in names.items() if v}
+
+
+def setup_save_names(game: games.Game | None = None) -> dict[str, str]:
+    return dict(_SETUP_SAVE_NAMES.get((game or GAME).key) or {})
+
+
+def save_names(game: games.Game | None = None) -> list[str]:
+    """The default names (ER0000.sl2, ER0000.co2) and any the current setup configures, without repeats."""
     game = game or GAME
+    out = []
+    for n in (*game.save_names, *setup_save_names(game).values()):
+        if n.lower() not in (x.lower() for x in out):
+            out.append(n)
+    return out
+
+
+def save_files(game: games.Game | None = None):
+    """Every save the game or the current setup uses (ER0000.sl2 / ER0000.co2, plus any name the setup configures)
+    in the game's save folders, one folder per Steam account."""
+    game = game or GAME
+    names = save_names(game)
     found = []
     for root in save_roots(game):
         for profile in sorted(root.glob("*")):
             if profile.is_dir():
-                found.extend(p for p in (profile / n for n in game.save_names) if p.exists())
+                found.extend(p for p in (profile / n for n in names) if p.exists())
     return found
 
 

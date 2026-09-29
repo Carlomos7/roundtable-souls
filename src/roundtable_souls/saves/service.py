@@ -7,7 +7,7 @@ import shutil
 import time
 from pathlib import Path
 
-from roundtable_souls import games, models
+from roundtable_souls import folders, games, models
 from roundtable_souls.saves import analyze as save_analyze
 from roundtable_souls.saves import container as save_container
 from roundtable_souls.saves import fix as save_fix
@@ -19,13 +19,22 @@ from roundtable_souls.saves import vanilla as save_vanilla
 from roundtable_souls.system import common
 
 
-def _save_info(path: Path) -> dict:
-    """One save file: type, modified time, findings, and its active characters."""
+def save_kind(path: Path, game: games.Game | None = None) -> str:
+    """Seamless Co-op for a .co2 or the co-op name the current setup configures, else Standard."""
     path = Path(path)
+    coop = common.setup_save_names(game).get("coop") or ""
+    return "Seamless Co-op" if path.suffix.lower() == ".co2" or path.name.lower() == coop.lower() else "Standard"
+
+
+def _save_info(path: Path, game: games.Game | None = None, kind: str | None = None) -> dict:
+    """One save file: type, modified time, findings, and its active characters. game and kind default to what the
+    file name says (a custom name counts for the active game)."""
+    path = Path(path)
+    game = game or games.for_save(path) or common.GAME
     info = dict(
         path=path,
         name=path.name,
-        kind="Seamless Co-op" if path.suffix.lower() == ".co2" else "Standard",
+        kind=kind or save_kind(path, game),
         modified="?",
         characters=[],
         block="?",
@@ -50,7 +59,6 @@ def _save_info(path: Path) -> dict:
         info["findings"] = [{"level": "error", "code": "read", "title": "Cannot read this save", "detail": str(e)}]
         return info
 
-    game = games.for_save(path) or games.ELDEN_RING
     if game.save_reader == "nightreign":
         return _nightreign_info(info, data, game)
     if game.save_reader != "eldenring":
@@ -185,7 +193,7 @@ def _save_info(path: Path) -> dict:
         )
         info["error"] = str(e)[:120]
     info["findings"] = findings
-    info["convert_ok"] = path.suffix.lower() == ".co2" and save_analyze.findings_are_clean(findings)
+    info["convert_ok"] = info["kind"] == "Seamless Co-op" and save_analyze.findings_are_clean(findings)
     return info
 
 
@@ -265,7 +273,7 @@ def _nightreign_info(info: dict, data: bytes, game: games.Game) -> dict:
         info["block"] = "needs repair"
     info["needs_repair"] = not status["healthy"]
     info["findings"] = findings
-    info["convert_ok"] = Path(info["path"]).suffix.lower() == ".co2" and save_analyze.findings_are_clean(findings)
+    info["convert_ok"] = info["kind"] == "Seamless Co-op" and save_analyze.findings_are_clean(findings)
     return info
 
 
@@ -300,13 +308,13 @@ def _container_info(info: dict, data: bytes, game: games.Game) -> dict:
             "Backups, restore, and the co-op and standard copies all work.",
         },
     ]
-    info["convert_ok"] = Path(info["path"]).suffix.lower() == ".co2"
+    info["convert_ok"] = info["kind"] == "Seamless Co-op"
     return info
 
 
-def save_info(path: Path) -> dict:
+def save_info(path: Path, game: games.Game | None = None, kind: str | None = None) -> dict:
     """One save file: type, modified time, findings, and its active characters (shape: models.SaveInfo)."""
-    info = _save_info(path)
+    info = _save_info(path, game, kind)
     models.SaveInfo.model_validate(info)
     return info
 
@@ -397,59 +405,86 @@ def saves_needing_attention(infos: list | None = None) -> list:
     return out
 
 
-BACKUP_FOLDERS = ("save-fix-backups", "regulation-fix-backups", "co2-to-sl2-backups", "sl2-to-co2-backups")
-FOLDER_ACTIONS = {
-    "save-fix-backups": "Save fix",
-    "regulation-fix-backups": "Repair regulation block",
-    "co2-to-sl2-backups": "Copy to standard save",
-    "sl2-to-co2-backups": "Copy to co-op save",
+# notes written by older versions, shown in today's words
+_OLD_ACTIONS = {
+    "Backup": "Before a change",
+    "Save fix": "Before a save fix",
+    "Fix checksums": "Before fixing checksums",
+    "Fix loading": "Before fixing loading",
+    "Remove mod items": "Before removing mod items",
+    "Repair regulation block": "Before repairing for save editors",
+    "Repair Nightreign save": "Before repairing the Nightreign save",
+    "Backup before Play": "Before playing",
+    "Copy a character": "Before copying a character in",
 }
 
 
-def list_backups(save: Path | None = None) -> list:
-    """Every backup next to the save(s), newest first: {path, save_name, when, action, changes, size, folder}."""
+def backup_folders(save: Path | None = None) -> list[Path]:
+    """The backups folder of every account with saves (or of one save)."""
     paths = [Path(save)] if save else list(common.save_files())
-    seen = set()
-    out = []
+    seen: list[Path] = []
     for p in paths:
-        for folder in BACKUP_FOLDERS:
-            d = p.parent / folder
-            if not d.is_dir() or d in seen:
+        d = folders.backups(p.parent)
+        if d not in seen:
+            seen.append(d)
+    return seen
+
+
+def list_backups(save: Path | None = None) -> list:
+    """Every backup of the save(s), newest first: {path, save_name, save, when, action, changes, size, keep, mtime}."""
+    out = []
+    for d in backup_folders(save):
+        if not d.is_dir():
+            continue
+        for f in d.iterdir():
+            if f.suffix not in (".bak", ".src") or (
+                save and not f.name.lower().startswith(Path(save).name.lower() + ".")
+            ):
                 continue
-            seen.add(d)
-            for f in d.iterdir():
-                if f.suffix not in (".bak", ".src") or (save and not f.name.startswith(p.name + ".")):
-                    continue
-                m = save_fix.read_manifest(f) or {}
-                try:
-                    st = f.stat()
-                except OSError:
-                    continue
-                when = m.get("when") or datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
-                action = m.get("action") or (
-                    FOLDER_ACTIONS.get(folder, "Backup") + (" (source copy)" if f.suffix == ".src" else "")
-                )
-                out.append(
-                    {
-                        "path": f,
-                        "save_name": f.name.split(".")[0] + "." + f.name.split(".")[1],
-                        "when": when,
-                        "action": action,
-                        "changes": list(m.get("changes") or []),
-                        "size": st.st_size,
-                        "folder": folder,
-                        "mtime": st.st_mtime,
-                    }
-                )
+            m = folders.note_of(f)
+            try:
+                st = f.stat()
+            except OSError:
+                continue
+            when = m.get("when") or datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+            action = m.get("action") or "Before a change"
+            out.append(
+                {
+                    "path": f,
+                    "save_name": folders._saved_name(f.name),
+                    "save": m.get("save") or "",
+                    "when": when,
+                    "action": _OLD_ACTIONS.get(action, action),
+                    "changes": list(m.get("changes") or []),
+                    "size": st.st_size,
+                    "keep": bool(m.get("keep")),
+                    "mtime": st.st_mtime,
+                }
+            )
     out.sort(key=lambda b: b["mtime"], reverse=True)
     return out
 
 
+def keep_backup(bak: Path, keep: bool = True) -> None:
+    """Keep a backup whatever its age (pruning skips it), or let it age out again."""
+    folders.set_keep(Path(bak), keep)
+
+
 def save_for_backup(bak: Path) -> Path:
-    """The live save a backup belongs to: same folder as the backup folder's parent, first two name parts."""
+    """The live save a backup belongs to: the one its note names; else the same account and file name under the
+    game's save folder."""
     bak = Path(bak)
-    parts = bak.name.split(".")
-    return bak.parent.parent / (parts[0] + "." + parts[1])
+    saved = folders.note_of(bak).get("save")
+    if saved:
+        return Path(saved)
+    name = folders._saved_name(bak.name)
+    account = bak.parent.parent.name  # …/saves/<game>/<account>/backups/<file>
+    game = games.BY_KEY.get(bak.parent.parent.parent.name) or games.for_save(name) or common.GAME
+    roots = common.save_roots(game)
+    for root in roots:
+        if (root / account / name).exists():
+            return root / account / name
+    return (roots[0] if roots else bak.parent) / account / name
 
 
 def restore_backup(bak: Path, save: Path | None = None) -> Path | None:
@@ -472,7 +507,13 @@ def restore_backup(bak: Path, save: Path | None = None) -> Path | None:
             raise RuntimeError(f"That backup is not a whole {game.name} save: {e}.") from e
     safety = None
     if save.exists():
-        safety = save_fix.backup(save, {"action": "Before restoring a backup", "changes": [f"restored {bak.name}"]})
+        safety = save_fix.backup(
+            save,
+            {
+                "action": "Before restoring a backup",
+                "changes": [f"restored the copy from {folders.note_of(bak).get('when') or bak.name}"],
+            },
+        )
     tmp = save.with_name(save.name + ".roundtable.tmp")
     tmp.write_bytes(data)
     tmp.replace(save)
@@ -617,10 +658,8 @@ def save_summary(info: dict) -> list:
 
 
 def convert_co2_to_sl2(path: Path, dest: Path | None = None, *, force: bool = False) -> Path:
-    """Copy a .co2 to .sl2 only when findings are clean (or force=True after an explicit confirm).
-
-    Never overwrites a live standard save (ER0000.sl2, NR0000.sl2) without a backup in co2-to-sl2-backups first.
-    """
+    """Copy a .co2 over the .sl2 only when its findings are clean (or force=True after an explicit confirm). The
+    standard save it replaces is backed up first."""
     path = Path(path)
     if path.suffix.lower() != ".co2":
         raise RuntimeError("Only Seamless Co-op .co2 files can be converted this way.")
@@ -630,36 +669,24 @@ def convert_co2_to_sl2(path: Path, dest: Path | None = None, *, force: bool = Fa
     if not force and not save_analyze.findings_are_clean(info["findings"]):
         raise RuntimeError("Findings are not clean. Repair or clear warnings first, or use force after confirming.")
     dest = Path(dest) if dest else path.with_suffix(".sl2")
-    folder = dest.parent / "co2-to-sl2-backups"
-    folder.mkdir(exist_ok=True)
-    stamp = time.strftime("%Y%m%d-%H%M%S")
     if dest.exists():
-        bak = folder / f"{dest.name}.{stamp}.bak"
-        shutil.copy2(dest, bak)
+        save_fix.backup(dest, {"action": "Before copying the co-op save over it", "changes": [path.name]})
     shutil.copy2(path, dest)
-    # Keep a copy of the source too
-    shutil.copy2(path, folder / f"{path.name}.{stamp}.src")
     return dest
 
 
 def convert_sl2_to_co2(path: Path, dest: Path | None = None) -> Path:
-    """Copy a standard .sl2 to the .co2 Seamless Co-op reads. Same bytes; the mod does not mind extra notes.
-
-    Whatever co-op save already exists is backed up into sl2-to-co2-backups first, with a copy of the source.
-    """
+    """Copy a standard .sl2 over the .co2 Seamless Co-op reads (same format). The co-op save it replaces is backed
+    up first."""
     path = Path(path)
     if path.suffix.lower() != ".sl2":
         raise RuntimeError("Only standard .sl2 files can be copied this way.")
     if common.game_running():
         raise RuntimeError(f"{common.GAME.name} is running. Close it before converting saves.")
     dest = Path(dest) if dest else path.with_suffix(".co2")
-    folder = dest.parent / "sl2-to-co2-backups"
-    folder.mkdir(exist_ok=True)
-    stamp = time.strftime("%Y%m%d-%H%M%S")
     if dest.exists():
-        shutil.copy2(dest, folder / f"{dest.name}.{stamp}.bak")
+        save_fix.backup(dest, {"action": "Before copying the standard save over it", "changes": [path.name]})
     shutil.copy2(path, dest)
-    shutil.copy2(path, folder / f"{path.name}.{stamp}.src")
     return dest
 
 
@@ -670,10 +697,6 @@ def dead_shells_count() -> int:
         return 0
 
 
-def backups_folder(path: Path):
-    """The newest backups folder next to the save: save fixes or regulation repairs."""
-    cands = [path.parent / save_fix.BACKUP_DIR, path.parent / repair_regulation.BACKUP_DIR]
-    have = [c for c in cands if c.is_dir()]
-    if not have:
-        return cands[1]
-    return max(have, key=lambda c: c.stat().st_mtime)
+def backups_folder(path: Path) -> Path:
+    """The backups folder for a save's account."""
+    return folders.backups(Path(path).parent)

@@ -222,13 +222,11 @@ def test_nightreign_copies_and_restore(tmp_path, monkeypatch):
     os.utime(co2, (1_700_000_000, 1_700_000_000))  # settled long ago: the write lock does not wait
     sl2 = saves.convert_co2_to_sl2(co2, co2.with_suffix(".sl2"))
     assert sl2.read_bytes() == co2.read_bytes()
-    bak = next((tmp_path / "co2-to-sl2-backups").glob("NR0000.co2.*.src"))
-    junk = tmp_path / "save-fix-backups" / "NR0000.co2.20260101-000000.bak"
+    junk = tmp_path / "elsewhere" / "NR0000.co2.20260101-000000.bak"
     junk.parent.mkdir()
     junk.write_bytes(b"BND4 but not really")
     with pytest.raises(RuntimeError, match="not a whole Nightreign save"):
         saves.restore_backup(junk, co2)
-    assert bak.is_file()
 
 
 def test_placeholder_games_cannot_play():

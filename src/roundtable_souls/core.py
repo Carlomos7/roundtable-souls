@@ -14,7 +14,7 @@ import time
 import traceback
 from pathlib import Path
 
-from roundtable_souls import __version__, coop, games
+from roundtable_souls import __version__, coop, folders, games
 from roundtable_souls.coop import (
     COMMENT_PREFIX,
     CUSTOM,
@@ -82,14 +82,14 @@ from roundtable_souls.resources import ASSETS_DIR
 from roundtable_souls.saves import analyze as save_analyze
 from roundtable_souls.saves import fix as save_fix
 from roundtable_souls.saves import layout as save_layout_check
+from roundtable_souls.saves import library as save_library
 from roundtable_souls.saves import loading as save_loading
 from roundtable_souls.saves import regulation as repair_regulation
 from roundtable_souls.saves import service as saves_service
+from roundtable_souls.saves import transfer as save_transfer
 from roundtable_souls.saves import vanilla as save_vanilla
 from roundtable_souls.saves.service import (
     AREA_NAMES,
-    BACKUP_FOLDERS,
-    FOLDER_ACTIONS,
     assert_writable,
     backups_folder,
     character_detail,
@@ -101,6 +101,7 @@ from roundtable_souls.saves.service import (
     fix_checksums,
     fix_loading,
     health_report,
+    keep_backup,
     list_backups,
     place_name,
     remove_mod_items,
@@ -321,6 +322,40 @@ def forget_setup(game: games.Game | None = None) -> None:
     save_game_settings((game or common.GAME).key, setup=None)
 
 
+def setup_saves(setup: Setup | None) -> dict:
+    """The save files a setup plays on, by name in the account's save folder:
+
+    standard  what the game writes: me3's per-profile savefile, else ER0000.sl2 (NR0000.sl2, ...).
+    coop      what Seamless Co-op writes instead, when the setup loads it: the standard name with Seamless's
+              save_file_extension (co2 unless changed in its ini). None without Seamless.
+    active    the one Play uses (co-op when Seamless is loaded; Play offline always uses the standard one).
+    why       role -> where the name comes from, for the Saves page."""
+    game = setup.game if setup else common.GAME
+    standard = f"{game.save_stem}.sl2"
+    why = {"standard": "the game's default"}
+    if setup and Path(setup.profile).is_file():
+        try:
+            named = profile_tools.read_settings(Path(setup.profile).read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            named = {}
+        if named.get("savefile"):
+            standard = str(named["savefile"])
+            why["standard"] = f"savefile in {Path(setup.profile).name}"
+    coop_name = None
+    if setup and setup.ini and Path(setup.ini).is_file():
+        ext = (read_keys(setup.ini, ["save_file_extension"]).get("save_file_extension") or "co2").strip().lstrip(".")
+        coop_name = f"{Path(standard).stem}.{ext or 'co2'}"
+        why["coop"] = f"save_file_extension in {Path(setup.ini).name}" if ext != "co2" else "Seamless Co-op's default"
+    return {"standard": standard, "coop": coop_name, "active": coop_name or standard, "why": why}
+
+
+def note_setup_saves(setup: Setup | None) -> dict:
+    """Make save discovery (the Saves page, repairs after play) include the files this setup uses."""
+    names = setup_saves(setup)
+    common.set_setup_save_names(setup.game if setup else common.GAME, {k: names[k] for k in ("standard", "coop")})
+    return names
+
+
 def use_game(key: str | games.Game, settings: dict | None = None) -> games.Game:
     """Switch every lookup (Steam folder, saves, me3 profiles, running-game checks) to this game."""
     return common.set_game(key, settings)
@@ -373,7 +408,7 @@ def backup_saves_before_play() -> list:
     made = []
     for p in common.save_files():
         try:
-            made.append(save_fix.backup(p, {"action": "Backup before Play", "changes": []}))
+            made.append(save_fix.backup(p, {"action": "Before playing", "changes": []}))
             common.log(f"backup: {made[-1]}")
         except OSError as e:
             common.log(f"backup failed for {p.name}: {e}")
@@ -436,6 +471,7 @@ def _after_play(opts):
 
 def job_play(setup: Setup):
     common.start_log("launcher: play")
+    note_setup_saves(setup)
     opts = play_options()
     if opts["play_backup_before"]:
         backup_saves_before_play()
@@ -565,6 +601,7 @@ def steam_state():
 
 def job_play_offline(setup, strip_revive=False, start_steam=True):
     common.start_log("launcher: play offline")
+    note_setup_saves(setup)
     opts = play_options()
     if opts["play_backup_before"]:
         backup_saves_before_play()

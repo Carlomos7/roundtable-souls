@@ -19,7 +19,7 @@ Usage:
 With no saves given, every ER0000.sl2 / ER0000.co2 under %APPDATA%/EldenRing
 is repaired. With no --regulation the game's regulation.bin is located through
 the Steam install. Saves whose block already looks healthy are skipped unless
---force. Each repaired save is backed up first, into a regulation-fix-backups
+--force. Each repaired save is backed up first, into the launcher's backups
 folder next to it.
 
 Exit codes: 0 done (repaired or nothing to do), 1 error, 2 game is running.
@@ -27,8 +27,6 @@ Exit codes: 0 done (repaired or nothing to do), 1 error, 2 game is running.
 
 import argparse
 import hashlib
-import shutil
-import time
 from pathlib import Path
 
 from roundtable_souls.system import common
@@ -39,7 +37,6 @@ UD11_SIZE = 0x240020
 BLOCK = 0x240000
 FILE_SIZE = 0x1BA03D0
 HEALTHY_HEADER = bytes.fromhex("20 47 45 52 02 00 00 00 18 b2 b2 00 00 00 24 00")
-BACKUP_DIR = "regulation-fix-backups"
 
 
 def is_pc_save(data):
@@ -78,28 +75,12 @@ def rebuild_block(reg, header):
 
 
 def backup(save):
-    folder = save.parent / BACKUP_DIR
-    folder.mkdir(exist_ok=True)
-    dest = folder / f"{save.name}.{time.strftime('%Y%m%d-%H%M%S')}.bak"
-    shutil.copy2(save, dest)
-    try:
-        import json
+    from roundtable_souls.saves import fix as save_fix
 
-        Path(str(dest) + ".json").write_text(
-            json.dumps(
-                {
-                    "action": "Repair regulation block",
-                    "when": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "save": str(save),
-                    "changes": ["regulation block rebuilt from regulation.bin"],
-                },
-                indent=1,
-            ),
-            encoding="utf-8",
-        )
-    except OSError:
-        pass
-    return dest
+    return save_fix.backup(
+        Path(save),
+        {"action": "Before repairing for save editors", "changes": ["regulation block rebuilt from regulation.bin"]},
+    )
 
 
 def repair(save, reg, header, force=False, out_path=None, dry_run=False):

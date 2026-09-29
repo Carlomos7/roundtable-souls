@@ -226,6 +226,8 @@ def apply_loading_fixes(
     finally:
         probe.unlink(missing_ok=True)
     touched = [p["slot"] for p in plan]
-    bak = F._commit(save, bytes(data), touched, parsed["ud10_md5_ok"], {"action": "Fix loading", "changes": changes})
+    bak = F._commit(
+        save, bytes(data), touched, parsed["ud10_md5_ok"], {"action": "Before fixing loading", "changes": changes}
+    )
     say(f"  backup: {bak}")
     return {"fixed": [{"slot": p["slot"], "name": p["name"], "issues": p["issues"]} for p in plan], "backup": bak}

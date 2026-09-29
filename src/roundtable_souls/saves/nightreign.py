@@ -270,7 +270,7 @@ def repair(
     bak = save_fix.backup(
         save,
         {
-            "action": "Repair Nightreign save",
+            "action": "Before repairing the Nightreign save",
             "changes": (
                 (["regulation section restored from a healthy copy"] if restore_blob is not None else [])
                 + (["section checksums recomputed"] if not status["checksum_all_ok"] or restore_blob else [])

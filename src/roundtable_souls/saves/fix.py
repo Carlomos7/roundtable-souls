@@ -3,7 +3,8 @@
 Every write:
   1. builds the new bytes in memory,
   2. re-parses them and checks the MD5 of every touched slot,
-  3. copies the original into save-fix-backups next to it (with a JSON note saying why), then replaces it.
+  3. copies the original into the launcher's backups (folders.backups, with a JSON note saying why), then
+     replaces it.
 
 Nothing is written when there is nothing to do. Callers refuse while the game runs.
 """
@@ -16,9 +17,9 @@ import shutil
 import time
 from pathlib import Path
 
+from roundtable_souls import folders
 from roundtable_souls.saves import layout as L
 
-BACKUP_DIR = "save-fix-backups"
 SLOT_STRIDE = 0x10 + L.SLOT_SIZE
 
 
@@ -34,10 +35,11 @@ def plan_checksum_fixes(parsed: dict) -> dict:
 
 
 def backup(save: Path, manifest: dict | None = None) -> Path:
-    """Copy the save into save-fix-backups. A manifest (action + change lines) is written next to it as
-    <backup>.json so the Backups list can say what each copy was taken before."""
-    folder = save.parent / BACKUP_DIR
-    folder.mkdir(exist_ok=True)
+    """Copy the save into its account's backups folder (folders.backups). A note (what it was taken before, when,
+    which save, what changed) is written beside it as <backup>.json, then older backups of that save are pruned."""
+    save = Path(save)
+    folder = folders.backups(save.parent)
+    folder.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%d-%H%M%S")
     dest = folder / f"{save.name}.{stamp}.bak"
     n = 1
@@ -45,13 +47,14 @@ def backup(save: Path, manifest: dict | None = None) -> Path:
         n += 1
         dest = folder / f"{save.name}.{stamp}-{n}.bak"
     shutil.copy2(save, dest)
-    write_manifest(dest, manifest or {"action": "Backup"}, save)
+    write_manifest(dest, manifest or {"action": "Before a change"}, save)
+    folders.prune(folder, save.name)
     return dest
 
 
 def write_manifest(bak: Path, manifest: dict, save: Path | None = None) -> None:
     doc = {
-        "action": manifest.get("action", "Backup"),
+        "action": manifest.get("action", "Before a change"),
         "when": time.strftime("%Y-%m-%d %H:%M:%S"),
         "save": str(save) if save else "",
         "changes": list(manifest.get("changes") or []),
@@ -121,6 +124,6 @@ def repair_checksums(save: Path, log=None) -> dict:
     changes = [f"slot {i + 1}: checksum recomputed" for i in plan["slots"]] + (
         ["profile summary: checksum recomputed"] if plan["ud10"] else []
     )
-    bak = _commit(save, bytes(data), plan["slots"], True, {"action": "Fix checksums", "changes": changes})
+    bak = _commit(save, bytes(data), plan["slots"], True, {"action": "Before fixing checksums", "changes": changes})
     say(f"  backup: {bak}")
     return {"slots": plan["slots"], "ud10": plan["ud10"], "backup": bak}

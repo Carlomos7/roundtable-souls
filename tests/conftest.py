@@ -1,9 +1,12 @@
-"""Shared fixtures: an isolated settings file so tests never read or write the developer's own, and no item names from
-whatever mods happen to be installed on the machine running the tests (tests that read names build their own)."""
+"""Shared fixtures: an isolated settings file and data folder so tests never read or write the developer's own
+(backups, the save library, deleted profiles), and no item names from whatever mods happen to be installed on the
+machine running the tests (tests that read names build their own)."""
+
+from pathlib import Path
 
 import pytest
 
-from roundtable_souls import games, settings
+from roundtable_souls import folders, games, settings
 from roundtable_souls.mods import item_names
 from roundtable_souls.system import common
 
@@ -11,9 +14,23 @@ from roundtable_souls.system import common
 @pytest.fixture(autouse=True)
 def isolated_settings(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "settings_path", lambda: tmp_path / "launcher_settings.json")
+    monkeypatch.setattr(folders, "data_root", lambda: tmp_path / "launcher-data")
+    # Moving older folders into the data folder only ever happens inside this test's own folder: a test that builds
+    # the real window sees the developer's real saves and profiles, and must never move anything out of them.
+    for name in ("adopt_legacy_save_folders", "adopt_legacy_profile_folders"):
+        real = getattr(folders, name)
+
+        def guarded(folder, *args, _real=real, **kwargs):
+            if tmp_path.resolve() in Path(folder).resolve().parents:
+                return _real(folder, *args, **kwargs)
+            return None
+
+        monkeypatch.setattr(folders, name, guarded)
+    folders._adopted.clear()
     settings.get_settings.cache_clear()
     yield
     settings.get_settings.cache_clear()
+    folders._adopted.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -29,7 +46,9 @@ def elden_ring_is_the_active_game():
     common.GAME = games.DEFAULT
     common.clear_detection_cache()
     common._PROFILE_GAMES_CACHE.clear()
+    common._SETUP_SAVE_NAMES.clear()
     yield
     common.GAME = games.DEFAULT
     common.clear_detection_cache()
     common._PROFILE_GAMES_CACHE.clear()
+    common._SETUP_SAVE_NAMES.clear()

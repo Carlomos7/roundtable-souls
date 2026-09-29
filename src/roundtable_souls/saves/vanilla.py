@@ -19,7 +19,7 @@ What it refuses (reported as blocked, everything else still runs):
   * a game weapon carrying a foreign ash of war. Remove the ash in-game first.
 
 Every write goes through save_fix._commit: verify the new bytes parse with matching MD5s, back the
-original up into save-fix-backups, then replace it.
+original up into the launcher's backups, then replace it.
 """
 
 from __future__ import annotations
@@ -281,6 +281,8 @@ def apply_restore(
     finally:
         if tmp.exists():
             tmp.unlink()
-    bak = F._commit(save, bytes(data), touched, r["ud10_md5_ok"], {"action": "Remove mod items", "changes": changes})
+    bak = F._commit(
+        save, bytes(data), touched, r["ud10_md5_ok"], {"action": "Before removing mod items", "changes": changes}
+    )
     say(f"  backup: {bak}")
     return {"done": done, "blocked": [b for p in plan for b in p["blocked"]], "backup": bak}

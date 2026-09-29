@@ -3,6 +3,7 @@
 import pytest
 
 from roundtable_souls import core as g
+from roundtable_souls import folders
 
 
 def test_sl2_to_co2_copies_and_backs_up(tmp_path, monkeypatch):
@@ -14,9 +15,9 @@ def test_sl2_to_co2_copies_and_backs_up(tmp_path, monkeypatch):
     out.write_bytes(b"older coop")
     g.convert_sl2_to_co2(src)
     assert out.read_bytes() == b"standard"
-    backups = list((tmp_path / "sl2-to-co2-backups").iterdir())
-    assert any(p.name.startswith("ER0000.co2.") and p.read_bytes() == b"older coop" for p in backups)
-    assert any(p.name.startswith("ER0000.sl2.") and p.suffix == ".src" for p in backups)
+    backups = [p for p in folders.backups(tmp_path).iterdir() if p.suffix == ".bak"]
+    assert [p.read_bytes() for p in backups] == [b"older coop"]  # only the file that was replaced
+    assert g.list_backups(out)[0]["action"] == "Before copying the standard save over it"
 
 
 def test_sl2_to_co2_refusals(tmp_path, monkeypatch):

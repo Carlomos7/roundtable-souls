@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from roundtable_souls import core as g
+from roundtable_souls import folders
 from support import copy_live_save as _copy
 
 F = g.save_fix
@@ -18,7 +19,9 @@ A = g.save_analyze
 def test_backup_writes_manifest_and_list_reads_it(tmp_path):
     copy = _copy(tmp_path)
     bak = F.backup(copy, {"action": "Fix loading", "changes": ["Tarnished: Torrent stuck at 0 HP"]})
-    assert bak.parent.name == F.BACKUP_DIR and bak.read_bytes() == copy.read_bytes()
+    assert bak.parent == folders.backups(copy.parent) and bak.read_bytes() == copy.read_bytes()
+    beside = [p for p in copy.parent.iterdir() if p.is_dir() and p != folders.data_root()]  # tests keep it here
+    assert beside == []  # nothing of the launcher's beside the save
     m = json.loads(Path(str(bak) + ".json").read_text(encoding="utf-8"))
     assert (
         m["action"] == "Fix loading"
@@ -26,18 +29,18 @@ def test_backup_writes_manifest_and_list_reads_it(tmp_path):
         and m["save"].endswith("ER0000.co2")
     )
     bak2 = F.backup(copy)  # same second: still a distinct file
-    assert bak2 != bak and F.read_manifest(bak2)["action"] == "Backup"
+    assert bak2 != bak and F.read_manifest(bak2)["action"] == "Before a change"
     rows = g.list_backups(copy)
     assert [r["path"] for r in rows][:2] == sorted([bak, bak2], key=lambda p: p.stat().st_mtime, reverse=True) or len(
         rows
     ) == 2
-    assert {r["action"] for r in rows} == {"Fix loading", "Backup"} and all(
+    assert {r["action"] for r in rows} == {"Before fixing loading", "Before a change"} and all(
         r["save_name"] == "ER0000.co2" for r in rows
     )
     assert g.save_for_backup(bak) == copy
-    # a backup without a manifest still lists, named after its folder
+    # a backup without a note still lists, and still finds its save through the folder it sits in
     Path(str(bak2) + ".json").unlink()
-    assert any(r["path"] == bak2 and r["action"] == "Save fix" for r in g.list_backups(copy))
+    assert any(r["path"] == bak2 and r["action"] == "Before a change" for r in g.list_backups(copy))
 
 
 def test_fix_writes_a_manifest_that_names_the_change(tmp_path, monkeypatch):
@@ -53,7 +56,7 @@ def test_fix_writes_a_manifest_that_names_the_change(tmp_path, monkeypatch):
     copy.write_bytes(bytes(data))
     out = g.fix_loading(copy)
     m = F.read_manifest(out["backup"])
-    assert m["action"] == "Fix loading" and any("Torrent" in c for c in m["changes"])
+    assert m["action"] == "Before fixing loading" and any("Torrent" in c for c in m["changes"])
 
 
 def test_restore_backup_round_trip_with_safety_copy(tmp_path, monkeypatch):
@@ -94,7 +97,7 @@ def test_play_options_defaults_and_backup_before_play(tmp_path, monkeypatch):
     made = g.backup_saves_before_play()
     assert (
         len(made) == 1
-        and F.read_manifest(made[0])["action"] == "Backup before Play"
+        and F.read_manifest(made[0])["action"] == "Before playing"
         and made[0].read_bytes() == copy.read_bytes()
     )
 
