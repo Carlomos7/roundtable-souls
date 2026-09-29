@@ -68,8 +68,9 @@ Play
 Co-op
   The Seamless Co-op session password, difficulty presets, and every other
   Seamless setting, each with a short explanation. Nothing is written until
-  you press Save changes on the bar at the bottom (or Ctrl+S). Discard puts
-  the page back to the file.
+  you press Save on the bar at the bottom (or Ctrl+S). Discard puts the page
+  back to the file. Closing the window or switching games with unsaved changes
+  asks: Save, Discard or Cancel.
 
   Difficulty presets are per extra player; only the host's numbers count:
     Seamless default         the mod's own values.
@@ -80,19 +81,56 @@ Co-op
     Custom                   your own six numbers.
 
   Share with a friend puts all your Seamless settings into one block of text.
-  Copy sends yours; Paste and Apply takes a friend's after showing what would
-  change.
+  Copy sends yours; Paste (or Open file...) takes a friend's, and Apply writes
+  what differs after showing every change. Discard puts your own back.
 
 Mods
   What the current me3 profile loads. Each mod can be turned on or off, has
   Options (load order and, for DLL mods, how they load) and can be removed
-  (its folder is deleted only if you tick that). Install mod takes a .zip,
-  .7z or .rar, or a folder, works out what kind of mod it is and adds it at
-  the end of the load order. New profile and Delete profile manage .me3
-  files. Profile settings are me3's own options for this profile. Conflicts
-  lists files two mods both replace and which one wins.
+  (its folder is deleted only if you tick that). New profile and Delete
+  profile manage .me3 files. Profile settings are me3's own options for this
+  profile. Conflicts lists files two mods both replace and which one wins.
 
-  Edit profile shows the .me3 text:
+  Install mod takes a .zip, .7z or .rar, a .dll, or a folder; you can also
+  drag one or more of them onto the Mods page and they install one after
+  another. It finds the mod inside, even below a wrapper folder or next to a
+  readme, and works out what kind it is. Before anything is copied you see:
+    Which one        when the archive holds more than one (say an English
+                     and an Italian version).
+    Folder name, Id  what the mod's folder and its entry are called. The id
+                     follows the name until you type your own.
+    What to install  every file and folder, with why. Game files, the DLL and
+                     its settings are ticked; readmes, an example .me3 (not
+                     needed: the mod is added to your own profile) and other
+                     mod loaders' DLLs are not. Files the launcher does not
+                     recognise are installed as shipped. Tick or untick any.
+    regulation.bin   the game's parameters. me3 uses only one: the last
+                     package in the load order that has one. When another
+                     package already has one (Nightreign Revive, say), the
+                     new mod goes before it by default, so that one keeps
+                     working; pick Last to use the new mod's instead, or
+                     untick regulation.bin to leave it out.
+  New mods otherwise go at the end of the load order; Options changes it,
+  and anything else, once the mod is in.
+
+  Each package and DLL has a tag naming the folder it sits in (SeamlessCoop
+  for ersc.dll); hover it for the full path. The packages folder (mod) and
+  the natives folder show at the top of their lists when something there
+  needs saying: an entry that points at the folder itself (it only holds the
+  mods listed below, so it loads nothing and can be removed), and Not loaded,
+  which lists the mod folders and DLLs in there that no entry points at and
+  adds the ones you tick. Entries that me3 would refuse (a missing file, a
+  required load-after that is missing or off, a load order that loops) say so
+  in red.
+
+  A DLL mod's settings button (the page icon on its row) opens its own
+  settings file, for example UnlockTheFps.ini, to edit and save. Files beside
+  the DLL are found on their own; if a mod reads a file under another name,
+  Tie a file points at it once and it is remembered. Seamless Co-op's settings
+  are on the Co-op page.
+
+  Edit profile shows the .me3 text, with Save and Discard under it (Discard
+  reads the file again):
     Ctrl+F find, Ctrl+H replace (Aa matches case, .* uses patterns),
     Enter and Shift+Enter step through matches, Esc closes the search bar,
     Ctrl+/ comments lines in or out, Tab and Shift+Tab indent a selection,
@@ -124,12 +162,38 @@ Saves
     For save editors    recomputes stale checksums and repairs the block
                         me3 leaves behind.
 
-  Copy to standard save and Copy to co-op save copy a save between the
-  Seamless Co-op file and the normal one, backing up whatever they replace.
+  The line at the top says which file Play uses and which one Play offline
+  uses. That follows your setup: a save file name set in the me3 profile, and
+  Seamless Co-op's own save file setting, are both honoured, so a renamed
+  save is listed and repaired after play like the default one.
+
+  Every save shows the characters it would have before and after any copy:
+    Copy to...           copies the whole file over another save (the co-op
+                         save over the standard one, say). The save it
+                         replaces is kept in the save library first, under a
+                         name you choose. Or add the copy to the library only,
+                         and nothing live changes.
+    Copy a character...  copies one character into a free slot, or over one,
+                         in the same or another save. Characters from another
+                         Steam account are moved to this one. A co-op
+                         character keeps Seamless Co-op's items; Remove mod
+                         items takes them off for a standard save.
+    Add to library...    keeps a named copy of the whole file.
   Copy report puts a plain-text summary on the clipboard.
 
-  Backups lists every copy made before a change. Restore puts one back (the
-  current file is copied first, so a restore can be undone too).
+  The save library keeps named copies of whole save files. Swap in puts one in
+  place of a live save: the save it replaces goes into the library first (you
+  name it; the default says who is in it and when), so nothing is ever lost,
+  and Undo works as for any change. Import a save file adds one from anywhere.
+  library.json records every copy and every swap, rename and removal. Removing
+  a copy moves its file to the library's removed folder. Library copies are
+  never removed for you.
+
+  Backups lists the backup taken before every change to a save, named for
+  what came next ("Before fixing checksums", "Before playing"). The newest 20
+  of each save and everything from the last 7 days are kept; Keep (the pin)
+  holds on to one for good. Restore puts a backup back, and backs up the save
+  as it is then, so a restore can be undone too.
 
   What counts as a game item comes from the installed game itself, including
   Shadow of the Erdtree and the Tarnished Edition pack's gear, so official
@@ -181,9 +245,9 @@ UPDATES
 
 Roundtable Souls checks for a new version at most once an hour when it starts
 (Settings > Launcher can turn that off, or check right away). When one is out,
-a bar offers Update now. It downloads the new version, checks it against the
+a bar offers Update now (or Download) and Skip this version. It downloads the new version, checks it against the
 published checksums, and restarts into it. Your settings, logs and backups are
-kept. Nothing is ever installed without that click. Skip hides one version.
+kept. Nothing is ever installed without that click. Skip this version hides that one version.
 
 
 SAVE REPAIRS
@@ -192,20 +256,33 @@ SAVE REPAIRS
 Playing through me3 leaves a block at the end of the save that save editors
 cannot read. The game does not mind. After every session, Roundtable Souls
 puts the game's own data back into that block. Every rewritten save is backed
-up first, next to the save, and nothing else in it is touched.
+up first (see Backups on the Saves page), and nothing else in it is touched.
 
 
 WHERE FILES LIVE
 ----------------
 
-Settings and logs:
+Everything Roundtable Souls keeps is in one folder, its data folder:
   installed on Windows   %LOCALAPPDATA%\RoundtableSouls
   portable               next to the program (or the folder above when that
                          folder cannot be written)
   Linux                  ~/.local/share/RoundtableSouls when the program's
                          folder cannot be written
-Backups: folders named save-fix-backups and regulation-fix-backups next to
-your saves.
+
+Inside it:
+  launcher_settings.json                 your settings
+  logs\                                  what happened, for when something goes wrong
+  saves\<game>\<Steam account>\backups\  a backup before every change to a save
+  saves\<game>\<Steam account>\library\  the save library (library.json, copies, removed\)
+  profiles\deleted\                      .me3 files deleted on the Mods page
+  temp\                                  mods being unpacked while they install
+
+Nothing of Roundtable Souls' goes into the game's save folder or me3's profile
+folders, apart from three things that must sit beside their file: the
+.offline.me3 copy Play offline uses (me3 reads a profile's paths from its
+folder), one .bak next to a .me3 or settings file you edited, and a moment's
+temporary file while a save is written. Backups and deleted profiles from
+earlier versions are moved into the data folder automatically.
 
 If something goes wrong, logs/launcher-errors.log and logs/last_run.log say
 what happened.

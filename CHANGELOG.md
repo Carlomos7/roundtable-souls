@@ -2,6 +2,38 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
+## [Unreleased]
+
+- Buttons: one size and shape everywhere; a primary action and the button beside it always match. Only Play stays larger.
+- Save rows: the Co-op page, both text editors and Review & fix share one bar: a note on what is unsaved, Discard and the action. On a narrow window the note goes above the buttons.
+- Editors: Edit profile and Share with a friend work the same way. The name of what the text came from, the tools, the editor, then Discard and Save (or Apply). Edit profile's Save moved from the top of the Mods page to under the editor.
+- Closing the window or switching games with unsaved changes asks Save, Discard or Cancel. Before, closing could only save or stay open.
+- Messages at the top of the window keep their buttons on a row under the text, so they fit a narrow window. Every dialog uses the launcher's own buttons.
+- Mods: each package and DLL has a tag naming the folder it sits in, below the profile's natives and mod folders (the full path is on hover). Long names shorten on a narrow window instead of pushing buttons out of view.
+- Mods: the packages folder (mod) and the natives folder show as folders at the top of their lists. An entry that points at a folder of mods instead of a mod (it loads nothing itself) is explained there instead of listed as a mod, with Remove entry; Not loaded lists the mod folders and DLLs in there that no entry points at, to add the ones you pick. Nothing is copied or moved. A profile with one package for everything, as in me3's guide, stays a normal package.
+- Mods: removing an entry whose folder other entries still use no longer offers to delete that folder, and says why.
+- Saves: the file Play uses follows the setup. A save file name set in the me3 profile and Seamless Co-op's save file setting are both honoured, so a renamed save is listed, and repaired after play, like the default one. The Saves page says which file Play and Play offline use.
+- Saves: Copy to... replaces another save with a whole file (the save it replaces is kept in the library first, under a name you choose) or only adds a named library copy. Both show every character before and after.
+- Saves: Copy a character... copies one character into a free slot, or over one, in the same or another save, checked and backed up; a character from another Steam account moves to this one.
+- Saves: a save library keeps named copies of whole saves beside them. Swap in puts one in place of a live save and files the replaced one first, so nothing is lost. library.json records every copy, swap, rename and removal.
+- Mods: each entry is checked the way me3 reads it: a missing file or folder, a native that is not a .dll, a package id used twice, a required load_after / load_before that is missing or switched off, and load orders that loop are named on the entry.
+- Mods: Options offers only entries of the same kind for load order (me3 orders packages with packages and DLLs with DLLs), named the way me3 refers to them.
+- Mods: Conflicts looks only at the game folders at the top of each package, which is what me3 serves; a folder of other mods no longer counts their files twice, and the scan is much faster.
+- Mods: quieter rows: no On / Off text beside the switches, long load-order lists shortened (the full list is on hover), initializers named by their function. Heap size is only editable with the memory patch on; the save file field is a plain name.
+- Mods: a profile changed outside the launcher (in a text editor, by me3 or an installer) is noticed. Coming back to the window reloads the Mods page, switches and Options act on the entry as it is in the file now rather than by its old position, and saving Edit profile over newer changes on disk asks first.
+- Mods: an empty package folder says it is empty for now (game folders put there load), instead of reading as a problem.
+- Mods: each DLL mod has a settings button that opens its own settings file (UnlockTheFps.ini, BetterCamera's ini, ...) in the editor, with Save and Discard and a .bak on save. Files beside the DLL are found on their own; one the mod reads under another name (SkeletonMan's skeleton_mods.txt) can be tied to it once and is remembered. Files keep their encoding and line endings. Seamless Co-op's settings stay on the Co-op page.
+- Mods: the folder line's buttons sit on the right.
+- Files: everything Roundtable Souls keeps now lives in its own data folder (%LOCALAPPDATA%\RoundtableSouls, or beside a portable copy): backups and the save library under saves\<game>\<Steam account>, deleted profiles under profiles\deleted, install unpacking under temp. Nothing of the launcher's is written into the game's save folder or me3's profile folders any more, apart from the offline .me3 copy and a single .bak beside an edited file. Folders earlier versions made there (save-fix-backups, regulation-fix-backups, co2-to-sl2-backups, sl2-to-co2-backups, roundtable-saves, deleted-profiles) are moved in automatically.
+- Backups: named for what came next ("Before fixing checksums", "Before playing", "Before copying a character in"). The newest 20 of each save and everything from the last 7 days are kept; Keep holds on to one for good. The Backups card shows the total size. Copies between the co-op and standard save no longer keep a spare copy of the unchanged source.
+- Fixed: expandable cards could keep empty space under their content, or cut off their last row after the list was refilled.
+- Mods: drag one or more archives, DLLs or mod folders onto the Mods page to install them, one after another. The page shows what a drop would do while you drag, and names files it would skip.
+- Mods: installing asks for the folder name and id, and shows what the mod holds with what to install: game files, the DLL and its settings are ticked; readmes, example .me3 profiles and other mod loaders' DLLs are not, each with the reason. Unrecognised files install as shipped. Files beside the mod's folder in the archive are listed too.
+- Mods: the mod is found below wrapper folders and next to readmes, and an archive with several versions (an English and an Italian mod folder) asks which one. Text languages are named.
+- Mods: a mod with a regulation.bin says that me3 uses only the last one in the load order and which package's is used now. It goes before that package by default (above the comment lines that describe its entry), or last, or without its regulation.bin.
+- Mods: a lone .dll installs as a DLL mod. An archive that also ships an example .me3 installs as a mod instead of being refused as a profile.
+- Fixed: after a job, the message and the Mods page refresh looked at how the job ended instead of what it was, so an install did not reload the page and every job reported "Saves repaired and cleanup done."
+
 ## [3.4.0] - 2026-09-28
 
 - Games: a game button at the top of the window picks the game every page works on; its menu lists every game with whether it is installed, and Ctrl+Tab / Ctrl+Shift+Tab step through them. Elden Ring and Nightreign are supported; Dark Souls III and Sekiro have placeholder pages that only show what was found on the PC. Settings stays shared, and each game remembers its own setup and custom game exe.
