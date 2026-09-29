@@ -35,10 +35,11 @@ The window never touches a save directly. Every read goes through `save_info`, e
 - One-click Play through me3 (or, for Elden Ring, a Nightreign Revive installation), with Steam sign-in wait, leftover-process cleanup and save repair after the game closes
 - `--game <name> --play` for a Steam shortcut, Big Picture or Steam Deck Gaming Mode: the same session without the window, one shortcut per game
 - Seamless Co-op for both games: password where the mod has one, difficulty (presets by party size for Elden Ring), every other setting explained, and a share format for a group
-- me3 profile management: install mods from `.zip`, `.7z`, `.rar` or a folder, per-mod options, load order, conflict scan, profile create and delete
+- me3 profile management: install mods by drag and drop or from `.zip`, `.7z`, `.rar`, a `.dll` or a folder, choosing what to install and where a `regulation.bin` goes; entries checked the way me3 reads them; per-mod options, load order, settings files for DLL mods, conflict scan, profile create and delete
 - Elden Ring save checks: checksums, the regulation block me3 dirties, loading hangs, torn writes, and items the game does not define, judged against the installed game's own item tables (so Shadow of the Erdtree and Tarnished Edition gear are always official); mod items are named from the mods' own files
 - Nightreign saves: a structure check, backups, restore and co-op/standard copies (the game encrypts its saves, so their contents are not shown)
 - Opt-in, per-item repairs on a Review & fix page, every one backed up and undoable; copies between standard and co-op saves
+- A save library of named copies to swap in, and copying a single character between saves or Steam accounts; backups kept in the launcher's own data folder
 - Windows installer (per-user, no administrator prompt) or portable zip; Linux build for desktop and Steam Deck
 - Update now: downloads the release for this kind of copy, checks it against published SHA-256 checksums, and restarts into it
 - Responsive layout down to narrow windows and high display scaling; keyboard shortcuts; find and replace in the editors

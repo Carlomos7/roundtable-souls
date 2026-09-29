@@ -2,7 +2,7 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
-## [Unreleased]
+## [3.5.0] - 2026-09-29
 
 - Buttons: one size and shape everywhere; a primary action and the button beside it always match. Only Play stays larger.
 - Save rows: the Co-op page, both text editors and Review & fix share one bar: a note on what is unsaved, Discard and the action. On a narrow window the note goes above the buttons.

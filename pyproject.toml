@@ -1,6 +1,6 @@
 [project]
 name = "roundtable-souls"
-version = "3.4.0"
+version = "3.5.0"
 description = "Launcher and save toolkit for modded Elden Ring: me3 profiles, Seamless Co-op settings, save checks and repairs."
 readme = "README.md"
 license = "GPL-3.0-or-later"
