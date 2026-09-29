@@ -406,6 +406,7 @@ class Bus(QObject):
     update_ready = Signal(object)
     conflicts = Signal(dict)
     saves = Signal(dict)
+    merge = Signal(dict)
 
 
 def page(name: str):

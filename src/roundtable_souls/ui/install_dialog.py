@@ -137,7 +137,12 @@ class InstallDialog(Dialog):
         self.viewLayout.addSpacing(6)
         self.reg_effect = hint("")
         self.reg_effect.setWordWrap(True)
-        for w in (self.reg_label, self.reg_about, self.reg_place, self.reg_effect):
+        self.rebuild = CheckBox("Rebuild combined parameters after install")
+        self.rebuild.setChecked(True)
+        self.rebuild.stateChanged.connect(self._refresh_reg)
+        self.merge_notes = hint("")
+        self.merge_notes.setWordWrap(True)
+        for w in (self.reg_label, self.reg_about, self.reg_place, self.rebuild, self.reg_effect, self.merge_notes):
             self.viewLayout.addWidget(w)
 
         self.note = hint("")
@@ -223,12 +228,21 @@ class InstallDialog(Dialog):
         others = self.plan.get("regulation_packages") or []
         self.reg_place.blockSignals(True)
         self.reg_place.clear()
-        winner = others[-1] if others else None
-        if winner:
-            self.reg_place.addItem(f"Before {winner['name']}: its regulation.bin stays in use", userData=winner["name"])
+        name = self.plan.get("merge_target") or (others[-1]["name"] if others else None)
+        if name:
+            self.reg_place.addItem(f"Before {name}, the package that must stay last", userData=name)
         self.reg_place.addItem("Last: this mod's regulation.bin is used", userData=None)
         self.reg_place.setCurrentIndex(0)
         self.reg_place.blockSignals(False)
+
+    def _rebuild_shown(self) -> bool:
+        """A rebuild is offered when the profile has a rebuild tool, regulation.bin is ticked and the pack goes before the
+        package that must stay last (or is reinstalled where it is)."""
+        return bool(
+            self.plan.get("merge_offered")
+            and self._regulation_on()
+            and (self.plan.get("already_listed") or self.reg_place.currentData() is not None)
+        )
 
     def _refresh_reg(self, *_):
         on = self._regulation_on()
@@ -236,8 +250,12 @@ class InstallDialog(Dialog):
         for w in (self.reg_label, self.reg_about):
             w.setVisible(on)
         placed = not self.plan.get("already_listed")  # a reinstall keeps its entry where it is
-        for w in (self.reg_place, self.reg_effect):
-            w.setVisible(on and bool(others) and placed)
+        self.reg_place.setVisible(on and bool(others) and placed)
+        self.rebuild.setVisible(self._rebuild_shown())
+        notes = self.plan.get("merge_notes") or []
+        self.merge_notes.setVisible(self._rebuild_shown() and bool(notes))
+        self.merge_notes.setText("\n".join(notes))
+        self.reg_effect.setVisible(on and bool(others))
         if not on:
             return
         if not others:
@@ -251,17 +269,34 @@ class InstallDialog(Dialog):
             f"It replaces the game's parameters as one whole file, and me3 uses only the last one in the load order. "
             f"{winner}'s is used now."
         )
-        if self.reg_place.currentData() is None:
+        if placed and self.reg_place.currentData() is None:
             self.reg_effect.setText(
-                f"{winner} loses its own parameters, which usually breaks it unless this mod was made for it."
+                f"{winner}'s parameters will not apply: this pack's regulation.bin replaces them, which usually breaks "
+                f"{winner} unless this pack was made for it."
             )
             tone_label(self.reg_effect, "warning")
-        else:
-            self.reg_effect.setText(
-                f"{winner} keeps working; this mod's parameter changes are left out unless merged into {winner}'s. "
-                "Untick regulation.bin above to leave the file out."
+        elif self._rebuild_shown() and self.rebuild.isChecked():
+            text = (
+                f"{winner} keeps working, and the rebuild folds this pack's parameters into the package that must "
+                "stay last. They apply only once the rebuild succeeds; a pack whose in-game options start hidden "
+                "shows nothing until then."
             )
-            tone_label(self.reg_effect, "muted")
+            source = self.plan.get("merge_source_now")
+            if source and placed:
+                text += (
+                    f" Only one parameter pack can be the rebuild's source: {source} is now, and this pack takes its "
+                    f"place, so {source}'s parameters stop applying."
+                )
+            self.reg_effect.setText(text)
+            tone_label(self.reg_effect, "warning" if source and placed else "muted")
+        else:
+            how = (
+                "Tick Rebuild combined parameters to fold them in."
+                if self.plan.get("merge_offered")
+                else f"They would need merging into {winner}'s. Untick regulation.bin above to leave the file out."
+            )
+            self.reg_effect.setText(f"This pack's parameters will not apply: {winner}'s regulation.bin is used. {how}")
+            tone_label(self.reg_effect, "warning")
 
     # -------------------------------------------------------------- what the plan says
     def _show(self):
@@ -302,7 +337,7 @@ class InstallDialog(Dialog):
         self.note.setText(" ".join(lines))
         tone_label(self.note, "error" if p.get("exists") and not p.get("in_place") else "muted")
         if self.reg_place.count() == 0 or self.reg_place.itemData(0) != (
-            (p.get("regulation_packages") or [{}])[-1].get("name")
+            p.get("merge_target") or (p.get("regulation_packages") or [{}])[-1].get("name")
         ):
             self._fill_reg_places()
         self._refresh_reg()
@@ -324,6 +359,7 @@ class InstallDialog(Dialog):
             )
         if ok and not quiet:
             self.plan["exclude"] = self.left_out()
+            self.plan["merge"] = self._rebuild_shown() and self.rebuild.isChecked()
             placed = self._regulation_on() and not self.plan.get("already_listed")
             self.plan["insert_before"] = self.reg_place.currentData() if placed else None  # a package name
         return ok

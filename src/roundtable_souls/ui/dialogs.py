@@ -14,6 +14,7 @@ from qfluentwidgets import (
     SubtitleLabel,
     SwitchButton,
 )
+from qfluentwidgets import FluentIcon as FI
 
 from roundtable_souls.ui.theme import BTN_H, ghost_btn, hint, style_ghost, style_primary
 
@@ -153,9 +154,11 @@ class ModOptionsDialog(Dialog):
     """Per-mod options me3 v1 knows: enabled, and for natives optional / load_early / initializer / finalizer,
     plus load order (load_after, load_before) against the other entries of the profile."""
 
-    def __init__(self, entry: dict, others: list, parent):
+    def __init__(self, entry: dict, others: list, parent, overlay: bool | None = None, rebuild_file: str = ""):
         super().__init__(parent)
         self.entry = entry
+        self.overlay = None
+        self.rebuild_file = None
         self.widget.setMinimumWidth(min(720, max(520, parent.width() - 200)))
         self.viewLayout.setSpacing(8)
         self.viewLayout.addWidget(SubtitleLabel(entry["name"]))
@@ -189,6 +192,38 @@ class ModOptionsDialog(Dialog):
             self.pkg_id.setText(entry.get("id") or "")
             self.pkg_id.setPlaceholderText("id other entries can refer to")
             row("Id", self.pkg_id, "Used by load order below. Leave as is unless another mod names it.")
+            if overlay is not None:
+                self.overlay = SwitchButton()
+                self.overlay.setOnText("On")
+                self.overlay.setOffText("Found by the launcher")
+                self.overlay.setChecked(overlay)
+                row(
+                    "Parameter overlay",
+                    self.overlay,
+                    "The package that must stay last and rebuilds combined parameters with its own tool. Normally "
+                    "found from its files; turn on only when it is not.",
+                )
+                pick = QWidget()
+                pl = QHBoxLayout(pick)
+                pl.setContentsMargins(0, 0, 0, 0)
+                pl.setSpacing(8)
+                self.rebuild_file = LineEdit()
+                self.rebuild_file.setText(rebuild_file)
+                self.rebuild_file.setPlaceholderText("rebuild.json (optional)")
+                self.rebuild_file.setClearButtonEnabled(True)
+                browse = ghost_btn("Choose...", FI.FOLDER)
+                browse.clicked.connect(self._choose_rebuild_file)
+                pl.addWidget(self.rebuild_file, 1)
+                pl.addWidget(browse)
+                row(
+                    "Rebuild file",
+                    pick,
+                    "Only for a tool that ships no rebuild.json of its own: a rebuild.json saying how to run it "
+                    "(docs/Rebuild tools.md in the project explains the format).",
+                )
+                self._pick_row = pick
+                self.overlay.checkedChanged.connect(lambda on: pick.setEnabled(on))
+                pick.setEnabled(overlay)
         else:
             self.optional = CheckBox("Optional: a load failure is not fatal")
             self.optional.setChecked(bool(entry.get("optional")))
@@ -272,6 +307,13 @@ class ModOptionsDialog(Dialog):
         self.viewLayout.addWidget(scroll)
         self.yesButton.setText("Save options")
         self.cancelButton.setText("Cancel")
+
+    def _choose_rebuild_file(self):
+        from PySide6.QtWidgets import QFileDialog
+
+        got, _ = QFileDialog.getOpenFileName(self, "Rebuild file", "", "Rebuild file (rebuild.json *.json)")
+        if got and self.rebuild_file is not None:
+            self.rebuild_file.setText(got)
 
     def options(self) -> dict:
         e = self.entry

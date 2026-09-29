@@ -454,3 +454,128 @@ def test_dropping_mods_on_the_mods_page_installs_each_in_turn(sandbox, monkeypat
         QTimer.singleShot(50, loop.quit)
         loop.exec()
     assert not w.mods_drop.isVisible()
+
+
+def test_install_dialog_offers_a_rebuild_only_before_the_merger(app, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QWidget
+    from test_mod_merge import World, _pack_source
+
+    from roundtable_souls.mods import manage
+
+    world = World(tmp_path, monkeypatch)
+    plan = manage.plan_install(world.profile, _pack_source(tmp_path / "dl"))
+    parent = QWidget()
+    parent.resize(1000, 800)
+    dlg = window.InstallDialog(parent, plan, lambda *a: plan, world.profile)
+    assert not dlg.rebuild.isHidden() and dlg.rebuild.isChecked()
+    assert dlg.validate() and plan["merge"] is True and plan["insert_before"] == "last"
+    dlg.rebuild.setChecked(False)
+    assert "will not apply" in dlg.reg_effect.text()
+    dlg.validate()
+    assert plan["merge"] is False
+    dlg.rebuild.setChecked(True)
+    dlg.reg_place.setCurrentIndex(1)  # Last: nothing to rebuild, the merger's own parameters are lost
+    assert dlg.rebuild.isHidden() and "last's parameters will not apply" in dlg.reg_effect.text()
+    dlg.validate()
+    assert plan["merge"] is False and plan["insert_before"] is None
+    dlg.reg_place.setCurrentIndex(0)
+    dlg.boxes["regulation.bin"].setChecked(False)  # left out: no parameters, no rebuild
+    assert dlg.rebuild.isHidden()
+    dlg.validate()
+    assert plan["merge"] is False
+    parent.deleteLater()
+
+
+def test_merge_health_shows_on_the_mods_page_and_prompts_when_it_goes_stale(sandbox, monkeypatch):
+    w = sandbox
+    shown = []
+    monkeypatch.setattr(
+        window, "notice", lambda *a, **k: shown.append(a[2]) or type("B", (), {"close": lambda s: None})()
+    )
+    prof = str(w.profiles / "sandbox.me3")
+    base = {"profile": prof, "packs": ["p", "last"], "winner": "last", "backend": "the rebuild tool of last"}
+    w.switchTo(w.mods_page)
+    w._on_merge({**base, "state": "current", "text": "Combined parameters are up to date", "reasons": []})
+    assert not w.merge_row.isHidden() and w.merge_btn.isHidden()
+    stale = {
+        **base,
+        "state": "stale",
+        "text": "Combined parameters are out of date",
+        "reasons": ["regulation.bin: p changed"],
+    }
+    w._on_merge(stale)
+    assert not w.merge_btn.isHidden() and "p changed" in w.merge_text.text()
+    assert shown == ["Combined parameters are out of date"]  # prompted once, on the change
+    w._on_merge(stale)
+    assert len(shown) == 1
+    w._on_merge({**base, "state": "single", "text": "", "reasons": [], "backend": None})
+    assert w.merge_row.isHidden()
+
+
+def test_an_install_that_asked_for_it_rebuilds_afterwards(sandbox, monkeypatch, tmp_path):
+    from PySide6.QtCore import QEventLoop, QTimer
+
+    from roundtable_souls.system import common
+
+    monkeypatch.setattr(common, "start_log", lambda *a, **k: None)
+    monkeypatch.setattr(common, "log", lambda *a, **k: None)
+    rebuilt = []
+    tool = type("T", (), {"label": "a tool", "package": {"name": "last"}, "problem": lambda self: None})()
+    monkeypatch.setattr(window.core.mod_merge, "find_backend", lambda p: tool)
+    monkeypatch.setattr(window.core.mod_merge, "approved", lambda t: True)
+    monkeypatch.setattr(
+        window.core.mod_merge, "rebuild", lambda p, log: rebuilt.append(p) or {"backend": "m", "profile_note": ""}
+    )
+
+    def answer(dlg):
+        ok = dlg.validate()
+        dlg.plan["merge"] = True  # as if the rebuild box was ticked
+        return ok
+
+    monkeypatch.setattr(window.InstallDialog, "exec", answer)
+    w = sandbox
+    src = tmp_path / "dl" / "Armor"
+    (src / "parts").mkdir(parents=True)
+    (src / "parts" / "x.partsbnd.dcx").write_bytes(b"p")
+    w._install_paths([src])
+    loop = QEventLoop()
+    for _ in range(200):
+        if rebuilt and not w.busy:
+            break
+        QTimer.singleShot(50, loop.quit)
+        loop.exec()
+    assert [p.name for p in rebuilt] == ["sandbox.me3"]
+
+
+def test_options_offer_the_parameter_overlay_switch_for_packages_only(app):
+    from PySide6.QtWidgets import QWidget
+
+    from roundtable_souls.ui.dialogs import ModOptionsDialog
+
+    parent = QWidget()
+    parent.resize(1000, 800)
+    pkg = {"kind": "package", "name": "last", "id": "last", "path": "Merger/mod", "enabled": True}
+    dlg = ModOptionsDialog(pkg, [], parent, overlay=False)
+    assert dlg.overlay is not None and not dlg.overlay.isChecked()
+    nat = {"kind": "native", "name": "x.dll", "path": "natives/x.dll", "enabled": True}
+    assert ModOptionsDialog(nat, [], parent).overlay is None
+    parent.deleteLater()
+
+
+def test_a_rebuild_tool_runs_only_after_it_is_allowed_once(sandbox, monkeypatch, tmp_path):
+    from test_mod_merge import _declared
+
+    from roundtable_souls.mods import merge
+
+    prof = _declared(tmp_path, monkeypatch)
+    asked, started = [], []
+    monkeypatch.setattr(window, "confirm", lambda *a, **k: asked.append(k.get("detail", "")) or False)
+    monkeypatch.setattr(window.Launcher, "start", lambda self, job, status, **k: started.append(status))
+    w = sandbox
+    w._rebuild_merge(prof)
+    assert len(asked) == 1 and "combine.py" in asked[0] and started == []  # declined: nothing runs
+    monkeypatch.setattr(window, "confirm", lambda *a, **k: asked.append("again") or True)
+    w._rebuild_merge(prof)
+    assert started == ["Rebuilding combined parameters..."] and merge.approved(merge.find_backend(prof))
+    w._rebuild_merge(prof)
+    assert asked.count("again") == 1 and len(started) == 2  # allowed once, not asked again

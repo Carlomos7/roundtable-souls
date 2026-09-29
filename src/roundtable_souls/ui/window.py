@@ -286,6 +286,7 @@ class Launcher(FluentWindow):
         self.bus.update_ready.connect(self._on_update_ready)
         self._update_bar = None
         self.bus.conflicts.connect(self._fill_conflicts)
+        self.bus.merge.connect(self._on_merge)
         core.NOTIFY = lambda title, msg: notice(self, "error", title, msg)
         sys.excepthook = lambda t, e, tb: report_exception(t, e, tb, "main thread")
         threading.excepthook = lambda a: report_exception(
@@ -769,6 +770,21 @@ class Launcher(FluentWindow):
         titled(lay, "Mods", FI.LIBRARY, "What this profile loads.", acts)
         self.mods_note = hint("")
         lay.addWidget(self.mods_note)
+        self.merge_row = QWidget()
+        mr = QHBoxLayout(self.merge_row)
+        mr.setContentsMargins(0, 0, 0, 0)
+        mr.setSpacing(12)
+        self.merge_text = hint("")
+        self.merge_text.setWordWrap(True)
+        self.merge_btn = ghost_btn("Rebuild", FI.SYNC)
+        self.merge_btn.setToolTip(
+            "Run the profile's rebuild tool so the package that must stay last combines the others."
+        )
+        self.merge_btn.clicked.connect(lambda: self._rebuild_merge())
+        mr.addWidget(self.merge_text, 1)
+        mr.addWidget(self.merge_btn, 0, Qt.AlignTop)
+        self.merge_row.hide()
+        lay.addWidget(self.merge_row)
         self.pack_exp = ExpandGroupSettingCard(FI.FOLDER, "Packages", "File replacements.")
         self.nat_exp = ExpandGroupSettingCard(FI.CODE, "Natives", "DLLs.")
         lay.addWidget(self.pack_exp)
@@ -1024,6 +1040,7 @@ class Launcher(FluentWindow):
             self._load_profile_editor()
             return
         mods = profile_entries(s.profile)
+        self._check_merge(s.profile)
         self._profile_seen = self._profile_stamp()
         packs = [m for m in mods if m["kind"] == "package"]
         nats = [m for m in mods if m["kind"] == "native"]
@@ -1431,6 +1448,107 @@ class Launcher(FluentWindow):
             return True
         return False
 
+    # -------------------------------------------------------------- merge health
+    def _check_merge(self, profile):
+        """Work out merge health on a worker thread (the rebuild tool's sources are hashed, cached by size and date)."""
+        prof = Path(profile)
+
+        def work():
+            try:
+                h = core.mod_merge.health(prof)
+            except Exception as e:  # a broken profile or unreadable report: say nothing rather than guess
+                h = {"state": None, "error": str(e)}
+            self.bus.merge.emit({**h, "profile": str(prof)})
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _on_merge(self, h):
+        if not self.setup or not core.mod_manage.same_folder(Path(h["profile"]), Path(self.setup.profile)):
+            return  # an answer for a profile no longer shown
+        before = getattr(self, "_merge_health", None)
+        self._merge_health = h
+        state = h.get("state")
+        show = state in ("stacked", "current", "stale", "failed")
+        self.merge_row.setVisible(show)
+        self.merge_btn.setVisible(bool(h.get("backend")) and state in ("stale", "failed"))
+        if not show:
+            return
+        reasons = h.get("reasons") or []
+        text = h["text"]
+        if state == "stacked":
+            text += f": {h['winner']}'s is used. Packs before it keep their file, but it does not apply."
+        elif state == "current":
+            text += f" ({h['backend']})."
+        else:
+            text += ". " + (reasons[0] if reasons else "")
+            if len(reasons) > 1:
+                text += f" (and {len(reasons) - 1} more)"
+        self.merge_text.setText(text)
+        self.merge_text.setToolTip("\n".join(reasons) or h["text"])
+        tone_label(self.merge_text, "muted" if state == "current" else "error" if state == "failed" else "warning")
+        same = before is not None and before.get("profile") == h["profile"]
+        if same and before.get("state") == "current" and state == "stale" and not self.busy:
+            btn = ghost_btn("Rebuild", FI.SYNC)
+            bar = notice(
+                self, "warning", "Combined parameters are out of date", reasons[0] if reasons else "", actions=(btn,)
+            )
+            btn.clicked.connect(lambda _=False, b=bar: (b.close(), self._rebuild_merge()))
+
+    def _warn_merge(self):
+        """Play does not merge; it only says when the parameters in use are not what the packages ask for."""
+        h = getattr(self, "_merge_health", None)
+        if not h or not self.setup or not core.mod_manage.same_folder(Path(h["profile"]), Path(self.setup.profile)):
+            return
+        if h.get("state") == "stacked":
+            notice(
+                self,
+                "warning",
+                "Only one parameter pack applies",
+                f"{h['winner']}'s regulation.bin is used.",
+                duration=8000,
+            )
+        elif h.get("state") in ("stale", "failed"):
+            notice(self, "warning", h["text"], "Rebuild them from the Mods page.", duration=8000)
+
+    def _rebuild_merge(self, profile=None):
+        prof = Path(profile or (self.setup.profile if self.setup else ""))
+        if self.busy or not prof.is_file():
+            return
+        if self.game_running:
+            self._toast("Close the game first", "The rebuild tool rewrites files the game has open.", error=True)
+            return
+        tool = core.mod_merge.find_backend(prof)
+        if tool is None:
+            self._toast("No rebuild tool", "This profile has no rebuild tool for combined parameters.", error=True)
+            return
+        if tool.problem():
+            self._toast(f"{tool.label} cannot run", tool.problem(), error=True)
+            return
+        if not core.mod_merge.approved(tool):
+            ok = confirm(
+                self,
+                f"Run {tool.label}?",
+                detail=f"It comes with {tool.package['name']} and runs:\n\n{tool.describe()}",
+                warning="It is a program from a mod: allow it only for mods you trust. You are asked again when "
+                "the tool changes.",
+                apply_text="Allow and run",
+            )
+            if not ok:
+                return
+            core.mod_merge.approve(tool)
+
+        def job(_setup):
+            common = core.common
+            common.start_log("launcher: rebuild combined parameters")
+            try:
+                out = core.mod_merge.rebuild(prof, common.log)
+                common.log(f"done: combined parameters rebuilt by {out['backend']}; {out['profile_note']}")
+            except core.mod_merge.MergeError as e:
+                common.log(f"error: {e}")
+                raise SystemExit(1) from e
+
+        self.start(job, "Rebuilding combined parameters...", need_setup=False)
+
     def _after_profile_change(self, msg):
         self._log(msg)
         self._load_profile_editor(force=True)
@@ -1481,13 +1599,28 @@ class Launcher(FluentWindow):
             and e["kind"] == entry["kind"]
             and (e["kind"] == "native" or e.get("id"))  # a package is named by its id
         ]
-        dlg = ModOptionsDialog(entry, others, self)
+        prof = Path(self.setup.profile)
+        folder = core.mod_manage.resolve(prof, entry["path"]) if entry.get("path") else None
+        mark = core.mod_merge.overlay_mark(prof)
+        overlay = None
+        rebuild_file = ""
+        if entry["kind"] == "package" and folder is not None and core.mod_merge.is_elden_ring(prof):
+            overlay = mark is not None and core.mod_manage.same_folder(mark["package"], folder)
+            rebuild_file = str(mark["rebuild"]) if overlay and mark["rebuild"] else ""
+        dlg = ModOptionsDialog(entry, others, self, overlay=overlay, rebuild_file=rebuild_file)
         if not dlg.exec():
             return
         try:
             fresh = self._fresh_entry(entry)
             if fresh is None:
                 return
+            if dlg.overlay is not None:
+                picked = dlg.rebuild_file.text().strip() if dlg.rebuild_file is not None else ""
+                if dlg.overlay.isChecked() != overlay or picked != rebuild_file:
+                    on = dlg.overlay.isChecked()
+                    core.mod_merge.set_overlay_override(
+                        prof, folder if on else None, Path(picked) if on and picked else None
+                    )
             set_mod_options(self.setup.profile, fresh["index"], dlg.options())
             self._after_profile_change(f"profile: options saved for {entry['name']}")
             self._toast("Options saved", f"{entry['name']} applies at the next launch.")
@@ -1626,6 +1759,7 @@ class Launcher(FluentWindow):
             QTimer.singleShot(0, self._install_next)
             return
         plan = dlg.plan
+        self._merge_after = Path(prof) if plan.get("merge") else None
 
         def job(_setup):
             common = core.common
@@ -4356,6 +4490,7 @@ class Launcher(FluentWindow):
                         "Converting",
                         "Restoring",
                         "Installing",
+                        "Rebuilding",
                         "Swapping",
                         "Copying",
                         "Adding",
@@ -4364,11 +4499,15 @@ class Launcher(FluentWindow):
                 else "Saves repaired and cleanup done."
             )
         )
-        if label.startswith("Installing"):
+        if label.startswith(("Installing", "Rebuilding")):
             self._load_profile_editor(force=True)
             self._fill_mods()
             self._update_plan()
-            if getattr(self, "_install_queue", None):
+            after = getattr(self, "_merge_after", None)
+            self._merge_after = None
+            if ok and after is not None and label.startswith("Installing"):
+                QTimer.singleShot(0, lambda p=after: self._rebuild_merge(p))  # asked for in the install dialog
+            elif getattr(self, "_install_queue", None):
                 QTimer.singleShot(0, self._install_next)  # the next dropped mod
         undo = self._undo if ok else None
         undo_btn = ghost_btn("Undo", FI.RETURN) if undo else None
@@ -4411,6 +4550,7 @@ class Launcher(FluentWindow):
     def launch(self):
         if self.busy or not self.setup:
             return
+        self._warn_merge()
         wrote = self.save_seamless()
         if wrote is None or not self._announce_saved(wrote, "play"):
             return
@@ -4496,6 +4636,7 @@ class Launcher(FluentWindow):
     def launch_offline(self):
         if self.busy or not self.setup:
             return
+        self._warn_merge()
         strip = self.off_revive.isChecked()
         steam = self.off_steam.isChecked()
         quiet = self.off_quiet.isChecked()
