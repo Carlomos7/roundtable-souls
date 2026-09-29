@@ -43,6 +43,7 @@ The window never touches a save directly. Every read goes through `save_info`, e
 - A save library of named copies to swap in, and copying a single character between saves or Steam accounts; backups kept in the launcher's own data folder
 - Windows installer (per-user, no administrator prompt) or portable zip; Linux build for desktop and Steam Deck
 - Update now: downloads the release for this kind of copy, checks it against published SHA-256 checksums, and restarts into it
+- Logs you can follow: one log per job (Play, repairs, installs, rebuilds) with how it ended, me3's output kept with each Play, crashes with their details, and old logs cleaned up on their own
 - Responsive layout down to narrow windows and high display scaling; keyboard shortcuts; find and replace in the editors
 
 ## Technologies Used

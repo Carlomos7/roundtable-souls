@@ -2,7 +2,7 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
-## [Unreleased]
+## [3.7.0] - 2026-09-29
 
 - Logs: every job (Play, a repair, an install, a rebuild...) keeps its own log in logs\jobs, with how it ended, instead of one last_run.log overwritten by the next job. jobs.jsonl lists them. me3's output is kept with each Play instead of one file overwritten per launch. launcher.log (rotated) holds everything else and every crash with its details, replacing launcher-errors.log, which only grew. Jobs are kept for 14 days or the newest 50; older log files move to logs\old and go after 30 days.
 - Logs: lines carry real levels (errors, warnings) and where they came from, with milliseconds. A job's log only has that job's lines; background checks no longer mix in. The Log on the Play page shows the running job and warnings from anywhere, wraps long lines under the message, and has a Logs folder button; its buttons wrap in a narrow window. Changes made in the window itself (profile options, co-op settings) are kept in launcher.log too.
