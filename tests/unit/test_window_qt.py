@@ -1077,3 +1077,20 @@ def test_play_asks_for_the_update_before_anything_else(sandbox, monkeypatch):
     monkeypatch.setattr(w, "start", lambda *a, **k: started.append(a))
     REAL_LAUNCH(w)
     assert asked and not started  # the update runs first; Play itself comes back through resume
+
+
+def test_install_mod_opens_one_picker_and_cancel_means_cancel(launcher, monkeypatch):
+    w = launcher
+    opened, menus, installed = [], [], []
+    monkeypatch.setattr(window.QFileDialog, "getOpenFileName", lambda *a, **k: opened.append("file") or ("", ""))
+    monkeypatch.setattr(window.QFileDialog, "getExistingDirectory", lambda *a, **k: opened.append("folder") or "")
+    monkeypatch.setattr(window.RoundMenu, "exec", lambda self, *a, **k: menus.append(self))
+    monkeypatch.setattr(w, "_mods_locked", lambda: False)
+    monkeypatch.setattr(w, "_install_paths", lambda paths: installed.append(paths))
+    w._install_mod()
+    assert not opened and len(menus) == 1  # the click only asks which kind of mod
+    file_choice, folder_choice = menus[0].actions()
+    file_choice.trigger()
+    assert opened == ["file"] and not installed  # cancelled: no second picker, nothing installed
+    folder_choice.trigger()
+    assert opened == ["file", "folder"] and not installed

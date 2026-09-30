@@ -21,7 +21,7 @@ import threading
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, Qt, QTimer
+from PySide6.QtCore import QEvent, QPoint, Qt, QTimer
 from PySide6.QtGui import QIcon, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
@@ -51,6 +51,7 @@ from qfluentwidgets import (
     LineEdit,
     NavigationItemPosition,
     PasswordLineEdit,
+    RoundMenu,
     SearchLineEdit,
     SpinBox,
     StrongBodyLabel,
@@ -211,6 +212,7 @@ from roundtable_souls.ui.widgets import (
     page,
     refresh_surfaces,
     short_problem,
+    style_menu,
     style_navigation,
     tidy_log_line,
     titled,
@@ -2170,19 +2172,29 @@ class Launcher(FluentWindow):
         )
 
     def _install_mod(self):
+        """Ask what the mod is, then open the one picker for it. Cancelling a picker installs nothing."""
         if self._mods_locked():
             return
+        menu = style_menu(RoundMenu(parent=self))
+        menu.addAction(Action(FI.ZIP_FOLDER, "From archive or DLL...", triggered=self._install_from_file))
+        menu.addAction(Action(FI.FOLDER, "From folder...", triggered=self._install_from_folder))
+        b = self.mods_install
+        menu.exec(b.mapToGlobal(QPoint(0, b.height() + 4)))
+
+    def _install_from_file(self):
         src, _ = QFileDialog.getOpenFileName(
             self,
-            "Install a mod: pick an archive (or Cancel to pick a folder)",
+            "Install a mod: pick an archive or DLL",
             "",
             "Mod archive or DLL (*.zip *.7z *.rar *.dll);;All files (*)",
         )
-        if not src:
-            src = QFileDialog.getExistingDirectory(self, "Install a mod: pick its folder", "")
-            if not src:
-                return
-        self._install_paths([Path(src)])
+        if src:
+            self._install_paths([Path(src)])
+
+    def _install_from_folder(self):
+        src = QFileDialog.getExistingDirectory(self, "Install a mod: pick its folder", "")
+        if src:
+            self._install_paths([Path(src)])
 
     @staticmethod
     def _drop_accepts(paths):
