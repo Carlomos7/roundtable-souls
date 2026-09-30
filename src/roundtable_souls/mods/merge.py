@@ -259,7 +259,42 @@ def overlay(profile: Path, all_layers: list[dict] | None = None) -> tuple[dict |
             return layer, backends.detect_for(profile, layer, mark["rebuild"]), True
     packs = [l for l in all_layers if (l["folder"] / REGULATION).is_file()]
     backend = backends.detect(profile, packs) if packs else None
+    if backend is None and packs:
+        return _declared_last(profile, all_layers, packs), None, False
     return (backend.package if backend else None), backend, False
+
+
+def _declared_last(profile: Path, all_layers: list[dict], packs: list[dict]) -> dict | None:
+    """A package that ships parameters and whose own entry says it loads after most others (at least two, and at
+    least half of the other packages): one that must stay last, whose rebuild tool was not found (its setup files
+    are missing). None when there is no such package."""
+    by_index = {e["index"]: e for e in mod_manage.entries(profile)}
+    refs = {mod_manage.entry_ref(by_index[l["index"]]).lower() for l in all_layers if l["index"] in by_index}
+    for layer in reversed(packs):
+        e = by_index.get(layer["index"])
+        if e is None:
+            continue
+        others = refs - {mod_manage.entry_ref(e).lower()}
+        named = {str(d["id"]).lower() for d in e.get("load_after") or []} & others
+        if len(named) >= 2 and len(named) * 2 >= len(others):
+            return layer
+    return None
+
+
+def setup_problem(profile: Path, all_layers: list[dict] | None = None, found: tuple | None = None) -> str | None:
+    """Why the package that must stay last cannot be rebuilt on this PC (its setup files are missing, or it cannot
+    run), or None. A rebuild stops before changing anything when there is one."""
+    from roundtable_souls.mods.backends import manifest_refresh
+
+    profile = Path(profile)
+    all_layers = layers(profile) if all_layers is None else all_layers
+    target, tool, _by_hand = found or overlay(profile, all_layers)
+    if target is None or not (Path(target["folder"]) / REGULATION).is_file():
+        return None  # nothing to rebuild into, or its parameters do not replace the combined ones
+    if tool is not None:
+        return tool.problem()
+    gone = manifest_refresh.missing(profile, target)
+    return manifest_refresh.missing_text(target["name"], gone or ["a rebuild tool beside it (a rebuild.json)"])
 
 
 # ----------------------------------------------------------------------------- last runs
@@ -332,8 +367,12 @@ def health(profile: Path) -> dict:
     inputs = _combine_inputs(all_layers, target, combine)
     out["can_combine"] = len(inputs) >= 2 or (combine is not None and bool(inputs))
     reasons: list[str] = []
-    if target is not None and tool is None:
+    blocked = setup_problem(profile, all_layers, (target, tool, by_hand))
+    if blocked:
+        reasons.append(blocked)
+    elif target is not None and tool is None and by_hand:
         reasons.append(f"{target['name']} is set as the parameter overlay, but no rebuild tool was found next to it")
+    if target is not None and tool is None:
         late = _after(all_layers, packs, target)
         if late:
             reasons.append(f"{late} loads after {target['name']}, the package that must stay last")
@@ -547,6 +586,9 @@ def rebuild(profile: Path, log, combine: bool | None = None) -> dict:
     target, tool, _by_hand = overlay(profile, all_layers)
     comb = builtin.find(profile, all_layers)
     inputs = _combine_inputs(all_layers, target, comb)
+    blocked = setup_problem(profile, all_layers, (target, tool, _by_hand))
+    if blocked:  # before anything is written: the profile stays exactly as it is
+        raise MergeError(blocked)
     if tool is not None and not approved(tool):
         raise MergeError(f"{tool.label} has not been allowed to run yet.")
     wants = combine is True or (combine is None and (comb is not None or len(inputs) >= 2))

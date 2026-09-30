@@ -347,7 +347,7 @@ def test_an_overlay_without_a_tool_still_says_what_must_stay_last(world, tmp_pat
     (world.base / "Merger" / "installation.json").unlink()
     merge.set_overlay_override(world.profile, world.winner)
     h = merge.health(world.profile)
-    assert h["backend"] is None and "no rebuild tool was found" in h["reasons"][0]
+    assert h["backend"] is None and "setup files are missing: installation.json" in h["reasons"][0]
     plan = M.plan_install(world.profile, _pack_source(tmp_path / "dl"))
     assert plan["merge_target"] == "last" and not plan["merge_offered"]
     late = world.base / "mod" / "late"

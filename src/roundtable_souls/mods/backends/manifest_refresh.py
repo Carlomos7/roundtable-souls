@@ -83,7 +83,7 @@ def _recipe(profile: Path, layer: dict, manifest: Path, data: dict) -> Recipe:
     problem = None
     command: list[str] = []
     if setup is None:
-        problem = f"The setup files of {label} were not found in the profile's folder."
+        problem = missing_text(layer["name"], ["its setup folder (an installer and the Python that runs it)"])
     else:
         py, script = setup / "tools" / "python" / "python.exe", setup / "installer" / "installer.py"
         where = ["--profile", str(profile), "--target", str(profile.parent), "--non-interactive"]
@@ -118,3 +118,27 @@ def _recipe(profile: Path, layer: dict, manifest: Path, data: dict) -> Recipe:
         approval=f"{setup}|{tool}",
         problem=problem,
     )
+
+
+def missing_text(name: str, missing: list[str]) -> str:
+    return (
+        f"{name} must stay last and rebuilds the combined files itself, but its setup files are missing: "
+        f"{' and '.join(missing)}. Run the installer it came with again (or put the files back from a backup); "
+        "until then its merge cannot be rebuilt."
+    )
+
+
+def missing(profile: Path, layer: dict) -> list[str]:
+    """For a package that looks like it keeps its merge this way but was not found as one: which of the files this
+    layout needs are not there (the manifest beside the package, the setup folder in the profile's folder)."""
+    folder = Path(layer["folder"])
+    out = []
+    manifest = next((c / MANIFEST for c in (folder, folder.parent) if (c / MANIFEST).is_file()), None)
+    data = _read(manifest, relaxed=True) if manifest is not None else None
+    if manifest is None:
+        out.append(f"{MANIFEST} (next to {folder.name})")
+    elif data is None:
+        out.append(f"a readable {MANIFEST} (the one next to {folder.name} lists no sources)")
+    if _find_setup(Path(profile), data or {}) is None:
+        out.append("its setup folder (an installer and the Python that runs it)")
+    return out
