@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 import html
 import re
+from functools import partial
 from pathlib import Path
 
 from PySide6.QtCore import (
@@ -24,6 +25,7 @@ from PySide6.QtCore import (
 from PySide6.QtGui import (
     QAction,
     QColor,
+    QCursor,
     QFont,
     QFontMetrics,
     QLinearGradient,
@@ -57,6 +59,7 @@ from qfluentwidgets import (
     InfoBarPosition,
     LargeTitleLabel,
     MenuAnimationType,
+    NavigationPushButton,
     RoundMenu,
     ScrollArea,
     StrongBodyLabel,
@@ -64,27 +67,25 @@ from qfluentwidgets import (
     TitleLabel,
     TransparentToolButton,
     getFont,
-    isDarkTheme,
 )
 from qfluentwidgets import ExpandGroupSettingCard as _ExpandGroupSettingCard
 from qfluentwidgets import FluentIcon as FI
+from qfluentwidgets.common.icon import FluentIconBase, drawIcon
 
 from roundtable_souls.ui.dialogs import InfoDialog
 from roundtable_souls.ui.editor import code_edit
 from roundtable_souls.ui.theme import (
-    ACCENT,
-    ACCENT_LIGHT,
-    HINT,
-    HINT_ON_LIGHT,
     RADIUS,
     RADIUS_BTN,
     RADIUS_HERO,
+    css,
     ghost_btn,
     hint,
     primary_btn,
     style_editor,
     style_ghost,
     tokens,
+    tone_label,
 )
 
 
@@ -128,7 +129,7 @@ class _StatusRowDelegate(QStyledItemDelegate):
         painter.setRenderHints(QPainter.Antialiasing | QPainter.TextAntialiasing)
         if hover or current:
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(t["ghost_hv"] if hover else t["ghost"]))
+            painter.setBrush(QColor(t["ghost_hv"] if hover else t["selected"]))
             painter.drawRoundedRect(row, RADIUS_BTN, RADIUS_BTN)
         if current:
             painter.setBrush(QColor(t["accent"]))
@@ -145,6 +146,19 @@ class _StatusRowDelegate(QStyledItemDelegate):
             painter.setPen(QColor(t["muted"]))
             painter.drawText(row.adjusted(0, 0, -10, 0), Qt.AlignRight | Qt.AlignVCenter, status)
         painter.restore()
+
+
+def style_menu(menu: RoundMenu) -> RoundMenu:
+    """A plain menu (icon and text rows) on the same panel as StatusMenu, with the theme's text and hover."""
+    t = tokens()
+    menu.view.setStyleSheet(
+        f"MenuActionListWidget{{background:{t['editor'].name()};border:1px solid {t['ghost_bd']};"
+        f"border-radius:{RADIUS}px;outline:none;}}"
+        f"MenuActionListWidget::item{{color:{css(t['ghost_fg'])};}}"
+        f"MenuActionListWidget::item:hover,MenuActionListWidget::item:selected"
+        f"{{background:{css(t['ghost_hv'])};color:{css(t['ghost_fg'])};}}"
+    )
+    return menu
 
 
 class StatusMenu(RoundMenu):
@@ -410,6 +424,133 @@ class Bus(QObject):
     merge = Signal(dict)
 
 
+def _paint_nav_row(w, e):
+    """A navigation row, the same in both themes: sidebar_hover and sidebar_selected fills, the selected row's type
+    and icon in sidebar_selected_fg (semibold) with the 3px accent bar, a 2px focus ring for the keyboard.
+    Geometry (icon at 11.5 px, text at 44 px, 36 px rows) is Fluent's (PySide6-Fluent-Widgets 1.11.3)."""
+    t = tokens()
+    p = QPainter(w)
+    p.setRenderHints(QPainter.Antialiasing | QPainter.TextAntialiasing | QPainter.SmoothPixmapTransform)
+    p.setPen(Qt.NoPen)
+    if not w.isEnabled():
+        p.setOpacity(0.4)
+    elif w.isPressed:
+        p.setOpacity(0.8)
+    m = w._margins()
+    pl, pr = m.left(), m.right()
+    selected = w._canDrawIndicator()
+    lit = selected or w.isAboutSelected
+    hover = w.isEnabled() and w.isEnter and QRect(w.mapToGlobal(QPoint()), w.size()).contains(QCursor.pos())
+    if lit or hover:
+        p.setBrush(t["sidebar_selected"] if lit else t["sidebar_hover"])
+        p.drawRoundedRect(QRectF(w.rect()), 5, 5)
+    if selected:
+        p.setBrush(QColor(t["accent"]))
+        p.drawRoundedRect(w.indicatorRect(), 1.5, 1.5)
+    fg = t["sidebar_selected_fg"] if lit else QColor(t["text"])
+    icon_rect = QRectF(11.5 + pl, 10, 16, 16)
+    if isinstance(w._icon, FluentIconBase):
+        w._icon.render(p, icon_rect, fill=fg.name())
+    else:
+        drawIcon(w._icon, p, icon_rect)
+    if not w.isCompacted:
+        f = QFont(w.font())
+        if lit:
+            f.setWeight(QFont.DemiBold)
+        p.setFont(f)
+        p.setPen(fg)
+        left = 44 + pl if not w.icon().isNull() else pl + 16
+        p.drawText(QRectF(left, 0, w.width() - 13 - left - pr, w.height()), Qt.AlignVCenter, w.text())
+    if w.hasFocus():
+        p.setOpacity(1)
+        p.setBrush(Qt.NoBrush)
+        p.setPen(QPen(QColor(t["focus"]), 2))
+        p.drawRoundedRect(QRectF(w.rect()).adjusted(1, 1, -1, -1), 5, 5)
+
+
+def _nav_key(w, fluent_key, e):
+    if e.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
+        w.click()
+        return
+    fluent_key(e)
+
+
+def style_navigation(nav):
+    """Give the window's navigation rows the launcher's paint and make them reachable with Tab (Enter or Space
+    opens the page). Only the navigation's own rows: other lists keep Fluent's look."""
+    for w in nav.findChildren(NavigationPushButton):
+        if getattr(w, "_launcher_paint", False):
+            continue
+        w._launcher_paint = True
+        w.paintEvent = partial(_paint_nav_row, w)
+        w.keyPressEvent = partial(_nav_key, w, w.keyPressEvent)
+        w.setFocusPolicy(Qt.TabFocus)
+
+
+class _Surface(QWidget):
+    """A page's ground. It paints a soft shadow (the theme's shadow colour) under its top-level cards (the hero,
+    standalone cards and expanders), so they lift off the page without another outline. Painted here rather than with a
+    QGraphicsDropShadowEffect: an effect re-renders the whole card, children included, on every update (the hero's
+    progress ring, typing in a card) and clips at the card's edge."""
+
+    BLUR = 16
+    OFFSET = 3
+    STEPS = 8
+
+    def __init__(self):
+        super().__init__()
+        self._watched = set()
+
+    def _elevated(self):
+        kinds = (HeroBanner, GlassCard, ExpandGroupSettingCard)
+        for kind in kinds:
+            for w in self.findChildren(kind):
+                if not getattr(w, "elevated", True) or not w.isVisibleTo(self):
+                    continue
+                up, nested = w.parentWidget(), False
+                while up is not None and up is not self:
+                    if isinstance(up, kinds):
+                        nested = True
+                        break
+                    up = up.parentWidget()
+                if not nested:
+                    yield w
+
+    def eventFilter(self, obj, e):
+        if e.type() in (QEvent.Move, QEvent.Resize, QEvent.Show, QEvent.Hide):
+            self.update()
+        return False
+
+    def paintEvent(self, e):
+        shadow = tokens()["shadow"]
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setPen(Qt.NoPen)
+        layer = QColor(shadow)
+        layer.setAlphaF(shadow.alphaF() / self.STEPS)
+        p.setBrush(layer)
+        area = QRectF(e.rect())
+        for w in self._elevated():
+            if id(w) not in self._watched:
+                self._watched.add(id(w))
+                w.installEventFilter(self)
+                w.destroyed.connect(lambda _=None, k=id(w): self._watched.discard(k))
+            r = QRectF(w.geometry() if w.parentWidget() is self else QRect(w.mapTo(self, QPoint()), w.size()))
+            r = r.adjusted(1, 1, -1, -1).translated(0, self.OFFSET)
+            radius = RADIUS_HERO if isinstance(w, HeroBanner) else RADIUS
+            if not area.intersects(r.adjusted(-self.BLUR, -self.BLUR, self.BLUR, self.BLUR)):
+                continue
+            for i in range(self.STEPS):
+                grow = self.BLUR / 2 * (i + 1) / self.STEPS
+                p.drawRoundedRect(r.adjusted(-grow, -grow, grow, grow), radius + grow, radius + grow)
+
+
+def refresh_surfaces(root):
+    """Repaint every page ground under root (their card shadows follow the theme)."""
+    for s in root.findChildren(_Surface):
+        s.update()
+
+
 def page(name: str):
     """A scrollable page with a vertical layout and generous padding."""
     area = ScrollArea()
@@ -417,7 +558,7 @@ def page(name: str):
     area.setWidgetResizable(True)
     area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)  # content reflows; a page never scrolls sideways
     area.setStyleSheet("QScrollArea{background:transparent;border:none}")
-    inner = QWidget()
+    inner = _Surface()
     inner.setObjectName(name + "Inner")
     inner.setStyleSheet("QWidget#" + name + "Inner{background:transparent}")
     lay = QVBoxLayout(inner)
@@ -557,7 +698,7 @@ def log_html(rows, stamp_width: str = "00:00:00") -> str:
     colors = {
         "info": t["editor_fg"],
         "debug": t["muted"],
-        "warning": t["accent"],
+        "warning": t["warning_fg"],
         "error": t["danger"],
         "banner": t["muted"],
     }
@@ -583,18 +724,6 @@ def log_html(rows, stamp_width: str = "00:00:00") -> str:
         f"<body style=\"background:{bg};font-family:Consolas,'Cascadia Code',monospace;font-size:11pt\">"
         f"{''.join(bits)}</body>"
     )
-
-
-def tone_label(lab, level="muted"):
-    """Quiet status type. Colour means something: gold wait, rust error, otherwise muted."""
-    if level == "error":
-        lab.setTextColor("#963C48", "#E08A7A")
-    elif level == "warning":
-        lab.setTextColor(ACCENT_LIGHT, ACCENT)
-    elif level == "accent":
-        lab.setTextColor(ACCENT_LIGHT, ACCENT)
-    else:
-        lab.setTextColor(HINT_ON_LIGHT, HINT)
 
 
 def titled(lay, text, icon, sub=None, action=None):
@@ -819,7 +948,10 @@ class SettingRow(QWidget):
 
 
 class GlassCard(QWidget):
-    """A rounded glass tile. Same radius as the expanders, so the page reads as one surface."""
+    """A rounded glass tile. Same radius as the expanders, so the page reads as one surface. elevated: whether a
+    page lifts it with a shadow in light (rows in a list set it False)."""
+
+    elevated = True
 
     def __init__(self, parent=None, radius=RADIUS):
         super().__init__(parent)
@@ -852,6 +984,15 @@ class Metric(QWidget):
         f.setBold(True)
         self.value.setFont(f)
         lay.addWidget(self.value)
+
+
+def _mix(a: QColor, b: QColor, k: float) -> QColor:
+    """a blended k of the way toward b."""
+    return QColor(
+        round(a.red() + (b.red() - a.red()) * k),
+        round(a.green() + (b.green() - a.green()) * k),
+        round(a.blue() + (b.blue() - a.blue()) * k),
+    )
 
 
 class HeroBanner(QWidget):
@@ -958,19 +1099,33 @@ class HeroBanner(QWidget):
         path = QPainterPath()
         path.addRoundedRect(r, RADIUS_HERO, RADIUS_HERO)
         t = tokens()
-        g = QLinearGradient(r.topLeft(), r.bottomRight())
-        g.setColorAt(0, t["hero_a"])
-        g.setColorAt(1, t["hero_b"])
-        p.fillPath(path, g)
-        orb = QRadialGradient(QPointF(r.left() + r.width() * 0.18, r.top() + 8), r.width() * 0.42)
-        orb.setColorAt(0, t["glow"])
-        orb.setColorAt(1, QColor(t["glow"].red(), t["glow"].green(), t["glow"].blue(), 0))
-        p.fillPath(path, orb)
+        self._paint_ground(p, path, r, t)
         p.strokePath(path, QPen(t["hero_border"], 1))
         y = self.metrics.y() - 6
         if y > 20:
             p.setPen(QPen(t["line"], 1))
             p.drawLine(int(r.left()) + 20, y, int(r.right()) - 20, y)
+
+    @staticmethod
+    def _paint_ground(p, path, r, t):
+        """The hero's ground, one geometry for both themes: the quiet colour (hero_b: snow, or the black of the page)
+        over the left two-thirds where the name sits, the rich colour (hero_a: frost, or brown) gathering toward the
+        right edge, and one faint bloom of hero_glow (moonlight, or gold) in the upper right. Static: no stars,
+        particles or animation."""
+        quiet, rich = QColor(t["hero_b"]), QColor(t["hero_a"])
+        g = QLinearGradient(r.topLeft(), r.topRight())
+        g.setColorAt(0.0, quiet)
+        g.setColorAt(0.62, quiet)
+        g.setColorAt(0.82, _mix(quiet, rich, 0.45))
+        g.setColorAt(1.0, rich)
+        p.fillPath(path, g)
+        glow = QColor(t["hero_glow"])
+        centre = QPointF(r.right() - r.width() * 0.12, r.top() + r.height() * 0.16)
+        bloom = QRadialGradient(centre, max(r.height() * 0.95, r.width() * 0.26))
+        bloom.setColorAt(0.0, glow)
+        glow.setAlpha(0)
+        bloom.setColorAt(1.0, glow)
+        p.fillPath(path, bloom)
 
 
 class ActionBar(QWidget):
@@ -989,9 +1144,19 @@ class ActionBar(QWidget):
         self.box = QBoxLayout(QBoxLayout.LeftToRight, self)
         self.box.setContentsMargins(*((20, 12, 16, 12) if framed else (0, 4, 0, 0)))
         self.box.setSpacing(12)
+        noted = QWidget()
+        nl = QHBoxLayout(noted)
+        nl.setContentsMargins(0, 0, 0, 0)
+        nl.setSpacing(8)
+        self.note_icon = IconWidget(FI.EDIT)
+        self.note_icon.setFixedSize(16, 16)
+        self.note_icon.setToolTip("Unsaved changes")
+        self.note_icon.hide()
+        nl.addWidget(self.note_icon, 0, Qt.AlignVCenter)
         self.note = BodyLabel(note)
         self.note.setWordWrap(True)
-        self.box.addWidget(self.note, 1)
+        nl.addWidget(self.note, 1)
+        self.box.addWidget(noted, 1)
         self.acts = QWidget()
         al = QHBoxLayout(self.acts)
         al.setContentsMargins(0, 0, 0, 0)
@@ -1014,13 +1179,20 @@ class ActionBar(QWidget):
         self._restack()
 
     def set_state(self, pending: bool, note: str) -> None:
-        """Pending: the actions are live and the note is gold; otherwise both buttons rest."""
+        """Pending: the actions are live, the note is in the accent and an edit mark says it is unsaved; otherwise both
+        buttons rest."""
         self.pending = pending
         self.primary.setEnabled(pending)
         if self.secondary is not None:
             self.secondary.setEnabled(pending)
+        self.note_icon.setVisible(pending)
         self.note.setText(note)
-        self.note.setTextColor(ACCENT_LIGHT if pending else HINT_ON_LIGHT, ACCENT if pending else HINT)
+        tone_label(self.note, "accent" if pending else "muted")
+        self.restyle()
+
+    def restyle(self):
+        """After a theme switch: the edit mark is in the accent, like the note beside it."""
+        self.note_icon.setIcon(FI.EDIT.icon(color=QColor(tokens()["accent"])))
         self.update()
 
     def _restack(self):
@@ -1404,7 +1576,7 @@ class DropOverlay(QWidget):
         p.setRenderHint(QPainter.Antialiasing)
         ok = bool(self._usable)
         edge = QColor(t["accent"] if ok else t["danger"])
-        fill = QColor(t["hero_b"] if isinstance(t["hero_b"], QColor) else QColor(t["hero_b"]))
+        fill = QColor(t["drop_surf"])
         fill.setAlpha(215)
         r = QRectF(self.rect()).adjusted(12, 12, -12, -12)
         p.setPen(Qt.NoPen)
@@ -1439,14 +1611,14 @@ class DropOverlay(QWidget):
         )
 
 
-# Status colours for pills: green only means "all good"; red is something to act on. Text always says it too, so
-# colour is never the only signal.
-PILL_COLORS = {
-    "ok": ("#2E7D4F", "#7CC89A"),
-    "bad": ("#963C48", "#E08A7A"),
-    "warn": (ACCENT_LIGHT, ACCENT),
-    "busy": (ACCENT_LIGHT, ACCENT),
-    "muted": (HINT_ON_LIGHT, HINT),
+# Pills: level -> (text token, fill token, mark). Green only means "all good"; red is something to act on. The words
+# and the mark say it too, so colour is never the only signal.
+PILL_LEVELS = {
+    "ok": ("success_fg", "success_bg", "\u2713"),
+    "bad": ("danger", "danger_bg", "\u2715"),
+    "warn": ("warning_fg", "warning_bg", "\u26a0"),
+    "busy": ("accent", "busy_bg", ""),
+    "muted": ("muted", "muted_bg", ""),
 }
 
 
@@ -1475,8 +1647,13 @@ class StatusPill(QWidget):
     def level(self):
         return self._level
 
+    def _shown(self):
+        """The text as painted: warning, error and success lead with their mark."""
+        mark = PILL_LEVELS.get(self._level, PILL_LEVELS["muted"])[2]
+        return f"{mark}  {self._text}" if mark and self._text else self._text
+
     def sizeHint(self):
-        return QSize(QFontMetrics(self._font).horizontalAdvance(self._text) + 22, 22)
+        return QSize(QFontMetrics(self._font).horizontalAdvance(self._shown()) + 22, 22)
 
     def minimumSizeHint(self):
         return self.sizeHint()
@@ -1497,16 +1674,20 @@ class StatusPill(QWidget):
         super().keyPressEvent(e)
 
     def paintEvent(self, e):
-        light, dark = PILL_COLORS.get(self._level, PILL_COLORS["muted"])
-        color = QColor(dark if isDarkTheme() else light)
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         r = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
-        fill = QColor(color)
-        fill.setAlpha(38)
-        p.setPen(QPen(color, 1.2 if self.hasFocus() else 1))
+        t = tokens()
+        fg, bg, _mark = PILL_LEVELS.get(self._level, PILL_LEVELS["muted"])
+        color, fill = QColor(t[fg]), QColor(t[bg])
+        soft = QColor(color)
+        soft.setAlpha(t["pill_edge"])
+        edge = QPen(QColor(t["focus"]), 2) if self.hasFocus() else QPen(soft, 1)
+        if self.hasFocus():
+            r = r.adjusted(0.5, 0.5, -0.5, -0.5)
+        p.setPen(edge)
         p.setBrush(fill)
         p.drawRoundedRect(r, 11, 11)
         p.setFont(self._font)
         p.setPen(color)
-        p.drawText(r, Qt.AlignCenter, self._text)
+        p.drawText(r, Qt.AlignCenter, self._shown())

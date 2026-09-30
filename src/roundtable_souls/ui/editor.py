@@ -18,7 +18,7 @@ from qfluentwidgets import (
 
 from roundtable_souls import find
 from roundtable_souls.core import COMMENT_PREFIX, indent_lines, toggle_comment
-from roundtable_souls.ui.theme import RADIUS, style_editor, tokens
+from roundtable_souls.ui.theme import RADIUS, TEXT_LIGHT, style_editor, tokens
 
 
 class CodeHighlighter(QSyntaxHighlighter):
@@ -43,12 +43,12 @@ class CodeHighlighter(QSyntaxHighlighter):
             }
         else:
             colors = {
-                "comment": "#385D70",
-                "key": "#142F40",
-                "string": "#075C8B",
+                "comment": "#4B6283",
+                "key": TEXT_LIGHT,
+                "string": "#245BC4",
                 "number": "#963C48",
-                "keyword": "#397E9F",
-                "header": "#075C8B",
+                "keyword": "#194BAA",
+                "header": "#245BC4",
             }
 
         def fmt(name, bold=False):

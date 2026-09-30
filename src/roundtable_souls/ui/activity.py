@@ -109,9 +109,9 @@ class JobDetails(QWidget):
         for name in rec.get("attachments") or []:
             label = name.rsplit(".", 2)[-2] if name.count(".") >= 2 else name
             self.sources.addItem(f"{label} output", userData=name)
-        self.sources.setVisible(self.sources.count() > 1)
         self.sources.currentIndexChanged.connect(self._pick)
         bar.addWidget(self.sources)
+        self.sources.setVisible(self.sources.count() > 1)
         self.copy_btn = ghost_btn("Copy", FI.COPY)
         self.copy_btn.setToolTip("Copy what is shown.")
         self.copy_btn.clicked.connect(lambda: self._copy(False))
@@ -185,6 +185,8 @@ class JobRow(GlassCard):
     """One job: when, how it ended, what it was, its summary; click (or the chevron) to open it. When the job can
     still be taken back (mods.undo), a button does it."""
 
+    elevated = False  # a row in a list, not a standalone card
+
     def __init__(self, rec: dict, expanded: bool = False, parent=None, on_undo=None):
         super().__init__(parent)
         self.rec = rec
@@ -230,9 +232,9 @@ class JobRow(GlassCard):
         if rec.get("outcome") == "interrupted" and not line:
             line = "The launcher closed before this job finished."
         self.summary = ElideLabel(line)
-        self.summary.setVisible(bool(line))
         tone_label(self.summary, "error" if rec.get("outcome") in ("failed", "interrupted") else "muted")
         lay.addWidget(self.summary)
+        self.summary.setVisible(bool(line))  # only once parented: shown before that, it is a window of its own
         self.body = QVBoxLayout()
         self.body.setContentsMargins(0, 0, 0, 0)
         lay.addLayout(self.body)

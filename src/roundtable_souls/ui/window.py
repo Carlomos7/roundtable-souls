@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, Qt, QTimer
-from PySide6.QtGui import QIcon, QKeySequence, QPixmap, QShortcut
+from PySide6.QtGui import QIcon, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -178,8 +178,10 @@ from roundtable_souls.ui.theme import (
     ghost_btn,
     hint,
     primary_btn,
+    style_button,
     style_ghost,
-    style_primary,
+    tokens,
+    use_theme_text,
 )
 from roundtable_souls.ui.widgets import (
     ActionBar,
@@ -207,7 +209,9 @@ from roundtable_souls.ui.widgets import (
     icon_btn,
     notice,
     page,
+    refresh_surfaces,
     short_problem,
+    style_navigation,
     tidy_log_line,
     titled,
     tone_label,
@@ -268,6 +272,7 @@ class Launcher(FluentWindow):
         self.addSubInterface(self.tools_page, FI.SETTING, "Settings", NavigationItemPosition.BOTTOM)
         self._build_placeholder()
         self._build_game_tabs()
+        style_navigation(self.navigationInterface)
         # Keyboard: Ctrl+1..6 open the pages in rail order. Nothing has focus at start,
         # so a stray Enter or Space when the window appears cannot press Play.
         self.setFocusPolicy(Qt.StrongFocus)
@@ -761,7 +766,7 @@ class Launcher(FluentWindow):
         acts, al = action_row()
         self.mods_refresh = ghost_btn("Refresh", FI.SYNC)
         self.mods_refresh.clicked.connect(self._fill_mods)
-        self.mods_install = ghost_btn("Install mod", FI.DOWNLOAD)
+        self.mods_install = ghost_btn("Install mod", FI.DOWNLOAD, role="action")
         self.mods_install.setToolTip(
             "A .zip, .7z or .rar, or a folder. Roundtable Souls works out whether it is a package or a DLL and adds it at the end of the load order."
         )
@@ -769,7 +774,7 @@ class Launcher(FluentWindow):
         self.prof_new = ghost_btn("New profile", FI.ADD)
         self.prof_new.setToolTip("A fresh .me3 in me3's profile folder, empty or copied from the current one.")
         self.prof_new.clicked.connect(self._new_profile)
-        self.prof_del = ghost_btn("Delete profile", FI.DELETE)
+        self.prof_del = ghost_btn("Delete profile", FI.DELETE, role="danger")
         self.prof_del.setToolTip("Moves the .me3 into the launcher's deleted profiles. Mod folders stay.")
         self.prof_del.clicked.connect(self._delete_profile)
         al.addWidget(
@@ -2902,7 +2907,7 @@ class Launcher(FluentWindow):
             self.setup_hint.setText(f"{me3.name if me3 else 'me3 not found'}  ·  {game}")
             self.setup_hint.setToolTip(s.summary())
             self.setup_exp.card.setContent(s.label)
-        self.setup_hint.setTextColor("#963C48" if probs else HINT_ON_LIGHT, "#E08A7A" if probs else HINT)
+        tone_label(self.setup_hint, "error" if probs else "muted")
         self.setup_exp.setExpand(bool(probs))
         self.play_btn.setEnabled(not probs and not self.game_running and not self.busy)
         self.ini = s.ini
@@ -3438,7 +3443,7 @@ class Launcher(FluentWindow):
                 c_lab = CaptionLabel(
                     ("\u2713  " if tone == "success" else "\u26a0  " if tone == "warn" else "\u2022  ") + text
                 )
-                tone_label(c_lab, "success" if tone == "success" else "error" if tone == "warn" else "muted")
+                tone_label(c_lab, "success" if tone == "success" else "warn" if tone == "warn" else "muted")
                 chips.addWidget(c_lab)
             titles.addWidget(chips_w)
             head.addLayout(titles, 1)
@@ -4445,7 +4450,7 @@ class Launcher(FluentWindow):
             c_lab = CaptionLabel(
                 ("\u2713  " if tone == "success" else "\u26a0  " if tone == "warn" else "\u2022  ") + text
             )
-            tone_label(c_lab, "success" if tone == "success" else "error" if tone == "warn" else "muted")
+            tone_label(c_lab, "success" if tone == "success" else "warn" if tone == "warn" else "muted")
             self.ws_chips.addWidget(c_lab)
 
     def _ws_rail_entry(self, title, sub, slot):
@@ -4544,7 +4549,7 @@ class Launcher(FluentWindow):
         if side:
             sl = hint(side)
             if note:
-                sl.setTextColor("#963C48", "#E08A7A")
+                tone_label(sl, "error")
             rl.addWidget(sl, 1)
         else:
             rl.addStretch()
@@ -5436,8 +5441,8 @@ class Launcher(FluentWindow):
 
     def _restyle(self):
         for b in self.findChildren(QPushBtn):
-            if b.objectName() == "cta":
-                style_primary(b)
+            if b.objectName() == "cta" or b.property("role"):
+                style_button(b)
             elif b.metaObject().className() == "PushButton":
                 style_ghost(b)
         if getattr(self, "game_btn", None) is not None:
@@ -5447,7 +5452,15 @@ class Launcher(FluentWindow):
         tone_label(self.status)
         tone_label(self.plan, "accent" if self.ini and self._coop_pending() else "muted")
         self.hero.update()
-        self.save_bar.update()
+        for w in self.findChildren(ActionBar):
+            w.restyle()
+        for w in self.findChildren(StatusPill):
+            w.updateGeometry()
+            w.update()
+        self.navigationInterface.update()
+        for w in self.navigationInterface.findChildren(QWidget):
+            w.update()
+        refresh_surfaces(self)  # card shadows
         for w in self.findChildren(GlassCard):
             w.update()
         for w in self.findChildren(ExpandGroupSettingCard):
@@ -5471,6 +5484,13 @@ class Launcher(FluentWindow):
     def _onThemeChangedFinished(self):
         super()._onThemeChangedFinished()
         self._frost()
+
+    def paintEvent(self, e):
+        super().paintEvent(e)
+        p = QPainter(self)
+        p.setPen(Qt.NoPen)
+        p.setBrush(tokens()["sidebar_bg"])
+        p.drawRect(self.navigationInterface.geometry())
 
     def _frost(self):
         """Solid canvas. Mica made dark type vanish on a light desktop; Tailwind-style apps paint their own ground."""
@@ -5533,6 +5553,7 @@ class Launcher(FluentWindow):
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName(TITLE)
+    use_theme_text()
     dark = load_settings().get("theme", "dark") == "dark"
     setTheme(Theme.DARK if dark else Theme.LIGHT)
     setThemeColor(ACCENT if dark else ACCENT_LIGHT)

@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QGridLayout, QSizePolicy, QVBoxLayout, QWidget
 from qfluentwidgets import BodyLabel, StrongBodyLabel
 
-from roundtable_souls.ui.theme import hint
+from roundtable_souls.ui.theme import hint, tone_label
 
 
 def _slot_names(title: str) -> str:
@@ -191,7 +191,7 @@ def _save_note_widget(note: dict) -> QWidget:
     lab = StrongBodyLabel(note["title"])
     lab.setWordWrap(True)
     if note.get("kind") == "issue":
-        lab.setTextColor("#963C48", "#E08A7A")
+        tone_label(lab, "error")
     lay.addWidget(lab)
     rows = note.get("rows") or []
     if rows:

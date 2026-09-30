@@ -16,7 +16,7 @@ from qfluentwidgets import (
 )
 from qfluentwidgets import FluentIcon as FI
 
-from roundtable_souls.ui.theme import BTN_H, ghost_btn, hint, style_ghost, style_primary
+from roundtable_souls.ui.theme import BTN_H, ghost_btn, hint, style_dialog, style_ghost, style_primary, tone_label
 
 
 class Dialog(MessageBoxBase):
@@ -26,6 +26,7 @@ class Dialog(MessageBoxBase):
         super().__init__(parent)
         style_primary(self.yesButton)
         style_ghost(self.cancelButton)
+        style_dialog(self)
         self.buttonGroup.setFixedHeight(BTN_H + 48)  # the base strip is sized for the library's shorter buttons
 
 
@@ -108,7 +109,7 @@ class ConfirmDialog(Dialog):
         self.viewLayout.addWidget(SubtitleLabel(title))
         if warning:
             w = hint(warning)
-            w.setTextColor("#963C48", "#E08A7A")
+            tone_label(w, "error")
             self.viewLayout.addWidget(w)
         changes = [c for c in changes if c]
         if changes:
