@@ -1,0 +1,142 @@
+# Evidence ledger
+
+What has been shown to work, what failed, and what is still open, for the plan in
+[technical-specification.md](technical-specification.md) (v1.1). A check that has not been done stays **pending**; it is
+never reported as passing. Newest entries are added at the end of each section.
+
+Status words: **accepted** (shown to work where stated), **failed**, **pending** (not done yet), **unknown** (looked
+into, not resolved).
+
+## 1. Current state (Phase 0 inventory, 2026-09-30, release 3.13.1, commit ac14414)
+
+**What the launcher writes today (Elden Ring, Windows)**
+
+| Output | Written by | Layout |
+|---|---|---|
+| Merged archives and text (files two mods ship) | `mods/filemerge.py` via `mods/backends/builtin.py` (Combine) | DCX KRAK, Oodle level 6, header byte 6 (6/6), from the game's own Oodle DLL |
+| Nightreign Revive build (preview setting) | `mods/engine.py` with the recipe `data/recipes/nightreign-revive-lite.json` | as above; the grace menu (ESD) still comes from Revive's Assets.exe |
+| Combined parameters | `mods/param_merge.py` + `mods/paramfile.py` | regulation.bin: BND4 in DCX ZSTD, AES-encrypted |
+
+**Format code and its callers**
+
+| Module | Reads / writes | Called from |
+|---|---|---|
+| `gamefiles.py` | DCX decompression (KRAK with the game's Oodle, DFLT, ZSTD), regulation decryption | `mods/formats.py`, `mods/paramfile.py`, `mods/item_names.py` |
+| `mods/formats.py` | DCX write, BND4 (general), FMG | `mods/filemerge.py`, `mods/backends/builtin.py`, `mods/engine.py` |
+| `mods/paramfile.py` | its own BND4 copy (regulation), PARAM, regulation read/write | `mods/param_merge.py` (Phase 1 folds its BND4 into `formats.py`) |
+| `mods/gamearchive.py` | the game's BHD5/BDT archives (RSA-decrypted indexes, cached) | `mods/backends/builtin.py`, `mods/engine.py` |
+| `mods/filemerge.py` | three-way merge of archives and text | `mods/backends/builtin.py`, `mods/engine.py` |
+| `mods/param_merge.py` | three-way merge of parameters, 4-byte chunks | `mods/backends/builtin.py`, `mods/engine.py` |
+| `mods/profile.py` `effective_order` | predicted load order | `mods/merge.py`, `mods/manage.py`, `mods/stay_last.py` |
+
+**Platform capability**
+
+- Windows: KRAK read and write (the game's `oo2core_*_win64.dll`), DFLT and ZSTD read and write.
+- Linux (native Python): no Oodle, so KRAK files can be neither read nor written; DFLT and ZSTD work. Whether a DFLT
+  file can stand in for a KRAK one is experiment E-006.
+- Steam Deck: nothing tested (no Deck available). Every Deck check below is **pending: needs a Deck**.
+
+**Workflows**: `test.yml` (push and pull request to `main`/`dev`: ruff, pyright, pytest on Windows and Ubuntu),
+`release.yml` (tags: verify, Windows and Linux builds, publish).
+
+**Real-data checks**: `scripts/verify/` (see its README). Earlier one-off checks were run from a scratch folder; their
+results are recorded below as E-001 to E-004.
+
+## 2. Evidence
+
+### E-001 Launcher-written 6/6 files load in game (Windows): accepted, with gaps
+
+2026-09-30, Windows, Elden Ring regulation 11711000, me3 0.13.0 (installed at the time of writing). The owner rebuilt Nightreign Revive with the
+launcher's engine (branch hotfix-3.13.1, commit 377e49f: 6/6 layout) and played.
+
+- Save loads; player animations (the Sekiro animation mod, merged with Revive's) look normal; the grace menu shows the
+  map mod's options and Revive's session settings in English; map markers work; common effects (hits, grace glow)
+  look normal: **accepted**.
+- Rain (effects archive, real-rain mod): **pending** (no rain during the session).
+- Co-op downed/revived animations (Revive's own clips): **pending** (needs co-op).
+- The grace menu in that build still came from Revive's tool, not the launcher.
+- Steam Deck: **pending: needs a Deck.**
+
+### E-002 Independent reading of that output: accepted, with stated limits
+
+Soulstruct (its own DCX, BND4 and FMG readers) opened every launcher-written file after the 6/6 change, with 0
+validation failures: inner files, IDs, flags and contents equal a result worked out from the inputs; the 58 removals
+are absent and the 4 additions present; the menu text table equals the reference tool's in all 15 languages (the 166
+map-mod changes and 27 new strings were checked in English only); all 194 parameter tables equal the reference tool's
+after decryption.
+
+Limits: Soulstruct decompresses with Oodle too, so decompression is not independently checked. The parameter result
+matches the reference tool; it was not worked out independently. The removal rule shares the reference tool's
+unvalidated assumption (E-007).
+
+### E-003 Header byte 4: a checker limitation, not a game result
+
+Before 3.13.1, files over 16 MB were written at Oodle level 4 with byte 4 in the header. Soulstruct refused them; with
+only that byte set to 6 it opened them and their contents were correct. This shows Soulstruct does not recognise that
+header. It does not show whether the game accepts it; that is experiment E-005.
+
+### E-004 Compression time at 6/6
+
+A full engine build of Revive took 267 s at 6/6 (about 90 s before, when large files used level 4); the effects
+archive alone took 150 s and the high-detail player animations 9 s. Level 4 and level 6 are different settings, so
+this is not an equal-settings benchmark of two writers.
+
+### E-005 DCX layouts 4/4, 4/6, 6/6 in game: pending
+
+Packages are made by `scripts/verify/ingame_package.py --layout 6/6|4/4|4/6`: two marker mods merged by the
+launcher's own Combine, then stored in the layout under test, played on a separate save.
+
+| Layout | Menu text (KRAK) | Player animations (KRAK) | Parameters | Windows | Deck |
+|---|---|---|---|---|---|
+| 6/6 | | | | pending | pending: needs a Deck |
+| 4/4 | | | | pending | pending: needs a Deck |
+| 4/6 | | | | pending | pending: needs a Deck |
+
+Only 6/6 is written by the launcher. The others are experiments; 3.13.1's header regression tests keep the writer
+at 6/6 until a result here says otherwise.
+
+### E-006 DFLT in place of KRAK: pending
+
+Same packages with `--layout dflt` (zlib level 9 in the same header). Whether the game accepts it for menu text and
+player animations on Windows is pending; on the Deck, pending: needs a Deck. This is only about output: reading the
+game's own KRAK files on Linux still needs Oodle, whatever the result.
+
+### E-007 The 58 animations the Sekiro animation mod leaves out: unknown
+
+The mod's `c0000_a00_hi.anibnd.dcx` (dated 2022-08-20) replaces 1,132 of the game's 1,192 clips and lacks 58, all
+`a000_*`, from `a000_017180` to `a000_910200`. The merger (like the reference tool) treats a missing part as removed,
+so those 58 are left out. Whether the author meant that, or the mod predates them, is not known, and no gameplay
+symptom has been observed or ruled out. Decided with the owner (2026-09-30): this is the worked example for the
+omission policy (proposal, not approved) and is investigated with Phase 4, not in Phase 0. `verify_output.py` lists
+every such removal as a note.
+
+### E-008 Parameter rows keep duplicate IDs in order: accepted
+
+2026-09-30, `scripts/verify/param_rows.py` on the game's regulation 11711000 (194 tables, 179,358 rows). One table
+has rows sharing an ID: RandomAppearParam, 26 IDs used twice (52 rows). For every table: writing it back gives the
+same bytes; the merger's row keys (ID plus occurrence) cover every row once; combining with an unchanged copy keeps
+the rows and their order. A pack changing only the second row with ID 1202020 changed that row alone. Soulstruct's
+parameter writer loses those 26 rows, so it is not used as a writer or as the duplicate-row oracle.
+
+### E-009 Reader calibration on the game's own files: accepted
+
+2026-09-30, `scripts/verify/calibrate.py`: the launcher's reader and Soulstruct both open the game's own menu text,
+menu layout, low and high player animations and common effects archives (all KRAK, header byte 6), with the same
+inner file counts (50, 47, 34, 1,192 and 14,997). pyooz was not installed for this run.
+
+### E-010 Load order prediction differs from me3: known issue, fixed in Phase 3
+
+The launcher's `effective_order` (repeated moves) is not me3's `sort_dependencies`. Reported fuzz: 475 of 2,000
+acyclic profiles (seed 1) order differently against a Python port; smallest case A B C D with D after A: the port
+gives A D B C, the launcher A B C D. Both satisfy the constraints but pick different later-wins providers, so a
+predicted file winner can be wrong. Phase 3 ports `sort_dependencies` from me3 `9b1e080bcf691608021e7bd8a4447198a2dcb94c`
+with a pinned Rust harness for parity. Installed me3 here: 0.13.0.
+
+## 3. Open checks
+
+- E-001: rain; co-op revive animations; all Deck checks.
+- E-005 and E-006: every layout in game (Windows now; Deck pending: needs a Deck).
+- E-007: the 58 omissions (Phase 4, with the omission policy).
+- Linux: KRAK input decoding (a separate prerequisite from any DFLT output result).
+- A controlled animation change seen in game (`ingame_package.py --anim-swap CLIP=SOURCE`), once a clip pair with an
+  obvious difference is identified; until then the animation archive shows it loads, not that a change applies.
