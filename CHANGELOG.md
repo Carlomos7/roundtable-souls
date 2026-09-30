@@ -2,7 +2,7 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
-## [Unreleased]
+## [3.10.0] - 2026-09-29
 
 - Mods: the package that must stay last (and its DLL) now stays last however mods are added. Installing, adding existing folders, removing, renaming an id or saving options keeps its own load_after lists naming every other package and DLL (on or off, each optional), so switching a mod on or off never rewrites them; your own entries are never changed. New mods go right before it in the file.
 - Install: with such a package, the dialog says a new mod is placed before it so it includes the mod's changes, instead of offering a load order; an advanced option loads a mod after it on purpose.
