@@ -11,36 +11,35 @@ SF_VOICE = """profileVersion = "v1"
 
 # voice pack: English lines
 [[packages]]
-id = "sf-voice"
-path = 'mod/sf-voice'
+id = "voice-pack"
+path = 'mod/voice-pack'
 
 
 # =====
-#  4. UI. ORDER-SENSITIVE
+#  4. INTERFACE
 # =====
 
-# Minimal HUD, HUD overlay files only
+# HUD overlay, interface files only
 [[packages]]
-id = "minimal-hud-lite"
-path = 'mod/minimal-hud-lite'
+id = "hud-overlay"
+path = 'mod/hud-overlay'
 """
 
 
 # ----------------------------------------------------------------------------- an entry's own span
 def test_removing_an_entry_keeps_the_next_entrys_comments_and_takes_its_own():
     new, chunk, _where = M.remove_entry(SF_VOICE, 0)
-    assert "4. UI. ORDER-SENSITIVE" in new and "# Minimal HUD" in new  # the next entry's notes stay
+    assert "4. INTERFACE" in new and "# HUD overlay" in new  # the next entry's notes stay
     assert "voice pack" not in new and chunk.startswith("# voice pack")  # its own go with it
-    assert [M.block_options(new, b["index"])["id"] for b in M.blocks(new)] == ["minimal-hud-lite"]
+    assert [M.block_options(new, b["index"])["id"] for b in M.blocks(new)] == ["hud-overlay"]
 
 
 def test_a_note_that_mentions_a_setting_is_still_a_note():
     text = (
-        "# Pulls the camera back for large enemies. full_search = 0 in bettercamera.ini.\n"
-        "[[natives]]\npath = 'natives/BetterCamera/bettercamera.dll'\n"
+        "# Widens the camera view. max_distance = 0 in camera.ini.\n[[natives]]\npath = 'natives/Camera/camera.dll'\n"
     )
     _new, chunk, _ = M.remove_entry(text, 0)
-    assert chunk.startswith("# Pulls the camera back")
+    assert chunk.startswith("# Widens the camera view")
 
 
 def test_commented_out_entries_above_are_not_taken():
@@ -82,37 +81,37 @@ def test_restore_finds_its_place_when_lines_around_repeat_and_neighbours_changed
 def test_restore_falls_back_to_the_next_entry_then_the_end():
     text = SF_VOICE
     new, chunk, where = M.remove_entry(text, 0)
-    rewritten = new.replace("# =====\n#  4. UI. ORDER-SENSITIVE\n# =====\n\n", "")  # its surroundings edited away
+    rewritten = new.replace("# =====\n#  4. INTERFACE\n# =====\n\n", "")  # its surroundings edited away
     back = M.restore_entry(rewritten, chunk, where)
     ids = [M.block_options(back, b["index"])["id"] for b in M.blocks(back)]
-    assert ids == ["sf-voice", "minimal-hud-lite"]
+    assert ids == ["voice-pack", "hud-overlay"]
     gone = M.remove_block(new, 0)  # the next entry was removed too: the lines around still place it
     back = M.restore_entry(gone, chunk, where)
-    assert back.index("sf-voice") < back.index("4. UI. ORDER-SENSITIVE")
+    assert back.index("voice-pack") < back.index("4. INTERFACE")
     elsewhere = "profileVersion = \"v2\"\n\n[[natives]]\npath = 'natives/x.dll'\n"  # nothing around it is left
     back = M.restore_entry(elsewhere, chunk, where)
-    assert back.index("x.dll") < back.index("sf-voice") and back.endswith("path = 'mod/sf-voice'\n")
+    assert back.index("x.dll") < back.index("voice-pack") and back.endswith("path = 'mod/voice-pack'\n")
 
 
 def test_uninstall_returns_what_restore_needs(tmp_path):
     p = tmp_path / "p.me3"
-    (tmp_path / "mod" / "sf-voice").mkdir(parents=True)
+    (tmp_path / "mod" / "voice-pack").mkdir(parents=True)
     p.write_text(SF_VOICE, encoding="utf-8")
     out = M.uninstall(p, 0, delete_folder=False)
-    assert out["name"] == "sf-voice" and out["entry_text"].startswith("# voice pack")
+    assert out["name"] == "voice-pack" and out["entry_text"].startswith("# voice pack")
     assert M.restore_entry(p.read_text(encoding="utf-8"), out["entry_text"], out["where"]) == SF_VOICE
 
 
 # ----------------------------------------------------------------------------- history
 def test_every_launcher_write_keeps_a_copy_first(tmp_path):
     p = tmp_path / "p.me3"
-    (tmp_path / "mod" / "sf-voice").mkdir(parents=True)
+    (tmp_path / "mod" / "voice-pack").mkdir(parents=True)
     p.write_text(SF_VOICE, encoding="utf-8")
     M.set_options(p, 0, {"enabled": False})
     service.write_profile_setting(p, "mem_patch", True)
     M.uninstall(p, 0, delete_folder=False)
     whys = [v["why"] for v in history.versions(p)]
-    assert whys == ["before removing sf-voice", "before changing mem_patch", "before turning sf-voice off"]
+    assert whys == ["before removing voice-pack", "before changing mem_patch", "before turning voice-pack off"]
     assert history.versions(p)[-1]["path"].read_text(encoding="utf-8") == SF_VOICE
 
 

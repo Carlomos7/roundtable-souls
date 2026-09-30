@@ -169,17 +169,17 @@ def test_filters_and_empty_states(app):
 def test_copy_for_support_masks_the_user(app, monkeypatch):
     from PySide6.QtWidgets import QApplication
 
-    monkeypatch.setenv("USERNAME", "prcsm")
-    make_job("check", [r"profile C:\Users\prcsm\p.me3 for 76561198073162086"])
+    monkeypatch.setenv("USERNAME", "player1")
+    make_job("check", [r"profile C:\Users\player1\p.me3 for 76561190000000001"])
     view = act.ActivityView()
     view.refresh()
     row = view.rows_shown()[0]
     row.flip()
     row.details._copy(True)
     text = QApplication.clipboard().text()
-    assert "prcsm" not in text and "<user>" in text and "<steam id>" in text
+    assert "player1" not in text and "<user>" in text and "<steam id>" in text
     row.details._copy(False)
-    assert "prcsm" in QApplication.clipboard().text()
+    assert "player1" in QApplication.clipboard().text()
 
 
 def test_a_missing_log_file_is_said_not_shown_as_an_error(app):

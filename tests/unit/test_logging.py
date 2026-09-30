@@ -345,24 +345,24 @@ def test_lines_the_window_shows_itself_are_kept_but_not_echoed(logs):
 
 # ----------------------------------------------------------------------------- sharing
 def test_redact_masks_the_user_and_steam_ids(monkeypatch):
-    monkeypatch.setenv("USERNAME", "prcsm")
+    monkeypatch.setenv("USERNAME", "player1")
     text = (
-        r"C:\Users\prcsm\AppData\Local\x.me3 and c:/users/Someone/y and /home/deck/z "
-        "76561198073162086 saved by prcsm, id 1234567890"
+        r"C:\Users\player1\AppData\Local\x.me3 and c:/users/Someone/y and /home/deck/z "
+        "76561190000000001 saved by player1, id 1234567890"
     )
     out = rl.redact(text)
-    assert "prcsm" not in out and "Someone" not in out and "deck" not in out and "76561198073162086" not in out
+    assert "player1" not in out and "Someone" not in out and "deck" not in out and "76561190000000001" not in out
     assert r"C:\Users\<user>\AppData" in out and "<steam id>" in out and "1234567890" in out
 
 
 def test_copy_logs_writes_a_redacted_copy(logs, tmp_path, monkeypatch):
-    monkeypatch.setenv("USERNAME", "prcsm")
+    monkeypatch.setenv("USERNAME", "player1")
     job = rl.begin_job("Play")
-    common.log(r"profile C:\Users\prcsm\p.me3 for 76561198073162086")
+    common.log(r"profile C:\Users\player1\p.me3 for 76561190000000001")
     rl.end_job(job)
     out = rl.copy_logs(tmp_path / "share")
     text = (out / rl.JOBS_DIR / job.path.name).read_text(encoding="utf-8")
-    assert "<user>" in text and "<steam id>" in text and "prcsm" not in text
+    assert "<user>" in text and "<steam id>" in text and "player1" not in text
     assert (out / rl.JOBS_INDEX).is_file()
 
 
