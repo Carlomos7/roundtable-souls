@@ -145,17 +145,59 @@ def _key(profile: Path) -> str:
     return os.path.normcase(str(Path(profile).resolve()))
 
 
-def overlay_mark(profile: Path) -> dict | None:
-    """What Options set for this profile: {package: folder, rebuild: a rebuild.json or None}, or None (the overlay
-    is found from its files)."""
+def _legacy_mark(profile: Path):
+    """What launchers before 3.10 kept in their own settings (per PC), or None."""
     from roundtable_souls.settings import load_settings
 
-    got = (load_settings().get("parameter_overlays") or {}).get(_key(profile))  # read fresh: Options just set it
+    return (load_settings().get("parameter_overlays") or {}).get(_key(profile))  # read fresh: Options just set it
+
+
+def _set_legacy_mark(profile: Path, value) -> None:
+    from roundtable_souls.settings import get_settings, load_settings, save_settings
+
+    marks = dict(load_settings().get("parameter_overlays") or {})
+    if value is None:
+        marks.pop(_key(profile), None)
+    else:
+        marks[_key(profile)] = value
+    save_settings(parameter_overlays=marks)
+    get_settings.cache_clear()
+
+
+def overlay_mark(profile: Path) -> dict | None:
+    """What Options set for this profile: {package: folder, rebuild: a rebuild.json or None}, or None (the overlay
+    is found from its files). Kept in roundtable.json beside the profile (see mods.profile_settings); a mark in the
+    launcher's own settings, where launchers before 3.10 kept it, is moved there the first time it is read."""
+    from roundtable_souls.mods import profile_settings as ps
+
+    profile = Path(profile)
+    mine = ps.load(profile)
+    if "overlay" in mine:
+        got = mine["overlay"]
+        if isinstance(got, dict) and got.get("package"):
+            return {
+                "package": ps.from_stored(profile, got["package"]),
+                "rebuild": ps.from_stored(profile, got.get("rebuild")),
+            }
+        return None  # turned off in roundtable.json: found from its files
+    got = _legacy_mark(profile)
+    mark = None
     if isinstance(got, str) and got:  # before rebuild.json could be picked
-        return {"package": Path(got), "rebuild": None}
-    if isinstance(got, dict) and got.get("package"):
-        return {"package": Path(got["package"]), "rebuild": Path(got["rebuild"]) if got.get("rebuild") else None}
-    return None
+        mark = {"package": Path(got), "rebuild": None}
+    elif isinstance(got, dict) and got.get("package"):
+        mark = {"package": Path(got["package"]), "rebuild": Path(got["rebuild"]) if got.get("rebuild") else None}
+    if mark is not None:
+        try:
+            ps.update(profile, overlay=_stored_mark(profile, mark["package"], mark["rebuild"]))
+        except ps.Unreadable, OSError:
+            pass  # the folder is read-only or its file unreadable: the launcher's own setting still works
+    return mark
+
+
+def _stored_mark(profile: Path, folder: Path, rebuild_file: Path | None) -> dict:
+    from roundtable_souls.mods import profile_settings as ps
+
+    return {"package": ps.to_stored(profile, folder), "rebuild": ps.to_stored(profile, rebuild_file)}
 
 
 def overlay_override(profile: Path) -> Path | None:
@@ -164,16 +206,26 @@ def overlay_override(profile: Path) -> Path | None:
     return mark["package"] if mark else None
 
 
-def set_overlay_override(profile: Path, folder: Path | None, rebuild_file: Path | None = None) -> None:
-    from roundtable_souls.settings import get_settings, load_settings, save_settings
+def set_overlay_override(profile: Path, folder: Path | None, rebuild_file: Path | None = None) -> str | None:
+    """Set (or, with None, clear) the package that must stay last, in roundtable.json beside the profile. When that
+    file cannot be written, it goes into the launcher's own settings instead, and the reason is returned."""
+    from roundtable_souls.mods import profile_settings as ps
 
-    marks = dict(load_settings().get("parameter_overlays") or {})
-    if folder is None:
-        marks.pop(_key(profile), None)
-    else:
-        marks[_key(profile)] = {"package": str(Path(folder)), "rebuild": str(rebuild_file) if rebuild_file else None}
-    save_settings(parameter_overlays=marks)
-    get_settings.cache_clear()
+    profile = Path(profile)
+    value = None if folder is None else _stored_mark(profile, Path(folder), rebuild_file)
+    try:
+        ps.update(profile, overlay=value)
+    except (ps.Unreadable, OSError) as e:
+        legacy = (
+            None
+            if folder is None
+            else {"package": str(Path(folder)), "rebuild": str(rebuild_file) if rebuild_file else None}
+        )
+        _set_legacy_mark(profile, legacy)
+        return f"kept in the launcher's own settings on this PC instead: {e}"
+    if _legacy_mark(profile) is not None:
+        _set_legacy_mark(profile, None)  # roundtable.json has it now; an old copy must not come back
+    return None
 
 
 def approved(tool) -> bool:
