@@ -925,6 +925,33 @@ def _write(profile: Path, new_text: str, why: str = "change") -> Path:
     return bak
 
 
+def _write_ordered(
+    profile: Path, new_text: str, why: str, tgt: dict | None, renamed: dict[str, str] | None = None
+) -> tuple[Path, str | None]:
+    """_write, with the mod that must stay last kept after everything else (see mods.stay_last). tgt is what
+    stay_last.target() said before the change. Returns (backup, why it could not be kept last, or None)."""
+    from roundtable_souls.mods import stay_last
+
+    problem = None
+    if tgt:
+        new_text, problem = stay_last.reconcile(profile, new_text, tgt, renamed)
+    return _write(profile, new_text, why), problem
+
+
+def _last_place(profile: Path, text: str, kind: str, tgt: dict | None) -> int | None:
+    """The block new entries of this kind go above, so the file reads in load order: the package that must stay
+    last, or the first of its DLLs. None without one."""
+    from roundtable_souls.mods import stay_last
+
+    if not tgt:
+        return None
+    items = stay_last._items(profile, text)
+    pkg, _last, mine = stay_last._roles(profile, items, tgt)
+    if kind == "package":
+        return pkg["index"] if pkg else None
+    return mine[0]["index"] if mine else None
+
+
 def plan_install(
     profile: Path, source: Path, name: str | None = None, pkg_id: str | None = None, variant: str | None = None
 ) -> dict:
@@ -1013,6 +1040,12 @@ def _plan(profile: Path, folder: Path, temp: bool, default_name: str, name, pkg_
     ]
     if plan.get("already_listed") and plan.get("id_taken"):
         plan["id_taken"] = False  # reinstalling over itself keeps its own id
+    if d["kind"] in ("package", "native") and not plan.get("already_listed"):
+        from roundtable_souls.mods import stay_last
+
+        tgt = stay_last.target(profile)
+        if tgt is not None and not same_folder(Path(plan["dest"]), tgt["folder"]):
+            plan["stay_last"] = tgt["name"]  # new entries go before it; the dialog offers to keep this one after
     if d["kind"] in ("package", "native"):
         plan["contents"] = contents(d["root"], d["kind"]) + extras(folder, d["root"])
         plan["profiles_inside"] = [str(m.relative_to(folder)) for m in folder.rglob("*.me3")]
@@ -1101,6 +1134,10 @@ def install(profile: Path, plan: dict, overwrite: bool = False) -> dict:
         if e["path"] not in listed
         and not (e["kind"] == "native" and Path(e["path"]).relative_to(rel(profile, dest)).parts[0].lower() in skip)
     ]
+    from roundtable_souls.mods import stay_last
+
+    tgt = stay_last.target(profile)
+    after_it = bool(plan.get("after_overlay")) and tgt is not None
     before = plan.get("insert_before")  # a package's name: where it is now, not where it was when the plan was made
     if isinstance(before, str):
         before = next(
@@ -1108,11 +1145,24 @@ def install(profile: Path, plan: dict, overwrite: bool = False) -> dict:
             None,
         )
     for e in added:
-        text = append_entry(text, e["kind"], e) if before is None else insert_entry(text, e["kind"], e, before)
-    bak = _write(profile, text, f"before installing {plan['name']}") if added or text != read_text(profile) else None
+        where = before
+        if after_it:  # kept after the mod that must stay last on purpose: last, and saying so in its own entry
+            items = stay_last._items(profile, text)
+            pkg, last, _mine = stay_last._roles(profile, items, tgt)
+            owner = pkg if e["kind"] == "package" else (last[0] if last else None)
+            if owner is not None:
+                e = {**e, "load_after": [{"id": entry_ref(owner), "optional": True}]}
+            where = None
+        elif where is None or e["kind"] == "native":
+            where = _last_place(profile, text, e["kind"], tgt)
+        text = append_entry(text, e["kind"], e) if where is None else insert_entry(text, e["kind"], e, where)
+    problem = None
+    bak = None
+    if added or text != read_text(profile):
+        bak, problem = _write_ordered(profile, text, f"before installing {plan['name']}", tgt)
     if plan.get("staging"):
         shutil.rmtree(plan["staging"], ignore_errors=True)
-    return {"dest": dest, "entries": added, "backup": bak, "in_place": in_place}
+    return {"dest": dest, "entries": added, "backup": bak, "in_place": in_place, "order_problem": problem}
 
 
 def uninstall(profile: Path, index: int, delete_folder: bool = True, to_trash: bool = True) -> dict:
@@ -1120,7 +1170,10 @@ def uninstall(profile: Path, index: int, delete_folder: bool = True, to_trash: b
     it lies beside the profile and no other entry still points into it (a natives folder shared by several DLLs is
     kept): to the Recycle Bin (to_trash), so it can come back, else deleted. Returns what was removed and where, so
     it can be put back (see mods.undo)."""
+    from roundtable_souls.mods import stay_last
+
     profile = Path(profile)
+    tgt = stay_last.target(profile)
     text = read_text(profile)
     if is_array_form(text):
         text = to_blocks(text)
@@ -1156,8 +1209,9 @@ def uninstall(profile: Path, index: int, delete_folder: bool = True, to_trash: b
             else:
                 shutil.rmtree(folder)
                 removed_folder = True
-    bak = _write(profile, new_text, f"before removing {name}")
+    bak, problem = _write_ordered(profile, new_text, f"before removing {name}", tgt)
     return {
+        "order_problem": problem,
         "kind": o["kind"],
         "path": o["path"],
         "name": name,
@@ -1176,12 +1230,20 @@ def set_options(profile: Path, index: int, opts: dict) -> Path:
     if is_array_form(text):
         text = to_blocks(text)
     name = block_options(text, index)["id"] or Path(block_options(text, index)["path"]).name
-    what = (
-        f"before turning {name} {'on' if opts['enabled'] else 'off'}"
-        if set(opts) == {"enabled"}
-        else f"before changing {name}'s options"
+    if set(opts) == {"enabled"}:  # switching a mod on or off: the load order lists already name every entry
+        what = f"before turning {name} {'on' if opts['enabled'] else 'off'}"
+        return _write(profile, set_block_options(text, index, opts), what)
+    from roundtable_souls.mods import stay_last
+
+    old = block_options(text, index)
+    renamed = {}
+    if old["kind"] == "package" and opts.get("id") and old["id"] and opts["id"] != old["id"]:
+        renamed = {old["id"].lower(): opts["id"]}
+    new = set_block_options(text, index, opts)
+    bak, _problem = _write_ordered(
+        profile, new, f"before changing {name}'s options", stay_last.target(profile), renamed
     )
-    return _write(profile, set_block_options(text, index, opts), what)
+    return bak  # a loop the change would make shows on the Load order card
 
 
 def entries(profile: Path) -> list[dict]:
@@ -1452,14 +1514,22 @@ def add_existing(profile: Path, folders: list[Path], kind: str = "package") -> d
     text = read_text(profile)
     if is_array_form(text):
         text = to_blocks(text)
+    from roundtable_souls.mods import stay_last
+
+    tgt = stay_last.target(profile)
     pk_root, _nt = roots(profile, text)
     have = {(block_options(text, b["index"]).get("id") or "").lower() for b in blocks(text) if b["kind"] == "package"}
     added = []
+
+    def put(text, row):
+        where = _last_place(profile, text, row["kind"], tgt)
+        return append_entry(text, row["kind"], row) if where is None else insert_entry(text, row["kind"], row, where)
+
     for f in folders:
         f = Path(f)
         if kind == "native":
             row = {"kind": "native", "path": rel(profile, f)}
-            text = append_entry(text, "native", row)
+            text = put(text, row)
             added.append(row)
             continue
         try:
@@ -1472,10 +1542,10 @@ def add_existing(profile: Path, folders: list[Path], kind: str = "package") -> d
             ident, n = f"{base}-{n}", n + 1
         have.add(ident.lower())
         row = {"kind": "package", "id": ident, "path": rel(profile, f)}
-        text = append_entry(text, "package", row)
+        text = put(text, row)
         added.append(row)
-    bak = _write(profile, text) if added else None
-    return {"entries": added, "backup": bak}
+    bak, problem = _write_ordered(profile, text, "before adding existing mods", tgt) if added else (None, None)
+    return {"entries": added, "backup": bak, "order_problem": problem}
 
 
 # ----------------------------------------------------------------------------- profiles

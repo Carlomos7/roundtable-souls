@@ -66,6 +66,7 @@ from roundtable_souls.mods import merge as mod_merge
 from roundtable_souls.mods import overview as mod_overview
 from roundtable_souls.mods import profile as profile_tools
 from roundtable_souls.mods import service as mods_service
+from roundtable_souls.mods import stay_last as mod_stay_last
 from roundtable_souls.mods import undo as mod_undo
 from roundtable_souls.mods.service import (
     create_profile,

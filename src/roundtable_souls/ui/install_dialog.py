@@ -145,6 +145,15 @@ class InstallDialog(Dialog):
         for w in (self.reg_label, self.reg_about, self.reg_place, self.rebuild, self.reg_effect, self.merge_notes):
             self.viewLayout.addWidget(w)
 
+        # the mod that must stay last: new mods go before it, unless kept after it on purpose
+        self.last_note = hint("")
+        self.last_note.setWordWrap(True)
+        self.after_last = CheckBox("")
+        self.after_last.stateChanged.connect(self._after_last_changed)
+        self.viewLayout.addSpacing(6)
+        self.viewLayout.addWidget(self.last_note)
+        self.viewLayout.addWidget(self.after_last)
+
         self.note = hint("")
         self.note.setWordWrap(True)
         self.viewLayout.addSpacing(6)
@@ -216,6 +225,31 @@ class InstallDialog(Dialog):
         self._refresh_reg()
         self.yesButton.setEnabled(self.validate(quiet=True))
 
+    def _after_last_changed(self, *_):
+        if self.reg_place.count() > 1:  # regulation.bin follows: before it, or last (its file replaces the merge)
+            self.reg_place.setCurrentIndex(1 if self.after_last.isChecked() else 0)
+        self._show_last()
+        self._refresh_reg()
+
+    def _show_last(self):
+        last = self.plan.get("stay_last")
+        self.last_note.setVisible(bool(last))
+        self.after_last.setVisible(bool(last))
+        if not last:
+            return
+        self.after_last.setText(f"Advanced: load after {last} instead (replaces its files)")
+        if self.after_last.isChecked():
+            self.last_note.setText(
+                f"Loads after {last}, the mod that must stay last: where both ship a file, this mod's copy is used "
+                f"and {last}'s merged one is not. Only for a mod made to go on top of it."
+            )
+            tone_label(self.last_note, "warning")
+        else:
+            self.last_note.setText(
+                f"Placed before {last}, the mod that must stay last, so {last} includes its changes."
+            )
+            tone_label(self.last_note, "muted")
+
     def left_out(self) -> list[str]:
         return [name for name, cb in self.boxes.items() if not cb.isChecked()]
 
@@ -258,7 +292,7 @@ class InstallDialog(Dialog):
         for w in (self.reg_label, self.reg_about):
             w.setVisible(on)
         placed = not self.plan.get("already_listed")  # a reinstall keeps its entry where it is
-        self.reg_place.setVisible(on and bool(others) and placed)
+        self.reg_place.setVisible(on and bool(others) and placed and not self.plan.get("stay_last"))
         self.rebuild.setText(self._rebuild_text())
         self.rebuild.setVisible(self._rebuild_shown())
         notes = self.plan.get("merge_notes") or []
@@ -353,6 +387,9 @@ class InstallDialog(Dialog):
             p.get("merge_target") or (p.get("regulation_packages") or [{}])[-1].get("name")
         ):
             self._fill_reg_places()
+            if self.after_last.isChecked() and self.reg_place.count() > 1:
+                self.reg_place.setCurrentIndex(1)
+        self._show_last()
         self._refresh_reg()
         self.yesButton.setEnabled(self.validate(quiet=True))
 
@@ -375,4 +412,5 @@ class InstallDialog(Dialog):
             self.plan["merge"] = self._rebuild_shown() and self.rebuild.isChecked()
             placed = self._regulation_on() and not self.plan.get("already_listed")
             self.plan["insert_before"] = self.reg_place.currentData() if placed else None  # a package name
+            self.plan["after_overlay"] = bool(self.plan.get("stay_last")) and self.after_last.isChecked()
         return ok

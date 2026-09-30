@@ -163,6 +163,12 @@ def overview(profile: Path) -> dict:
     except Exception:
         out["problems"] = []
     try:
+        from roundtable_souls.mods import stay_last
+
+        out["stay_last"] = stay_last.status(profile)
+    except Exception:
+        out["stay_last"] = None
+    try:
         out["tool_backups"] = merge.tool_backups(profile) if merge.is_elden_ring(profile) else []
     except Exception:
         out["tool_backups"] = []

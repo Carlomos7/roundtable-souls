@@ -937,3 +937,53 @@ def test_undo_rebuild_and_redo_from_activity(sandbox, monkeypatch):
     QTest.mouseClick(rows[0].undo_btn, Qt.LeftButton)
     _wait_idle(w)
     assert ran == [False, True] and w.activity.rows_shown()[0].title.full_text() == "Redo the rebuild"
+
+
+def test_install_dialog_places_a_mod_before_the_one_that_must_stay_last(app, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QWidget
+    from test_mod_merge import World, _pack_source
+
+    from roundtable_souls.mods import manage
+
+    world = World(tmp_path, monkeypatch)
+    plan = manage.plan_install(world.profile, _pack_source(tmp_path / "dl"))
+    parent = QWidget()
+    parent.resize(1000, 800)
+    dlg = window.InstallDialog(parent, plan, lambda *a: plan, world.profile)
+    assert "Placed before last" in dlg.last_note.text() and not dlg.after_last.isHidden()
+    assert dlg.reg_place.isHidden()  # no load order choice to make
+    dlg.validate()
+    assert plan["insert_before"] == "last" and plan["after_overlay"] is False
+    dlg.after_last.setChecked(True)  # the advanced exception
+    assert "Loads after last" in dlg.last_note.text() and "last's parameters will not apply" in dlg.reg_effect.text()
+    dlg.validate()
+    assert plan["after_overlay"] is True and plan["insert_before"] is None
+    parent.deleteLater()
+
+
+def test_the_load_order_card_says_what_loads_after_the_mod_that_must_stay_last(sandbox, monkeypatch):
+    w = sandbox
+    w.switchTo(w.mods_page)
+    w.load_exp.setExpand(False)
+    fixed, kept = [], []
+    monkeypatch.setattr(window.core.mod_stay_last, "fix", lambda p: fixed.append(p))
+    monkeypatch.setattr(window.core.mod_stay_last, "keep_after", lambda p, names, keep=True: kept.append((names, keep)))
+    st = {"name": "revive", "late": ["hand"], "kept": [], "kept_setting": [], "can_fix": True, "problem": None}
+    assert w._fill_stay_last(st) == ["hand"]
+    assert "hand loads after revive and replaces its files" in w.last_text.text()
+    assert not w.fix_order_btn.isHidden() and not w.keep_after_btn.isHidden() and w.put_before_btn.isHidden()
+    assert w.load_exp.isExpand  # opened once for it
+    w.fix_order_btn.click()
+    assert len(fixed) == 1
+    w._fill_stay_last(st)
+    w.keep_after_btn.click()
+    assert kept[-1] == (["hand"], True)
+    w._fill_stay_last({**st, "late": [], "kept": ["hand"], "kept_setting": ["hand"]})
+    assert (
+        "loads after every other mod" in w.last_text.text() and "Kept after it on purpose: hand" in w.last_text.text()
+    )
+    assert w.fix_order_btn.isHidden() and not w.put_before_btn.isHidden()
+    w.put_before_btn.click()
+    assert kept[-1] == (["hand"], False)
+    w._fill_stay_last(None)
+    assert w.last_row.isHidden()

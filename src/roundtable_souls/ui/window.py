@@ -842,6 +842,33 @@ class Launcher(FluentWindow):
         bl = QVBoxLayout(body)
         bl.setContentsMargins(16, 12, 16, 16)
         bl.setSpacing(8)
+        # the mod that must stay last
+        self.last_row = QWidget()
+        ll = QVBoxLayout(self.last_row)
+        ll.setContentsMargins(0, 0, 0, 0)
+        ll.setSpacing(6)
+        self.last_head = StrongBodyLabel("Stays last")
+        ll.addWidget(self.last_head)
+        self.last_text = hint("")
+        self.last_text.setWordWrap(True)
+        ll.addWidget(self.last_text)
+        lrow, lbar = action_row()
+        self.fix_order_btn = ghost_btn("Fix order", FI.SYNC)
+        self.fix_order_btn.setToolTip(
+            "Put the mod that must stay last after these again (only its own entries change)."
+        )
+        self.fix_order_btn.clicked.connect(self._fix_order)
+        self.keep_after_btn = ghost_btn("Keep it after", FI.ACCEPT)
+        self.keep_after_btn.setToolTip("They load after it on purpose: stop warning (kept in roundtable.json).")
+        self.keep_after_btn.clicked.connect(lambda: self._keep_after(True))
+        self.put_before_btn = ghost_btn("Put them before", FI.RETURN)
+        self.put_before_btn.setToolTip("Stop keeping these after it, and put it after them again.")
+        self.put_before_btn.clicked.connect(lambda: self._keep_after(False))
+        for b in (self.fix_order_btn, self.keep_after_btn, self.put_before_btn):
+            lbar.addWidget(b)
+        ll.addWidget(lrow)
+        self.last_row.hide()
+        bl.addWidget(self.last_row)
         # parameters
         self.merge_row = QWidget()
         pl = QVBoxLayout(self.merge_row)
@@ -1127,6 +1154,7 @@ class Launcher(FluentWindow):
             "\n".join(rows[:13]) + (f"\n  and {len(rows) - 13} more in the rebuild's log" if len(rows) > 13 else "")
         )
         self.merge_rows_note.setVisible(bool(rows))
+        late = self._fill_stay_last(r.get("stay_last"))
         probs = r.get("problems") or []
         self.problems_head.setVisible(bool(probs))
         self.problems_note.setVisible(bool(probs))
@@ -1136,9 +1164,78 @@ class Launcher(FluentWindow):
         summary += [
             f"{counts[k]} {core.mod_overview.OUTCOME_TEXT[k]}" for k in core.mod_overview.OUTCOMES if counts.get(k)
         ]
+        if late:
+            summary.insert(0, f"{len(late)} load{'s' if len(late) == 1 else ''} after {r['stay_last']['name']}")
         if probs:
             summary.append(f"{len(probs)} entr{'y' if len(probs) == 1 else 'ies'} me3 would refuse")
         self.load_exp.card.setContent("  \u00b7  ".join(summary) or "No file is shipped twice")
+
+    def _fill_stay_last(self, st) -> list[str]:
+        """The Stays last section: what loads after the mod that must stay last, and the buttons to fix or keep it.
+        Returns the names loading after it without being kept there on purpose."""
+        self._stay_last = st
+        if not st:
+            self.last_row.hide()
+            return []
+        late, kept, name = st.get("late") or [], st.get("kept") or [], st["name"]
+        lines = []
+        if late:
+            who = ", ".join(late[:4]) + (f" and {len(late) - 4} more" if len(late) > 4 else "")
+            verb = "loads" if len(late) == 1 else "load"
+            lines.append(f"{who} {verb} after {name} and replace{'s' if len(late) == 1 else ''} its files.")
+        else:
+            lines.append(f"{name} loads after every other mod, so it includes their changes.")
+        if kept:
+            lines.append(f"Kept after it on purpose: {', '.join(kept)}.")
+        if st.get("problem"):
+            lines.append(st["problem"])
+        self.last_text.setText(" ".join(lines))
+        tone_label(self.last_text, "error" if st.get("problem") else "warning" if late else "muted")
+        self.fix_order_btn.setVisible(bool(late) and bool(st.get("can_fix")) and not st.get("problem"))
+        self.keep_after_btn.setVisible(bool(late))
+        self.put_before_btn.setVisible(bool(st.get("kept_setting")))
+        self.last_row.show()
+        was = getattr(self, "_late_before", None)
+        self._late_before = late
+        if late and late != was:
+            self.load_exp.setExpand(True)  # something replaces its files: show it once
+        return late
+
+    def _fix_order(self):
+        if self._mods_locked():
+            return
+        prof = Path(self.setup.profile)
+        try:
+            problem = core.mod_stay_last.fix(prof)
+        except OSError as e:
+            problem = str(e)
+        if problem:
+            self._toast("Could not fix the load order", problem, error=True)
+            return
+        name = (getattr(self, "_stay_last", None) or {}).get("name", "It")
+        self._after_profile_change(f"profile: {name} put after every other mod again")
+        self._undo_notice("Load order fixed", f"{name} loads after every other mod again.")
+
+    def _keep_after(self, keep: bool):
+        if self._mods_locked():
+            return
+        st = getattr(self, "_stay_last", None) or {}
+        prof = Path(self.setup.profile)
+        names = st.get("late") if keep else st.get("kept_setting")
+        if not names:
+            return
+        try:
+            core.mod_stay_last.keep_after(prof, list(names), keep)
+            if not keep:
+                problem = core.mod_stay_last.fix(prof)
+                if problem:
+                    self._toast("Could not fix the load order", problem, error=True)
+        except (OSError, core.mod_stay_last.Unreadable) as e:
+            self._toast("Could not save that", str(e), error=True)
+            return
+        self._after_profile_change(
+            f"profile: {', '.join(names)} {'kept after' if keep else 'no longer kept after'} {st.get('name')}"
+        )
 
     def _fill_mods(self):
         keep_p, keep_n = self.pack_exp.isExpand, self.nat_exp.isExpand
@@ -1657,6 +1754,10 @@ class Launcher(FluentWindow):
             return
         if self.game_running:
             self._toast("Close the game first", "The rebuild rewrites files the game has open.", error=True)
+            return
+        blocked = core.mod_merge.setup_problem(prof)
+        if blocked:
+            self._toast("It cannot be rebuilt now", blocked, error=True)
             return
         tool = core.mod_merge.find_backend(prof)
         h = core.mod_merge.health(prof)
