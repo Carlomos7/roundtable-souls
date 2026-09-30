@@ -126,6 +126,9 @@ def set_profile_mod_enabled(profile, index: int, enabled: bool) -> bool:
     if new_block == lines[i:j]:
         return False
     lines[i:j] = new_block
+    from roundtable_souls.mods import history
+
+    history.snapshot(path, f"before turning a mod {'on' if enabled else 'off'}")
     atomic_write(path, "".join(lines), backup=True)
     return True
 
@@ -175,6 +178,9 @@ def write_profile_setting(profile, key: str, value) -> bool:
     new = profile_tools.set_setting(text, key, value)
     if new == text:
         return False
+    from roundtable_souls.mods import history
+
+    history.snapshot(path, f"before changing {key}")
     atomic_write(path, new, backup=True)
     return True
 

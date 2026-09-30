@@ -683,11 +683,152 @@ def set_block_options(text: str, index: int, opts: dict) -> str:
     return "".join(all_lines)
 
 
-def remove_block(text: str, index: int) -> str:
+_COMMENTED_TOML = re.compile(r"^\s*#+\s*(?:\[|\]|\{|[A-Za-z_][\w.-]*\s*=)")
+
+
+def _commented_entry(line: str) -> bool:
+    """A comment line that is a commented-out entry or key (# [[packages]], # id = "x", # ]), not a note: a note may
+    mention a setting (full_search = 0) but does not start with one."""
+    return bool(_COMMENTED_TOML.match(line))
+
+
+def entry_span(text: str, index: int) -> tuple[int, int]:
+    """The lines [start, end) block `index` owns: the comment lines directly above its header (up to a blank line or
+    a commented-out entry) and its body up to its last key line, comments inside it included. The blank lines after
+    it, and comments that describe the next entry, belong to what follows."""
     b = blocks(text)[index]
-    all_lines = text.splitlines(keepends=True)
-    del all_lines[b["start"] : b["end"]]
-    return "".join(all_lines)
+    lines = text.splitlines(keepends=True)
+    start = b["start"]
+    while start > 0:
+        prev = lines[start - 1]
+        if not prev.strip().startswith("#") or _commented_entry(prev):
+            break
+        start -= 1
+    end = b["start"] + 1
+    for k in range(b["start"] + 1, b["end"]):
+        body = lines[k].strip()
+        if body and not body.startswith("#"):
+            end = k + 1
+    return start, end
+
+
+CONTEXT = 3  # lines of context remembered on each side of a removed entry
+
+
+def remove_entry(text: str, index: int) -> tuple[str, str, dict]:
+    """Take block `index` out with its own comments (entry_span), leaving the entries around it and their comments
+    as they were. Returns (new text, the text taken out, where it was: {prev, next, next_ref})."""
+    nl = "\r\n" if "\r\n" in text else "\n"
+    lines = text.splitlines(keepends=True)
+    start, end = entry_span(text, index)
+    chunk = "".join(lines[start:end])
+    if not chunk.endswith(("\n", "\r\n")):
+        chunk += nl
+    after = end
+    while after < len(lines) and not lines[after].strip():
+        after += 1
+    blank_above = start == 0 or not lines[start - 1].strip()
+    joiner = [] if blank_above or after >= len(lines) else [nl]
+    new_lines = lines[:start] + joiner + lines[after:]
+    if after >= len(lines):  # it was the last thing in the file: no trailing blank lines left behind
+        while new_lines and not new_lines[-1].strip():
+            new_lines.pop()
+    prev = next((lines[k].strip() for k in range(start - 1, -1, -1) if lines[k].strip()), "")
+    nxt = lines[after].strip() if after < len(lines) else ""
+    following = [x for x in blocks(text) if x["index"] > index]
+    next_ref = None
+    if following:
+        o = block_options(text, following[0]["index"])
+        next_ref = {"kind": o["kind"], "ref": entry_ref({**o, "kind": o["kind"]}), "path": o["path"]}
+    new_text = "".join(new_lines)
+    if new_text and not new_text.endswith(("\n", "\r\n")) and text.endswith(("\n", "\r\n")):
+        new_text += nl
+    gap_above = 0
+    k = start - 1
+    while k >= 0 and not lines[k].strip():
+        gap_above, k = gap_above + 1, k - 1
+    above = [lines[k].strip() for k in range(start - 1, -1, -1) if lines[k].strip()][:CONTEXT]
+    below = [lines[k].strip() for k in range(after, len(lines)) if lines[k].strip()][:CONTEXT]
+    where = {
+        "prev": prev,
+        "next": nxt,
+        "above": above,  # nearest first
+        "below": below,
+        "next_ref": next_ref,
+        "gap_above": gap_above,
+        "gap_below": after - end,
+    }
+    return new_text, chunk, where
+
+
+def remove_block(text: str, index: int) -> str:
+    """The text without block `index` and its own comments (see remove_entry)."""
+    return remove_entry(text, index)[0]
+
+
+def restore_entry(text: str, chunk: str, where: dict) -> str:
+    """Put an entry taken out by remove_entry back: between the same two lines when they still sit together, else
+    just above the entry that followed it (and that entry's comments), else after the line that preceded it, else at
+    the end."""
+    nl = "\r\n" if "\r\n" in text else "\n"
+    chunk = chunk.replace("\r\n", "\n").replace("\n", nl)
+    lines = text.splitlines(keepends=True)
+    prev, nxt = where.get("prev") or "", where.get("next") or ""
+
+    gap_above = int(where.get("gap_above", 1))
+    gap_below = int(where.get("gap_below", 1))
+
+    def put(at: int) -> str:
+        """Insert at line `at`, with the blank lines the entry had above and below it (as far as they are not
+        already there)."""
+        before = list(lines[:at])
+        after = list(lines[at:])
+        if before and not before[-1].endswith(("\n", "\r\n")):
+            before[-1] += nl
+        have_above = 0
+        while have_above < len(before) and not before[len(before) - 1 - have_above].strip():
+            have_above += 1
+        lead = [nl] * max(0, gap_above - have_above) if before else []
+        tail = [nl] * gap_below if after else []
+        return "".join(before + lead + [chunk] + tail + after)
+
+    above, below = where.get("above") or ([prev] if prev else []), where.get("below") or ([nxt] if nxt else [])
+    if above or below:
+        # The best place is where the lines around it are the ones it had: every nearby line that matches scores,
+        # the nearest ones most, so a line repeated all over the file (enabled = false) cannot win on its own.
+        nonblank = [i for i, line in enumerate(lines) if line.strip()]
+        best, best_score = None, 0.0
+        for pos in range(len(nonblank) + 1):
+            at = nonblank[pos] if pos < len(nonblank) else len(lines)
+            score = 0.0
+            for n, want in enumerate(above):
+                k = pos - 1 - n
+                if k < 0 or lines[nonblank[k]].strip() != want:
+                    break
+                score += 1.0 / (n + 1)
+            for n, want in enumerate(below):
+                k = pos + n
+                if k >= len(nonblank) or lines[nonblank[k]].strip() != want:
+                    break
+                score += 1.0 / (n + 1)
+            if score > best_score:
+                best, best_score = at, score
+        full = sum(1.0 / (n + 1) for n in range(len(above))) + sum(1.0 / (n + 1) for n in range(len(below)))
+        if best is not None and best_score >= 0.6 * full:
+            return put(best)
+    ref = where.get("next_ref") or {}
+    if ref:
+        for b in blocks(text):
+            o = block_options(text, b["index"])
+            if o["kind"] == ref.get("kind") and (
+                entry_ref({**o, "kind": o["kind"]}) == ref.get("ref") or (o["path"] and o["path"] == ref.get("path"))
+            ):
+                return put(entry_span(text, b["index"])[0])
+    if prev:
+        for i in range(len(lines) - 1, -1, -1):
+            if lines[i].strip() == prev:
+                return put(i + 1)
+    return put(len(lines))
 
 
 def insert_entry(text: str, kind: str, row: dict, before: int) -> str:
@@ -700,8 +841,7 @@ def insert_entry(text: str, kind: str, row: dict, before: int) -> str:
     at = b["start"]
     while at > 0:
         prev = lines[at - 1].strip()
-        body = prev.lstrip("#").strip()
-        if not prev.startswith("#") or "=" in body or body.startswith(("[", "{", "]")):
+        if not prev.startswith("#") or _commented_entry(prev):
             break  # a blank line, a real line, or a commented-out entry: the note above ends here
         at -= 1
     new = "".join(_entry_lines(kind, row, nl)) + nl
@@ -771,8 +911,12 @@ def rel(profile: Path, target: Path) -> str:
 
 
 # ----------------------------------------------------------------------------- operations
-def _write(profile: Path, new_text: str) -> Path:
+def _write(profile: Path, new_text: str, why: str = "change") -> Path:
+    """Write the profile atomically: a copy in its history first (see mods.history), and one .bak beside it."""
+    from roundtable_souls.mods import history
+
     profile = Path(profile)
+    history.snapshot(profile, why)
     bak = profile.with_name(profile.name + ".bak")
     shutil.copy2(profile, bak)
     tmp = profile.with_name(profile.name + ".tmp")
@@ -965,15 +1109,16 @@ def install(profile: Path, plan: dict, overwrite: bool = False) -> dict:
         )
     for e in added:
         text = append_entry(text, e["kind"], e) if before is None else insert_entry(text, e["kind"], e, before)
-    bak = _write(profile, text) if added or text != read_text(profile) else None
+    bak = _write(profile, text, f"before installing {plan['name']}") if added or text != read_text(profile) else None
     if plan.get("staging"):
         shutil.rmtree(plan["staging"], ignore_errors=True)
     return {"dest": dest, "entries": added, "backup": bak, "in_place": in_place}
 
 
 def uninstall(profile: Path, index: int, delete_folder: bool = True) -> dict:
-    """Remove one block. With delete_folder, the mod's folder goes too when it lies beside the profile and no other
-    entry still points into it (a natives folder shared by several DLLs is kept)."""
+    """Remove one block, with its own comments (see remove_entry). With delete_folder, the mod's folder goes too when
+    it lies beside the profile and no other entry still points into it (a natives folder shared by several DLLs is
+    kept). Returns what was removed, and where, so restore_entry can put it back."""
     profile = Path(profile)
     text = read_text(profile)
     if is_array_form(text):
@@ -983,7 +1128,8 @@ def uninstall(profile: Path, index: int, delete_folder: bool = True) -> dict:
     folder = None
     if target is not None:
         folder = target if o["kind"] == "package" else target.parent
-    new_text = remove_block(text, index)
+    name = o["id"] or Path(o["path"]).name or f"entry {index + 1}"
+    new_text, chunk, where = remove_entry(text, index)
     removed_folder = False
     if delete_folder and folder is not None and folder.is_dir():
         inside = profile.parent.resolve() in folder.resolve().parents
@@ -999,8 +1145,17 @@ def uninstall(profile: Path, index: int, delete_folder: bool = True) -> dict:
         if inside and not shared and folder.resolve() != profile.parent.resolve():
             shutil.rmtree(folder)
             removed_folder = True
-    bak = _write(profile, new_text)
-    return {"kind": o["kind"], "path": o["path"], "folder": folder, "removed_folder": removed_folder, "backup": bak}
+    bak = _write(profile, new_text, f"before removing {name}")
+    return {
+        "kind": o["kind"],
+        "path": o["path"],
+        "name": name,
+        "folder": folder,
+        "removed_folder": removed_folder,
+        "backup": bak,
+        "entry_text": chunk,
+        "where": where,
+    }
 
 
 def set_options(profile: Path, index: int, opts: dict) -> Path:
@@ -1008,7 +1163,13 @@ def set_options(profile: Path, index: int, opts: dict) -> Path:
     text = read_text(profile)
     if is_array_form(text):
         text = to_blocks(text)
-    return _write(profile, set_block_options(text, index, opts))
+    name = block_options(text, index)["id"] or Path(block_options(text, index)["path"]).name
+    what = (
+        f"before turning {name} {'on' if opts['enabled'] else 'off'}"
+        if set(opts) == {"enabled"}
+        else f"before changing {name}'s options"
+    )
+    return _write(profile, set_block_options(text, index, opts), what)
 
 
 def entries(profile: Path) -> list[dict]:

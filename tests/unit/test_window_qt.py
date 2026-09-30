@@ -791,3 +791,52 @@ def test_clicking_the_pill_opens_the_load_order(sandbox):
     w.merge_pill.setFocus()
     QTest.keyClick(w.merge_pill, Qt.Key_Space)  # reachable without a mouse
     assert w.load_exp.isExpand
+
+
+def _notices(monkeypatch):
+    """Capture window notices: [(title, [(button text, button)])]."""
+    got = []
+    real = window.notice
+
+    def spy(parent, kind, title, content="", actions=(), **k):
+        got.append((title, [(b.text(), b) for b in actions]))
+        return real(parent, kind, title, content, actions=actions, **k)
+
+    monkeypatch.setattr(window, "notice", spy)
+    return got
+
+
+def test_turning_a_mod_off_offers_undo_and_undo_restores_the_file(sandbox, monkeypatch):
+    w = sandbox
+    got = _notices(monkeypatch)
+    prof = w.profiles / "sandbox.me3"
+    before = prof.read_text(encoding="utf-8")
+    entry = next(e for e in window.profile_entries(prof) if e["kind"] == "native")
+    w._toggle_mod(entry, False)
+    assert "enabled = false" in prof.read_text(encoding="utf-8")
+    title, buttons = next(n for n in got if "turned off" in n[0])
+    undo = dict(buttons)["Undo"]
+    QTest.mouseClick(undo, Qt.LeftButton)
+    assert prof.read_text(encoding="utf-8") == before
+    assert any(t == "Earlier version restored" for t, _ in got)
+
+
+def test_versions_lists_earlier_copies_and_restores_one(sandbox, monkeypatch):
+    w = sandbox
+    prof = w.profiles / "sandbox.me3"
+    original = prof.read_text(encoding="utf-8")
+    entry = next(e for e in window.profile_entries(prof) if e["kind"] == "native")
+    monkeypatch.setattr(window, "notice", lambda *a, **k: type("B", (), {"close": lambda s: None})())
+    w._toggle_mod(entry, False)
+    chosen = []
+
+    def pick(dlg):
+        labels = [dlg.list.item(i).text() for i in range(dlg.list.count())]
+        chosen.append(labels)
+        dlg.list.setCurrentRow(0)
+        return True
+
+    monkeypatch.setattr(window.VersionsDialog, "exec", pick)
+    w._show_versions()
+    assert chosen and "before turning ersc.dll off" in chosen[0][0] and "1 line differs from now" in chosen[0][0]
+    assert prof.read_text(encoding="utf-8") == original

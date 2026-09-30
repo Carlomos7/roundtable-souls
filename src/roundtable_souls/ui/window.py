@@ -159,6 +159,7 @@ from roundtable_souls.ui.dialogs import (
     ConfirmDialog,
     ModOptionsDialog,
     TextDialog,
+    VersionsDialog,
     ask_unsaved,
     confirm,
 )
@@ -913,6 +914,12 @@ class Launcher(FluentWindow):
         body = QWidget()
         bl = QVBoxLayout(body)
         bl.setContentsMargins(16, 12, 16, 14)
+        vrow, vbar = action_row()
+        self.versions_btn = ghost_btn("Versions...", FI.HISTORY)
+        self.versions_btn.setToolTip("Earlier versions of this profile, kept before every change; restore any of them.")
+        self.versions_btn.clicked.connect(self._show_versions)
+        vbar.addWidget(self.versions_btn)
+        bl.addWidget(vrow)
         self.profile_panel = EditorPanel(
             "The me3 file for the setup on Play.",
             "Save",
@@ -992,7 +999,7 @@ class Launcher(FluentWindow):
             return
         if changed:
             self._log(f"profile: {key} = {value if value not in (None, '') else 'me3 default'}")
-            self._toast("Profile updated", f"{core.profile_tools.SETTING_TEXT[key][0]} applies at the next launch.")
+            self._undo_notice(f"{core.profile_tools.SETTING_TEXT[key][0]} changed", "It applies at the next launch.")
             self._load_profile_editor(force=True)
         self._load_profile_settings()
 
@@ -1672,6 +1679,50 @@ class Launcher(FluentWindow):
             need_setup=False,
         )
 
+    # -------------------------------------------------------------- profile history
+    def _undo_notice(self, title, content):
+        """A change to the profile just happened: say so, with Undo back to the copy kept just before it."""
+        if not self.setup:
+            return
+        prof = Path(self.setup.profile)
+        copy = core.mod_history.latest(prof)
+        if copy is None:
+            self._toast(title, content)
+            return
+        btn = ghost_btn("Undo", FI.RETURN)
+        bar = notice(self, "success", title, content, actions=(btn,), duration=6000)
+        btn.clicked.connect(lambda _=False, b=bar, c=copy: (b.close(), self._restore_version(c)))
+
+    def _show_versions(self):
+        if not self.setup or not Path(self.setup.profile).is_file():
+            return
+        prof = Path(self.setup.profile)
+        dlg = VersionsDialog(prof, core.mod_history.versions(prof), core.mod_manage.read_text(prof), self)
+        if dlg.exec() and dlg.chosen() is not None:
+            self._restore_version(dlg.chosen())
+
+    def _restore_version(self, copy):
+        if self._mods_locked() or copy is None:
+            return
+        prof = Path(self.setup.profile)
+        try:
+            before = core.mod_history.restore(prof, copy)
+        except OSError as e:
+            self._toast("Could not restore that version", str(e), error=True)
+            return
+        self._after_profile_change(f"profile: restored the version kept {Path(copy).name[:15]}")
+        btn = ghost_btn("Undo", FI.RETURN)
+        bar = notice(
+            self,
+            "success",
+            "Earlier version restored",
+            "The one it replaced is kept too.",
+            actions=(btn,),
+            duration=6000,
+        )
+        if before is not None:
+            btn.clicked.connect(lambda _=False, b=bar, c=before: (b.close(), self._restore_version(c)))
+
     def _after_profile_change(self, msg):
         self._log(msg)
         self._load_profile_editor(force=True)
@@ -1708,6 +1759,7 @@ class Launcher(FluentWindow):
         try:
             set_mod_options(self.setup.profile, entry["index"], {"enabled": bool(checked)})
             self._after_profile_change(f"profile: {entry['name']} {'on' if checked else 'off'}")
+            self._undo_notice(f"{entry['name']} turned {'on' if checked else 'off'}", "It applies at the next launch.")
         except Exception as e:
             self._toast("Could not change the profile", str(e), error=True)
             self._fill_mods()
@@ -1746,7 +1798,7 @@ class Launcher(FluentWindow):
                     )
             set_mod_options(self.setup.profile, fresh["index"], dlg.options())
             self._after_profile_change(f"profile: options saved for {entry['name']}")
-            self._toast("Options saved", f"{entry['name']} applies at the next launch.")
+            self._undo_notice(f"{entry['name']}: options saved", "They apply at the next launch.")
         except Exception as e:
             self._toast("Could not save options", str(e), error=True)
 
@@ -2051,6 +2103,7 @@ class Launcher(FluentWindow):
             return False
         text = self.profile_edit.toPlainText()
         try:
+            core.mod_history.snapshot(self._profile_file, "before saving the editor")
             core.atomic_write(
                 self._profile_file, text.replace("\n", "\r\n") if self._profile_crlf else text, backup=True
             )

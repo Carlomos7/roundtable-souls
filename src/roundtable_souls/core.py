@@ -60,6 +60,7 @@ from roundtable_souls.coop import (
 from roundtable_souls.files import (
     atomic_write,
 )
+from roundtable_souls.mods import history as mod_history
 from roundtable_souls.mods import manage as mod_manage
 from roundtable_souls.mods import merge as mod_merge
 from roundtable_souls.mods import overview as mod_overview

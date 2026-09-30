@@ -502,10 +502,13 @@ def rebuild(profile: Path, log, combine: bool | None = None) -> dict:
         raise MergeError(
             "There is nothing to combine: fewer than two packs ship parameters and there is no rebuild tool."
         )
+    from roundtable_souls.mods import history
+
     original = mod_manage.read_text(profile)
     bak = profile.with_name(profile.name + ".bak")
     bak.write_text(original, encoding="utf-8", newline="")
-    log(f"merge: profile saved to {bak.name}")
+    before = history.snapshot(profile, "before rebuilding")
+    log(f"merge: profile saved to {bak.name} and the profile history")
     labels = []
     try:
         if wants and combine is not False:
@@ -534,7 +537,7 @@ def rebuild(profile: Path, log, combine: bool | None = None) -> dict:
         why = "; ".join(h["reasons"][:3]) or h["text"]
         note_run(profile, False, f"The rebuild finished but does not match the packages: {why}")
         raise MergeError(f"The rebuild finished but does not match the packages: {why}")
-    return {"backend": " then ".join(labels), "profile_note": note}
+    return {"backend": " then ".join(labels), "profile_note": note, "profile_before": before}
 
 
 def _put(profile: Path, text: str) -> None:

@@ -422,3 +422,61 @@ class ChoiceListDialog(Dialog):
 
     def selected(self) -> list[int]:
         return [i for i, cb in enumerate(self.boxes) if cb.isChecked()]
+
+
+class VersionsDialog(Dialog):
+    """Earlier versions of a profile (its history), newest first, with how much each differs from the file now.
+    After exec(), chosen() is the copy to restore, or None."""
+
+    def __init__(self, profile, versions: list[dict], current_text: str, parent, now=None):
+        import datetime
+        import difflib
+
+        from qfluentwidgets import ListWidget
+
+        super().__init__(parent)
+        self.widget.setMinimumWidth(min(680, max(460, (parent.width() - 200) if parent else 560)))
+        self.viewLayout.setSpacing(8)
+        self.viewLayout.addWidget(SubtitleLabel(f"Earlier versions of {profile.name}"))
+        self.viewLayout.addWidget(
+            hint(
+                "A copy is kept before every change the launcher makes (the newest 30). Restoring one keeps the "
+                "current file as a version too, so it can be undone."
+            )
+        )
+        self.list = ListWidget()
+        self.list.setMinimumHeight(220)
+        self._paths = []
+        today = (now or datetime.datetime.now()).date()
+        now_lines = current_text.splitlines()
+        for v in versions:
+            try:
+                old = v["path"].read_text(encoding="utf-8", errors="replace").splitlines()
+            except OSError:
+                continue
+            changed = sum(1 for op in difflib.ndiff(old, now_lines) if op[:1] in "+-")
+            when = v["when"]
+            day = (
+                "Today"
+                if when.date() == today
+                else "Yesterday"
+                if when.date() == today - datetime.timedelta(days=1)
+                else when.strftime("%d %b")
+            )
+            differs = (
+                "same as now" if not changed else f"{changed} line{' differs' if changed == 1 else 's differ'} from now"
+            )
+            self.list.addItem(f"{day} {when:%H:%M}  ·  {v['why']}  ·  {differs}")
+            self._paths.append(v["path"])
+        if not self._paths:
+            self.viewLayout.addWidget(hint("No earlier versions yet: they are kept from the next change on."))
+        self.list.setVisible(bool(self._paths))
+        self.viewLayout.addWidget(self.list)
+        self.yesButton.setText("Restore")
+        self.yesButton.setEnabled(False)
+        self.list.currentRowChanged.connect(lambda row: self.yesButton.setEnabled(row >= 0))
+        self.cancelButton.setText("Close")
+
+    def chosen(self):
+        row = self.list.currentRow()
+        return self._paths[row] if 0 <= row < len(self._paths) else None
