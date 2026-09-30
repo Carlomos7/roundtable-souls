@@ -78,7 +78,9 @@ class _Options(ctypes.Structure):
 
 
 KRAKEN = 8
-BIG = 16 << 20  # above this, a faster compression level
+# Kraken files are written with the layout of the tested Elden Ring files: compression level 6 in the payload and the
+# same 6 in the header (the "6/6" layout). Other levels and header values are not written until tested in game.
+KRAKEN_LEVEL = 6
 
 
 def _kraken(body: bytes, level: int, lib) -> bytes:
@@ -103,11 +105,8 @@ def pack(body: bytes, how: Dcx | None, compressor=None) -> bytes:
     if how.kind == b"KRAK":
         if compressor is None:
             raise FormatError("writing Oodle-compressed files needs the game's oo2core DLL (Windows only)")
-        level = header[0x30] or 6
-        if len(body) > BIG:
-            level = min(level, 4)  # about 40 times faster on the largest archives, a fifth bigger; read the same
-        header[0x30] = level
-        payload = _kraken(body, level, compressor)
+        header[0x30] = KRAKEN_LEVEL
+        payload = _kraken(body, KRAKEN_LEVEL, compressor)
     elif how.kind == b"DFLT":
         payload = zlib.compress(body, header[0x30] or 9)
     elif how.kind == b"ZSTD":
