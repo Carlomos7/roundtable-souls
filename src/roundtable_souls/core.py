@@ -66,6 +66,7 @@ from roundtable_souls.mods import merge as mod_merge
 from roundtable_souls.mods import overview as mod_overview
 from roundtable_souls.mods import profile as profile_tools
 from roundtable_souls.mods import service as mods_service
+from roundtable_souls.mods import undo as mod_undo
 from roundtable_souls.mods.service import (
     create_profile,
     delete_profile,
@@ -130,7 +131,7 @@ from roundtable_souls.settings import (
     save_game_settings,
     save_settings,
 )
-from roundtable_souls.system import common, me3_info
+from roundtable_souls.system import common, me3_info, trash
 from roundtable_souls.system import logging as run_logging
 from roundtable_souls.system import processes as clear_dead_game_shells
 from roundtable_souls.system import session as me3_session

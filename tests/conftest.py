@@ -34,6 +34,33 @@ def isolated_settings(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def run_in_a_temporary_folder(tmp_path, monkeypatch):
+    """Every test runs from its own temporary folder, never the repository: a relative path gone wrong (an empty path
+    is the current folder) can then only reach that folder."""
+    monkeypatch.chdir(tmp_path)
+
+
+@pytest.fixture(autouse=True)
+def recycle_bin_left_clean(monkeypatch):
+    """Removing a mod sends its folder to the real Recycle Bin: every item a test sends there is purged after it,
+    so the bin is left as it was."""
+    from roundtable_souls.system import trash
+
+    made = []
+    real = trash.send
+
+    def send(path):
+        rec = real(path)
+        made.append(rec)
+        return rec
+
+    monkeypatch.setattr(trash, "send", send)
+    yield
+    for rec in made:
+        trash.purge(rec)
+
+
+@pytest.fixture(autouse=True)
 def clean_logging():
     """No job, sink or standalone run survives a test, so one test's lines never reach another's files."""
     from roundtable_souls.system import logging as run_logging

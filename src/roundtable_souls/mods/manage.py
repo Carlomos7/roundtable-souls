@@ -1115,10 +1115,11 @@ def install(profile: Path, plan: dict, overwrite: bool = False) -> dict:
     return {"dest": dest, "entries": added, "backup": bak, "in_place": in_place}
 
 
-def uninstall(profile: Path, index: int, delete_folder: bool = True) -> dict:
+def uninstall(profile: Path, index: int, delete_folder: bool = True, to_trash: bool = True) -> dict:
     """Remove one block, with its own comments (see remove_entry). With delete_folder, the mod's folder goes too when
     it lies beside the profile and no other entry still points into it (a natives folder shared by several DLLs is
-    kept). Returns what was removed, and where, so restore_entry can put it back."""
+    kept): to the Recycle Bin (to_trash), so it can come back, else deleted. Returns what was removed and where, so
+    it can be put back (see mods.undo)."""
     profile = Path(profile)
     text = read_text(profile)
     if is_array_form(text):
@@ -1131,6 +1132,7 @@ def uninstall(profile: Path, index: int, delete_folder: bool = True) -> dict:
     name = o["id"] or Path(o["path"]).name or f"entry {index + 1}"
     new_text, chunk, where = remove_entry(text, index)
     removed_folder = False
+    trashed = None
     if delete_folder and folder is not None and folder.is_dir():
         inside = profile.parent.resolve() in folder.resolve().parents
         still = [block_options(new_text, b["index"])["path"] for b in blocks(new_text)]
@@ -1143,8 +1145,17 @@ def uninstall(profile: Path, index: int, delete_folder: bool = True) -> dict:
             for p in still
         )
         if inside and not shared and folder.resolve() != profile.parent.resolve():
-            shutil.rmtree(folder)
-            removed_folder = True
+            from roundtable_souls.system import trash as trash_bin
+
+            if to_trash and trash_bin.available():
+                try:
+                    trashed = trash_bin.send(folder)
+                    removed_folder = True
+                except trash_bin.TrashError:
+                    trashed = None  # cancelled at Windows' warning, or no bin: the folder stays
+            else:
+                shutil.rmtree(folder)
+                removed_folder = True
     bak = _write(profile, new_text, f"before removing {name}")
     return {
         "kind": o["kind"],
@@ -1155,6 +1166,7 @@ def uninstall(profile: Path, index: int, delete_folder: bool = True) -> dict:
         "backup": bak,
         "entry_text": chunk,
         "where": where,
+        "trash": trashed,  # where the folder went in the Recycle Bin (system.trash), when it went there
     }
 
 

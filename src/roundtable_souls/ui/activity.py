@@ -182,9 +182,10 @@ class JobDetails(QWidget):
 
 
 class JobRow(GlassCard):
-    """One job: when, how it ended, what it was, its summary; click (or the chevron) to open it."""
+    """One job: when, how it ended, what it was, its summary; click (or the chevron) to open it. When the job can
+    still be taken back (mods.undo), a button does it."""
 
-    def __init__(self, rec: dict, expanded: bool = False, parent=None):
+    def __init__(self, rec: dict, expanded: bool = False, parent=None, on_undo=None):
         super().__init__(parent)
         self.rec = rec
         self.details: JobDetails | None = None
@@ -208,6 +209,16 @@ class JobRow(GlassCard):
         self.meta = CaptionLabel("  ·  ".join(m for m in meta if m))
         tone_label(self.meta, "muted")
         head.addWidget(self.meta)
+        self.undo_btn = None
+        undo = rec.get("undo")
+        if on_undo is not None and undo and rec.get("outcome") in ("done", "warnings"):
+            from roundtable_souls.mods import undo as undo_tools
+
+            if undo_tools.available(undo):
+                self.undo_btn = ghost_btn(undo_tools.label(undo), FI.RETURN)
+                self.undo_btn.setToolTip("Take this back: " + (rec.get("summary") or title_text(rec)))
+                self.undo_btn.clicked.connect(lambda _=False, r=rec: on_undo(r))
+                head.addWidget(self.undo_btn)
         self.toggle = TransparentToolButton(FI.CHEVRON_RIGHT_MED)
         self.toggle.setFixedSize(28, 28)
         self.toggle.setToolTip("Show this job's log")
@@ -257,9 +268,10 @@ class ActivityView(QWidget):
 
     refreshed = Signal(int)  # entries shown
 
-    def __init__(self, parent=None, now: Callable[[], datetime.datetime] = datetime.datetime.now):
+    def __init__(self, parent=None, now: Callable[[], datetime.datetime] = datetime.datetime.now, on_undo=None):
         super().__init__(parent)
         self._now = now
+        self._on_undo = on_undo
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(10)
@@ -323,7 +335,7 @@ class ActivityView(QWidget):
                 day = d
                 label = StrongBodyLabel(day_label(d, today) if d else "Unknown date")
                 self.rows.addWidget(label)
-            row = JobRow(rec, expanded=rec.get("id") in opened)
+            row = JobRow(rec, expanded=rec.get("id") in opened, on_undo=self._on_undo)
             self.rows.addWidget(row)
             self._rows.append(row)
         if not recs:

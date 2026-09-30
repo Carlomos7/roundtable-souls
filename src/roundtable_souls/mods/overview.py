@@ -100,6 +100,18 @@ def classify(profile: Path, scan: dict, game_dir=None) -> dict:
     return {"conflicts": out, "counts": counts, "packages": per}
 
 
+def merged_from(profile: Path, package_id: str, ov: dict | None = None) -> list[str]:
+    """The files of one package that a combined result was built from (combined, or combined but out of date):
+    what stays in the game after the package is removed, until a rebuild. ov: an overview() of this profile to
+    reuse, else one is worked out."""
+    ov = ov if ov is not None else overview(Path(profile))
+    out = []
+    for c in (ov.get("overlaps") or {}).get("conflicts") or []:
+        if any(l["id"] == package_id and l["outcome"] in ("combined", "stale") for l in c["losers"]):
+            out.append(c["path"])
+    return sorted(set(out), key=str.lower)
+
+
 def row_conflicts(profile: Path) -> list[str]:
     """The combine's report lines about rows two packs both changed (empty without a combine)."""
     profile = Path(profile)

@@ -219,7 +219,14 @@ def install_mod(profile, plan, overwrite=False) -> dict:
 def uninstall_mod(profile, index: int, delete_folder=True) -> dict:
     out = mod_manage.uninstall(Path(profile), index, delete_folder=delete_folder)
     common.log(
-        f"removed {out['kind']} {out['path']}" + (f" and its folder {out['folder']}" if out["removed_folder"] else "")
+        f"removed {out['kind']} {out['path']}"
+        + (
+            ""
+            if not out["removed_folder"]
+            else f" and moved its folder {out['folder']} to the Recycle Bin"
+            if out.get("trash") and out["trash"].get("kind") != "gone"
+            else f" and deleted its folder {out['folder']}"
+        )
     )
     return out
 

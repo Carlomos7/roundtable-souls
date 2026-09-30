@@ -87,3 +87,35 @@ def test_linux_trash_writes_an_info_file(tmp_path, sent):
     sent.append(rec)
     info = open(rec["info"], encoding="utf-8").read()
     assert info.startswith("[Trash Info]\nPath=") and "with%20space" in info and "DeletionDate=" in info
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        {"kind": "gone", "item": "", "info": "", "original": "x"},  # deleted for good: empty paths
+        {"kind": "windows", "item": "", "info": ""},
+        {"kind": "windows", "item": ".", "info": "."},
+        {"kind": "freedesktop", "item": "files", "info": "info"},
+        None,
+        {},
+    ],
+)
+def test_purge_and_restore_never_touch_anything_but_a_real_trash_item(tmp_path, monkeypatch, record):
+    here = tmp_path / "work"
+    (here / "src").mkdir(parents=True)
+    (here / "src" / "keep.py").write_text("keep")
+    monkeypatch.chdir(here)  # an empty path is the current folder
+    trash.purge(record)
+    assert (here / "src" / "keep.py").read_text() == "keep"
+    assert not trash.exists(record)
+    with pytest.raises(trash.TrashError):
+        trash.restore(record or {"kind": "gone"})
+
+
+def test_purge_refuses_a_path_outside_a_trash(tmp_path):
+    victim = tmp_path / "$R123456"
+    victim.mkdir()
+    info = tmp_path / "$I123456"
+    info.write_text("x")
+    trash.purge({"kind": "windows", "item": str(victim), "info": str(info)})  # not inside a $Recycle.Bin
+    assert victim.exists() and info.exists()

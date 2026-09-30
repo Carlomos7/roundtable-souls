@@ -246,6 +246,7 @@ class Job:
     kind_given: bool = False  # kind named by the caller, not guessed from the title
     summary: str = ""  # what it did, in a line: its last "done: ..." line, or set_summary()
     problem: str = ""  # its first error, in a line
+    undo: dict | None = None  # how to take it back (see mods.undo), when it can be
     handler: logging.Handler | None = None
 
 
@@ -396,6 +397,14 @@ def end_job(job: Job | None = None, outcome: str | None = None) -> Job | None:
     return job
 
 
+def set_undo(data: dict | None) -> None:
+    """How the current job can be taken back (Activity offers it while it still can be; see mods.undo)."""
+    job = _current.get()
+    if job is not None:
+        job.undo = dict(data) if data else None
+        _write_index(job)
+
+
 def set_summary(text: str) -> None:
     """What the current job did, in a line, for the Activity page (otherwise its last "done: ..." line)."""
     job = _current.get()
@@ -439,6 +448,7 @@ def _record(job: Job) -> dict:
         "attachments": list(job.attachments),
         "summary": job.summary,
         "problem": job.problem,
+        "undo": job.undo,
         "pid": os.getpid(),
     }
 

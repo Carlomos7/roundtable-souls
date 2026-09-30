@@ -44,11 +44,43 @@ def send(path: Path) -> dict:
     raise TrashError("there is no trash to move it to on this system")
 
 
+def _genuine(record: dict | None) -> tuple[Path, Path] | None:
+    """(item, info) when the record names a real item in a trash, else None. Everything that touches files goes
+    through this: an empty path means the current folder, and a record for something deleted for good, or one edited
+    by hand, must never lead to deleting or moving anything else."""
+    if not isinstance(record, dict):
+        return None
+    item_s, info_s = str(record.get("item") or ""), str(record.get("info") or "")
+    if not item_s or not info_s:
+        return None
+    item, info = Path(item_s), Path(info_s)
+    if not item.is_absolute() or not info.is_absolute():
+        return None
+    kind = record.get("kind")
+    if kind == "windows":
+        ok = (
+            item.name.startswith("$R")
+            and info.name.startswith("$I")
+            and item.name[2:] == info.name[2:]
+            and item.parent == info.parent
+            and item.parent.parent.name.lower() == "$recycle.bin"
+        )
+    elif kind == "freedesktop":
+        ok = (
+            item.parent.name == "files"
+            and info.parent.name == "info"
+            and info.name == item.name + ".trashinfo"
+            and item.parent.parent == info.parent.parent
+        )
+    else:
+        ok = False
+    return (item, info) if ok else None
+
+
 def exists(record: dict | None) -> bool:
     """Whether the item is still in the trash (not restored, and the trash not emptied)."""
-    if not record:
-        return False
-    return Path(record.get("item") or "").exists() and Path(record.get("info") or "").exists()
+    got = _genuine(record)
+    return got is not None and got[0].exists() and got[1].exists()
 
 
 def restore(record: dict, dest: Path | None = None) -> Path:
@@ -56,6 +88,7 @@ def restore(record: dict, dest: Path | None = None) -> Path:
     when it is no longer in the trash."""
     if not exists(record):
         raise TrashError("it is no longer in the trash (emptied, or restored already)")
+    assert record is not None
     target = Path(dest or record["original"])
     if target.exists():
         raise FileExistsError(f"{target} exists")
@@ -73,16 +106,17 @@ def restore(record: dict, dest: Path | None = None) -> Path:
 
 
 def purge(record: dict | None) -> None:
-    """Delete an item from the trash for good."""
-    if not record:
+    """Delete an item from the trash for good. Does nothing unless the record names a genuine trash item."""
+    got = _genuine(record)
+    if got is None:
         return
-    item = Path(record.get("item") or "")
-    if item.is_dir():
+    item, info = got
+    if item.is_dir() and not item.is_symlink():
         shutil.rmtree(item, ignore_errors=True)
-    elif item.exists():
+    elif item.exists() or item.is_symlink():
         item.unlink()
     try:
-        Path(record.get("info") or "").unlink()
+        info.unlink()
     except OSError:
         pass
 

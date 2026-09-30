@@ -1647,21 +1647,8 @@ class Launcher(FluentWindow):
                 "Nothing to rebuild", "Fewer than two packs ship parameters and there is no rebuild tool.", error=True
             )
             return
-        if tool is not None and tool.problem():
-            self._toast(f"{tool.label} cannot run", tool.problem(), error=True)
+        if not self._tool_ready(prof):
             return
-        if tool is not None and not core.mod_merge.approved(tool):
-            ok = confirm(
-                self,
-                f"Run {tool.label}?",
-                detail=f"It comes with {tool.package['name']} and runs:\n\n{tool.describe()}",
-                warning="It is a program from a mod: allow it only for mods you trust. You are asked again when "
-                "the tool changes.",
-                apply_text="Allow and run",
-            )
-            if not ok:
-                return
-            core.mod_merge.approve(tool)
 
         def job(_setup):
             common = core.common
@@ -1816,42 +1803,173 @@ class Launcher(FluentWindow):
                 other = core.mod_manage.resolve(prof, o["path"])
                 if other == folder or folder in other.parents:
                     users.append(o["name"])
-        keep = (
-            [
+        merged = self._merged_from(prof, entry)
+        rebuild_ok = bool(merged) and not self.game_running
+        changes = [
+            f"The [[{'packages' if entry['kind'] == 'package' else 'natives'}]] entry and its own comments are "
+            f"deleted from {prof.name}"
+        ]
+        if users:
+            changes.append(
                 f"The folder {folder.name} stays: {', '.join(users[:4])}{' ...' if len(users) > 4 else ''} still load from it"
-            ]
-            if users
-            else []
-        )
+            )
+        if merged:
+            files = ", ".join(Path(f).name for f in merged[:3]) + (
+                f" and {len(merged) - 3} more" if len(merged) > 3 else ""
+            )
+            changes.append(
+                f"Its {files} {'is' if len(merged) == 1 else 'are'} inside the combined result, so the game keeps "
+                "using them until it is rebuilt" + (" (after the game closes)" if merged and self.game_running else "")
+            )
         dlg = ConfirmDialog(
             f"Remove {entry['name']} from the profile",
             self,
-            changes=[
-                f"The [[{'packages' if entry['kind'] == 'package' else 'natives'}]] entry is deleted from {prof.name}"
-            ]
-            + keep,
+            changes=changes,
             warning="me3 stops loading it at the next launch. Removing a mod other entries load_after may leave them waiting on a missing id.",
-            safety="The profile keeps a .bak. A deleted folder is gone for good, so leave the box unticked to keep the files.",
-            option=(f"Also delete the folder {folder}" if folder and folder.is_dir() and not users else None),
+            safety="Activity can restore it: the entry goes back where it was, and a folder moved to the Recycle Bin "
+            "comes back with it. Edit profile > Versions keeps the profile as it was too.",
+            option=(
+                f"Also move the folder {folder.name} to the Recycle Bin"
+                if folder and folder.is_dir() and not users
+                else None
+            ),
             option_checked=False,
-            apply_text="Remove",
+            apply_text="Remove and rebuild" if rebuild_ok else "Remove",
+            second_text="Remove only" if rebuild_ok else None,
         )
         if not dlg.exec():
             return
+        rebuild = rebuild_ok and dlg.choice == "apply"
+        if rebuild and not self._tool_ready(prof):
+            return
+        fresh = self._fresh_entry(entry)
+        if fresh is None:
+            return
+        index, name, delete = fresh["index"], entry["name"], dlg.option_on()
+
+        def job(_setup):
+            common = core.common
+            common.start_log(f"launcher: remove {name}")
+            out = uninstall_mod(prof, index, delete_folder=delete)
+            core.run_logging.set_undo(
+                {
+                    "type": "remove",
+                    "profile": str(prof),
+                    "name": name,
+                    "path": out["path"],
+                    "entry_text": out["entry_text"],
+                    "where": out["where"],
+                    "trash": out.get("trash"),
+                    "merged": bool(merged),
+                }
+            )
+            gone = out.get("trash") and out["trash"].get("kind") == "gone"
+            common.log(
+                f"done: removed {name}"
+                + (
+                    ""
+                    if not out["removed_folder"]
+                    else "; its folder was deleted (the Recycle Bin could not take it)"
+                    if gone
+                    else "; its folder is in the Recycle Bin"
+                )
+            )
+            if delete and not out["removed_folder"] and not users:
+                common.log("warning: the folder was kept (the Recycle Bin did not take it)")
+            if rebuild:
+                try:
+                    res = core.mod_merge.rebuild(prof, common.log)
+                    common.log(f"done: removed {name} and rebuilt the combined parameters ({res['backend']})")
+                except core.mod_merge.MergeError as e:
+                    common.log(f"warning: {name} is removed, but the rebuild did not finish: {e}")
+
+        self.start(job, f"Removing {name}...", need_setup=False)
+
+    def _merged_from(self, prof, entry) -> list:
+        """The files of a package that a combined result was built from (from the Load order scan the page already
+        has, when it is for this profile)."""
+        if entry.get("kind") != "package" or not core.mod_merge.is_elden_ring(prof):
+            return []
+        ov = self._conf_result
+        if not ov or ov.get("error") or not core.mod_manage.same_folder(Path(ov.get("profile") or ""), prof):
+            ov = None
         try:
-            fresh = self._fresh_entry(entry)
-            if fresh is None:
-                return
-            out = uninstall_mod(self.setup.profile, fresh["index"], delete_folder=dlg.option_on())
-            self._after_profile_change(
-                f"profile: removed {entry['name']}" + (" and its folder" if out["removed_folder"] else "")
-            )
-            self._toast(
-                "Removed",
-                entry["name"] + (" and its folder." if out["removed_folder"] else ". Its files are still on disk."),
-            )
-        except Exception as e:
-            self._toast("Could not remove", str(e), error=True)
+            return core.mod_overview.merged_from(prof, entry["name"], ov)
+        except Exception:
+            return []
+
+    def _tool_ready(self, prof) -> bool:
+        """The profile's rebuild tool can run: found, nothing stopping it, and allowed by the user (asked once per
+        version of the tool). True when there is no tool (the launcher's own combine needs no permission)."""
+        tool = core.mod_merge.find_backend(prof)
+        if tool is None:
+            return True
+        if tool.problem():
+            self._toast(f"{tool.label} cannot run", tool.problem(), error=True)
+            return False
+        if core.mod_merge.approved(tool):
+            return True
+        ok = confirm(
+            self,
+            f"Run {tool.label}?",
+            detail=f"It comes with {tool.package['name']} and runs:\n\n{tool.describe()}",
+            warning="It is a program from a mod: allow it only for mods you trust. You are asked again when "
+            "the tool changes.",
+            apply_text="Allow and run",
+        )
+        if ok:
+            core.mod_merge.approve(tool)
+        return ok
+
+    def _run_undo(self, rec):
+        """Take a job back from Activity (see mods.undo)."""
+        u = rec.get("undo") or {}
+        if self.busy:
+            self._toast("Wait for the current job", "Undo runs as a job of its own.", error=True)
+            return
+        if not core.mod_undo.available(u):
+            self._toast("It cannot be taken back any more", "What it needs is gone.", error=True)
+            self.activity.refresh()
+            return
+        name = u.get("name") or "it"
+        prof = Path(u.get("profile") or "")
+        rebuild_ok = bool(u.get("merged")) and not self.game_running
+        in_bin = core.trash.exists(u.get("trash"))
+        dlg = ConfirmDialog(
+            f"Restore {name}",
+            self,
+            changes=[
+                f"Its entry goes back into {prof.name}, where it was",
+                "Its folder comes back from the Recycle Bin" if in_bin else "",
+                "The combined parameters are rebuilt with it" if rebuild_ok else "",
+            ],
+            safety="The profile as it is now is kept in its versions.",
+            apply_text="Restore and rebuild" if rebuild_ok else "Restore",
+            second_text="Restore only" if rebuild_ok else None,
+        )
+        if not dlg.exec():
+            return
+        rebuild = rebuild_ok and dlg.choice == "apply"
+        if rebuild and not self._tool_ready(prof):
+            return
+
+        def job(_setup):
+            common = core.common
+            common.start_log(f"launcher: restore {name}")
+            try:
+                said = core.mod_undo.run(u, common.log)
+            except (core.mod_undo.UndoError, OSError) as e:
+                common.log(f"error: {e}")
+                raise SystemExit(1) from e
+            common.log(f"done: {said}")
+            if rebuild:
+                try:
+                    core.mod_merge.rebuild(prof, common.log)
+                    common.log(f"done: {said}, and rebuilt the combined parameters")
+                except core.mod_merge.MergeError as e:
+                    common.log(f"warning: {name} is back, but the rebuild did not finish: {e}")
+
+        self.start(job, f"Restoring {name}...", need_setup=False)
 
     def _install_mod(self):
         if self._mods_locked():
@@ -4633,7 +4751,7 @@ class Launcher(FluentWindow):
             "What the launcher did: every Play, repair, install and rebuild, with how it went and its full log.",
             acts,
         )
-        self.activity = ActivityView()
+        self.activity = ActivityView(on_undo=self._run_undo)
         lay.addWidget(self.activity)
         lay.addStretch(1)
         self._activity_badge = None
@@ -4765,6 +4883,8 @@ class Launcher(FluentWindow):
                         "Restoring",
                         "Installing",
                         "Rebuilding",
+                        "Removing",
+                        "Restoring",
                         "Combining",
                         "Swapping",
                         "Copying",
@@ -4774,7 +4894,7 @@ class Launcher(FluentWindow):
                 else "Saves repaired and cleanup done."
             )
         )
-        if label.startswith(("Installing", "Rebuilding", "Combining")):
+        if label.startswith(("Installing", "Rebuilding", "Combining", "Removing", "Restoring")):
             self._load_profile_editor(force=True)
             self._fill_mods()
             self._update_plan()

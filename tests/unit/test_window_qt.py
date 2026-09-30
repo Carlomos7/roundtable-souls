@@ -840,3 +840,66 @@ def test_versions_lists_earlier_copies_and_restores_one(sandbox, monkeypatch):
     w._show_versions()
     assert chosen and "before turning ersc.dll off" in chosen[0][0] and "1 line differs from now" in chosen[0][0]
     assert prof.read_text(encoding="utf-8") == original
+
+
+def test_removing_a_mod_is_a_job_that_activity_can_restore(sandbox, monkeypatch):
+    from roundtable_souls.mods import manage
+
+    w = sandbox
+    prof = w.profiles / "sandbox.me3"
+    original = prof.read_text(encoding="utf-8")
+    monkeypatch.setattr(window, "notice", lambda *a, **k: type("B", (), {"close": lambda s: None})())
+    shown = []
+
+    def accept(dlg):
+        shown.append((dlg.yesButton.text(), dlg.secondButton.text() if dlg.secondButton else None))
+        dlg.choice = "apply"
+        return True
+
+    monkeypatch.setattr(window.ConfirmDialog, "exec", accept)
+    entry = next(e for e in window.profile_entries(prof) if e["kind"] == "native")
+    w._remove_mod(entry)
+    _wait_idle(w)
+    assert shown[0] == ("Remove", None)  # not inside any combined result: one way to go ahead
+    assert not [e for e in manage.entries(prof) if e["kind"] == "native"]
+    w.switchTo(w.activity_page)
+    row = w.activity.rows_shown()[0]
+    assert row.title.full_text() == "Remove ersc.dll" and row.undo_btn is not None and row.undo_btn.text() == "Restore"
+    QTest.mouseClick(row.undo_btn, Qt.LeftButton)
+    _wait_idle(w)
+    assert prof.read_text(encoding="utf-8") == original  # back where it was, comments and all
+    assert w.activity.rows_shown()[0].title.full_text() == "Restore ersc.dll"
+
+
+def test_removing_a_merged_package_offers_remove_and_rebuild(sandbox, monkeypatch):
+    w = sandbox
+    prof = w.profiles / "sandbox.me3"
+    (w.profiles / "mod" / "near" / "parts").mkdir(parents=True)
+    prof.write_text(
+        prof.read_text(encoding="utf-8") + "\n[[packages]]\nid = \"near\"\npath = 'mod/near'\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(window.Launcher, "_merged_from", lambda self, p, e: ["regulation.bin"])
+    monkeypatch.setattr(window, "notice", lambda *a, **k: type("B", (), {"close": lambda s: None})())
+    rebuilt, shown = [], []
+    monkeypatch.setattr(window.core.mod_merge, "rebuild", lambda p, log, **k: rebuilt.append(p) or {"backend": "t"})
+    monkeypatch.setattr(window.core.mod_merge, "find_backend", lambda p: None)
+
+    def accept(dlg):
+        shown.append((dlg.yesButton.text(), dlg.secondButton.text() if dlg.secondButton else None))
+        dlg.choice = "apply"
+        return True
+
+    monkeypatch.setattr(window.ConfirmDialog, "exec", accept)
+    entry = next(e for e in window.profile_entries(prof) if e["name"] == "near")
+    w._remove_mod(entry)
+    _wait_idle(w)
+    assert shown[0] == ("Remove and rebuild", "Remove only") and [p.name for p in rebuilt] == ["sandbox.me3"]
+    w.game_running = True  # while playing: the rebuild waits, so only Remove is offered
+    prof.write_text(
+        prof.read_text(encoding="utf-8") + "\n[[packages]]\nid = \"near\"\npath = 'mod/near'\n", encoding="utf-8"
+    )
+    entry = next(e for e in window.profile_entries(prof) if e["name"] == "near")
+    w._remove_mod(entry)
+    _wait_idle(w)
+    assert shown[1] == ("Remove", None) and len(rebuilt) == 1
+    w.game_running = False

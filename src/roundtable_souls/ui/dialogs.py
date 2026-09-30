@@ -98,9 +98,11 @@ class ConfirmDialog(Dialog):
         cancel_text="Cancel",
         option=None,
         option_checked=True,
+        second_text=None,
     ):
         super().__init__(parent)
         self.option = None
+        self.choice = None  # "apply" or "second" once accepted
         self.widget.setMinimumWidth(min(680, max(460, (parent.width() - 200) if parent else 560)))
         self.viewLayout.setSpacing(8)
         self.viewLayout.addWidget(SubtitleLabel(title))
@@ -137,6 +139,19 @@ class ConfirmDialog(Dialog):
             self.viewLayout.addWidget(self.option)
         self.yesButton.setText(apply_text)
         self.cancelButton.setText(cancel_text)
+        self.secondButton = None
+        if second_text:  # a second way to go ahead, between the main one and Cancel
+            self.secondButton = ghost_btn(second_text)
+            self.secondButton.clicked.connect(self._second)
+            self.buttonLayout.insertWidget(1, self.secondButton, 1, Qt.AlignVCenter)
+
+    def validate(self):
+        self.choice = self.choice or "apply"
+        return True
+
+    def _second(self):
+        self.choice = "second"
+        self.accept()
 
     def option_on(self) -> bool:
         return bool(self.option is not None and self.option.isChecked())
