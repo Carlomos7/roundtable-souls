@@ -30,3 +30,5 @@ logs/
 # Editors
 .vscode/
 .idea/
+# the launcher's checksum cache, if a run ever writes it here (it holds local file paths)
+cache/
