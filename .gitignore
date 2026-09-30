@@ -32,3 +32,6 @@ logs/
 .idea/
 # the launcher's checksum cache, if a run ever writes it here (it holds local file paths)
 cache/
+
+# real-data checks: machine-specific paths
+scripts/verify/local.toml
