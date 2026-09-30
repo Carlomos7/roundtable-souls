@@ -1,11 +1,14 @@
-"""The launcher's own build of a mod that must stay last, from a recipe: with a fake merge tool (the real one is the
-mod's own and never runs in tests). Checked on a real PC against the mod's installer: identical output."""
+"""The launcher's own build of a mod that must stay last, from a recipe: the launcher's merges on tiny game files,
+and a fake tool for the one step still left to the mod's own tool (the real one never runs in tests). Checked on a
+real PC against the mod's installer: the same content."""
 
 import json
 import shutil
 from pathlib import Path
 
 import pytest
+from fakegame import bnd, dcx, files_of, fmg, texts_of
+from test_param_merge import pack, rows_of, set_word, vanilla
 
 from roundtable_souls import settings
 from roundtable_souls.mods import backends, engine, merge
@@ -46,22 +49,23 @@ PAYLOAD = [
     "payload/ReviveHudBootstrap.dll",
     "payload/audio/revive.wav",
     "payload/ui/base.png",
-    "payload/mod/regulation.bin",
-    "payload/mod/chr/c0000.anibnd.dcx",
-    "payload/mod/chr/c0000.behbnd.dcx",
-    "payload/mod/chr/c0000_a00_hi.anibnd.dcx",
-    "payload/mod/chr/c0000_a00_md.anibnd.dcx",
-    "payload/mod/chr/c0000_a00_lo.anibnd.dcx",
-    "payload/mod/sfx/sfxbnd_commoneffects.ffxbnd.dcx",
-    "payload/settings/engus.json",
-    "payload/settings/rusru.json",
     "payload/settings/m00_00_00_00.talkesdbnd.dcx",
     "payload/settings/vanilla/script/talk/m00_00_00_00.talkesdbnd.dcx",
-    "payload/settings/vanilla/msg/engus/menu_dlc02.msgbnd.dcx",
-    "payload/settings/vanilla/msg/rusru/menu_dlc02.msgbnd.dcx",
     "tools/merge/Assets.exe",
     "tools/defs/SpEffect.xml",
 ]
+ARCHIVES = ["chr/c0000.anibnd.dcx", "chr/c0000.behbnd.dcx", "chr/c0000_a00_hi.anibnd.dcx", "chr/c0000_a00_md.anibnd.dcx",
+            "chr/c0000_a00_lo.anibnd.dcx", "sfx/sfxbnd_commoneffects.ffxbnd.dcx"]  # fmt: skip
+GAME_CLIPS = {"a000_000.hkx": b"walk", "a000_001.hkx": b"run", "a000_002.hkx": b"roll"}
+
+
+def game_files() -> dict[str, bytes]:
+    files = {rel: dcx(bnd(GAME_CLIPS)) for rel in ARCHIVES}
+    for lang in ("engus", "rusru"):
+        files[f"msg/{lang}/menu_dlc02.msgbnd.dcx"] = dcx(
+            bnd({"EventTextForTalk.fmg": fmg({1000: "Rest", 1001: None}), "Other.fmg": fmg({5: "x"})})
+        )
+    return files
 
 
 class Revive:
@@ -72,8 +76,11 @@ class Revive:
         self.base = tmp_path / "profiles" / "er"
         self.game = tmp_path / "Game"
         self.game.mkdir(parents=True)
-        (self.game / "regulation.bin").write_bytes(b"GAME-REG")
+        (self.game / "regulation.bin").write_bytes(vanilla())
         (self.game / "eldenring.exe").write_bytes(b"x")
+        import fakegame
+
+        fakegame.game(monkeypatch, game_files())
         monkeypatch.setattr(common, "game_dir", lambda: self.game)
         monkeypatch.setattr(common, "game_running", lambda: False)
         self.setup = self.base / ".nightreign-revive-setup"
@@ -81,6 +88,14 @@ class Revive:
             (self.setup / f).parent.mkdir(parents=True, exist_ok=True)
             (self.setup / f).write_bytes(f"stock {f}".encode())
         (self.setup / "payload/RevivePrototype.ini").write_text("[Coop]\nEnabled=1\n[UI]\nLanguage=auto\n")
+        for rel in ARCHIVES:  # the mod's copies: the game's with one clip of its own added
+            (self.setup / "payload/mod" / rel).parent.mkdir(parents=True, exist_ok=True)
+            (self.setup / "payload/mod" / rel).write_bytes(dcx(bnd({**GAME_CLIPS, "revive.hkx": b"revive"})))
+        (self.setup / "payload/mod/regulation.bin").write_bytes(pack({"EquipParamWeapon": set_word(2000, 1, 77)}))
+        (self.setup / "payload/settings/engus.json").write_text('{"99002000": "Revive: session settings"}')
+        (self.setup / "payload/settings/rusru.json").write_text('{"99002000": "Revive ru"}', encoding="utf-8")
+        for lang in ("engus", "rusru"):
+            (self.setup / f"payload/settings/vanilla/msg/{lang}").mkdir(parents=True)
         (self.setup / "payload/mod/action/script").mkdir(parents=True)
         (self.setup / "payload/mod/action/script/c0000.hks").write_text(
             "-- vanilla\nfunction Update() end\n-- Wrap the current mod's Update;\nrevive stock wrapper\n"
@@ -96,8 +111,15 @@ class Revive:
         (body / "parts").mkdir(parents=True)
         anims = self.base / "mod" / "anims"
         (anims / "chr").mkdir(parents=True)
-        (anims / "chr/c0000_a00_hi.anibnd.dcx").write_bytes(b"ANIMS-HI")
-        (anims / "regulation.bin").write_bytes(b"ANIMS-REG")
+        # the animation mod changes one clip and removes another
+        (anims / "chr/c0000_a00_hi.anibnd.dcx").write_bytes(
+            dcx(bnd({"a000_000.hkx": b"sekiro walk", "a000_002.hkx": b"roll"}))
+        )
+        (anims / "regulation.bin").write_bytes(pack({"EquipParamWeapon": set_word(1000, 0, 55)}))
+        (anims / "msg/engus").mkdir(parents=True)
+        (anims / "msg/engus/menu_dlc02.msgbnd.dcx").write_bytes(
+            dcx(bnd({"EventTextForTalk.fmg": fmg({1000: "Rest here", 1001: None}), "Other.fmg": fmg({5: "x"})}))
+        )
         (anims / "action/script").mkdir(parents=True)
         (anims / "action/script/c0000.hks").write_bytes(b"-- anims script\r\nfunction Update() end\r\n")
         (self.base / "mod" / "off").mkdir()
@@ -163,28 +185,35 @@ def test_another_edition_is_not_matched(world):
     assert engine.match(world.setup)[0] is None
 
 
-def test_a_build_takes_each_file_from_the_last_package_that_ships_it(world):
+def test_the_launcher_merges_the_mods_files_with_the_packages_before_it(world):
     world.build()
     own = world.own
-    assert (own / "mod/regulation.bin").read_bytes() == b"MERGED merge-regulation ANIMS-REG"
-    assert (own / "mod/chr/c0000_a00_hi.anibnd.dcx").read_bytes() == b"MERGED merge-archive ANIMS-HI"
-    # no package ships these: the mod's own copy as it is
-    assert (own / "mod/chr/c0000.behbnd.dcx").read_bytes() == b"stock payload/mod/chr/c0000.behbnd.dcx"
-    # talk and menus fall back to the download's vanilla copies
-    assert (own / "mod/script/talk/m00_00_00_00.talkesdbnd.dcx").read_bytes().startswith(b"MERGED merge-grace stock")
-    assert (own / "mod/msg/rusru/menu_dlc02.msgbnd.dcx").is_file() and (
-        own / "mod/msg/engus/menu_dlc02.msgbnd.dcx"
-    ).is_file()
+    # the animation mod's change and removal, and the mod's own clip, in one archive
+    assert files_of((own / "mod/chr/c0000_a00_hi.anibnd.dcx").read_bytes()) == {
+        "a000_000.hkx": b"sekiro walk",
+        "a000_002.hkx": b"roll",
+        "revive.hkx": b"revive",
+    }
+    # no package ships this one: the mod's own copy as it is
+    behavior = world.setup / "payload/mod/chr/c0000.behbnd.dcx"
+    assert (own / "mod/chr/c0000.behbnd.dcx").read_bytes() == behavior.read_bytes()
+    # parameters: both packs' rows
+    rows = rows_of((own / "mod/regulation.bin").read_bytes(), "EquipParamWeapon")
+    word = lambda r, i: int.from_bytes(r.data[i * 4 : i * 4 + 4], "little")  # noqa: E731
+    assert word(rows[1000], 0) == 55 and word(rows[2000], 1) == 77
+    # the grace menu is still the mod's own tool's job
+    assert [c[0] for c in world.calls] == ["merge-grace"]
+    assert world.calls[0][2]["NRR_GAME_DIRECTORY"] == str(world.game)
     assert (own / "audio/revive.wav").is_file() and (own / "ui/base.png").is_file()
     assert (own / "RevivePrototype.dll").read_bytes() == b"stock payload/RevivePrototype.dll"
-    assert all(c[2]["NRR_GAME_DIRECTORY"] == str(world.game) for c in world.calls)
-    assert "merged regulation.bin" in (own / "merge-report.txt").read_text()
 
 
-def test_the_menu_text_follows_the_language(world):
+def test_the_menu_text_keeps_the_packages_text_and_adds_the_mods_in_each_language(world):
     world.build()
-    texts = [c for c in world.calls if c[0] == "merge-menu-text"]
-    assert len(texts) == 2
+    en = texts_of((world.own / "mod/msg/engus/menu_dlc02.msgbnd.dcx").read_bytes(), "EventTextForTalk.fmg")
+    ru = texts_of((world.own / "mod/msg/rusru/menu_dlc02.msgbnd.dcx").read_bytes(), "EventTextForTalk.fmg")
+    assert en == {1000: "Rest here", 1001: None, 99002000: "Revive: session settings"}
+    assert ru == {1000: "Rest", 1001: None, 99002000: "Revive ru"}
 
 
 def test_the_script_is_the_last_packages_with_the_mods_text_appended(world):
@@ -232,12 +261,20 @@ def test_the_previous_build_is_kept_and_undo_swaps_it_back(world):
     undo.run(u, lambda s: None)
     assert (world.own / "mod/regulation.bin").read_bytes() == b"OLD BUILD"
     undo.run({**u, "redo": True}, lambda s: None)
-    assert (world.own / "mod/regulation.bin").read_bytes().startswith(b"MERGED")
+    assert (world.own / "mod/regulation.bin").read_bytes() != b"OLD BUILD"
 
 
 def test_a_failed_merge_leaves_the_build_in_place_and_no_staging(world, monkeypatch):
     monkeypatch.setattr(engine, "run_tool", lambda *a, **k: (3, "could not read the archive"))
     with pytest.raises(engine.EngineError, match="exit 3"):
+        world.build()
+    assert (world.own / "mod/regulation.bin").read_bytes() == b"OLD BUILD"
+    assert not list(world.base.glob(".NightreignRevive.building-*"))
+
+
+def test_a_damaged_file_stops_the_build_with_its_name(world):
+    (world.base / "mod/anims/chr/c0000_a00_hi.anibnd.dcx").write_bytes(b"DCX\0 broken")
+    with pytest.raises(engine.EngineError, match="c0000_a00_hi"):
         world.build()
     assert (world.own / "mod/regulation.bin").read_bytes() == b"OLD BUILD"
     assert not list(world.base.glob(".NightreignRevive.building-*"))

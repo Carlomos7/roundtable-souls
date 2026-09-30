@@ -7,9 +7,17 @@ output folder from the packages before it:
     copy_tree / copy   files of the download, as they are
     config             a settings file of the player's: kept when it is there (new keys of a newer default are added,
                        their values never changed), else the download's default
-    tool               one file merged by the mod's own tool: {source} is that file from the last package before it
-                       that ships it (else what `missing` says: the game's copy, the download's vanilla copy, or the
-                       patch copied as it is), {patch}, {out}, {setup}, {text}; `each` repeats it per folder
+    merge              one file merged by the launcher (mods.filemerge): the last package before it that ships the
+                       file, then the mod's own copy (`patch`), against the game's copy; with no package shipping
+                       it, the mod's copy as it is
+    text               a text archive: the mod's strings (a JSON list, `texts` by `each` folder) set in one of its
+                       tables (`table`) of the game's copy, then merged like `merge`
+    params             the parameters (regulation.bin): the launcher's row-by-row combine of that package's and the
+                       mod's copy against the game's
+    tool               one file merged by the mod's own tool, where the launcher cannot merge it yet: {source} is
+                       that file from the last package before it that ships it (else what `missing` says: the game's
+                       copy, the download's vanilla copy, or the patch copied as it is), {patch}, {out}, {setup},
+                       {text}; `each` repeats any step per folder
     script_append      a script: the packages' own script folders copied in load order, then the mod's text appended
                        to the entry file (or to the download's base when no package has one)
     remove             leftovers of the tool (a glob below the output's mod folder)
@@ -31,11 +39,12 @@ import subprocess
 import time
 from pathlib import Path
 
+from roundtable_souls.gamefiles import FormatError
 from roundtable_souls.resources import DATA_DIR
 
 RECIPES_DIR = DATA_DIR / "recipes"
 WORK = ".roundtable-build"  # beside the output: the previous build and its restore.json
-STEPS = {"copy_tree", "copy", "config", "tool", "script_append", "remove"}
+STEPS = {"copy_tree", "copy", "config", "tool", "merge", "text", "params", "script_append", "remove"}
 
 
 class EngineError(RuntimeError):
@@ -315,6 +324,14 @@ def build(
                 else:
                     shutil.copy2(setup / step["from"], dest)
                 made.append(dest)
+            elif kind in ("merge", "text", "params"):
+                names = _each(step, setup)
+                for each in names:
+                    try:
+                        made.append(_launcher_step(step, each, setup, inputs, game_dir, mod, sources, log))
+                    except FormatError as e:
+                        where = _fill(step["file"], {"each": each or ""})
+                        raise EngineError(f"{where} could not be merged: {e}") from e
             elif kind == "tool":
                 if step.get("each"):
                     base = setup / step["each"]["folders_in"]
@@ -355,6 +372,80 @@ def build(
     seconds = time.time() - started
     log(f"engine: {recipe['label']} built in {seconds:.0f}s; the build it replaced is kept for Undo rebuild")
     return {"output": own, "previous": previous, "restore": restore, "sources": sources, "seconds": seconds}
+
+
+def _each(step, setup) -> list:
+    if not step.get("each"):
+        return [None]
+    base = setup / step["each"]["folders_in"]
+    skip = set(step["each"].get("except") or [])
+    return sorted(p.name for p in base.iterdir() if p.is_dir() and p.name not in skip)
+
+
+_oodle: dict = {}
+
+
+def _codecs(game_dir: Path):
+    """(decompressor, compressor) from the game's own Oodle DLL, or None each (not Windows): only files compressed
+    with it need them, and merging one without them stops with the reason."""
+    from roundtable_souls.gamefiles import find_oodle
+    from roundtable_souls.mods import formats
+
+    key = str(game_dir)
+    if key not in _oodle:
+        _oodle[key] = (find_oodle(game_dir), formats.oodle_compressor(game_dir))
+    return _oodle[key]
+
+
+def _launcher_step(step, each, setup, inputs, game_dir, mod, sources, log) -> Path:
+    from roundtable_souls.mods import filemerge, formats, gamearchive, param_merge
+
+    values = {"each": each or ""}
+    rel = _fill(step["file"], values)
+    out = mod / rel
+    out.parent.mkdir(parents=True, exist_ok=True)
+    source = _effective(inputs, rel)
+    dec, comp = _codecs(game_dir)
+    kind = step["do"]
+    if kind == "params":
+        base = game_dir / rel
+        if not base.is_file():
+            raise EngineError(f"The game's own {rel} was not found.")
+        src = source or base
+        sources.append({"path": str(src), "sha256": _sha(src)})
+        packs = [] if source is None else [(Path(source).parent.name, source.read_bytes())]
+        packs.append(("the mod", (setup / _fill(step["patch"], values)).read_bytes()))
+        log(f"  combining {rel}")
+        data, _report = param_merge.combine(base.read_bytes(), packs, dec)
+        out.write_bytes(data)
+        return out
+    vanilla = gamearchive.read(game_dir, rel)
+    if vanilla is None and step.get("vanilla"):
+        vanilla = (setup / _fill(step["vanilla"], values)).read_bytes()
+    if kind == "text":
+        if vanilla is None:
+            raise EngineError(f"The game's own {rel} was not found in its archives.")
+        text_map = step["texts"]
+        texts_file = setup / text_map.get(each or "", text_map.get("*", ""))
+        texts = {int(k): v for k, v in json.loads(texts_file.read_text(encoding="utf-8-sig")).items()}
+        body, how = formats.unpack(vanilla, dec)
+        patch = formats.pack(filemerge.add_text(body, step["table"], texts), how, comp)
+    else:
+        patch = (setup / _fill(step["patch"], values)).read_bytes()
+        if source is None:  # nothing to merge with: the mod's own copy, as it is
+            out.write_bytes(patch)
+            return out
+    layers = []
+    if source is not None:
+        sources.append({"path": str(source), "sha256": _sha(source)})
+        layers.append((Path(source).as_posix(), source.read_bytes()))
+    layers.append(("the mod", patch))
+    log(f"  merging {rel}")
+    result = filemerge.merge(vanilla, layers, dec, comp)
+    if result.clashes:
+        log(f"  {rel}: {result.summary()}")
+    out.write_bytes(result.data)
+    return out
 
 
 def _tool_step(step, each, setup, inputs, game_dir, mod, exe, env, timeout, sources, report, log) -> Path:
