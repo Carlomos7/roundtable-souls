@@ -39,11 +39,11 @@ The window never touches a save directly. Every read goes through `save_info`, e
 - Elden Ring save checks: checksums, the regulation block me3 dirties, loading hangs, torn writes, and items the game does not define, judged against the installed game's own item tables (so Shadow of the Erdtree and Tarnished Edition gear are always official); mod items are named from the mods' own files
 - Nightreign saves: a structure check, backups, restore and co-op/standard copies (the game encrypts its saves, so their contents are not shown)
 - Opt-in, per-item repairs on a Review & fix page, every one backed up and undoable; copies between standard and co-op saves
-- Parameter packs for Elden Ring: see which pack's regulation.bin applies, combine several into one so all of them apply (row by row against the game's own file), and keep an overhaul's own rebuild tool in step, with checks that say when the result is out of date
+- Parameter packs for Elden Ring: a green or red pill says whether they all apply, Load order explains every file two mods both ship; see which pack's regulation.bin applies, combine several into one so all of them apply (row by row against the game's own file), and keep an overhaul's own rebuild tool in step, with checks that say when the result is out of date
 - A save library of named copies to swap in, and copying a single character between saves or Steam accounts; backups kept in the launcher's own data folder
 - Windows installer (per-user, no administrator prompt) or portable zip; Linux build for desktop and Steam Deck
 - Update now: downloads the release for this kind of copy, checks it against published SHA-256 checksums, and restarts into it
-- Logs you can follow: one log per job (Play, repairs, installs, rebuilds) with how it ended, me3's output kept with each Play, crashes with their details, and old logs cleaned up on their own
+- Activity: every Play, repair, install and rebuild with how it went and its full log (me3's output kept with each Play), a red count for failures you have not seen, and logs you can share with your user name and Steam IDs masked
 - Responsive layout down to narrow windows and high display scaling; keyboard shortcuts; find and replace in the editors
 
 ## Technologies Used

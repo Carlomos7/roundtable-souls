@@ -2,7 +2,7 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
-## [Unreleased]
+## [3.8.0] - 2026-09-29
 
 - Activity: a new page in the sidebar listing every job (Play, repairs, installs, rebuilds...) by day, with how it went and a line on what it did or what went wrong. Open one for its log, with Show details for the fine detail and me3's output kept with each Play; filter by game, kind or failures. A red count on Activity shows jobs that failed since you last looked, and a failure message offers View in Activity. Copy for support and Save logs for support (a zip) mask your user name and Steam IDs. The Log on the Play page links to it.
 - Mods: parameters are a green or red pill next to the profile name (Parameters OK, out of date, 1 of N apply, or rebuild failed). Clicking it opens Load order.
