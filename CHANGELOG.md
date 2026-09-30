@@ -7,6 +7,8 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
 - Fixed: Oodle-compressed files the launcher writes (merged files, and the preview build of Nightreign Revive) now use the tested Elden Ring layout: compression level 6, with the same level in the file header. Files over 16 MB were written at a faster level with that level in the header, a layout no game file uses. Merging the largest archives now takes longer (the 88 MB effects archive about two and a half minutes instead of seconds).
 - Mods: a DLL's settings files are attached rather than tied: Attach a file and Detach.
 - Mods: Rebuild is offered whenever a build exists, so turning on Build Nightreign Revive in the launcher can be put into effect at once.
+- Look: a new light theme, frost and Carian blue with snow-white cards; dark keeps its gold. Status colours, pills (now with a mark: ✓, ✕, ⚠), logs, dialogs, menus and the sidebar follow the theme; a page's main action is solid, a destructive one is red; the sidebar can be reached with Tab.
+- Mods: Install mod asks archive or folder first; cancelling a picker installs nothing.
 
 ## [3.13.0] - 2026-09-30
 

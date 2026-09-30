@@ -96,10 +96,11 @@ Mods
   manage .me3 files. Profile settings are me3's own options for this
   profile. Conflicts lists files two mods both replace and which one wins.
 
-  Install mod takes a .zip, .7z or .rar, a .dll, or a folder; you can also
-  drag one or more of them onto the Mods page and they install one after
-  another. It finds the mod inside, even below a wrapper folder or next to a
-  readme, and works out what kind it is. Before anything is copied you see:
+  Install mod asks archive or folder, then takes a .zip, .7z or .rar, a .dll,
+  or a folder; you can also drag one or more of them onto the Mods page and
+  they install one after another. It finds the mod inside, even below a
+  wrapper folder or next to a readme, and works out what kind it is. Before
+  anything is copied you see:
     Which one        when the archive holds more than one (say an English
                      and an Italian version).
     Folder name, Id  what the mod's folder and its entry are called. The id
