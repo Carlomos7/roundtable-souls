@@ -653,6 +653,44 @@ def rebuild(profile: Path, log, combine: bool | None = None) -> dict:
     }
 
 
+# ----------------------------------------------------------------------------- before Play
+AUTO_KEEP = 3  # rebuild tool backups kept after an automatic rebuild (Nightreign Revive's are about 140 MB each)
+
+
+def needs_update(profile: Path) -> dict | None:
+    """The profile's health when Play should rebuild first: a merge exists (the launcher's combine or a rebuild
+    tool) and it is out of date or its last run failed, and nothing stops a rebuild (see setup_problem). None when
+    Play can start as it is. A profile whose packs are only stacked (no merge yet) is not rebuilt by itself: making
+    a combined package is a change to the profile the user asks for."""
+    profile = Path(profile)
+    try:
+        if not profile.is_file() or not is_elden_ring(profile):
+            return None
+        h = health(profile)
+    except OSError, ValueError:
+        return None
+    if h["state"] not in ("stale", "failed") or not h["backend"]:
+        return None
+    if setup_problem(profile):
+        return None
+    return h
+
+
+def update_before_play(profile: Path, log) -> dict | None:
+    """Rebuild when needs_update() says so, then keep only the newest AUTO_KEEP backups of the rebuild tool (the
+    older ones go to the Recycle Bin). Returns rebuild()'s result, or None when nothing was needed. Raises MergeError
+    when the rebuild fails (the previous result is still in place) or the tool has not been allowed to run."""
+    h = needs_update(profile)
+    if h is None:
+        return None
+    log(f"merge: out of date before Play ({'; '.join(h['reasons'][:2]) or h['text']}): rebuilding first")
+    out = rebuild(Path(profile), log)
+    moved = trim_tool_backups(Path(profile), keep=AUTO_KEEP)
+    if moved:
+        log(f"merge: {len(moved)} older rebuild backup(s) moved to the Recycle Bin; the newest {AUTO_KEEP} stay")
+    return out
+
+
 # ----------------------------------------------------------------------------- the tool's own backups
 def find_tool_backup(profile: Path, since: float) -> Path | None:
     """The restore list (restore.json) a rebuild tool wrote during its run, in a folder of the profile's folder

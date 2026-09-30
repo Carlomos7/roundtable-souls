@@ -363,6 +363,7 @@ def use_game(key: str | games.Game, settings: dict | None = None) -> games.Game:
 
 
 PLAY_DEFAULTS = {
+    "play_update_merge": True,
     "play_backup_before": False,
     "play_repair_after": True,
     "play_clear_before": True,
@@ -700,11 +701,31 @@ def play_headless(game: games.Game | None = None) -> int:
             "and choose one on the Play page"
         )
         return 1
+    if play_options(settings)["play_update_merge"]:
+        update_merge_headless(setup)
     try:
         job_play(setup)
     except SystemExit as e:
         return int(e.code or 1) if isinstance(e.code, int) else 1
     return 0
+
+
+def update_merge_headless(setup) -> None:
+    """--play without the window: bring the merged mods up to date first when the rebuild tool was already allowed
+    (nothing can ask here); a failure is logged and the game starts with the previous result."""
+    prof = Path(setup.profile) if getattr(setup, "profile", None) else None
+    if prof is None or mod_merge.needs_update(prof) is None:
+        return
+    common.start_log("launcher: update merged mods before Play (no window)")
+    tool = mod_merge.find_backend(prof)
+    if tool is not None and not mod_merge.approved(tool):
+        common.log(f"warning: {tool.label} has not been allowed to run yet; open Roundtable Souls and Rebuild once")
+        return
+    try:
+        mod_merge.update_before_play(prof, common.log)
+        common.log("done: merged mods updated")
+    except mod_merge.MergeError as e:
+        common.log(f"warning: the merged mods could not be updated, the previous result is used: {e}")
 
 
 def check(game: games.Game | None = None):
