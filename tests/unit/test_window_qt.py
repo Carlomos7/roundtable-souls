@@ -903,3 +903,37 @@ def test_removing_a_merged_package_offers_remove_and_rebuild(sandbox, monkeypatc
     _wait_idle(w)
     assert shown[1] == ("Remove", None) and len(rebuilt) == 1
     w.game_running = False
+
+
+def test_undo_rebuild_and_redo_from_activity(sandbox, monkeypatch):
+    from roundtable_souls.system import logging as rl
+
+    w = sandbox
+    prof = w.profiles / "sandbox.me3"
+    kept = w.profiles / "kept.me3"
+    kept.write_text("# before the rebuild\n", encoding="utf-8")
+    ran = []
+
+    def fake_run(u, log):
+        ran.append(bool(u.get("redo")))
+        return "undid the rebuild: the profile back as before" if not u.get("redo") else "redid the rebuild"
+
+    monkeypatch.setattr(window.core.mod_undo, "run", fake_run)
+    monkeypatch.setattr(window.core.mod_undo, "available", lambda u: bool(u))
+    monkeypatch.setattr(window, "confirm", lambda *a, **k: True)
+    monkeypatch.setattr(window, "notice", lambda *a, **k: type("B", (), {"close": lambda s: None})())
+    job = rl.begin_job("rebuild combined parameters")
+    rl.set_undo({"type": "rebuild", "profile": str(prof), "profile_before": str(kept)})
+    rl.end_job(job)
+    w.switchTo(w.activity_page)
+    row = w.activity.rows_shown()[0]
+    assert row.undo_btn is not None and row.undo_btn.text() == "Undo rebuild"
+    QTest.mouseClick(row.undo_btn, Qt.LeftButton)
+    _wait_idle(w)
+    rows = w.activity.rows_shown()
+    assert ran == [False] and rows[0].title.full_text() == "Undo the rebuild"
+    assert rows[0].undo_btn is not None and rows[0].undo_btn.text() == "Redo rebuild"
+    assert rows[1].undo_btn is None  # the undone rebuild no longer offers it
+    QTest.mouseClick(rows[0].undo_btn, Qt.LeftButton)
+    _wait_idle(w)
+    assert ran == [False, True] and w.activity.rows_shown()[0].title.full_text() == "Redo the rebuild"

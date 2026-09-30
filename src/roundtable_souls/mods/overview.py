@@ -162,4 +162,8 @@ def overview(profile: Path) -> dict:
         out["problems"] = problems(profile)
     except Exception:
         out["problems"] = []
+    try:
+        out["tool_backups"] = merge.tool_backups(profile) if merge.is_elden_ring(profile) else []
+    except Exception:
+        out["tool_backups"] = []
     return out

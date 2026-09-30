@@ -48,8 +48,23 @@ def game_regulation() -> Path | None:
     return p if p is not None and p.is_file() else None
 
 
+HISTORY_KEEP = 3  # earlier combined outputs kept for Undo rebuild (about 2 MB each)
+
+
+def history_root(profile: Path) -> Path:
+    """Where earlier combined outputs of one profile are kept: the data folder, never beside the profile."""
+    import hashlib
+    import os
+
+    from roundtable_souls import folders
+
+    key = hashlib.sha1(os.path.normcase(os.path.abspath(profile)).encode()).hexdigest()[:8]
+    return folders.data_root() / "mods" / "combined-history" / f"{Path(profile).stem}-{key}"
+
+
 class CombineTool:
     builtin = True
+    previous: Path | None = None  # where the output this run replaced was kept
 
     def __init__(self, profile: Path, layer: dict):
         self.profile = profile
@@ -102,6 +117,29 @@ class CombineTool:
             for l in all_layers[:stop]
             if l["index"] != self.package["index"] and (Path(l["folder"]) / REGULATION).is_file()
         ]
+
+    def _keep_previous(self) -> Path | None:
+        """Keep the output about to be replaced (for Undo rebuild); the newest HISTORY_KEEP are kept."""
+        import shutil
+
+        if not (self.folder / REGULATION).is_file():
+            return None
+        root = history_root(self.profile)
+        dest = root / time.strftime("%Y%m%d-%H%M%S")
+        n = 2
+        while dest.exists():
+            dest = root / f"{time.strftime('%Y%m%d-%H%M%S')}-{n}"
+            n += 1
+        try:
+            dest.mkdir(parents=True)
+            for name in (REGULATION, RECORD):
+                if (self.folder / name).is_file():
+                    shutil.copy2(self.folder / name, dest / name)
+        except OSError:
+            return None
+        for old in sorted((d for d in root.iterdir() if d.is_dir()), key=lambda d: d.name, reverse=True)[HISTORY_KEEP:]:
+            shutil.rmtree(old, ignore_errors=True)
+        return dest
 
     def reasons(self, all_layers: list[dict], until: dict | None) -> list[str]:
         """Why the combined file no longer matches today's packages."""
@@ -171,6 +209,7 @@ class CombineTool:
             raise BackendError(f"Combining parameters failed: {e}") from e
         for line in report.lines():
             log(f"  {line}")
+        self.previous = self._keep_previous()
         self.folder.mkdir(parents=True, exist_ok=True)
         tmp = self.folder / (REGULATION + ".tmp")
         tmp.write_bytes(out)

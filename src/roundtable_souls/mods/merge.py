@@ -510,19 +510,24 @@ def rebuild(profile: Path, log, combine: bool | None = None) -> dict:
     before = history.snapshot(profile, "before rebuilding")
     log(f"merge: profile saved to {bak.name} and the profile history")
     labels = []
+    tool_backup = None
+    combined_before = None
     try:
         if wants and combine is not False:
             comb = ensure_combined(profile, target)
             all_layers = layers(profile)
             target, tool, _by_hand = overlay(profile, all_layers)
             comb.run(log, all_layers, target)
+            combined_before = comb.previous
             labels.append(comb.label)
         before_tool = mod_manage.read_text(profile)
         note = "the profile was not changed by a rebuild tool"
         if tool is not None:
             log(f"merge: running {tool.label}")
+            tool_started = time.time()
             tool.run(log)
             labels.append(tool.label)
+            tool_backup = find_tool_backup(profile, tool_started)
             note = keep_profile_text(profile, before_tool, tool)
             log(f"merge: {note}")
     except backends.BackendError as e:
@@ -537,7 +542,68 @@ def rebuild(profile: Path, log, combine: bool | None = None) -> dict:
         why = "; ".join(h["reasons"][:3]) or h["text"]
         note_run(profile, False, f"The rebuild finished but does not match the packages: {why}")
         raise MergeError(f"The rebuild finished but does not match the packages: {why}")
-    return {"backend": " then ".join(labels), "profile_note": note, "profile_before": before}
+    undo = {
+        "type": "rebuild",
+        "profile": str(profile),
+        "name": "the rebuild",
+        "profile_before": str(before) if before else None,
+        "combined_before": str(combined_before) if combined_before else None,
+        "combined_folder": str(comb.folder) if comb is not None and combined_before else None,
+        "tool_restore": str(tool_backup) if tool_backup else None,
+    }
+    return {
+        "backend": " then ".join(labels),
+        "profile_note": note,
+        "profile_before": before,
+        "undo": undo,
+    }
+
+
+# ----------------------------------------------------------------------------- the tool's own backups
+def find_tool_backup(profile: Path, since: float) -> Path | None:
+    """The restore list (restore.json) a rebuild tool wrote during its run, in a folder of the profile's folder
+    (at most two levels down), or None."""
+    root = Path(profile).parent
+    best = None
+    for f in list(root.glob("*/restore.json")) + list(root.glob("*/*/restore.json")):
+        try:
+            t = f.stat().st_mtime
+        except OSError:
+            continue
+        if t >= since - 1 and (best is None or t > best[0]):
+            best = (t, f)
+    return best[1] if best else None
+
+
+def tool_backups(profile: Path) -> list[dict]:
+    """The backups rebuild tools keep in the profile's folder (folders holding a restore.json), newest first:
+    {folder, when, size}."""
+    root = Path(profile).parent
+    out = []
+    for f in list(root.glob("*/restore.json")) + list(root.glob("*/*/restore.json")):
+        d = f.parent
+        try:
+            size = sum(p.stat().st_size for p in d.rglob("*") if p.is_file())
+            when = f.stat().st_mtime
+        except OSError:
+            continue
+        out.append({"folder": d, "when": when, "size": size})
+    out.sort(key=lambda x: x["when"], reverse=True)
+    return out
+
+
+def trim_tool_backups(profile: Path, keep: int = 3) -> list[dict]:
+    """Move all but the newest `keep` tool backups to the Recycle Bin (so even this can be undone). Returns the trash
+    records of what was moved."""
+    from roundtable_souls.system import trash
+
+    moved = []
+    for b in tool_backups(profile)[keep:]:
+        try:
+            moved.append(trash.send(b["folder"]))
+        except trash.TrashError:
+            continue
+    return moved
 
 
 def _put(profile: Path, text: str) -> None:

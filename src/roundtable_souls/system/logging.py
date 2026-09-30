@@ -405,6 +405,20 @@ def set_undo(data: dict | None) -> None:
         _write_index(job)
 
 
+def mark_undone(job_id: str) -> None:
+    """A job was taken back (from Activity): its record no longer offers to, and says so."""
+    with _lock:
+        rec = next((r for r in read_jobs() if r.get("id") == job_id), None)
+        if rec is None:
+            return
+        rec = {**rec, "undo": None, "undone": datetime.datetime.now().isoformat(timespec="seconds")}
+        try:
+            with (log_dir() / JOBS_INDEX).open("a", encoding="utf-8") as f:
+                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        except OSError:
+            pass
+
+
 def set_summary(text: str) -> None:
     """What the current job did, in a line, for the Activity page (otherwise its last "done: ..." line)."""
     job = _current.get()

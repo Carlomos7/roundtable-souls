@@ -870,6 +870,16 @@ class Launcher(FluentWindow):
         )
         pbar.addWidget(self.merge_btn)
         pl.addWidget(prow)
+        brow, bbar = action_row()
+        self.backups_note = hint("")
+        self.backups_note.setWordWrap(True)
+        self.trim_btn = ghost_btn("Keep the newest 3", FI.DELETE)
+        self.trim_btn.setToolTip("Move older rebuild backups to the Recycle Bin. The newest 3 stay for Undo.")
+        self.trim_btn.clicked.connect(self._trim_tool_backups)
+        bbar.addWidget(self.trim_btn)
+        pl.addWidget(self.backups_note)
+        pl.addWidget(brow)
+        self.backups_row = brow
         bl.addWidget(self.merge_row)
         # files
         files_head = StrongBodyLabel("Files two packages both ship")
@@ -1104,6 +1114,14 @@ class Launcher(FluentWindow):
             self.conf_rows.addWidget(row)
         self.conf_more.setVisible(len(cf) > 12)
         self.conf_more.setText("Show fewer" if self._conf_all else f"Show all {len(cf)}")
+        backups = r.get("tool_backups") or []
+        total = sum(b["size"] for b in backups)
+        self.backups_note.setText(
+            f"The rebuild tool keeps {len(backups)} backup{'s' if len(backups) != 1 else ''} "
+            f"({total / 1048576:,.0f} MB) in the profile's folder; it never removes them itself."
+        )
+        self.backups_note.setVisible(bool(backups))
+        self.backups_row.setVisible(len(backups) > 3)
         rows = r.get("rows") or []
         self.merge_rows_note.setText(
             "\n".join(rows[:13]) + (f"\n  and {len(rows) - 13} more in the rebuild's log" if len(rows) > 13 else "")
@@ -1655,6 +1673,7 @@ class Launcher(FluentWindow):
             common.start_log("launcher: rebuild combined parameters")
             try:
                 out = core.mod_merge.rebuild(prof, common.log, combine=combine)
+                core.run_logging.set_undo(out.get("undo"))
                 common.log(f"done: combined parameters rebuilt by {out['backend']}; {out['profile_note']}")
             except core.mod_merge.MergeError as e:
                 common.log(f"error: {e}")
@@ -1885,6 +1904,29 @@ class Launcher(FluentWindow):
 
         self.start(job, f"Removing {name}...", need_setup=False)
 
+    def _trim_tool_backups(self):
+        if self._mods_locked():
+            return
+        prof = Path(self.setup.profile)
+        backups = core.mod_merge.tool_backups(prof)
+        extra = backups[3:]
+        if not extra:
+            return
+        size = sum(b["size"] for b in extra)
+        if not confirm(
+            self,
+            f"Move {len(extra)} older rebuild backup{'s' if len(extra) != 1 else ''} to the Recycle Bin",
+            changes=[f"{b['folder'].name}  ·  {b['size'] / 1048576:,.0f} MB" for b in extra],
+            safety=f"Frees {size / 1048576:,.0f} MB once the bin is emptied; until then they can be restored from it. "
+            "The newest 3 stay, so the latest rebuilds can still be undone.",
+            apply_text="Move to the Recycle Bin",
+        ):
+            return
+        moved = core.mod_merge.trim_tool_backups(prof, keep=3)
+        self._log(f"mods: moved {len(moved)} older rebuild backup(s) to the Recycle Bin")
+        self._toast("Older rebuild backups moved", f"{len(moved)} to the Recycle Bin.")
+        self._scan_conflicts()
+
     def _merged_from(self, prof, entry) -> list:
         """The files of a package that a combined result was built from (from the Load order scan the page already
         has, when it is for this profile)."""
@@ -1923,7 +1965,7 @@ class Launcher(FluentWindow):
 
     def _run_undo(self, rec):
         """Take a job back from Activity (see mods.undo)."""
-        u = rec.get("undo") or {}
+        u = dict(rec.get("undo") or {})
         if self.busy:
             self._toast("Wait for the current job", "Undo runs as a job of its own.", error=True)
             return
@@ -1931,36 +1973,70 @@ class Launcher(FluentWindow):
             self._toast("It cannot be taken back any more", "What it needs is gone.", error=True)
             self.activity.refresh()
             return
-        name = u.get("name") or "it"
         prof = Path(u.get("profile") or "")
-        rebuild_ok = bool(u.get("merged")) and not self.game_running
-        in_bin = core.trash.exists(u.get("trash"))
-        dlg = ConfirmDialog(
-            f"Restore {name}",
-            self,
-            changes=[
-                f"Its entry goes back into {prof.name}, where it was",
-                "Its folder comes back from the Recycle Bin" if in_bin else "",
-                "The combined parameters are rebuilt with it" if rebuild_ok else "",
-            ],
-            safety="The profile as it is now is kept in its versions.",
-            apply_text="Restore and rebuild" if rebuild_ok else "Restore",
-            second_text="Restore only" if rebuild_ok else None,
-        )
-        if not dlg.exec():
+        if u.get("type") == "rebuild" and self.game_running:
+            self._toast("Close the game first", "The rebuild's files are in use while it runs.", error=True)
             return
-        rebuild = rebuild_ok and dlg.choice == "apply"
-        if rebuild and not self._tool_ready(prof):
-            return
+        rebuild = False
+        if u.get("type") == "rebuild":
+            redo = bool(u.get("redo"))
+            title = "Redo the rebuild" if redo else "Undo the rebuild"
+            ok = confirm(
+                self,
+                title,
+                changes=[
+                    "The rebuild tool's output is swapped with the backup it kept" if u.get("tool_restore") else "",
+                    "The combined parameters are swapped with the ones kept before" if u.get("combined_before") else "",
+                    f"{prof.name} goes back as it was {'after' if redo else 'before'} the rebuild"
+                    if u.get("profile_before")
+                    else "",
+                ],
+                safety="Nothing is deleted: each is swapped with its copy, so this can be done again the other way. "
+                "Load order will say the parameters are out of date until you rebuild.",
+                apply_text=title,
+            )
+            if not ok:
+                return
+            name = "the rebuild"
+        else:
+            name = u.get("name") or "it"
+            rebuild_ok = bool(u.get("merged")) and not self.game_running
+            in_bin = core.trash.exists(u.get("trash"))
+            dlg = ConfirmDialog(
+                f"Restore {name}",
+                self,
+                changes=[
+                    f"Its entry goes back into {prof.name}, where it was",
+                    "Its folder comes back from the Recycle Bin" if in_bin else "",
+                    "The combined parameters are rebuilt with it" if rebuild_ok else "",
+                ],
+                safety="The profile as it is now is kept in its versions.",
+                apply_text="Restore and rebuild" if rebuild_ok else "Restore",
+                second_text="Restore only" if rebuild_ok else None,
+            )
+            if not dlg.exec():
+                return
+            rebuild = rebuild_ok and dlg.choice == "apply"
+            if rebuild and not self._tool_ready(prof):
+                return
+        job_id = rec.get("id")
 
         def job(_setup):
             common = core.common
-            common.start_log(f"launcher: restore {name}")
+            common.start_log(
+                f"launcher: {'redo' if u.get('redo') else 'undo'} the rebuild"
+                if u.get("type") == "rebuild"
+                else f"launcher: restore {name}"
+            )
             try:
                 said = core.mod_undo.run(u, common.log)
             except (core.mod_undo.UndoError, OSError) as e:
                 common.log(f"error: {e}")
                 raise SystemExit(1) from e
+            if job_id:
+                core.run_logging.mark_undone(job_id)
+            if u.get("type") == "rebuild":  # the same swap, the other way
+                core.run_logging.set_undo({**u, "redo": not u.get("redo")})
             common.log(f"done: {said}")
             if rebuild:
                 try:
@@ -1969,7 +2045,13 @@ class Launcher(FluentWindow):
                 except core.mod_merge.MergeError as e:
                     common.log(f"warning: {name} is back, but the rebuild did not finish: {e}")
 
-        self.start(job, f"Restoring {name}...", need_setup=False)
+        self.start(
+            job,
+            ("Redoing the rebuild..." if u.get("redo") else "Undoing the rebuild...")
+            if u.get("type") == "rebuild"
+            else f"Restoring {name}...",
+            need_setup=False,
+        )
 
     def _install_mod(self):
         if self._mods_locked():
@@ -4885,6 +4967,8 @@ class Launcher(FluentWindow):
                         "Rebuilding",
                         "Removing",
                         "Restoring",
+                        "Undoing",
+                        "Redoing",
                         "Combining",
                         "Swapping",
                         "Copying",
@@ -4894,7 +4978,7 @@ class Launcher(FluentWindow):
                 else "Saves repaired and cleanup done."
             )
         )
-        if label.startswith(("Installing", "Rebuilding", "Combining", "Removing", "Restoring")):
+        if label.startswith(("Installing", "Rebuilding", "Combining", "Removing", "Restoring", "Undoing", "Redoing")):
             self._load_profile_editor(force=True)
             self._fill_mods()
             self._update_plan()
