@@ -507,7 +507,8 @@ def test_merge_health_is_a_pill_and_prompts_when_it_goes_stale(sandbox, monkeypa
     w.load_exp.setExpand(False)
     w._on_merge({**base, "state": "current", "text": "Combined parameters are up to date", "reasons": []})
     assert not w.merge_pill.isHidden() and (w.merge_pill.text(), w.merge_pill.level()) == ("Parameters OK", "ok")
-    assert w.merge_btn.isHidden() and not w.load_exp.isExpand
+    # up to date, and still rebuildable (turning on the launcher's own build, say, changes nothing out of date)
+    assert not w.merge_btn.isHidden() and w.merge_btn.text() == "Rebuild" and not w.load_exp.isExpand
     stale = {
         **base,
         "state": "stale",

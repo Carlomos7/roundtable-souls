@@ -1708,10 +1708,8 @@ class Launcher(FluentWindow):
         self.merge_pill.setToolTip("\n".join(reasons) or h.get("text") or "")
         self.merge_row.setVisible(show)
         unmerged = bool(files) and not h.get("combine")  # two mods ship one file: combining merges it
-        self.merge_btn.setVisible(
-            (bool(h.get("backend")) and state in ("stale", "failed"))
-            or (state == "stacked" and h.get("can_combine"))
-            or unmerged
+        self.merge_btn.setVisible(  # a build that exists can always be rebuilt (after switching how it is built, say)
+            bool(h.get("backend")) or (state == "stacked" and h.get("can_combine")) or unmerged
         )
         self.merge_btn.setText("Combine" if state == "stacked" or unmerged else "Rebuild")
         if not show:
