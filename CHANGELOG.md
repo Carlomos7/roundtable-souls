@@ -2,7 +2,7 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
-## [Unreleased]
+## [3.9.0] - 2026-09-29
 
 - Fixed: removing a mod took the comment lines of the entry after it (a section heading, another mod's notes) and left its own behind. Removing now takes exactly the entry and its own comments, and a removed entry can be put back byte for byte where it was.
 - Profiles: a copy is kept before every change the launcher makes (the newest 30, in the data folder, identical copies skipped). Switches, options and profile settings show Undo right after the change; Edit profile > Versions restores any copy, and a restore can itself be undone.
