@@ -2,6 +2,11 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
+## [Unreleased]
+
+- Fixed: Oodle-compressed files the launcher writes (merged files, and the preview build of Nightreign Revive) now use the tested Elden Ring layout: compression level 6, with the same level in the file header. Files over 16 MB were written at a faster level with that level in the header, a layout no game file uses. Merging the largest archives now takes longer (the 88 MB effects archive about two and a half minutes instead of seconds).
+- Mods: a DLL's settings files are attached rather than tied: Attach a file and Detach.
+
 ## [3.13.0] - 2026-09-30
 
 - Mods: files two mods both ship are merged, not just replaced. For archives (menu layouts, animations, effects and the like) and text, a Combine or Rebuild reads the game's own copy from its archives, works out what each mod changed, added or removed inside, and puts all of it into one file in the combined package, so both mods apply; where two mods change the same part, the later one's is used and the log says so. Load order shows those copies as combined, and a changed copy or a game update makes the merge out of date (Play updates it first). Undo rebuild covers the merged files too.
