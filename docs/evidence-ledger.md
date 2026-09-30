@@ -92,6 +92,11 @@ launcher's own Combine, then stored in the layout under test, played on a separa
 | 4/4 | | | | pending | pending: needs a Deck |
 | 4/6 | | | | pending | pending: needs a Deck |
 
+Before play (2026-09-30, regulation 11711000): all four packages built; each stored file reads back to the merged
+content. `verify_output.py` with Soulstruct 2.6.0: 6/6 and 4/6 have 0 validation failures (inner files, IDs, flags,
+contents; both mods' menu text changes merged entry by entry; exactly the 2 changed parameter rows); dflt the same, with
+its different layout noted; 4/4 not opened by Soulstruct (E-003), so its contents were checked only by the read-back.
+
 Only 6/6 is written by the launcher. The others are experiments; 3.13.1's header regression tests keep the writer
 at 6/6 until a result here says otherwise.
 

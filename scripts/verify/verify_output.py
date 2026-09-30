@@ -32,7 +32,6 @@ import _readers
 from calibrate import calibrate
 
 REMOVED = None
-SIZES = slice(0x1C, 0x24)  # the header's two size fields
 
 
 def _sha(path: Path) -> str:
@@ -87,7 +86,9 @@ def check_file(entry: dict, pkg: Path, game: Path, dec, read, fmg, failures: lis
     rel = entry["rel"]
     raw = (pkg / rel).read_bytes()
     game_raw = gamearchive.read(game, rel)
-    res: dict = {"file": rel, "sources": [Path(s["path"]).parent.name for s in entry["sources"]]}
+    depth = len(Path(rel).parts)
+    mod = lambda s: Path(s["path"]).parents[depth - 1].name  # noqa: E731  (the package folder the copy is in)
+    res: dict = {"file": rel, "sources": [mod(s) for s in entry["sources"]]}
     if game_raw is None:
         notes.append(f"{rel}: the game has no such file")
         return res
@@ -95,11 +96,15 @@ def check_file(entry: dict, pkg: Path, game: Path, dec, read, fmg, failures: lis
         if _sha(Path(s["path"])) != s["sha256"]:
             failures.append(f"{rel}: {s['path']} changed after the package was built; rebuild first")
             return res
-    same = lambda a, b, skip: bytes(a[: skip.start]) + bytes(a[skip.stop : 0x4C]) == bytes(b[: skip.start]) + bytes(b[skip.stop : 0x4C])  # noqa: E731  # fmt: skip
-    res["header_byte_0x30"] = raw[0x30]
-    res["header_same_as_game_apart_from_sizes"] = same(raw, game_raw, SIZES)
-    if not res["header_same_as_game_apart_from_sizes"]:
-        failures.append(f"{rel}: the DCX header differs from the game's own (beyond the sizes)")
+    # the header: everything but the sizes, the compression kind and the level byte must be the game's own
+    mask = lambda h: bytes(h[:0x1C]) + bytes(h[0x24:0x28]) + bytes(h[0x2C:0x30]) + bytes(h[0x31:0x4C])  # noqa: E731
+    layout = f"{raw[0x28:0x2C].decode(errors='replace')} byte {raw[0x30]}"
+    game_layout = f"{game_raw[0x28:0x2C].decode(errors='replace')} byte {game_raw[0x30]}"
+    res["layout"] = layout
+    if mask(raw) != mask(game_raw):
+        failures.append(f"{rel}: the DCX header differs from the game's own beyond sizes, kind and level")
+    if layout != game_layout:
+        notes.append(f"{rel}: stored as {layout}; the game's own is {game_layout}")
     try:
         van = read(game_raw)
     except _readers.CannotRead as e:
@@ -108,9 +113,12 @@ def check_file(entry: dict, pkg: Path, game: Path, dec, read, fmg, failures: lis
     try:
         got = read(raw)
     except _readers.CannotRead as e:
-        failures.append(f"{rel}: the reader opens the game's copy but not ours: {e}")
+        if layout != game_layout:  # calibrated on the game's layout only: a refusal here is about the reader
+            notes.append(f"{rel}: the reader cannot open the {layout} layout ({e}); contents not checked")
+        else:
+            failures.append(f"{rel}: the reader opens the game's copy but not ours: {e}")
         return res
-    layers = [(Path(s["path"]).parent.name, read(Path(s["path"]).read_bytes())) for s in entry["sources"]]
+    layers = [(mod(s), read(Path(s["path"]).read_bytes())) for s in entry["sources"]]
     try:
         want, texts, removals = intended_parts(van, layers, fmg)
     except _readers.CannotRead as e:

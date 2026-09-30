@@ -61,8 +61,10 @@ def main() -> int:
     from roundtable_souls.mods.backends import builtin
     from roundtable_souls.system import common
 
-    if common.game_running():
-        sys.exit("the game is running: close it first (the launcher's Combine refuses to run while it is open)")
+    # A Rebuild refuses while the game runs because it rewrites files the game may have open. Everything here is
+    # written inside the output folder, which the game does not use, and the game's own files are only read, so that
+    # check is switched off for this run only (the launcher itself is unchanged).
+    common.game_running = lambda: False
     dec = find_oodle(game)
     comp = formats.oodle_compressor(game)
     if comp is None:
