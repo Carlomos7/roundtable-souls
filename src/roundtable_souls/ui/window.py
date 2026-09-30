@@ -112,6 +112,7 @@ from roundtable_souls.core import (
     plan_import,
     plan_mod_install,
     play_command,
+    play_options,
     preset_of,
     profile_entries,
     read_password,
@@ -449,6 +450,7 @@ class Launcher(FluentWindow):
                 pass
         self.repair_row.setVisible(g.regulation_repair)
         self.play_rows["play_repair_after"].setVisible(g.regulation_repair)
+        self.play_rows["play_update_merge"].setVisible(g is games.ELDEN_RING)
         self.off_revive_row.setVisible(g is games.ELDEN_RING)
         target, options = play_command(g)
         self.shortcut_fields["Target"].setText(target)
@@ -1717,6 +1719,9 @@ class Launcher(FluentWindow):
             text = h["text"] + f" ({h['backend']})."
         else:
             text = h["text"] + "."
+            auto = play_options(self.settings).get("play_update_merge", True) and h.get("backend")
+            if state in ("stale", "failed") and auto and self.game is games.ELDEN_RING:
+                text += " Play updates them first, or Rebuild now."
         self.merge_text.setText(text)
         tone_label(self.merge_text, "muted" if level == "ok" else "error")
         self.merge_reasons.setText("\n".join(f"\u2022 {x}" for x in reasons))
@@ -2596,6 +2601,15 @@ class Launcher(FluentWindow):
             hint("What Play does around the game. Each step can be turned off; the launch itself always runs.")
         )
         rows = (
+            (
+                "play_update_merge",
+                "Update merged mods before Play",
+                "When mods, their load order or the game changed, Play rebuilds the merged ones first (combined "
+                "parameters, and a mod's own rebuild tool such as Nightreign Revive's), then starts the game.",
+                "A failed update keeps the previous result and asks before starting. After an automatic rebuild only "
+                "the newest 3 of a rebuild tool's backups are kept; older ones go to the Recycle Bin. Off: Play only "
+                "warns, and Rebuild on the Mods page does it.",
+            ),
             (
                 "play_boot_boost",
                 "Boot boost",
@@ -5046,8 +5060,119 @@ class Launcher(FluentWindow):
             self.game_btn.setEnabled(not busy)  # never switch games under a running job
         self.setWindowTitle(self._base_title() + (f" - {status}" if busy and status else ""))
 
+    # ---------------------------------------------------------------- updating merged mods before Play
+    UPDATE_LABEL = "Updating merged mods before Play..."
+
+    def _update_first(self, resume) -> bool:
+        """Before Play: when the merged mods are out of date (see mod_merge.needs_update), rebuild them as a job and
+        call resume (Play again) when it succeeds. True when that job was started, False to play right away."""
+        s = self.setup
+        if s is None or not s.profile or self.game is not games.ELDEN_RING or self.game_running:
+            return False
+        if not play_options(self.settings).get("play_update_merge", True):
+            return False
+        if getattr(self, "_skip_update_once", False):  # Play anyway, after a failed update
+            self._skip_update_once = False
+            return False
+        prof = Path(s.profile)
+        h = core.mod_merge.needs_update(prof)
+        if h is None:
+            return False
+        self._on_merge({**h, "profile": str(prof)})
+        key = tuple(h.get("reasons") or ())
+        failed = getattr(self, "_update_failed", {})
+        if failed.get(str(prof)) == key:
+            return False  # it failed with exactly these inputs this session: Play warns instead of failing again
+        if not self._tool_ready(prof):
+            return False
+        self._update_resume = resume
+        self._update_key = (str(prof), key)
+        self._update_cancelled = False
+        cancel = ghost_btn("Cancel Play", FI.CLOSE)
+        self._update_bar = notice(
+            self,
+            "info",
+            "Updating merged mods for Play",
+            (h.get("reasons") or [h.get("text") or ""])[0]
+            + ". The game starts when it is done; a rebuild tool can take a few minutes.",
+            actions=(cancel,),
+        )
+        cancel.clicked.connect(self._cancel_update)
+
+        def job(_setup):
+            common = core.common
+            common.start_log("launcher: update merged mods before Play")
+            try:
+                out = core.mod_merge.update_before_play(prof, common.log)
+                if out is not None:
+                    core.run_logging.set_undo(out.get("undo"))
+                    common.log(f"done: merged mods updated by {out['backend']}; {out['profile_note']}")
+                else:
+                    common.log("done: the merged mods were already up to date")
+            except core.mod_merge.MergeError as e:
+                common.log(f"error: {e}")
+                raise SystemExit(1) from e
+
+        self.start(job, self.UPDATE_LABEL, need_setup=False)
+        return True
+
+    def _cancel_update(self):
+        """The rebuild itself finishes (a tool stopped midway could leave its files half-written); the game then does
+        not start."""
+        self._update_cancelled = True
+        self._close_update_bar()
+        self._toast("Play cancelled", "The update finishes first, then the game does not start.", info=True)
+
+    def _close_update_bar(self):
+        bar = getattr(self, "_update_bar", None)
+        self._update_bar = None
+        if bar is not None:
+            try:
+                bar.close()
+            except Exception:
+                pass
+
+    def _after_update(self, ok, status):
+        self.set_busy(False, f"{status} at {datetime.datetime.now():%H:%M}")
+        self._pill("Ready" if ok else "Stopped", "success" if ok else "error")
+        self._close_update_bar()
+        self._load_profile_editor(force=True)
+        self._fill_mods()
+        self._update_plan()
+        self._update_activity_badge()
+        resume = getattr(self, "_update_resume", None)
+        prof, key = getattr(self, "_update_key", ("", ()))
+        self._update_resume = None
+        if self._update_cancelled or resume is None:
+            return
+        if ok:
+            getattr(self, "_update_failed", {}).pop(prof, None)
+            QTimer.singleShot(0, resume)
+            return
+        self._update_failed = {**getattr(self, "_update_failed", {}), prof: key}
+        run = core.mod_merge.last_run(Path(prof)) or {}
+        dlg = ConfirmDialog(
+            "The merged mods could not be updated",
+            self,
+            changes=[run.get("message") or "The rebuild stopped; its log is on Activity."],
+            safety="Nothing was replaced: the previous result is still in place, so the game starts with it (without "
+            "the latest changes).",
+            apply_text="Play anyway",
+            second_text="View details",
+        )
+        if not dlg.exec():
+            return
+        if dlg.choice == "second":
+            self._open_activity(failed_only=True)
+            return
+        self._skip_update_once = True
+        QTimer.singleShot(0, resume)
+
     def _on_done(self, ok, status):
         label = getattr(self, "_job_label", "")  # what start() was told the job does; status is only how it ended
+        if label == self.UPDATE_LABEL:
+            self._after_update(ok, status)
+            return
         self.set_busy(False, f"{status} at {datetime.datetime.now():%H:%M}")
         self._pill("Finished" if ok else "Stopped", "success" if ok else "error")
         self.refresh_saves()
@@ -5139,6 +5264,8 @@ class Launcher(FluentWindow):
     def launch(self):
         if self.busy or not self.setup:
             return
+        if self._update_first(self.launch):
+            return
         self._warn_merge()
         wrote = self.save_seamless()
         if wrote is None or not self._announce_saved(wrote, "play"):
@@ -5224,6 +5351,8 @@ class Launcher(FluentWindow):
 
     def launch_offline(self):
         if self.busy or not self.setup:
+            return
+        if self._update_first(self.launch_offline):
             return
         self._warn_merge()
         strip = self.off_revive.isChecked()

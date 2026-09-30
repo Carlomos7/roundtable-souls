@@ -14,6 +14,7 @@ from roundtable_souls.system import common as _common  # noqa: E402
 from roundtable_souls.ui import window  # noqa: E402
 
 REAL_SAVE_FILES = _common.save_files
+REAL_LAUNCH = window.Launcher.launch
 
 QTest = QtTest.QTest
 
@@ -517,6 +518,7 @@ def test_merge_health_is_a_pill_and_prompts_when_it_goes_stale(sandbox, monkeypa
     assert (
         not w.merge_btn.isHidden() and "p changed" in w.merge_reasons.text() and "p changed" in w.merge_pill.toolTip()
     )
+    assert "Play updates them first" in w.merge_text.text()
     assert w.load_exp.isExpand  # opened once, when it turned red
     assert shown == ["Combined parameters are out of date"]  # prompted once, on the change
     w.load_exp.setExpand(False)
@@ -987,3 +989,89 @@ def test_the_load_order_card_says_what_loads_after_the_mod_that_must_stay_last(s
     assert kept[-1] == (["hand"], False)
     w._fill_stay_last(None)
     assert w.last_row.isHidden()
+
+
+def _stale_merge(monkeypatch, fail=False):
+    """Play sees an out-of-date merge; the update itself is faked (recorded, or failing)."""
+    ran = []
+    h = {"state": "stale", "text": "Combined parameters are out of date", "reasons": ["p changed"], "backend": "t"}
+    h.update(packs=["p", "last"], winner="last")
+    monkeypatch.setattr(window.core.mod_merge, "needs_update", lambda p: dict(h))
+
+    def update(p, log):
+        ran.append(p)
+        if fail:
+            window.core.mod_merge.note_run(p, False, "the tool refused a file")
+            raise window.core.mod_merge.MergeError("the tool refused a file")
+        return {"backend": "t", "profile_note": "kept", "undo": None}
+
+    monkeypatch.setattr(window.core.mod_merge, "update_before_play", update)
+    return ran
+
+
+def test_play_updates_the_merged_mods_first_then_starts(sandbox, monkeypatch):
+    w = sandbox
+    ran = _stale_merge(monkeypatch)
+    resumed = []
+    assert w._update_first(lambda: resumed.append(1)) is True
+    _wait_idle(w)
+    for _ in range(5):
+        QApplication.processEvents()
+    assert len(ran) == 1 and resumed == [1]
+    monkeypatch.setattr(window.core.mod_merge, "needs_update", lambda p: None)
+    assert w._update_first(lambda: resumed.append(2)) is False  # up to date: Play goes straight on
+
+
+def test_cancel_play_lets_the_update_finish_but_does_not_start(sandbox, monkeypatch):
+    w = sandbox
+    _stale_merge(monkeypatch)
+    resumed = []
+    w._update_first(lambda: resumed.append(1))
+    w._cancel_update()
+    _wait_idle(w)
+    for _ in range(5):
+        QApplication.processEvents()
+    assert resumed == []
+
+
+def test_a_failed_update_offers_play_anyway_once(sandbox, monkeypatch):
+    w = sandbox
+    _stale_merge(monkeypatch, fail=True)
+    asked = []
+
+    class Answer:
+        def __init__(self, title, parent, **k):
+            asked.append((title, k.get("apply_text"), k.get("second_text"), k.get("changes")))
+            self.choice = "apply"
+
+        def exec(self):
+            return True
+
+    monkeypatch.setattr(window, "ConfirmDialog", Answer)
+    resumed = []
+    w._update_first(lambda: resumed.append(1))
+    _wait_idle(w)
+    for _ in range(5):
+        QApplication.processEvents()
+    assert asked and asked[0][1:3] == ("Play anyway", "View details") and "refused" in asked[0][3][0]
+    assert resumed == [1]
+    assert w._update_first(lambda: None) is False  # Play anyway: this Play starts as it is
+    assert w._update_first(lambda: None) is False  # and it is not tried again with the same inputs this session
+
+
+def test_the_switch_turns_the_update_off(sandbox, monkeypatch):
+    w = sandbox
+    _stale_merge(monkeypatch)
+    w.settings["play_update_merge"] = False
+    assert w._update_first(lambda: None) is False and not w.busy
+    assert not w.play_rows["play_update_merge"].isHidden() or w.game is not window.games.ELDEN_RING
+
+
+def test_play_asks_for_the_update_before_anything_else(sandbox, monkeypatch):
+    w = sandbox
+    asked = []
+    monkeypatch.setattr(w, "_update_first", lambda resume: asked.append(resume) or True)
+    started = []
+    monkeypatch.setattr(w, "start", lambda *a, **k: started.append(a))
+    REAL_LAUNCH(w)
+    assert asked and not started  # the update runs first; Play itself comes back through resume
