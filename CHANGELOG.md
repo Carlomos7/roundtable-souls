@@ -2,7 +2,7 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
-## [Unreleased]
+## [3.13.0] - 2026-09-30
 
 - Mods: files two mods both ship are merged, not just replaced. For archives (menu layouts, animations, effects and the like) and text, a Combine or Rebuild reads the game's own copy from its archives, works out what each mod changed, added or removed inside, and puts all of it into one file in the combined package, so both mods apply; where two mods change the same part, the later one's is used and the log says so. Load order shows those copies as combined, and a changed copy or a game update makes the merge out of date (Play updates it first). Undo rebuild covers the merged files too.
 - Mods: building Nightreign Revive in the launcher (the preview on Settings) now merges its animations, effects, menu text and parameters with the launcher's own merger instead of the mod's tool; only the grace menu still uses the mod's tool. On a real profile the content matched the mod's installer's, file for file.
