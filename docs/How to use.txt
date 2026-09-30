@@ -186,16 +186,32 @@ Mods
   missing, and Rebuild stops before changing anything. Run the installer it
   came with again, or put the files back.
 
+  Merging files two mods ship. When two packages ship the same game file,
+  me3 uses only the later one's copy. For the files the launcher can merge
+  (archives such as menu layouts, animations and effects, and text), a
+  Combine or Rebuild merges them instead: it reads the game's own copy from
+  its archives, sees what each mod changed, added or removed inside, and
+  puts all of it into one file in the combined package, after the mods it
+  merges. Where two mods change the same part (one texture, one text
+  entry), the later mod's is used and the log says so. Load order then
+  shows those copies as combined; a changed copy or a game update shows the
+  merge as out of date, and Play updates it first. Other files are left as
+  they are (the later mod's copy is used). Oodle-compressed files, which is
+  most of Elden Ring's, need the game's own Oodle library, so merging them
+  works on Windows.
+
   Build in the launcher (preview, on Settings). For a mod the launcher has
   a recipe for (Nightreign Revive LITE 0.1.33), a rebuild merges it from
-  the download kept in its setup folder instead of running its installer:
-  the same files, byte for byte (checked against the installer's own
-  output), with the mod's own merge tool doing the merging. Your profile is
-  never rewritten, RevivePrototype.ini keeps your values (a new version only
-  adds its new settings), and one previous build is kept in
-  .roundtable-build for Undo rebuild, instead of a full backup on every
-  run. Other versions, or with the switch off, run the mod's installer as
-  before.
+  the download kept in its setup folder instead of running its installer.
+  The launcher merges its animations, effects, menu text and parameters
+  itself, the same way as above; only the grace menu still goes through
+  the mod's own tool (two mods changing the same menu script need that
+  tool). The content is the same as the installer's (checked on a real
+  profile). Your profile is never rewritten, RevivePrototype.ini keeps
+  your values (a new version only adds its new settings), and one previous
+  build is kept in .roundtable-build for Undo rebuild, instead of a full
+  backup on every run. Other versions, or with the switch off, run the
+  mod's installer as before.
 
   Stays last. The package that must stay last (and its DLL) loads after
   every other mod, however mods are added: installing, adding existing

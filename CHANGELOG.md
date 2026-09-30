@@ -2,6 +2,12 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
+## [Unreleased]
+
+- Mods: files two mods both ship are merged, not just replaced. For archives (menu layouts, animations, effects and the like) and text, a Combine or Rebuild reads the game's own copy from its archives, works out what each mod changed, added or removed inside, and puts all of it into one file in the combined package, so both mods apply; where two mods change the same part, the later one's is used and the log says so. Load order shows those copies as combined, and a changed copy or a game update makes the merge out of date (Play updates it first). Undo rebuild covers the merged files too.
+- Mods: building Nightreign Revive in the launcher (the preview on Settings) now merges its animations, effects, menu text and parameters with the launcher's own merger instead of the mod's tool; only the grace menu still uses the mod's tool. On a real profile the content matched the mod's installer's, file for file.
+- The game's own files are read from its archives when a merge needs them; the decrypted archive indexes are kept in the launcher's data folder after the first time.
+
 ## [3.12.0] - 2026-09-30
 
 - Mods: the launcher can build Nightreign Revive (LITE 0.1.33) itself from the download kept in its setup folder, instead of running its installer (Build Nightreign Revive in the launcher, on Settings; a preview, off by default). It follows a recipe (data, not code) and uses the mod's own merge tool for each merged file; on a real profile its output matched the installer's file for file. The profile is never rewritten, RevivePrototype.ini keeps the player's values (a newer version only adds its new settings), inputs are only read, a failed build leaves the old one in place, and the build it replaced is kept for Undo rebuild instead of a full backup on every run. Other versions still use the mod's installer.

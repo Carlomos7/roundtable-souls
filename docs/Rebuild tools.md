@@ -100,7 +100,10 @@ folder. Steps, in order:
 |---|---|
 | `copy_tree`, `copy` | Files of the download (`from`) into the output (`to`) as they are. |
 | `config` | A settings file of the player's: kept when it is there, with only the keys a newer default adds; else the default. |
-| `tool` | One file merged by the mod's tool: `{source}` is `file` from the last enabled package before it that ships it, else what `missing` says (`game`, `copy_patch`, or a path in the download). Also `{patch}`, `{out}`, `{setup}`, `{text}` (from a `text` map by `each`, `*` for the rest). `each: {folders_in, except}` repeats it per folder. |
+| `merge` | One file merged by the launcher: the last package before it that ships `file`, then the mod's copy (`patch`), against the game's copy (archives file by file, text entry by entry); with no package shipping it, the mod's copy as it is. |
+| `text` | A text archive: the mod's strings (`texts`, a JSON object of text ID to string, by `each` folder, `*` for the rest) set in its `table` of the game's copy (or `vanilla` from the download), then merged like `merge`. |
+| `params` | `regulation.bin`: the launcher's row-by-row combine of that package's copy and the mod's (`patch`) against the game's. |
+| `tool` | One file merged by the mod's tool, where the launcher cannot merge it itself yet: `{source}` is `file` from the last enabled package before it that ships it, else what `missing` says (`game`, `copy_patch`, or a path in the download). Also `{patch}`, `{out}`, `{setup}`, `{text}` (from a `text` map by `each`, `*` for the rest). `each: {folders_in, except}` repeats it per folder. |
 | `script_append` | The packages' own `folder` (for example `action/script`) copied in load order, then `append` added to `entry` (or to `base` up to `base_until` when no package has one); `refuse` lists text that means a package already contains it. |
 | `remove` | Leftovers of the tool, a `glob` below the output's `mod` folder. |
 
