@@ -78,6 +78,7 @@ class Recipe:
     approval: str = ""  # changes when the tool changes, so a new version is asked about again
     problem: str | None = None  # why it cannot run on this PC now
     timeout: int = 1800
+    engine: object = None  # the launcher builds it from a recipe instead (mods.engine): called with log
 
 
 class Tool:
@@ -120,6 +121,8 @@ class Tool:
 
     def describe(self) -> str:
         """The command as it will run, for the one-time question before a tool runs."""
+        if self.recipe.engine is not None:
+            return getattr(self.recipe.engine, "describe", "the launcher builds it from its download")
         shown = " ".join(f'"{c}"' if " " in c else c for c in self.recipe.command)
         return f"{shown}\nin {self.recipe.cwd}"
 
@@ -129,6 +132,14 @@ class Tool:
         r = self.recipe
         if r.problem:
             raise BackendError(r.problem)
+        if r.engine is not None:
+            from roundtable_souls.mods.engine import EngineError
+
+            try:
+                r.engine(log)
+            except EngineError as e:
+                raise BackendError(str(e)) from e
+            return
         log(f"rebuild tool: {self.describe()}")
         tail: list[str] = []
         start = time.time()

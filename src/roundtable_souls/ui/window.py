@@ -451,6 +451,7 @@ class Launcher(FluentWindow):
         self.repair_row.setVisible(g.regulation_repair)
         self.play_rows["play_repair_after"].setVisible(g.regulation_repair)
         self.play_rows["play_update_merge"].setVisible(g is games.ELDEN_RING)
+        self.play_rows["build_merges"].setVisible(g is games.ELDEN_RING)
         self.off_revive_row.setVisible(g is games.ELDEN_RING)
         target, options = play_command(g)
         self.shortcut_fields["Target"].setText(target)
@@ -2609,6 +2610,16 @@ class Launcher(FluentWindow):
                 "A failed update keeps the previous result and asks before starting. After an automatic rebuild only "
                 "the newest 3 of a rebuild tool's backups are kept; older ones go to the Recycle Bin. Off: Play only "
                 "warns, and Rebuild on the Mods page does it.",
+            ),
+            (
+                "build_merges",
+                "Build Nightreign Revive in the launcher (preview)",
+                "For a mod the launcher has a recipe for (Nightreign Revive LITE 0.1.33), a rebuild merges it from its "
+                "own download instead of running its installer.",
+                "Your profile is never rewritten, RevivePrototype.ini keeps your values (a new version only adds its "
+                "new settings), and one previous build is kept in .roundtable-build for Undo rebuild instead of a "
+                "full backup on every run. Other versions still use their own installer. Off: the installer runs, "
+                "as before.",
             ),
             (
                 "play_boot_boost",

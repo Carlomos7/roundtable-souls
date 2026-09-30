@@ -106,6 +106,22 @@ def _recipe(profile: Path, layer: dict, manifest: Path, data: dict) -> Recipe:
         tool = hashlib.sha256((setup / "installer" / "installer.py").read_bytes()).hexdigest() if setup else ""
     except OSError:
         tool = ""
+    built = _engine(profile, layer, setup)
+    if built is not None:
+        engine_problem, run, approval = built
+        return Recipe(
+            label=f"the launcher's build of {layer['name']}",
+            package=layer,
+            profile=profile,
+            command=[],
+            cwd=setup,
+            sources_file=manifest,
+            merges=_merges(setup),
+            own=[p for p in (manifest.parent, setup) if p is not None],
+            approval=approval,
+            problem=engine_problem,
+            engine=run,
+        )
     return Recipe(
         label=label,
         package=layer,
@@ -118,6 +134,43 @@ def _recipe(profile: Path, layer: dict, manifest: Path, data: dict) -> Recipe:
         approval=f"{setup}|{tool}",
         problem=problem,
     )
+
+
+class _Build:
+    """What Tool.run calls when the launcher builds the mod itself (mods.engine)."""
+
+    def __init__(self, profile: Path, layer: dict, setup: Path, recipe: dict, version: str):
+        self.profile, self.layer, self.setup, self.recipe, self.version = profile, layer, setup, recipe, version
+        self.describe = (
+            f"The launcher builds {recipe['label']} {version} itself from its download in {setup.name}, with the "
+            f"recipe {recipe['id']}; it runs {recipe['tool']['path']} from there for the merges."
+        )
+
+    def __call__(self, log):
+        from roundtable_souls.mods import engine
+
+        engine.build(self.profile, Path(self.layer["folder"]), self.setup, self.recipe, self.version, log)
+
+
+def _engine(profile: Path, layer: dict, setup: Path | None):
+    """(problem, the build to run, approval key) when the launcher builds this mod itself: the switch on Settings is
+    on and a recipe fits its download. None otherwise (its own installer runs)."""
+    from roundtable_souls.mods import engine
+    from roundtable_souls.settings import load_settings
+    from roundtable_souls.system import common
+
+    if setup is None or not load_settings().get("build_merges", False):
+        return None
+    recipe, version, _why = engine.match(setup)
+    if recipe is None:
+        return None
+    game_dir = common.game_dir()
+    problem = None if game_dir and Path(game_dir).is_dir() else "The game was not found."
+    try:
+        tool = hashlib.sha256((setup / recipe["tool"]["path"]).read_bytes()).hexdigest()
+    except OSError:
+        tool = ""
+    return problem, _Build(profile, layer, setup, recipe, version or ""), f"engine|{setup}|{recipe['id']}|{tool}"
 
 
 def missing_text(name: str, missing: list[str]) -> str:

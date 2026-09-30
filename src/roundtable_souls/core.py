@@ -364,6 +364,7 @@ def use_game(key: str | games.Game, settings: dict | None = None) -> games.Game:
 
 PLAY_DEFAULTS = {
     "play_update_merge": True,
+    "build_merges": False,
     "play_backup_before": False,
     "play_repair_after": True,
     "play_clear_before": True,

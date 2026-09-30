@@ -82,6 +82,7 @@ class LauncherSettings(BaseModel):
     offline_skip_confirm: bool = False
 
     play_update_merge: bool = True
+    build_merges: bool = False
     play_backup_before: bool = False
     play_repair_after: bool = True
     play_clear_before: bool = True
