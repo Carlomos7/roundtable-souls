@@ -1,5 +1,6 @@
-"""The launcher's own parameter combine: a package it manages (combined-parameters) holding one regulation.bin that
-applies every pack's changes to the game's own file (see mods.param_merge), and a record of what went in.
+"""The launcher's own combine: a package it manages (combined-parameters) holding one regulation.bin that applies
+every pack's changes to the game's own file (see mods.param_merge), every other game file two or more packages ship
+merged the same way (see mods.filemerge: archives file by file, text entry by entry), and a record of what went in.
 
 It sits after the last package that ships parameters, or, when a package that must stay last has a rebuild tool of
 its own, right before that package, so that tool takes the combined file as its source. It is found by its record,
@@ -48,7 +49,40 @@ def game_regulation() -> Path | None:
     return p if p is not None and p.is_file() else None
 
 
-HISTORY_KEEP = 3  # earlier combined outputs kept for Undo rebuild (about 2 MB each)
+HISTORY_KEEP = 3  # earlier combined outputs kept for Undo rebuild
+
+
+def _shipped(folder: Path) -> list[str]:
+    """Game files a package ships that the merger can take: compressed game files (archives, text), relative, with /."""
+    out = []
+    for dirpath, _dirs, files in os.walk(folder):
+        for f in files:
+            if f.lower().endswith(".dcx"):
+                out.append(os.path.relpath(os.path.join(dirpath, f), folder).replace("\\", "/"))
+    return out
+
+
+def shared_files(layers: list[dict]) -> dict[str, list[dict]]:
+    """Files (lower-case relative path) two or more of these packages ship -> those packages, in load order."""
+    owners: dict[str, list[dict]] = {}
+    for layer in layers:
+        for rel in _shipped(Path(layer["folder"])):
+            owners.setdefault(rel.lower(), []).append({**layer, "rel": rel})
+    return {k: v for k, v in owners.items() if len(v) > 1}
+
+
+def archives_fingerprint(game_dir) -> str:
+    """Changes when the game's archives do (a game update): the merged files are then merged again."""
+    from roundtable_souls.mods import gamearchive
+
+    parts = []
+    for name in gamearchive.ARCHIVES:
+        try:
+            st = (Path(game_dir) / f"{name}.bhd").stat()
+            parts.append(f"{name}:{st.st_size}:{st.st_mtime_ns}")
+        except OSError, TypeError:
+            parts.append(f"{name}:-")
+    return hashlib.sha256("|".join(parts).encode()).hexdigest()[:16]
 
 
 def history_root(profile: Path) -> Path:
@@ -122,7 +156,8 @@ class CombineTool:
         """Keep the output about to be replaced (for Undo rebuild); the newest HISTORY_KEEP are kept."""
         import shutil
 
-        if not (self.folder / REGULATION).is_file():
+        rec = self.record()
+        if not (rec.get("packs") or rec.get("files")):  # nothing was built yet: the new package's empty record
             return None
         root = history_root(self.profile)
         dest = root / time.strftime("%Y%m%d-%H%M%S")
@@ -132,25 +167,59 @@ class CombineTool:
             n += 1
         try:
             dest.mkdir(parents=True)
-            for name in (REGULATION, RECORD):
-                if (self.folder / name).is_file():
-                    shutil.copy2(self.folder / name, dest / name)
+            for f in self.folder.rglob("*"):
+                if f.is_file() and not f.name.endswith(".tmp"):
+                    (dest / f.relative_to(self.folder)).parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(f, dest / f.relative_to(self.folder))
         except OSError:
             return None
         for old in sorted((d for d in root.iterdir() if d.is_dir()), key=lambda d: d.name, reverse=True)[HISTORY_KEEP:]:
             shutil.rmtree(old, ignore_errors=True)
         return dest
 
+    def file_inputs(self, all_layers: list[dict], until: dict | None) -> list[dict]:
+        """The packages whose shared files are merged: every enabled package before `until` other than this one."""
+        order = [l["index"] for l in all_layers]
+        stop = order.index(until["index"]) if until is not None and until["index"] in order else len(order)
+        return [l for l in all_layers[:stop] if l["index"] != self.package["index"]]
+
+    def file_reasons(self, all_layers: list[dict], until: dict | None) -> list[str]:
+        """Why the merged files no longer match today's packages."""
+        from roundtable_souls.system import common
+
+        rec = self.record()
+        done = rec.get("files") or {}
+        shared = shared_files(self.file_inputs(all_layers, until))
+        out = []
+        if (done or shared) and rec.get("archives") and rec["archives"] != archives_fingerprint(common.game_dir()):
+            return ["the game's own files changed since they were merged (a game update?)"]
+        for low, owners in sorted(shared.items()):
+            had = done.get(low)
+            now = [os.path.normcase(str(Path(o["folder"]) / o["rel"])) for o in owners]
+            names = " and ".join(o["name"] for o in owners)
+            if had is None:
+                out.append(f"{names} both ship {owners[0]['rel']}; it is not merged yet")
+            elif [os.path.normcase(s["path"]) for s in had.get("sources") or []] != now:
+                out.append(f"{owners[0]['rel']}: which packages ship it, or their order, changed since it was merged")
+            elif any(_sha(Path(s["path"])) != s["sha256"] for s in had.get("sources") or []):
+                out.append(f"{owners[0]['rel']}: {names}'s copies changed since it was merged")
+        for low, had in done.items():
+            if low not in shared and had.get("output"):
+                out.append(f"{had.get('rel') or low} no longer needs merging")
+        return out
+
     def reasons(self, all_layers: list[dict], until: dict | None) -> list[str]:
-        """Why the combined file no longer matches today's packages."""
+        """Why the combined files no longer match today's packages."""
         rec = self.record()
         want = self.inputs(all_layers, until)
         had = rec.get("packs") or []
         have = {os.path.normcase(str(Path(l["folder"]) / REGULATION)): l for l in want}
         was = {os.path.normcase(str(Path(p["path"]))): p for p in had if isinstance(p, dict) and p.get("path")}
-        out = []
+        out = self.file_reasons(all_layers, until)
+        if not want and not had:
+            return out
         if not (self.folder / REGULATION).is_file() or not had and want:
-            return ["the combined parameters have not been built yet"]
+            return ["the combined parameters have not been built yet", *out]
         for k, l in have.items():
             if k not in was:
                 out.append(f"{l['name']} ships parameters now but was not combined")
@@ -182,11 +251,16 @@ class CombineTool:
         from roundtable_souls.mods import merge, param_merge
         from roundtable_souls.system import common
 
-        base = game_regulation()
-        if base is None:
-            raise BackendError(self.problem() or "no base regulation")
         layers = merge.layers(self.profile) if all_layers is None else all_layers
         packs = self.inputs(layers, until)
+        self.previous = self._keep_previous()
+        files = self._merge_files(log, layers, until)
+        base = game_regulation()
+        if not packs:
+            (self.folder / REGULATION).unlink(missing_ok=True)
+            return self._write_record(files, None, [], None, __version__)
+        if base is None:
+            raise BackendError(self.problem() or "no base regulation")
         log(
             f"combine: {len(packs)} packs onto the game's regulation.bin: {', '.join(p['name'] for p in packs) or 'none'}"
         )
@@ -209,15 +283,31 @@ class CombineTool:
             raise BackendError(f"Combining parameters failed: {e}") from e
         for line in report.lines():
             log(f"  {line}")
-        self.previous = self._keep_previous()
         self.folder.mkdir(parents=True, exist_ok=True)
         tmp = self.folder / (REGULATION + ".tmp")
         tmp.write_bytes(out)
         tmp.replace(self.folder / REGULATION)
+        record = self._write_record(files, base, packs, report, __version__, out)
+        log(f"combine: done in {time.time() - start:.1f}s ({len(report.conflicts)} overlapping rows)")
+        return record
+
+    def _write_record(self, files: dict, base, packs, report, version, out: bytes | None = None) -> dict:
+        from roundtable_souls.system import common
+
         record = {
             "combined": 1,
-            "made_by": f"Roundtable Souls {__version__}",
+            "made_by": f"Roundtable Souls {version}",
             "when": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "files": files,
+            "archives": archives_fingerprint(common.game_dir()),
+        }
+        if base is None:
+            self.folder.mkdir(parents=True, exist_ok=True)
+            tmp = self.folder / (RECORD + ".tmp")
+            tmp.write_text(json.dumps(record, indent=1), encoding="utf-8")
+            tmp.replace(self.folder / RECORD)
+            return record
+        record |= {
             "base": str(base),
             "base_sha256": _sha(base),
             "base_version": report.base_version,
@@ -240,5 +330,56 @@ class CombineTool:
         tmp = self.folder / (RECORD + ".tmp")
         tmp.write_text(json.dumps(record, indent=1), encoding="utf-8")
         tmp.replace(self.folder / RECORD)
-        log(f"combine: done in {time.time() - start:.1f}s ({len(report.conflicts)} overlapping rows)")
         return record
+
+    def _merge_files(self, log, layers: list[dict], until: dict | None) -> dict:
+        """Merge every file two or more packages before `until` ship into this package; drop merged files no longer
+        needed. Returns the record's files: {rel (lower): {rel, sources, output, parts, clashes | skipped}}."""
+        from roundtable_souls.gamefiles import find_oodle
+        from roundtable_souls.mods import filemerge, formats, gamearchive
+        from roundtable_souls.system import common
+
+        shared = shared_files(self.file_inputs(layers, until))
+        before = self.record().get("files") or {}
+        for low, had in before.items():  # merged before, not needed now
+            if low not in shared and had.get("output"):
+                (self.folder / had["rel"]).unlink(missing_ok=True)
+        if not shared:
+            return {}
+        game_dir = common.game_dir()
+        dec = find_oodle(Path(game_dir)) if game_dir else None
+        comp = formats.oodle_compressor(Path(game_dir)) if game_dir else None
+        out: dict = {}
+        for low, owners in sorted(shared.items()):
+            rel = owners[0]["rel"]
+            sources = [
+                {"path": str(Path(o["folder"]) / o["rel"]), "sha256": _sha(Path(o["folder"]) / o["rel"])}
+                for o in owners
+            ]
+            entry = {"rel": rel, "sources": sources, "output": False}
+            dest = self.folder / rel
+            try:
+                vanilla = gamearchive.read(Path(game_dir), rel) if game_dir else None
+                if vanilla is None:
+                    entry["skipped"] = "the game has no such file, so there is nothing to compare the copies with"
+                else:
+                    layers_ = [(o["name"], (Path(o["folder"]) / o["rel"]).read_bytes()) for o in owners]
+                    result = filemerge.merge(vanilla, layers_, dec, comp)
+                    if not result.merged:
+                        entry["skipped"] = "not an archive or a text table the launcher can merge yet"
+                    else:
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        tmp = dest.with_name(dest.name + ".tmp")
+                        tmp.write_bytes(result.data)
+                        tmp.replace(dest)
+                        entry |= {"output": True, "parts": len(result.changed), "clashes": result.clashes}
+                        log(f"  merged {rel} from {' and '.join(o['name'] for o in owners)}: {result.summary()}")
+                        for part, who in list(result.clashes.items())[:5]:
+                            log(f"    {part}: changed by {', '.join(who)}; {who[-1]}'s is used")
+            except (OSError, formats.FormatError, gamearchive.ArchiveError) as e:
+                entry["skipped"] = f"could not be merged: {e}"
+            if entry.get("skipped"):
+                dest.unlink(missing_ok=True)
+                log(f"  {rel}: {entry['skipped']}; the later package's copy is used")
+            out[low] = entry
+        return out

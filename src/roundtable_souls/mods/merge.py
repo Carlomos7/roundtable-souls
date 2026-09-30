@@ -333,6 +333,16 @@ def _combine_inputs(all_layers: list[dict], target: dict | None, combine) -> lis
     return [l for l in all_layers[:stop] if l["index"] not in skip and (l["folder"] / REGULATION).is_file()]
 
 
+def _shared(all_layers: list[dict], target: dict | None, combine) -> dict[str, list[dict]]:
+    """Game files two or more packages before the overlay (other than the combined package) ship."""
+    from roundtable_souls.mods.backends import builtin
+
+    skip = combine.package["index"] if combine is not None else None
+    order = [l["index"] for l in all_layers]
+    stop = order.index(target["index"]) if target is not None and target["index"] in order else len(order)
+    return builtin.shared_files([l for l in all_layers[:stop] if l["index"] != skip])
+
+
 def health(profile: Path) -> dict:
     """{state, text, packs, winner, backend, reasons, run, combine, can_combine, ...} for the profile; state None
     when this does not apply (not an Elden Ring profile, or no profile)."""
@@ -365,7 +375,9 @@ def health(profile: Path) -> dict:
     out["overlay_set"] = by_hand
     out["combine"] = combine is not None
     inputs = _combine_inputs(all_layers, target, combine)
-    out["can_combine"] = len(inputs) >= 2 or (combine is not None and bool(inputs))
+    shared = _shared(all_layers, target, combine)
+    out["shared_files"] = sorted(o[0]["rel"] for o in shared.values())
+    out["can_combine"] = len(inputs) >= 2 or (combine is not None and bool(inputs)) or bool(shared)
     reasons: list[str] = []
     blocked = setup_problem(profile, all_layers, (target, tool, by_hand))
     if blocked:
@@ -379,12 +391,15 @@ def health(profile: Path) -> dict:
     if tool is None and combine is None:
         out["state"] = "stacked" if len(packs) > 1 else "single"
         out["text"] = STATE_TEXT[out["state"]]
+        if shared:
+            names = ", ".join(out["shared_files"][:3]) + (f" and {len(shared) - 3} more" if len(shared) > 3 else "")
+            reasons.append(f"{len(shared)} game file(s) two packages ship can be merged so both apply: {names}")
         out["reasons"] = reasons
         return out
     out["backend"] = tool.label if tool is not None else combine.label
     out["run"] = last_run(profile)
     if combine is not None:
-        reasons += [f"Combined parameters: {r}" for r in combine.reasons(all_layers, target)]
+        reasons += [f"Combined files: {r}" for r in combine.reasons(all_layers, target)]
     if tool is not None:
         reasons += stale_reasons(profile, all_layers, packs, tool, common.game_dir())
     run = out["run"]
@@ -535,10 +550,12 @@ def ensure_combined(profile: Path, target: dict | None):
     else:
         order = [l["index"] for l in all_layers]
         at = order.index(combine.package["index"])
+        shared = {o["index"] for owners in _shared(all_layers, target, combine).values() for o in owners}
         packs_after = [
             l
             for l in all_layers[at + 1 :]
-            if (l["folder"] / REGULATION).is_file() and (target is None or l["index"] != target["index"])
+            if ((l["folder"] / REGULATION).is_file() or l["index"] in shared)
+            and (target is None or l["index"] != target["index"])
         ]
         before_target = target is None or order.index(target["index"]) > at
         if packs_after or not before_target:  # move it back into place
@@ -556,10 +573,11 @@ def ensure_combined(profile: Path, target: dict | None):
 
 def _place(profile: Path, text: str, row: dict, target: dict | None, all_layers: list[dict]) -> str:
     """Add the combined package's entry: right before the overlay, else right after the last package with
-    parameters (before whatever follows it), else at the end."""
+    parameters or a file it merges (before whatever follows it), else at the end."""
     if target is not None:
         return mod_manage.insert_entry(text, "package", row, target["index"])
-    packs = [l for l in all_layers if (l["folder"] / REGULATION).is_file()]
+    shared = {o["index"] for owners in _shared(all_layers, None, None).values() for o in owners}
+    packs = [l for l in all_layers if (l["folder"] / REGULATION).is_file() or l["index"] in shared]
     if packs:
         following = [
             b["index"] for b in mod_manage.blocks(text) if b["index"] > packs[-1]["index"] and b["kind"] == "package"
@@ -591,7 +609,8 @@ def rebuild(profile: Path, log, combine: bool | None = None) -> dict:
         raise MergeError(blocked)
     if tool is not None and not approved(tool):
         raise MergeError(f"{tool.label} has not been allowed to run yet.")
-    wants = combine is True or (combine is None and (comb is not None or len(inputs) >= 2))
+    shared = _shared(all_layers, target, comb)
+    wants = combine is True or (combine is None and (comb is not None or len(inputs) >= 2 or bool(shared)))
     if tool is None and not wants:
         raise MergeError(
             "There is nothing to combine: fewer than two packs ship parameters and there is no rebuild tool."

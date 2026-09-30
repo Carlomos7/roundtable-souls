@@ -195,11 +195,13 @@ def _undo_rebuild(undo: dict, log) -> str:
     combined_before = Path(str(undo.get("combined_before") or ""))
     folder = Path(str(undo.get("combined_folder") or ""))
     if undo.get("combined_before") and undo.get("combined_folder") and combined_before.is_dir() and folder.is_dir():
-        for f in combined_before.iterdir():
+        for f in sorted(combined_before.rglob("*")):
             if f.is_file():
-                _swap(folder / f.name, f)
-        log("undo: the combined parameters are back as they were")
-        said.append("the combined parameters")
+                live = folder / f.relative_to(combined_before)
+                live.parent.mkdir(parents=True, exist_ok=True)
+                _swap(live, f)
+        log("undo: the combined files are back as they were")
+        said.append("the combined files")
     before = Path(str(undo.get("profile_before") or ""))
     if undo.get("profile_before") and before.is_file():
         history.restore(profile, before)

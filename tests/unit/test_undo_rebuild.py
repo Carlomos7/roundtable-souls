@@ -102,7 +102,7 @@ def test_the_combine_keeps_its_earlier_outputs_and_undo_puts_one_back(tmp_path, 
     kept = sorted(os.listdir(builtin.history_root(prof)))
     assert len(kept) == 2  # the newest HISTORY_KEEP
     said = undo.run(undos[-1], lambda s: None)
-    assert "the combined parameters" in said
+    assert "the combined files" in said
     assert (base / "mod" / "combined-parameters" / "regulation.bin").read_bytes() == outputs[-2]
 
 

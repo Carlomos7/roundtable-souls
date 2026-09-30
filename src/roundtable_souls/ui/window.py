@@ -1699,20 +1699,26 @@ class Launcher(FluentWindow):
         self._merge_health = h
         state = h.get("state")
         packs = h.get("packs") or []
-        show = state in ("stacked", "current", "stale", "failed") or (state == "single" and bool(packs))
+        files = h.get("shared_files") or []
+        show = state in ("stacked", "current", "stale", "failed") or (state == "single" and bool(packs)) or bool(files)
         level = self.PILL.get(state, "muted")
         self.merge_pill.set(self._pill_text(h), level)
         self.merge_pill.setVisible(show)
         reasons = h.get("reasons") or []
         self.merge_pill.setToolTip("\n".join(reasons) or h.get("text") or "")
         self.merge_row.setVisible(show)
+        unmerged = bool(files) and not h.get("combine")  # two mods ship one file: combining merges it
         self.merge_btn.setVisible(
-            (bool(h.get("backend")) and state in ("stale", "failed")) or (state == "stacked" and h.get("can_combine"))
+            (bool(h.get("backend")) and state in ("stale", "failed"))
+            or (state == "stacked" and h.get("can_combine"))
+            or unmerged
         )
-        self.merge_btn.setText("Combine" if state == "stacked" else "Rebuild")
+        self.merge_btn.setText("Combine" if state == "stacked" or unmerged else "Rebuild")
         if not show:
             return
-        if state == "single":
+        if state == "single" and not packs:
+            text = "No package ships parameters."
+        elif state == "single":
             text = f"One package ships parameters ({packs[0]}): its regulation.bin is used as it is."
         elif state == "stacked":
             text = h["text"] + f": {h['winner']}'s is used."

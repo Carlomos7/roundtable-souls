@@ -48,6 +48,7 @@ def classify(profile: Path, scan: dict, game_dir=None) -> dict:
     tool_files: set[str] = set()
     tool_sources: dict[str, str] = {}
     combined: dict[str, str] = {}
+    merged_files: set[str] = set()
     if merge.is_elden_ring(profile):
         layers = merge.layers(profile)
         _target, tool, _by_hand = merge.overlay(profile, layers)
@@ -57,9 +58,15 @@ def classify(profile: Path, scan: dict, game_dir=None) -> dict:
             for s in tool.sources() or []:
                 tool_sources[_key(local_path(s["path"], profile, game_dir))] = s["sha256"]
         if combine is not None:
-            for p in combine.record().get("packs") or []:
+            rec = combine.record()
+            for p in rec.get("packs") or []:
                 if isinstance(p, dict) and p.get("path"):
                     combined[_key(Path(p["path"]))] = str(p.get("sha256") or "")
+            for f in (rec.get("files") or {}).values():
+                if f.get("output"):
+                    merged_files.add(str(f.get("rel") or "").lower())
+                    for s in f.get("sources") or []:
+                        combined[_key(Path(s["path"]))] = str(s.get("sha256") or "")
     tool_dir = _key(tool.package["folder"]) if tool is not None else None
     comb_dir = _key(combine.folder) if combine is not None else None
 
@@ -88,7 +95,7 @@ def classify(profile: Path, scan: dict, game_dir=None) -> dict:
                     outcome = used_by(combined, copy)  # inside the combined file the tool takes
                 else:
                     outcome = "unreached"
-            elif comb_dir is not None and winner_dir == comb_dir and low == builtin.REGULATION:
+            elif comb_dir is not None and winner_dir == comb_dir and (low == builtin.REGULATION or low in merged_files):
                 outcome = used_by(combined, copy)
             judged.append({"id": loser["id"], "outcome": outcome})
             counts[outcome] += 1
