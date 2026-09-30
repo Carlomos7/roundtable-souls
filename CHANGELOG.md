@@ -2,6 +2,13 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
+## [Unreleased]
+
+- Activity: a new page in the sidebar listing every job (Play, repairs, installs, rebuilds...) by day, with how it went and a line on what it did or what went wrong. Open one for its log, with Show details for the fine detail and me3's output kept with each Play; filter by game, kind or failures. A red count on Activity shows jobs that failed since you last looked, and a failure message offers View in Activity. Copy for support and Save logs for support (a zip) mask your user name and Steam IDs. The Log on the Play page links to it.
+- Mods: parameters are a green or red pill next to the profile name (Parameters OK, out of date, 1 of N apply, or rebuild failed). Clicking it opens Load order.
+- Mods: Load order replaces Conflicts and explains what the profile loads from one scan: the parameters' status with reasons, Combine or Rebuild, and the rows two packs both changed; every file two packages ship with what happens to the earlier copy (replaced, combined, combined but out of date, or not reaching the rebuild), checked against the rebuild's or the combine's checksums; and the entries me3 would refuse. It opens by itself when the pill turns red.
+- Logs: a job's end line reads "failed in 3s, 1 error" instead of counting zeros.
+
 ## [3.7.0] - 2026-09-29
 
 - Logs: every job (Play, a repair, an install, a rebuild...) keeps its own log in logs\jobs, with how it ended, instead of one last_run.log overwritten by the next job. jobs.jsonl lists them. me3's output is kept with each Play instead of one file overwritten per launch. launcher.log (rotated) holds everything else and every crash with its details, replacing launcher-errors.log, which only grew. Jobs are kept for 14 days or the newest 50; older log files move to logs\old and go after 30 days.

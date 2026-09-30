@@ -138,12 +138,13 @@ Mods
                      it with the other packs and / or run the rebuild tool
                      after the install. Its parameters apply once that
                      succeeds.
-    Mods page        a line under the profile name says whether the
-                     parameters in use are up to date: Combine when several
-                     packs ship parameters but only one applies, Rebuild
-                     when a pack was turned on or off, reordered, removed or
-                     updated, or after a game update (the game must be
-                     closed).
+    Mods page        a pill next to the profile name: green (Parameters OK)
+                     or red (out of date, only one of several packs applies,
+                     or the last rebuild failed). Click it for the Load order
+                     card, which says why and has Combine (several packs,
+                     only one applies) or Rebuild (a pack was turned on or
+                     off, reordered, removed or updated, or the game
+                     updated; the game must be closed).
     Rebuild          the profile is saved as a .bak first. Rebuild tools
                      usually rewrite the profile without comments; when it
                      still loads the same things, your own text comes back
@@ -161,6 +162,20 @@ Mods
   rebuild tool is then looked for with looser rules, or you can pick a
   rebuild.json for it there; installs place new packs before it even when no
   tool is found.
+
+  Load order (on the Mods page) says what this profile loads and what wins:
+    Parameters       the pill's status with its reasons, Combine or
+                     Rebuild, and the rows two packs both changed in the
+                     last combine (the later pack won those).
+    Files            every file two packages both ship, and what happens to
+                     the earlier copy: replaced (me3 uses the later one's),
+                     combined (a rebuild or the combine was built from it, as
+                     it is now), combined but out of date (rebuild to bring
+                     it in), or does not reach the rebuild (another pack's
+                     copy sits in between; the rebuild takes the nearest).
+    Problems         entries me3 would refuse: a missing folder, a required
+                     load-after that is missing or off, a loop.
+  It opens by itself when the pill turns red.
 
   Each package and DLL has a tag naming the folder it sits in (SeamlessCoop
   for ersc.dll); hover it for the full path. The packages folder (mod) and
@@ -334,8 +349,17 @@ folder), one .bak next to a .me3 or settings file you edited, and a moment's
 temporary file while a save is written. Backups and deleted profiles from
 earlier versions are moved into the data folder automatically.
 
-If something goes wrong, the logs folder says what happened (Logs folder under
-Log on the Play page opens it):
+Activity (in the sidebar) lists what the launcher did: every Play, repair,
+install and rebuild, grouped by day, with how it went (Done, Done with
+warnings, Failed, Stopped, or Interrupted when the launcher closed first) and
+what it did. Open one for its log; Show details adds the fine detail, and a
+Play also keeps me3's own output. Filter by game, kind or failures. A red count
+on Activity says how many jobs failed since you last looked. Copy for support
+and Save logs for support mask your user name and Steam IDs; nothing is sent
+anywhere.
+
+If something goes wrong, the logs folder says what happened (Logs folder on
+Activity, or under Log on the Play page, opens it):
   jobs\<date>_<what>.log    one file per job (Play, a repair, an install, a
                             rebuild...) with every step, and how it ended
   jobs\<...>.me3.log        me3's own output for that Play
