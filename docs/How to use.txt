@@ -186,6 +186,17 @@ Mods
   missing, and Rebuild stops before changing anything. Run the installer it
   came with again, or put the files back.
 
+  Build in the launcher (preview, on Settings). For a mod the launcher has
+  a recipe for (Nightreign Revive LITE 0.1.33), a rebuild merges it from
+  the download kept in its setup folder instead of running its installer:
+  the same files, byte for byte (checked against the installer's own
+  output), with the mod's own merge tool doing the merging. Your profile is
+  never rewritten, RevivePrototype.ini keeps your values (a new version only
+  adds its new settings), and one previous build is kept in
+  .roundtable-build for Undo rebuild, instead of a full backup on every
+  run. Other versions, or with the switch off, run the mod's installer as
+  before.
+
   Stays last. The package that must stay last (and its DLL) loads after
   every other mod, however mods are added: installing, adding existing
   folders, removing, renaming an id and saving options keep its own

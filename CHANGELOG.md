@@ -2,6 +2,11 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
+## [Unreleased]
+
+- Mods: the launcher can build Nightreign Revive (LITE 0.1.33) itself from the download kept in its setup folder, instead of running its installer (Build Nightreign Revive in the launcher, on Settings; a preview, off by default). It follows a recipe (data, not code) and uses the mod's own merge tool for each merged file; on a real profile its output matched the installer's file for file. The profile is never rewritten, RevivePrototype.ini keeps the player's values (a newer version only adds its new settings), inputs are only read, a failed build leaves the old one in place, and the build it replaced is kept for Undo rebuild instead of a full backup on every run. Other versions still use the mod's installer.
+- Docs: the recipe format, in Rebuild tools.
+
 ## [3.11.0] - 2026-09-29
 
 - Play: when merged mods are out of date (a mod was added, removed, turned on or off, reordered or updated, or the game updated), Play rebuilds them first and then starts the game, with Cancel Play. A failed rebuild keeps the previous result and offers Play anyway or View details; it is not retried with the same mods in that session. Offline Play and Play from a Steam shortcut do the same (the shortcut only runs a rebuild tool that was already allowed, and starts anyway on failure).
