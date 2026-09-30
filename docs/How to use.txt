@@ -166,7 +166,27 @@ Mods
   differently), turn on Parameter overlay in that package's Options. Its
   rebuild tool is then looked for with looser rules, or you can pick a
   rebuild.json for it there; installs place new packs before it even when no
-  tool is found.
+  tool is found. That choice, and the mods you keep after it on purpose, are
+  kept in roundtable.json next to the profile, so they go with the folder
+  when you copy it to another PC.
+  When the package that must stay last is there but its setup files are not
+  (copied without its hidden setup folder, say), Load order names what is
+  missing, and Rebuild stops before changing anything. Run the installer it
+  came with again, or put the files back.
+
+  Stays last. The package that must stay last (and its DLL) loads after
+  every other mod, however mods are added: installing, adding existing
+  folders, removing, renaming an id and saving options keep its own
+  load_after lists naming every other package and DLL, each optional, on or
+  off, so switching a mod on or off never rewrites them. Only its own
+  entries are changed; yours stay as you wrote them. New mods go right
+  before it in the file. The install dialog says so and has an advanced
+  option to load a mod after it instead (only for a mod made to go on top
+  of it: its files replace the merged ones). A mod that names it in its own
+  Load after is kept after it too. When an edit by hand leaves a mod after
+  it, Load order says so, with Fix order (put it last again) and Keep it
+  after (on purpose; Put them before undoes that). A change that would make
+  the load order loop is not made, and Load order says why.
 
   Undo. A copy of the profile is kept before every change the launcher
   makes (the newest 30, in the data folder). Switching a mod, its options or
@@ -180,6 +200,9 @@ Mods
   Recycle Bin.
 
   Load order (on the Mods page) says what this profile loads and what wins:
+    Stays last       whether the package that must stay last loads after
+                     every other mod, with Fix order and Keep it after when
+                     one loads after it.
     Parameters       the pill's status with its reasons, Combine or
                      Rebuild, and the rows two packs both changed in the
                      last combine (the later pack won those).

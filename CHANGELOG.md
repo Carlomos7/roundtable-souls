@@ -2,6 +2,14 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
+## [Unreleased]
+
+- Mods: the package that must stay last (and its DLL) now stays last however mods are added. Installing, adding existing folders, removing, renaming an id or saving options keeps its own load_after lists naming every other package and DLL (on or off, each optional), so switching a mod on or off never rewrites them; your own entries are never changed. New mods go right before it in the file.
+- Install: with such a package, the dialog says a new mod is placed before it so it includes the mod's changes, instead of offering a load order; an advanced option loads a mod after it on purpose.
+- Load order: a Stays last section says when a mod loads after it (an edit by hand) and replaces its files, with Fix order and Keep it after (and Put them before to undo that). A change that would make the load order loop is not made, and the reason is shown.
+- Profiles: the package set as the parameter overlay, and the mods kept after it on purpose, are kept in roundtable.json next to the profile (relative paths), so a copied profile folder works the same on another PC. A setting from an earlier version moves there on its own; a folder that cannot be written keeps using the launcher's own setting.
+- Fixed: when the package that must stay last is there but its setup files are not, Load order names the missing files (installation.json, the setup folder) and how to put them back, instead of saying it loads after the combined parameters, and Rebuild stops before changing anything.
+
 ## [3.9.0] - 2026-09-29
 
 - Fixed: removing a mod took the comment lines of the entry after it (a section heading, another mod's notes) and left its own behind. Removing now takes exactly the entry and its own comments, and a removed entry can be put back byte for byte where it was.
