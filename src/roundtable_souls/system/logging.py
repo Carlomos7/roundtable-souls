@@ -244,6 +244,8 @@ class Job:
     outcome: str = "running"
     ended: float | None = None
     kind_given: bool = False  # kind named by the caller, not guessed from the title
+    summary: str = ""  # what it did, in a line: its last "done: ..." line, or set_summary()
+    problem: str = ""  # its first error, in a line
     handler: logging.Handler | None = None
 
 
@@ -261,6 +263,14 @@ class _JobHandler(logging.Handler):
             self.job.errors += 1
         elif record.levelno >= logging.WARNING:
             self.job.warnings += 1
+        try:
+            first = (record.getMessage().strip().splitlines() or [""])[0].strip()
+        except Exception:  # noqa: BLE001 - a message that cannot be formatted still goes to the file below
+            first = ""
+        if first.lower().startswith("done:"):
+            self.job.summary = first.split(":", 1)[1].strip()
+        if record.levelno >= logging.ERROR and not self.job.problem and first:
+            self.job.problem = re.sub(r"(?i)^(error|failed)\s*:?\s*", "", first) or first
         if self.inner is not None:
             self.inner.handle(record)
 
@@ -366,13 +376,15 @@ def end_job(job: Job | None = None, outcome: str | None = None) -> Job | None:
     token_job = _current.get()
     if token_job is not job:
         _current.set(job)  # so the footer reaches the job's own file
+    counts = [
+        f"{n} {word}{'s' if n != 1 else ''}" for n, word in ((job.warnings, "warning"), (job.errors, "error")) if n
+    ]
     get_logger("job").info(
-        "=== %s: %s in %s (%d warning(s), %d error(s)) ===",
+        "=== %s: %s in %s%s ===",
         job.title,
         outcome,
         _duration(job.ended - job.started),
-        job.warnings,
-        job.errors,
+        (", " + ", ".join(counts)) if counts else "",
     )
     if job.handler is not None:
         get_logger().removeHandler(job.handler)
@@ -382,6 +394,13 @@ def end_job(job: Job | None = None, outcome: str | None = None) -> Job | None:
     _write_index(job)
     prune()
     return job
+
+
+def set_summary(text: str) -> None:
+    """What the current job did, in a line, for the Activity page (otherwise its last "done: ..." line)."""
+    job = _current.get()
+    if job is not None:
+        job.summary = str(text).strip()
 
 
 def attachment(name: str) -> Path | None:
@@ -418,6 +437,8 @@ def _record(job: Job) -> dict:
         "errors": job.errors,
         "log": job.path.name if job.path else None,
         "attachments": list(job.attachments),
+        "summary": job.summary,
+        "problem": job.problem,
         "pid": os.getpid(),
     }
 
@@ -545,6 +566,93 @@ def _index_lines(d: Path):
             yield from f
     except OSError:
         return
+
+
+# ----------------------------------------------------------------------------- reading jobs back
+KIND_GROUPS = {
+    "play": "Play",
+    "cleanup": "Play",
+    "repair": "Saves",
+    "restore": "Saves",
+    "library": "Saves",
+    "copy": "Saves",
+    "install": "Mods",
+    "rebuild": "Mods",
+}
+GROUPS = ("Play", "Saves", "Mods", "Other")
+_LINE = re.compile(
+    r"^(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)(?:\.(\d{3}))?  (DEBUG|INFO|WARNING|ERROR|CRITICAL)\s+(\S+)  (.*)$"
+)
+READ_LIMIT = 2 * 1024 * 1024  # a job log or attachment is shown from its last 2 MB
+
+
+def group_of(kind: str) -> str:
+    return KIND_GROUPS.get(kind, "Other")
+
+
+def job_file(name: str) -> Path | None:
+    """A file in logs/jobs by its bare name (as the index lists it), or None for anything else."""
+    if not name or Path(name).name != name or name in (".", ".."):
+        return None
+    return log_dir() / JOBS_DIR / name
+
+
+def _tail(path: Path, limit: int) -> tuple[str, bool]:
+    with path.open("rb") as f:
+        f.seek(0, os.SEEK_END)
+        size = f.tell()
+        f.seek(max(0, size - limit))
+        data = f.read()
+    text = data.decode("utf-8", errors="replace")
+    if size > limit:
+        text = text.split("\n", 1)[-1]  # drop the partial first line
+    return text, size > limit
+
+
+def read_job_log(name: str, limit: int = READ_LIMIT) -> dict:
+    """A job's log as entries {time, level, source, text} (lines that continue an entry, such as a traceback, are
+    part of its text). {entries, cut (only the end was read), missing}."""
+    path = job_file(name)
+    if path is None or not path.is_file():
+        return {"entries": [], "cut": False, "missing": True}
+    try:
+        text, cut = _tail(path, limit)
+    except OSError:
+        return {"entries": [], "cut": False, "missing": True}
+    entries: list[dict] = []
+    for line in text.splitlines():
+        m = _LINE.match(line)
+        if m:
+            entries.append(
+                {
+                    "time": m.group(1)[11:] + (f".{m.group(2)}" if m.group(2) else ""),
+                    "level": m.group(3).lower().replace("critical", "error"),
+                    "source": m.group(4),
+                    "text": m.group(5),
+                }
+            )
+        elif entries:
+            entries[-1]["text"] += "\n" + line
+        elif line.strip():
+            entries.append({"time": "", "level": "info", "source": "", "text": line})
+    return {"entries": entries, "cut": cut, "missing": False}
+
+
+def read_attachment(name: str, limit: int = READ_LIMIT) -> dict:
+    """Another program's output kept with a job: {text, cut, missing}."""
+    path = job_file(name)
+    if path is None or not path.is_file():
+        return {"text": "", "cut": False, "missing": True}
+    try:
+        text, cut = _tail(path, limit)
+    except OSError:
+        return {"text": "", "cut": False, "missing": True}
+    return {"text": text, "cut": cut, "missing": False}
+
+
+def unseen_failures(since: float) -> list[dict]:
+    """Jobs that failed or were interrupted after `since` (a time; what the Activity page last showed)."""
+    return [r for r in read_jobs() if r.get("outcome") in ("failed", "interrupted") and float(r.get("t") or 0) > since]
 
 
 # ----------------------------------------------------------------------------- the command line

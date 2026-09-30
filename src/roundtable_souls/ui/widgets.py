@@ -64,6 +64,7 @@ from qfluentwidgets import (
     TitleLabel,
     TransparentToolButton,
     getFont,
+    isDarkTheme,
 )
 from qfluentwidgets import ExpandGroupSettingCard as _ExpandGroupSettingCard
 from qfluentwidgets import FluentIcon as FI
@@ -471,7 +472,7 @@ class LogPane(QWidget):
     """What the running job is doing: timestamp, one colour per level, Copy, Clear and the logs folder. Newest at
     the bottom. Every job's full log is kept in the logs folder; this pane keeps the last LOG_KEEP lines."""
 
-    def __init__(self, open_folder=None):
+    def __init__(self, open_folder=None, open_activity=None):
         super().__init__()
         self._rows = []
         self.view = TextEdit()
@@ -495,6 +496,12 @@ class LogPane(QWidget):
             self.folder_btn.setToolTip("Every job's full log, me3's output and launcher.log.")
             self.folder_btn.clicked.connect(open_folder)
             bar.addWidget(self.folder_btn)
+        self.activity_btn = None
+        if open_activity is not None:
+            self.activity_btn = ghost_btn("Activity", FI.HISTORY)
+            self.activity_btn.setToolTip("Every job so far, with how it went and its full log.")
+            self.activity_btn.clicked.connect(open_activity)
+            bar.addWidget(self.activity_btn)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(8)
@@ -531,34 +538,51 @@ class LogPane(QWidget):
 
     def restyle(self):
         style_editor(self.view)
-        for b in (self.copy_btn, self.clear_btn, self.folder_btn):
+        for b in (self.copy_btn, self.clear_btn, self.folder_btn, self.activity_btn):
             if b is not None:
                 style_ghost(b)
         self._paint()
 
     def _paint(self):
-        t = tokens()
-        bg = t["editor"].name()
-        colors = {"info": t["editor_fg"], "warning": t["accent"], "error": t["danger"], "banner": t["muted"]}
-        f = QFont("Consolas")
-        f.setStyleHint(QFont.StyleHint.Monospace)
-        f.setPointSize(11)
-        indent = QFontMetrics(f).horizontalAdvance("00:00:00  ")
-        bits = []
-        for ts, level, part in self._rows:
-            color = colors.get(level, t["editor_fg"])
-            if level == "banner":
-                bits.append(f'<div style="color:{t["muted"]};margin:12px 0 6px 0">{html.escape("─ " * 2 + part)}</div>')
-            else:
-                stamp = ts.strftime("%H:%M:%S") if ts else "&nbsp;" * 8
-                body = html.escape(part) if part else "&nbsp;"
-                bits.append(  # a hanging indent: wrapped text lines up with the message, not under the time
-                    f'<div style="color:{color};margin-left:{indent}px;text-indent:-{indent}px">'
-                    f'<span style="color:{t["muted"]}">{stamp}</span>&nbsp;&nbsp;{body}</div>'
-                )
-        self.view.setHtml(
-            f"<body style=\"background:{bg};font-family:Consolas,'Cascadia Code',monospace;font-size:11pt\">{''.join(bits)}</body>"
-        )
+        rows = [(ts.strftime("%H:%M:%S") if ts else "", level, part) for ts, level, part in self._rows]
+        self.view.setHtml(log_html(rows))
+
+
+def log_html(rows, stamp_width: str = "00:00:00") -> str:
+    """Log lines as the editor-styled HTML both the Play page's Log and the Activity page show: one colour per
+    level, a muted time, and a hanging indent so wrapped text lines up with the message. rows: (time text, level,
+    text) with level info / warning / error / debug / banner."""
+    t = tokens()
+    bg = t["editor"].name()
+    colors = {
+        "info": t["editor_fg"],
+        "debug": t["muted"],
+        "warning": t["accent"],
+        "error": t["danger"],
+        "banner": t["muted"],
+    }
+    f = QFont("Consolas")
+    f.setStyleHint(QFont.StyleHint.Monospace)
+    f.setPointSize(11)
+    indent = QFontMetrics(f).horizontalAdvance(stamp_width + "  ")
+    bits = []
+    for stamp, level, part in rows:
+        color = colors.get(level, t["editor_fg"])
+        if level == "banner":
+            bits.append(f'<div style="color:{t["muted"]};margin:12px 0 6px 0">{html.escape("─ " * 2 + part)}</div>')
+            continue
+        shown = html.escape(stamp) if stamp else "&nbsp;" * len(stamp_width)
+        for i, line in enumerate(str(part).split("\n") or [""]):
+            body = html.escape(line) if line else "&nbsp;"
+            lead = shown if i == 0 else "&nbsp;" * len(stamp_width)
+            bits.append(
+                f'<div style="color:{color};margin-left:{indent}px;text-indent:-{indent}px">'
+                f'<span style="color:{t["muted"]}">{lead}</span>&nbsp;&nbsp;{body}</div>'
+            )
+    return (
+        f"<body style=\"background:{bg};font-family:Consolas,'Cascadia Code',monospace;font-size:11pt\">"
+        f"{''.join(bits)}</body>"
+    )
 
 
 def tone_label(lab, level="muted"):
@@ -1413,3 +1437,76 @@ class DropOverlay(QWidget):
             Qt.AlignHCenter | Qt.AlignTop | Qt.TextWordWrap,
             sub,
         )
+
+
+# Status colours for pills: green only means "all good"; red is something to act on. Text always says it too, so
+# colour is never the only signal.
+PILL_COLORS = {
+    "ok": ("#2E7D4F", "#7CC89A"),
+    "bad": ("#963C48", "#E08A7A"),
+    "warn": (ACCENT_LIGHT, ACCENT),
+    "busy": (ACCENT_LIGHT, ACCENT),
+    "muted": (HINT_ON_LIGHT, HINT),
+}
+
+
+class StatusPill(QWidget):
+    """A small rounded status: a tinted fill and outline in its level's colour, and a word or two. Clickable (and
+    reachable with Tab, Enter or Space) when something listens to clicked."""
+
+    clicked = Signal()
+
+    def __init__(self, text="", level="muted", parent=None):
+        super().__init__(parent)
+        self._text, self._level = text, level
+        self._font = getFont(12, QFont.DemiBold)
+        self.setFixedHeight(22)
+        self.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        self.setFocusPolicy(Qt.TabFocus)
+
+    def set(self, text, level):
+        self._text, self._level = text, level
+        self.updateGeometry()
+        self.update()
+
+    def text(self):
+        return self._text
+
+    def level(self):
+        return self._level
+
+    def sizeHint(self):
+        return QSize(QFontMetrics(self._font).horizontalAdvance(self._text) + 22, 22)
+
+    def minimumSizeHint(self):
+        return self.sizeHint()
+
+    def setClickable(self, on=True):
+        self.setCursor(Qt.PointingHandCursor if on else Qt.ArrowCursor)
+        self.setFocusPolicy(Qt.StrongFocus if on else Qt.NoFocus)
+
+    def mouseReleaseEvent(self, e):
+        if e.button() == Qt.LeftButton and self.rect().contains(e.position().toPoint()):
+            self.clicked.emit()
+        super().mouseReleaseEvent(e)
+
+    def keyPressEvent(self, e):
+        if e.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
+            self.clicked.emit()
+            return
+        super().keyPressEvent(e)
+
+    def paintEvent(self, e):
+        light, dark = PILL_COLORS.get(self._level, PILL_COLORS["muted"])
+        color = QColor(dark if isDarkTheme() else light)
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        r = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        fill = QColor(color)
+        fill.setAlpha(38)
+        p.setPen(QPen(color, 1.2 if self.hasFocus() else 1))
+        p.setBrush(fill)
+        p.drawRoundedRect(r, 11, 11)
+        p.setFont(self._font)
+        p.setPen(color)
+        p.drawText(r, Qt.AlignCenter, self._text)

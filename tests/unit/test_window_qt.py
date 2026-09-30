@@ -51,7 +51,14 @@ def test_nothing_can_press_play_by_accident_at_start(launcher, app):
 
 
 def test_ctrl_number_switches_pages(launcher, app):
-    pages = [launcher.play_page, launcher.coop_page, launcher.mods_page, launcher.saves_page, launcher.tools_page]
+    pages = [
+        launcher.play_page,
+        launcher.coop_page,
+        launcher.mods_page,
+        launcher.saves_page,
+        launcher.activity_page,
+        launcher.tools_page,
+    ]
     for n, page in enumerate(pages, start=1):
         QTest.keyClick(launcher, getattr(Qt, f"Key_{n}"), Qt.ControlModifier)
         app.processEvents()
@@ -665,3 +672,69 @@ def test_changes_made_in_the_window_are_kept_in_the_logs(sandbox):
     sandbox._log("profile: mem_patch = On")
     rl.shutdown()
     assert "profile: mem_patch = On" in (rl.log_dir() / rl.APP_LOG).read_text(encoding="utf-8")
+
+
+def _wait_idle(w, loops=100):
+    from PySide6.QtCore import QEventLoop, QTimer
+
+    loop = QEventLoop()
+    for _ in range(loops):
+        if not w.busy:
+            break
+        QTimer.singleShot(50, loop.quit)
+        loop.exec()
+
+
+def test_a_failed_job_shows_on_activity_with_a_badge_until_looked_at(sandbox, monkeypatch):
+    w = sandbox
+    buttons = []
+    real_notice = window.notice
+
+    def spy(parent, kind, title, content="", actions=(), **k):
+        buttons.extend(b.text() for b in actions)
+        return real_notice(parent, kind, title, content, actions=actions, **k)
+
+    monkeypatch.setattr(window, "notice", spy)
+
+    def job(_setup):
+        window.core.common.log("error: the save is locked")
+        raise SystemExit(1)
+
+    w.switchTo(w.play_page)
+    w.start(job, "Repairing...", need_setup=False)
+    _wait_idle(w)
+    assert "View in Activity" in buttons
+    assert w._activity_badge is not None and w._activity_badge.text() == "1"
+    QTest.keyClick(w, Qt.Key_5, Qt.ControlModifier)  # Ctrl+5: Activity
+    QTest.qWait(50)
+    assert w.stackedWidget.currentWidget() is w.activity_page
+    assert w._activity_badge is None  # looked at: the count goes
+    rows = w.activity.rows_shown()
+    assert rows and rows[0].title.full_text() == "Repairing" and rows[0].pill.text() == "Failed"
+    assert rows[0].summary.full_text() == "the save is locked"
+
+
+def test_activity_entries_fit_a_narrow_window(sandbox):
+    from roundtable_souls.system import logging as rl
+
+    job = rl.begin_job("install mod a very long mod name that would never fit on a narrow window at all")
+    window.core.common.log("done: " + "installed and combined with several other packs " * 3)
+    rl.end_job(job)
+    w = sandbox
+    w.switchTo(w.activity_page)
+    w.resize(560, 700)
+    QTest.qWait(200)
+    row = w.activity.rows_shown()[0]
+    row.flip()
+    QTest.qWait(100)
+    for widget in (row.pill, row.title, row.meta, row.toggle, row.details.copy_btn, row.details.open_btn):
+        assert widget.mapTo(row, widget.rect().topRight()).x() <= row.width(), widget
+    assert row.title.text().endswith("…") and row.summary.text().endswith("…")  # shortened, full text on hover
+
+
+def test_the_play_pages_log_links_to_activity(sandbox):
+    w = sandbox
+    w.switchTo(w.play_page)
+    w.log_exp.setExpand(True)
+    QTest.mouseClick(w.log_pane.activity_btn, Qt.LeftButton)
+    assert w.stackedWidget.currentWidget() is w.activity_page

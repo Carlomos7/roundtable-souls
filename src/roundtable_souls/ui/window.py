@@ -151,6 +151,7 @@ from roundtable_souls.core import (
 from roundtable_souls.mods import configs as mod_configs
 from roundtable_souls.resources import ASSETS_DIR
 from roundtable_souls.settings import FROZEN, is_installed
+from roundtable_souls.ui.activity import ActivityView
 from roundtable_souls.ui.config_files import ConfigFilesDialog
 from roundtable_souls.ui.dialogs import (
     WRITE_SAFETY,
@@ -256,18 +257,21 @@ class Launcher(FluentWindow):
         self._build_saves()
         self._build_tools()
         self._build_workshop()
+        self._build_activity()
         self.addSubInterface(self.play_page, FI.PLAY, "Play")
         self.addSubInterface(self.coop_page, FI.PEOPLE, "Co-op")
         self.addSubInterface(self.mods_page, FI.LIBRARY, "Mods")
         self.addSubInterface(self.saves_page, FI.SAVE, "Saves")
+        self.addSubInterface(self.activity_page, FI.HISTORY, "Activity")
         self.addSubInterface(self.tools_page, FI.SETTING, "Settings", NavigationItemPosition.BOTTOM)
         self._build_placeholder()
         self._build_game_tabs()
-        # Keyboard: Ctrl+1..5 open the pages in rail order. Nothing has focus at start,
+        # Keyboard: Ctrl+1..6 open the pages in rail order. Nothing has focus at start,
         # so a stray Enter or Space when the window appears cannot press Play.
         self.setFocusPolicy(Qt.StrongFocus)
         for n, target in enumerate(
-            (self.play_page, self.coop_page, self.mods_page, self.saves_page, self.tools_page), start=1
+            (self.play_page, self.coop_page, self.mods_page, self.saves_page, self.activity_page, self.tools_page),
+            start=1,
         ):
             nav = QShortcut(QKeySequence(f"Ctrl+{n}"), self)
             nav.activated.connect(lambda pg=target: self._shortcut_page(pg))
@@ -286,7 +290,8 @@ class Launcher(FluentWindow):
         self.bus.update_ready.connect(self._on_update_ready)
         self._update_bar = None
         self.bus.conflicts.connect(self._fill_conflicts)
-        self.bus.merge.connect(self._on_merge)
+        self.stackedWidget.currentChanged.connect(self._on_page_changed)
+        self.bus.merge.connect(self._on_merge)  # a health result on its own (the overview scan sends it too)
         core.NOTIFY = lambda title, msg: notice(self, "error", title, msg)
         sys.excepthook = lambda t, e, tb: report_exception(t, e, tb, "main thread")
         threading.excepthook = lambda a: report_exception(
@@ -299,6 +304,7 @@ class Launcher(FluentWindow):
         else:
             QTimer.singleShot(0, lambda: self._set_game(self.game))  # opens the placeholder page
         self._watch_game()
+        self._update_activity_badge()
         self._refresh_me3()
         self._check_launcher_update()
         QTimer.singleShot(0, lambda: (self.navigationInterface.expand(useAni=False), self._restyle(), self._relayout()))
@@ -308,8 +314,8 @@ class Launcher(FluentWindow):
         return f"{TITLE} {VERSION} - {self.game.name}"
 
     def _shortcut_page(self, pg):
-        """Ctrl+1..5. A game without support yet only has its placeholder and Settings."""
-        if self.game.ready or pg is self.tools_page:
+        """Ctrl+1..6. A game without support yet only has its placeholder, Activity and Settings."""
+        if self.game.ready or pg in (self.tools_page, self.activity_page):
             self.switchTo(pg)
 
     def _build_game_tabs(self):
@@ -547,7 +553,7 @@ class Launcher(FluentWindow):
         self.log_exp = ExpandGroupSettingCard(
             FI.HISTORY, "Log", "What the running job is doing. Opens on its own if something goes wrong."
         )
-        self.log_pane = LogPane(open_folder=self._open_logs)
+        self.log_pane = LogPane(open_folder=self._open_logs, open_activity=lambda: self.switchTo(self.activity_page))
         self.log = self.log_pane.view
         self.log.setMinimumHeight(180)
         log_body = QWidget()
@@ -4449,6 +4455,90 @@ class Launcher(FluentWindow):
         """Lines from the logging layer (the running job, and warnings from anywhere), for the pane."""
         self.bus.line.emit(str(msg), level or "")
 
+    # -------------------------------------------------------------- activity
+    def _build_activity(self):
+        self.activity_page, lay = page("activityPage")
+        acts, al = action_row()
+        refresh = ghost_btn("Refresh", FI.SYNC)
+        refresh.clicked.connect(lambda: self.activity.refresh())
+        folder = ghost_btn("Logs folder", FI.FOLDER)
+        folder.setToolTip("Every job's log, other programs' output kept with them, and launcher.log.")
+        folder.clicked.connect(self._open_logs)
+        share = ghost_btn("Save logs for support...", FI.ZIP_FOLDER)
+        share.setToolTip(
+            "A zip of the logs folder with your user name and Steam IDs masked, to attach to a report. Nothing is "
+            "sent anywhere."
+        )
+        share.clicked.connect(self._save_logs_for_support)
+        for b in (refresh, folder, share):
+            al.addWidget(b)
+        titled(
+            lay,
+            "Activity",
+            FI.HISTORY,
+            "What the launcher did: every Play, repair, install and rebuild, with how it went and its full log.",
+            acts,
+        )
+        self.activity = ActivityView()
+        lay.addWidget(self.activity)
+        lay.addStretch(1)
+        self._activity_badge = None
+
+    def _on_page_changed(self, *_):
+        if self.stackedWidget.currentWidget() is self.activity_page:
+            self.activity.refresh()
+            self._mark_activity_seen()
+
+    def _open_activity(self, failed_only=False):
+        self.activity.failed_only.setChecked(failed_only)
+        self.switchTo(self.activity_page)
+        self.activity.refresh()
+
+    def _mark_activity_seen(self):
+        save_settings(activity_seen=time.time())
+        self.settings = load_settings()
+        self._update_activity_badge()
+
+    def _update_activity_badge(self):
+        """A red count on the Activity item for jobs that failed since the page was last looked at."""
+        seen = float(load_settings().get("activity_seen") or 0.0)
+        count = len(core.run_logging.unseen_failures(seen))
+        if self._activity_badge is not None:
+            try:
+                self._activity_badge.close()
+                self._activity_badge.deleteLater()
+            except RuntimeError:
+                pass
+            self._activity_badge = None
+        item = self.navigationInterface.widget(self.activity_page.objectName())
+        if count and item is not None:
+            self._activity_badge = InfoBadge.error(
+                str(count) if count < 100 else "99+",
+                parent=item.parent(),
+                target=item,
+                position=InfoBadgePosition.NAVIGATION_ITEM,
+            )
+            self._activity_badge.setToolTip(f"{count} job{'s' if count != 1 else ''} failed since you last looked")
+        if item is not None:
+            item.setToolTip(f"Activity: {count} failed since you last looked" if count else "Activity")
+
+    def _save_logs_for_support(self):
+        import shutil
+        import tempfile
+
+        where = QFileDialog.getExistingDirectory(self, "Save logs for support: pick a folder", str(Path.home()))
+        if not where:
+            return
+        stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                core.run_logging.copy_logs(Path(tmp) / "logs")
+                out = shutil.make_archive(str(Path(where) / f"roundtable-souls-logs-{stamp}"), "zip", tmp)
+        except OSError as e:
+            self._toast("Could not save the logs", str(e), error=True)
+            return
+        self._toast("Logs saved", f"{Path(out).name}: user names and Steam IDs are masked.", info=True)
+
     def _open_logs(self):
         d = core.run_logging.log_dir()
         try:
@@ -4542,17 +4632,24 @@ class Launcher(FluentWindow):
                 QTimer.singleShot(0, self._install_next)  # the next dropped mod
         undo = self._undo if ok else None
         undo_btn = ghost_btn("Undo", FI.RETURN) if undo else None
+        view_btn = ghost_btn("View in Activity", FI.HISTORY) if not ok else None
         bar = notice(
             self,
             "success" if ok else "error",
             status,
             detail + (" Undo puts the file back as it was." if undo else ""),
-            actions=(undo_btn,) if undo_btn else (),
+            actions=tuple(b for b in (undo_btn, view_btn) if b is not None),
             duration=-1 if (undo or not ok) else 6000,
         )
         if undo_btn:
             undo_btn.clicked.connect(lambda _=False, u=undo, bar=bar: (bar.close(), self._undo_last(u)))
+        if view_btn:
+            view_btn.clicked.connect(lambda _=False, bar=bar: (bar.close(), self._open_activity(failed_only=True)))
         self._undo = None
+        if self.stackedWidget.currentWidget() is self.activity_page:
+            self.activity.refresh()
+            self._mark_activity_seen()
+        self._update_activity_badge()
 
     def start(self, job, status, need_setup=True):
         if self.busy:
