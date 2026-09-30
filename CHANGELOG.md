@@ -2,6 +2,14 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
+## [Unreleased]
+
+- Fixed: removing a mod took the comment lines of the entry after it (a section heading, another mod's notes) and left its own behind. Removing now takes exactly the entry and its own comments, and a removed entry can be put back byte for byte where it was.
+- Profiles: a copy is kept before every change the launcher makes (the newest 30, in the data folder, identical copies skipped). Switches, options and profile settings show Undo right after the change; Edit profile > Versions restores any copy, and a restore can itself be undone.
+- Mods: removing a mod inside combined parameters offers Remove and rebuild, so the game does not keep a removed mod's changes; removal is a job on Activity. The folder goes to the Recycle Bin instead of being deleted (Windows still asks before deleting for good when the bin cannot take it), and Activity's Restore puts the folder and the entry back.
+- Mods: Undo rebuild on Activity puts back what a rebuild replaced: the rebuild tool's output from its own backup and the launcher's combined parameters (the last 3 kept), swapped by renaming so it is instant and needs no space; Redo swaps them again. The profile comes back as it was before the rebuild.
+- Mods: Load order shows how much space a rebuild tool's backups take (it never removes them) and can move all but the newest 3 to the Recycle Bin.
+
 ## [3.8.0] - 2026-09-29
 
 - Activity: a new page in the sidebar listing every job (Play, repairs, installs, rebuilds...) by day, with how it went and a line on what it did or what went wrong. Open one for its log, with Show details for the fine detail and me3's output kept with each Play; filter by game, kind or failures. A red count on Activity shows jobs that failed since you last looked, and a failure message offers View in Activity. Copy for support and Save logs for support (a zip) mask your user name and Steam IDs. The Log on the Play page links to it.

@@ -86,9 +86,14 @@ Co-op
 
 Mods
   What the current me3 profile loads. Each mod can be turned on or off, has
-  Options (load order and, for DLL mods, how they load) and can be removed
-  (its folder is deleted only if you tick that). New profile and Delete
-  profile manage .me3 files. Profile settings are me3's own options for this
+  Options (load order and, for DLL mods, how they load) and can be removed.
+  Removing takes the entry and its own comment lines only (the next entry's
+  notes and section headings stay), and moves its folder to the Recycle Bin
+  if you tick that. When the mod is inside combined parameters, you can
+  Remove and rebuild in one go, so the game never keeps a removed mod's
+  changes. Activity's Restore puts a removed mod back: the entry where it
+  was, and the folder from the Recycle Bin. New profile and Delete profile
+  manage .me3 files. Profile settings are me3's own options for this
   profile. Conflicts lists files two mods both replace and which one wins.
 
   Install mod takes a .zip, .7z or .rar, a .dll, or a folder; you can also
@@ -162,6 +167,17 @@ Mods
   rebuild tool is then looked for with looser rules, or you can pick a
   rebuild.json for it there; installs place new packs before it even when no
   tool is found.
+
+  Undo. A copy of the profile is kept before every change the launcher
+  makes (the newest 30, in the data folder). Switching a mod, its options or
+  a profile setting shows Undo right after; Edit profile > Versions lists
+  every copy with why it was made and restores any of them. A rebuild keeps
+  what it replaced: the launcher's combined parameters (the last 3) and the
+  rebuild tool's own backup. Undo rebuild on Activity swaps them back by
+  renaming, so it takes no time or space, and Redo swaps them again.
+  Rebuild tools keep a backup every run and never remove them; Load order
+  shows how much space they use and can move all but the newest 3 to the
+  Recycle Bin.
 
   Load order (on the Mods page) says what this profile loads and what wins:
     Parameters       the pill's status with its reasons, Combine or
