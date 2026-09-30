@@ -493,7 +493,7 @@ def test_install_dialog_offers_a_rebuild_only_before_the_merger(app, tmp_path, m
     parent.deleteLater()
 
 
-def test_merge_health_shows_on_the_mods_page_and_prompts_when_it_goes_stale(sandbox, monkeypatch):
+def test_merge_health_is_a_pill_and_prompts_when_it_goes_stale(sandbox, monkeypatch):
     w = sandbox
     shown = []
     monkeypatch.setattr(
@@ -502,8 +502,10 @@ def test_merge_health_shows_on_the_mods_page_and_prompts_when_it_goes_stale(sand
     prof = str(w.profiles / "sandbox.me3")
     base = {"profile": prof, "packs": ["p", "last"], "winner": "last", "backend": "the rebuild tool of last"}
     w.switchTo(w.mods_page)
+    w.load_exp.setExpand(False)
     w._on_merge({**base, "state": "current", "text": "Combined parameters are up to date", "reasons": []})
-    assert not w.merge_row.isHidden() and w.merge_btn.isHidden()
+    assert not w.merge_pill.isHidden() and (w.merge_pill.text(), w.merge_pill.level()) == ("Parameters OK", "ok")
+    assert w.merge_btn.isHidden() and not w.load_exp.isExpand
     stale = {
         **base,
         "state": "stale",
@@ -511,12 +513,24 @@ def test_merge_health_shows_on_the_mods_page_and_prompts_when_it_goes_stale(sand
         "reasons": ["regulation.bin: p changed"],
     }
     w._on_merge(stale)
-    assert not w.merge_btn.isHidden() and "p changed" in w.merge_text.text()
+    assert (w.merge_pill.text(), w.merge_pill.level()) == ("Parameters out of date", "bad")
+    assert (
+        not w.merge_btn.isHidden() and "p changed" in w.merge_reasons.text() and "p changed" in w.merge_pill.toolTip()
+    )
+    assert w.load_exp.isExpand  # opened once, when it turned red
     assert shown == ["Combined parameters are out of date"]  # prompted once, on the change
+    w.load_exp.setExpand(False)
     w._on_merge(stale)
-    assert len(shown) == 1
-    w._on_merge({**base, "state": "single", "text": "", "reasons": [], "backend": None})
-    assert w.merge_row.isHidden()
+    assert len(shown) == 1 and not w.load_exp.isExpand  # still red: left as the user set it
+    w._on_merge(
+        {**base, "state": "stacked", "text": "Several packages ship parameters", "reasons": [], "can_combine": True}
+    )
+    assert w.merge_pill.text() == "Parameters: 1 of 2 apply" and w.merge_btn.text() == "Combine"
+    w._on_merge({**base, "packs": ["p"], "state": "single", "text": "", "reasons": [], "backend": None})
+    assert (w.merge_pill.text(), w.merge_pill.level()) == ("Parameters OK", "ok")  # one pack: green
+    w._on_merge({**base, "packs": [], "state": "single", "text": "", "reasons": [], "backend": None})
+    assert w.merge_pill.isHidden() and w.merge_row.isHidden()  # nothing ships parameters: no pill at all
+    QTest.mouseClick(w.merge_pill, Qt.LeftButton)  # hidden: nothing happens
 
 
 def test_an_install_that_asked_for_it_rebuilds_afterwards(sandbox, monkeypatch, tmp_path):
@@ -738,3 +752,42 @@ def test_the_play_pages_log_links_to_activity(sandbox):
     w.log_exp.setExpand(True)
     QTest.mouseClick(w.log_pane.activity_btn, Qt.LeftButton)
     assert w.stackedWidget.currentWidget() is w.activity_page
+
+
+def test_the_load_order_card_shows_outcomes_from_one_scan(sandbox, tmp_path):
+    from roundtable_souls.mods import overview
+
+    w = sandbox
+    prof = w.profiles / "sandbox.me3"
+    for name in ("a", "b"):
+        (w.profiles / "mod" / name / "parts").mkdir(parents=True)
+        (w.profiles / "mod" / name / "parts" / "am_m_1000.partsbnd.dcx").write_bytes(name.encode())
+    prof.write_text(
+        prof.read_text(encoding="utf-8")
+        + "\n[[packages]]\nid = \"a\"\npath = 'mod/a'\n\n[[packages]]\nid = \"b\"\npath = 'mod/b'\n",
+        encoding="utf-8",
+    )
+    w.switchTo(w.mods_page)
+    w._fill_conflicts(overview.overview(prof))
+    assert "1 shipped by more than one" in w.conf_note.text() and "1 replaced" in w.conf_note.text()
+    assert "a: 1 replaced" in w.conf_packages.text() and "b: used 1" in w.conf_packages.text()
+    assert "1 replaced" in w.load_exp.card.contentLabel.text()
+    labels = [lab.text() for lab in w.load_exp.findChildren(window.CaptionLabel)]
+    assert any("b is used; a replaced" in t for t in labels)
+    assert w.problems_head.isHidden()
+    w._fill_conflicts({"profile": str(prof), "error": "disk on fire"})
+    assert "Could not scan: disk on fire" in w.conf_note.text()
+
+
+def test_clicking_the_pill_opens_the_load_order(sandbox):
+    w = sandbox
+    w.switchTo(w.mods_page)
+    w.load_exp.setExpand(False)
+    prof = str(w.profiles / "sandbox.me3")
+    w._on_merge({"profile": prof, "packs": ["p"], "state": "single", "text": "", "reasons": [], "backend": None})
+    QTest.mouseClick(w.merge_pill, Qt.LeftButton)
+    assert w.load_exp.isExpand
+    w.load_exp.setExpand(False)
+    w.merge_pill.setFocus()
+    QTest.keyClick(w.merge_pill, Qt.Key_Space)  # reachable without a mouse
+    assert w.load_exp.isExpand

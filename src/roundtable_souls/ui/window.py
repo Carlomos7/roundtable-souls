@@ -136,7 +136,6 @@ from roundtable_souls.core import (
     save_settings,
     save_summary,
     scaling_spec,
-    scan_profile_conflicts,
     set_mod_options,
     setting_face,
     setup_from_path,
@@ -197,6 +196,7 @@ from roundtable_souls.ui.widgets import (
     PathTag,
     SettingRow,
     StatusMenu,
+    StatusPill,
     action_row,
     card,
     clear_layout,
@@ -776,27 +776,17 @@ class Launcher(FluentWindow):
         al.addWidget(self.prof_del)
         al.addWidget(self.mods_refresh)
         titled(lay, "Mods", FI.LIBRARY, "What this profile loads.", acts)
+        head = QHBoxLayout()
+        head.setSpacing(10)
         self.mods_note = hint("")
-        lay.addWidget(self.mods_note)
-        self.merge_row = QWidget()
-        mr = QHBoxLayout(self.merge_row)
-        mr.setContentsMargins(0, 0, 0, 0)
-        mr.setSpacing(12)
-        self.merge_text = hint("")
-        self.merge_text.setWordWrap(True)
-        self.merge_btn = ghost_btn("Rebuild", FI.SYNC)
-        self.merge_btn.setToolTip(
-            "Run the profile's rebuild tool so the package that must stay last combines the others."
-        )
-        self.merge_btn.clicked.connect(
-            lambda: self._rebuild_merge(
-                combine=True if (getattr(self, "_merge_health", None) or {}).get("state") == "stacked" else None
-            )
-        )
-        mr.addWidget(self.merge_text, 1)
-        mr.addWidget(self.merge_btn, 0, Qt.AlignTop)
-        self.merge_row.hide()
-        lay.addWidget(self.merge_row)
+        head.addWidget(self.mods_note)
+        self.merge_pill = StatusPill()
+        self.merge_pill.setClickable(True)
+        self.merge_pill.clicked.connect(self._show_load_order)
+        self.merge_pill.hide()
+        head.addWidget(self.merge_pill)
+        head.addStretch(1)
+        lay.addLayout(head)
         self.pack_exp = ExpandGroupSettingCard(FI.FOLDER, "Packages", "File replacements.")
         self.nat_exp = ExpandGroupSettingCard(FI.CODE, "Natives", "DLLs.")
         lay.addWidget(self.pack_exp)
@@ -846,29 +836,77 @@ class Launcher(FluentWindow):
         cl.addWidget(self.ps_note)
         lay.addWidget(c)
         self.ps_card = c
-        c, cl = card("Conflicts", FI.INFO)
-        cl.addWidget(
+        self.load_exp = ExpandGroupSettingCard(FI.INFO, "Load order", "What this profile loads, and what wins.")
+        body = QWidget()
+        bl = QVBoxLayout(body)
+        bl.setContentsMargins(16, 12, 16, 16)
+        bl.setSpacing(8)
+        # parameters
+        self.merge_row = QWidget()
+        pl = QVBoxLayout(self.merge_row)
+        pl.setContentsMargins(0, 0, 0, 0)
+        pl.setSpacing(6)
+        pl.addWidget(StrongBodyLabel("Parameters"))
+        self.merge_text = hint("")
+        self.merge_text.setWordWrap(True)
+        pl.addWidget(self.merge_text)
+        self.merge_reasons = hint("")
+        self.merge_reasons.setWordWrap(True)
+        pl.addWidget(self.merge_reasons)
+        self.merge_rows_note = hint("")
+        self.merge_rows_note.setWordWrap(True)
+        self.merge_rows_note.hide()
+        pl.addWidget(self.merge_rows_note)
+        prow, pbar = action_row()
+        self.merge_btn = ghost_btn("Rebuild", FI.SYNC)
+        self.merge_btn.setToolTip(
+            "Combine the packs' parameters and run the rebuild tool of the package that must stay last, if there is one."
+        )
+        self.merge_btn.clicked.connect(
+            lambda: self._rebuild_merge(
+                combine=True if (getattr(self, "_merge_health", None) or {}).get("state") == "stacked" else None
+            )
+        )
+        pbar.addWidget(self.merge_btn)
+        pl.addWidget(prow)
+        bl.addWidget(self.merge_row)
+        # files
+        files_head = StrongBodyLabel("Files two packages both ship")
+        bl.addSpacing(8)
+        bl.addWidget(files_head)
+        bl.addWidget(
             hint(
-                "Files two enabled packages both ship. The package later in the load order wins; this is what me3 does, shown before you play. Read-only."
+                "me3 uses the later package's copy. Where a rebuild or the launcher's combine folds a file together, "
+                "the earlier copies are in the result instead: those say combined, as long as it is up to date."
             )
         )
         self.conf_note = hint("Not scanned yet.")
-        cl.addWidget(self.conf_note)
+        bl.addWidget(self.conf_note)
+        self.conf_packages = hint("")
+        self.conf_packages.setWordWrap(True)
+        bl.addWidget(self.conf_packages)
         self.conf_rows = QVBoxLayout()
         self.conf_rows.setSpacing(4)
-        cl.addLayout(self.conf_rows)
-        row = QHBoxLayout()
+        bl.addLayout(self.conf_rows)
+        crow, cbar = action_row()
         self.conf_more = ghost_btn("Show all")
         self.conf_more.setVisible(False)
         self.conf_more.clicked.connect(self._toggle_conflicts)
-        row.addWidget(self.conf_more)
+        cbar.addWidget(self.conf_more)
         b = ghost_btn("Refresh", FI.SYNC)
         b.clicked.connect(self._scan_conflicts)
-        row.addWidget(b)
-        row.addStretch()
-        cl.addLayout(row)
-        lay.addWidget(c)
-        self.conf_card = c
+        cbar.addWidget(b)
+        bl.addWidget(crow)
+        # problems
+        self.problems_head = StrongBodyLabel("Entries me3 would refuse")
+        bl.addSpacing(8)
+        bl.addWidget(self.problems_head)
+        self.problems_note = hint("")
+        self.problems_note.setWordWrap(True)
+        bl.addWidget(self.problems_note)
+        self.load_exp.addGroupWidget(body)
+        lay.addWidget(self.load_exp)
+        self.conf_card = self.load_exp
         self._conf_all = False
         self._conf_result = None
         edit = ExpandGroupSettingCard(FI.EDIT, "Edit profile", "The me3 file for the setup on Play.")
@@ -959,56 +997,83 @@ class Launcher(FluentWindow):
         self._load_profile_settings()
 
     def _scan_conflicts(self):
+        """Work out the Load order card and the pill on a worker thread (the rebuild tool's sources are hashed,
+        cached by size and date)."""
         if not self.setup:
             return
         self.conf_note.setText("Scanning packages...")
-        prof = self.setup.profile
+        prof = Path(self.setup.profile)
 
         def work():
             try:
-                self.bus.conflicts.emit(scan_profile_conflicts(prof))
-            except Exception as e:
-                self.bus.conflicts.emit({"error": str(e)})
+                self.bus.conflicts.emit(core.mod_overview.overview(prof))
+            except Exception as e:  # never leave the card saying "Scanning..."
+                self.bus.conflicts.emit({"profile": str(prof), "error": str(e)})
 
         threading.Thread(target=work, daemon=True).start()
+
+    _refresh_overview = _scan_conflicts
 
     def _toggle_conflicts(self):
         self._conf_all = not self._conf_all
         if self._conf_result:
             self._fill_conflicts(self._conf_result)
 
+    def _show_load_order(self):
+        self.load_exp.setExpand(True)
+        QTimer.singleShot(0, lambda: self.mods_page.ensureWidgetVisible(self.load_exp, 0, 40))
+
     def _fill_conflicts(self, r):
+        if (
+            self.setup
+            and r.get("profile")
+            and not core.mod_manage.same_folder(Path(r["profile"]), Path(self.setup.profile))
+        ):
+            return  # an answer for a profile no longer shown
         self._conf_result = r
+        if r.get("health") is not None:
+            self._on_merge({**r["health"], "profile": r.get("profile", "")})
         for i in reversed(range(self.conf_rows.count())):
             it = self.conf_rows.takeAt(i)
             dispose(it.widget())
-        if r.get("error"):
-            self.conf_note.setText(f"Could not scan: {r['error']}")
+        scan = r.get("scan") or {}
+        err = r.get("error") or scan.get("error")
+        if err:
+            self.conf_note.setText(f"Could not scan: {err}")
+            tone_label(self.conf_note, "error")
             self.conf_more.setVisible(False)
+            self.conf_packages.setText("")
             return
-        pk = r.get("packages") or []
-        cf = r.get("conflicts") or []
+        ov = r.get("overlaps") or {}
+        counts = ov.get("counts") or {}
+        cf = ov.get("conflicts") or []
+        pk = scan.get("packages") or []
         missing = [p["id"] for p in pk if p.get("missing")]
-        parts = [f"{len(pk)} package{'s' if len(pk) != 1 else ''}, {r.get('files', 0):,} files"]
-        parts.append(
-            "no overlapping files"
-            if not cf
-            else f"{len(cf)} overlapping file{'s' if len(cf) != 1 else ''}: "
-            + ", ".join(f"{k} {v}" for k, v in sorted(r["by_category"].items()))
-        )
+        parts = [f"{len(pk)} package{'s' if len(pk) != 1 else ''}, {scan.get('files', 0):,} files"]
+        if not cf:
+            parts.append("no file is shipped twice")
+        else:
+            parts.append(f"{len(cf)} shipped by more than one")
+            parts += [
+                f"{counts[k]} {core.mod_overview.OUTCOME_TEXT[k]}" for k in core.mod_overview.OUTCOMES if counts.get(k)
+            ]
         if missing:
             parts.append("missing folder: " + ", ".join(missing))
-        if r.get("truncated"):
+        if scan.get("truncated"):
             parts.append("scan stopped early (very large packages)")
         self.conf_note.setText("  \u00b7  ".join(parts))
-        tone_label(self.conf_note, "error" if missing else "muted")
-        if cf:
-            wins = sorted(
-                ((p["id"], p["wins"], p["loses"]) for p in pk if p["wins"] or p["loses"]), key=lambda x: -x[1]
-            )
-            self.conf_rows.addWidget(
-                hint("Load order result: " + "  \u00b7  ".join(f"{i} wins {w}, loses {l}" for i, w, l in wins))
-            )
+        bad = counts.get("stale") or counts.get("unreached") or missing
+        tone_label(self.conf_note, "error" if missing else "warning" if bad else "muted")
+        per = ov.get("packages") or {}
+        lines = []
+        for pid, n in per.items():
+            bits = [f"{n[k]} {core.mod_overview.OUTCOME_TEXT[k]}" for k in core.mod_overview.OUTCOMES if n.get(k)]
+            if n.get("wins"):
+                bits.insert(0, f"used {n['wins']}")
+            if bits:
+                lines.append(f"{pid}: {', '.join(bits)}")
+        self.conf_packages.setText("\n".join(lines))
+        self.conf_packages.setVisible(bool(lines))
         shown = cf if self._conf_all else cf[:12]
         for c in shown:
             row = QWidget()
@@ -1023,17 +1088,37 @@ class Launcher(FluentWindow):
             lab.elide_mode = Qt.ElideMiddle
             lab.setText(c["path"])
             rl.addWidget(lab, 1)
-            who = hint(f"{c['winner']} wins over " + ", ".join(l["id"] for l in c["losers"]))
+            said = ", ".join(f"{l['id']} {core.mod_overview.OUTCOME_TEXT[l['outcome']]}" for l in c["losers"])
+            who = hint(f"{c['winner']} is used; {said}")
             who.setWordWrap(True)
+            worst = {l["outcome"] for l in c["losers"]}
+            tone_label(who, "warning" if worst & {"stale", "unreached"} else "muted")
             rl.addWidget(who, 1)
             self.conf_rows.addWidget(row)
         self.conf_more.setVisible(len(cf) > 12)
         self.conf_more.setText("Show fewer" if self._conf_all else f"Show all {len(cf)}")
+        rows = r.get("rows") or []
+        self.merge_rows_note.setText(
+            "\n".join(rows[:13]) + (f"\n  and {len(rows) - 13} more in the rebuild's log" if len(rows) > 13 else "")
+        )
+        self.merge_rows_note.setVisible(bool(rows))
+        probs = r.get("problems") or []
+        self.problems_head.setVisible(bool(probs))
+        self.problems_note.setVisible(bool(probs))
+        self.problems_note.setText("\n".join(f"{p['name']}: {'; '.join(p['problems'])}" for p in probs))
+        tone_label(self.problems_note, "error")
+        summary = [self.merge_pill.text()] if not self.merge_pill.isHidden() else []
+        summary += [
+            f"{counts[k]} {core.mod_overview.OUTCOME_TEXT[k]}" for k in core.mod_overview.OUTCOMES if counts.get(k)
+        ]
+        if probs:
+            summary.append(f"{len(probs)} entr{'y' if len(probs) == 1 else 'ies'} me3 would refuse")
+        self.load_exp.card.setContent("  \u00b7  ".join(summary) or "No file is shipped twice")
 
     def _fill_mods(self):
         keep_p, keep_n = self.pack_exp.isExpand, self.nat_exp.isExpand
         self._load_profile_settings()
-        self._scan_conflicts()
+        self._scan_conflicts()  # the Load order card and the pill, from one scan
         first = not getattr(self, "_mods_seen", False)
         for exp in (self.pack_exp, self.nat_exp):
             while exp.viewLayout.count():
@@ -1052,7 +1137,6 @@ class Launcher(FluentWindow):
             self._load_profile_editor()
             return
         mods = profile_entries(s.profile)
-        self._check_merge(s.profile)
         self._profile_seen = self._profile_stamp()
         packs = [m for m in mods if m["kind"] == "package"]
         nats = [m for m in mods if m["kind"] == "native"]
@@ -1461,18 +1545,27 @@ class Launcher(FluentWindow):
         return False
 
     # -------------------------------------------------------------- merge health
-    def _check_merge(self, profile):
-        """Work out merge health on a worker thread (the rebuild tool's sources are hashed, cached by size and date)."""
-        prof = Path(profile)
+    PILL = {  # health state -> (pill level); the words come from _pill_text
+        "single": "ok",
+        "current": "ok",
+        "stacked": "bad",
+        "stale": "bad",
+        "failed": "bad",
+    }
 
-        def work():
-            try:
-                h = core.mod_merge.health(prof)
-            except Exception as e:  # a broken profile or unreadable report: say nothing rather than guess
-                h = {"state": None, "error": str(e)}
-            self.bus.merge.emit({**h, "profile": str(prof)})
-
-        threading.Thread(target=work, daemon=True).start()
+    @staticmethod
+    def _pill_text(h) -> str:
+        state = h.get("state")
+        if state in ("single", "current"):
+            return "Parameters OK"
+        if state == "stacked":
+            n = max(len(h.get("packs") or []), 2)
+            return f"Parameters: 1 of {n} apply"
+        if state == "stale":
+            return "Parameters out of date"
+        if state == "failed":
+            return "Rebuild failed"
+        return ""
 
     def _on_merge(self, h):
         if not self.setup or not core.mod_manage.same_folder(Path(h["profile"]), Path(self.setup.profile)):
@@ -1480,7 +1573,13 @@ class Launcher(FluentWindow):
         before = getattr(self, "_merge_health", None)
         self._merge_health = h
         state = h.get("state")
-        show = state in ("stacked", "current", "stale", "failed")
+        packs = h.get("packs") or []
+        show = state in ("stacked", "current", "stale", "failed") or (state == "single" and bool(packs))
+        level = self.PILL.get(state, "muted")
+        self.merge_pill.set(self._pill_text(h), level)
+        self.merge_pill.setVisible(show)
+        reasons = h.get("reasons") or []
+        self.merge_pill.setToolTip("\n".join(reasons) or h.get("text") or "")
         self.merge_row.setVisible(show)
         self.merge_btn.setVisible(
             (bool(h.get("backend")) and state in ("stale", "failed")) or (state == "stacked" and h.get("can_combine"))
@@ -1488,19 +1587,21 @@ class Launcher(FluentWindow):
         self.merge_btn.setText("Combine" if state == "stacked" else "Rebuild")
         if not show:
             return
-        reasons = h.get("reasons") or []
-        text = h["text"]
-        if state == "stacked":
-            text += f": {h['winner']}'s is used. " + (reasons[0] if reasons else "Combine them so all apply.")
+        if state == "single":
+            text = f"One package ships parameters ({packs[0]}): its regulation.bin is used as it is."
+        elif state == "stacked":
+            text = h["text"] + f": {h['winner']}'s is used."
         elif state == "current":
-            text += f" ({h['backend']})."
+            text = h["text"] + f" ({h['backend']})."
         else:
-            text += ". " + (reasons[0] if reasons else "")
-            if len(reasons) > 1:
-                text += f" (and {len(reasons) - 1} more)"
+            text = h["text"] + "."
         self.merge_text.setText(text)
-        self.merge_text.setToolTip("\n".join(reasons) or h["text"])
-        tone_label(self.merge_text, "muted" if state == "current" else "error" if state == "failed" else "warning")
+        tone_label(self.merge_text, "muted" if level == "ok" else "error")
+        self.merge_reasons.setText("\n".join(f"\u2022 {x}" for x in reasons))
+        self.merge_reasons.setVisible(bool(reasons))
+        turned_bad = level == "bad" and (before is None or self.PILL.get(before.get("state")) != "bad")
+        if turned_bad:
+            self.load_exp.setExpand(True)  # red for a reason: show it once, then leave it as the user sets it
         same = before is not None and before.get("profile") == h["profile"]
         if same and before.get("state") == "current" and state == "stale" and not self.busy:
             btn = ghost_btn("Rebuild", FI.SYNC)
