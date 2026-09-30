@@ -268,7 +268,7 @@ Mods
   A DLL mod's settings button (the page icon on its row) opens its own
   settings file, for example UnlockTheFps.ini, to edit and save. Files beside
   the DLL are found on their own; if a mod reads a file under another name,
-  Tie a file points at it once and it is remembered. Seamless Co-op's settings
+  Attach a file points at it once and it is remembered. Seamless Co-op's settings
   are on the Co-op page.
 
   Edit profile shows the .me3 text, with Save and Discard under it (Discard

@@ -398,6 +398,7 @@ def test_seamless_settings_button_opens_the_coop_page(sandbox, monkeypatch):
     (w.profiles / "natives" / "SeamlessCoop" / "ersc.dll").with_name("extra_settings.ini").write_text("a = 1\n")
     w._native_settings(ersc)
     assert opened and [f["path"].name for f in opened[0].files] == ["extra_settings.ini"]
+    assert opened[0].tie_btn.text() == "Attach a file..." and opened[0].untie_btn.text() == "Detach"
 
 
 def _drag(target, paths, kind="enter"):

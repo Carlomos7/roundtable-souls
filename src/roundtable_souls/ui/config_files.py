@@ -1,5 +1,5 @@
 """Edit a DLL mod's own settings files from its row on the Mods page: the files found beside it, and any the user
-tied to it (a mod that reads a differently named file, like SkeletonMan's skeleton_mods.txt)."""
+attached to it (a mod that reads a differently named file, like SkeletonMan's skeleton_mods.txt)."""
 
 from __future__ import annotations
 
@@ -33,11 +33,11 @@ class ConfigFilesDialog(Dialog):
         self.pick = ComboBox()
         self.pick.currentIndexChanged.connect(self._on_pick)
         row.addWidget(self.pick, 1)
-        self.tie_btn = ghost_btn("Tie a file...", FI.LINK)
+        self.tie_btn = ghost_btn("Attach a file...", FI.LINK)
         self.tie_btn.setToolTip("Point at a settings file this mod reads that is not found automatically.")
         self.tie_btn.clicked.connect(self._on_tie)
         row.addWidget(self.tie_btn)
-        self.untie_btn = ghost_btn("Untie", FI.CANCEL)
+        self.untie_btn = ghost_btn("Detach", FI.CANCEL)
         self.untie_btn.setToolTip("Forget this file for this mod. The file itself stays.")
         self.untie_btn.clicked.connect(self._on_untie)
         row.addWidget(self.untie_btn)
@@ -59,7 +59,7 @@ class ConfigFilesDialog(Dialog):
 
     # -------------------------------------------------------------- choosing a file
     def _label(self, f: dict) -> str:
-        how = "tied" if f["how"] == "tied" else "beside it"
+        how = "attached" if f["how"] == "tied" else "beside it"
         return f"{f['path'].name}  ·  {how}" + ("" if f["exists"] else "  ·  missing")
 
     def _fill(self, index: int):
@@ -72,9 +72,9 @@ class ConfigFilesDialog(Dialog):
         self.pick.setVisible(has)
         self.panel.setVisible(has)
         self.about.setText(
-            "Found beside the DLL, or tied to it by you. Edits apply the next time the game starts."
+            "Found beside the DLL, or attached to it by you. Edits apply the next time the game starts."
             if has
-            else "No settings file found beside this DLL. If the mod reads one (its readme names it), tie it here."
+            else "No settings file found beside this DLL. If the mod reads one (its readme names it), attach it here."
         )
         if has:
             self.pick.setCurrentIndex(min(index, len(self.files) - 1))
@@ -119,7 +119,7 @@ class ConfigFilesDialog(Dialog):
             got = configs.read(p)
         except FileNotFoundError:
             self._loaded = None
-            self.panel.set_baseline("", f"{p.name} is missing. Untie it, or put the file back.", str(p))
+            self.panel.set_baseline("", f"{p.name} is missing. Detach it, or put the file back.", str(p))
             self.panel.edit.setReadOnly(True)
             self.panel.bar.setEnabled(False)
             return
@@ -160,7 +160,7 @@ class ConfigFilesDialog(Dialog):
 
     # -------------------------------------------------------------- ties
     def _on_tie(self):
-        if not self._settle("tying a file"):
+        if not self._settle("attaching a file"):
             return
         start = str(self.dll.parent)
         p, _ = QFileDialog.getOpenFileName(
@@ -184,7 +184,7 @@ class ConfigFilesDialog(Dialog):
 
     def _on_untie(self):
         f = self._current()
-        if not f or f["how"] != "tied" or not self._settle("untying it"):
+        if not f or f["how"] != "tied" or not self._settle("detaching it"):
             return
         self.files = self._untie(f["path"])
         self._loaded = None
