@@ -4,6 +4,17 @@ Roundtable Souls is licensed under the GNU General Public License v3.0 or later 
 window is built on PySide6-Fluent-Widgets, which is GPL-3.0. It builds on the work below; none of it is endorsed by
 those authors, and each part keeps its own license.
 
+## SoulsFormats (GPL-3.0)
+
+- [SoulsFormatsNEXT](https://github.com/soulsmods/SoulsFormatsNEXT), after TKGP's SoulsFormats. The layouts of the
+  game's archives (BHD5/BDT, BND4), compressed files (DCX, and the Oodle settings the game needs) and text tables (FMG)
+  that the file merger reads and writes were learned from it; the launcher's code is its own.
+
+## UXM Selective Unpack
+
+- [UXM-Selective-Unpack](https://github.com/Nordgaren/UXM-Selective-Unpack) by Nordgaren, after TKGP's UXM: the RSA
+  public keys of Elden Ring's archive headers (`data/archives/eldenring.json`) are the ones it publishes.
+
 ## ER-Save-Editor (Apache-2.0)
 
 - [ER-Save-Editor](https://github.com/ClayAmore/ER-Save-Editor) by ClayAmore.
