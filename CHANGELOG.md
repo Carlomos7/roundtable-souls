@@ -2,6 +2,12 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
+## [Unreleased]
+
+- Play: when merged mods are out of date (a mod was added, removed, turned on or off, reordered or updated, or the game updated), Play rebuilds them first and then starts the game, with Cancel Play. A failed rebuild keeps the previous result and offers Play anyway or View details; it is not retried with the same mods in that session. Offline Play and Play from a Steam shortcut do the same (the shortcut only runs a rebuild tool that was already allowed, and starts anyway on failure).
+- Play: after an automatic rebuild only the newest 3 of a rebuild tool's backups are kept (about 140 MB each for some tools); older ones go to the Recycle Bin.
+- Settings: Update merged mods before Play (on by default). Off, Play only warns as before. Load order says an out-of-date merge will update at the next Play.
+
 ## [3.10.0] - 2026-09-29
 
 - Mods: the package that must stay last (and its DLL) now stays last however mods are added. Installing, adding existing folders, removing, renaming an id or saving options keeps its own load_after lists naming every other package and DLL (on or off, each optional), so switching a mod on or off never rewrites them; your own entries are never changed. New mods go right before it in the file.

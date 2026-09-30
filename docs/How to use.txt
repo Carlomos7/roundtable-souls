@@ -157,9 +157,21 @@ Mods
                      result is checked against what went in: a rebuild that
                      did not take each file from the right pack is reported
                      as failed, never as done.
-    Play             warns when the parameters in use are out of date, only
-                     one of several packs applies, or the last rebuild
-                     failed. It does not rebuild by itself.
+    Play             when a merge (combined parameters, or a mod's own
+                     rebuild tool) is out of date because mods, their load
+                     order or the game changed, Play rebuilds it first and
+                     then starts the game; Cancel Play lets the rebuild
+                     finish and does not start. A failed rebuild keeps the
+                     previous result and offers Play anyway (not tried
+                     again with the same mods until you restart the
+                     launcher). After an automatic rebuild only the newest
+                     3 of the tool's backups stay; older ones go to the
+                     Recycle Bin. Turn it off with Update merged mods
+                     before Play on Settings; Play then only warns. It
+                     never makes a combined package by itself: when only
+                     one of several packs applies, Play warns. Play from a
+                     Steam shortcut does the same when the tool was
+                     already allowed, and starts anyway if it fails.
   Which files a pack has is always read from the pack itself; nothing asks
   you to label a mod. If the launcher does not recognise a package that
   must stay last (a fork, or a newer version that names its files
