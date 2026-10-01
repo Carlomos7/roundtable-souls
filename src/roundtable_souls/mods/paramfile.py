@@ -1,7 +1,8 @@
 """Read and write Elden Ring's regulation.bin: AES-256-CBC around a DCX (ZSTD) around a BND4 archive of PARAM tables.
 
 Writing keeps every structure the game's own file has and only recomputes what changes (row counts, offsets, sizes,
-the archive's hash table), so rebuilding an unchanged regulation gives back the same archive bytes. Nothing here
+the archive's hash table), so rebuilding an unchanged regulation gives back the same archive bytes. The archive (BND4)
+is the shared one in formats.py. Nothing here
 knows what a field means: a row is its ID, its bytes and its (editor-only) name.
 """
 
@@ -10,7 +11,7 @@ from __future__ import annotations
 import os
 import struct
 from compression import zstd
-from dataclasses import dataclass, field
+from dataclasses import dataclass, replace
 
 from roundtable_souls.gamefiles import (
     DCX_DATA_OFFSET,
@@ -19,6 +20,7 @@ from roundtable_souls.gamefiles import (
     dcx_decompress,
     decrypt_regulation,
 )
+from roundtable_souls.mods.formats import COMPRESSION, IDS, NAMES1, NAMES2, Bnd4, read_bnd4, write_bnd4
 
 NO_NAME = -1  # Param.shared_name when every row's name offset is 0
 ROW_HEADER = 24  # u32 id, u32 pad, i64 data offset, i64 name offset (the 64-bit layout the game uses)
@@ -155,117 +157,25 @@ def write_param(p: Param) -> bytes:
     return bytes(out)
 
 
-# ----------------------------------------------------------------------------- BND4
-@dataclass
-class BndFile:
-    name: str  # the full path as stored (N:\GR\data\Param\param\GameParam\...)
-    data: bytes
-    id: int = 0
-    flags: int = 0x40
+# ----------------------------------------------------------------------------- the binder
+# The regulation's binder is a BND4 archive read and written by the shared code in formats.py. What is particular to
+# it is checked and kept here: its layout, and each table's stored size taken from its data on write.
+REGULATION_FORMAT = IDS | NAMES1 | NAMES2 | COMPRESSION  # 0x74 as stored: 36-byte entries with IDs and Unicode names
+REGULATION_ENTRY = 36
 
 
-@dataclass
-class Bnd4:
-    header: bytes  # the 0x40 header as read
-    files: list[BndFile] = field(default_factory=list)
-
-    def get(self, short: str) -> BndFile | None:
-        low = short.lower()
-        return next((f for f in self.files if f.name.replace("\\", "/").rsplit("/", 1)[-1].lower() == low), None)
-
-
-def read_bnd4(body: bytes) -> Bnd4:
-    if body[:4] != b"BND4":
-        raise FormatError("not a BND4 archive")
-    count = struct.unpack_from("<i", body, 0x0C)[0]
-    header_size = struct.unpack_from("<q", body, 0x20)[0]
-    if header_size != 36 or body[0x30] != 1 or body[0x31] != 0x74:
+def read_binder(body: bytes) -> Bnd4:
+    """The regulation's binder. Refuses another layout rather than guess at it."""
+    b = read_bnd4(body)
+    if b.format != REGULATION_FORMAT or not b.unicode or struct.unpack_from("<q", body, 0x20)[0] != REGULATION_ENTRY:
         raise FormatError("unsupported BND4 layout")
-    files = []
-    for i in range(count):
-        o = 0x40 + i * header_size
-        flags = body[o]
-        size = struct.unpack_from("<q", body, o + 8)[0]
-        data_at, fid, name_at = struct.unpack_from("<IiI", body, o + 24)
-        end = name_at
-        while body[end : end + 2] != b"\0\0":
-            end += 2
-        files.append(BndFile(body[name_at:end].decode("utf-16-le"), bytes(body[data_at : data_at + size]), fid, flags))
-    return Bnd4(bytes(body[:0x40]), files)
+    return b
 
 
-def path_hash(name: str) -> int:
-    h = 0
-    text = name.strip().replace("\\", "/").lower()
-    if not text.startswith("/"):
-        text = "/" + text
-    for c in text:
-        h = (h * 37 + ord(c)) & 0xFFFFFFFF
-    return h
-
-
-def _is_prime(n: int) -> bool:
-    if n < 2:
-        return False
-    return all(n % d for d in range(2, int(n**0.5) + 1))
-
-
-def _hash_table(files: list[BndFile], at: int) -> bytes:
-    groups = next(p for p in range(len(files) // 7, 100001) if _is_prime(p))
-    buckets: list[list[tuple[int, int]]] = [[] for _ in range(groups)]
-    for i, f in enumerate(files):
-        h = path_hash(f.name)  # the whole stored path, drive included
-        buckets[h % groups].append((h, i))
-    table = bytearray()
-    hashes_at = at + 16 + groups * 8
-    table += struct.pack("<qiBBBB", hashes_at, groups, 0x10, 8, 8, 0)
-    start = 0
-    for b in buckets:
-        table += struct.pack("<ii", len(b), start)
-        start += len(b)
-    for b in buckets:
-        for h, i in sorted(b):  # by hash within each group, as the game's own files have them
-            table += struct.pack("<Ii", h, i)
-    return bytes(table)
-
-
-def _align(n: int, a: int) -> int:
-    return (n + a - 1) // a * a
-
-
-def write_bnd4(b: Bnd4) -> bytes:
-    n = len(b.files)
-    names = bytearray()
-    name_at = []
-    names_start = 0x40 + n * 36
-    for f in b.files:
-        name_at.append(names_start + len(names))
-        names += f.name.encode("utf-16-le") + b"\0\0"
-    hash_at = _align(names_start + len(names), 8)
-    table = _hash_table(b.files, hash_at)
-    data_start = _align(hash_at + len(table), 16)
-    out = bytearray(b.header)
-    struct.pack_into("<i", out, 0x0C, n)
-    struct.pack_into("<q", out, 0x28, data_start)
-    struct.pack_into("<q", out, 0x38, hash_at)
-    data_at = []
-    pos = data_start
-    for f in b.files:
-        pos = _align(pos, 16)
-        data_at.append(pos)
-        pos += len(f.data)
-    for i, f in enumerate(b.files):
-        out += struct.pack(
-            "<B7sqqIiI", f.flags, b"\0\0\0\xff\xff\xff\xff", len(f.data), len(f.data), data_at[i], f.id, name_at[i]
-        )
-    out += names
-    out += b"\0" * (hash_at - len(out))
-    out += table
-    out += b"\0" * (data_start - len(out))
-    for i, f in enumerate(b.files):
-        out += b"\0" * (data_at[i] - len(out))
-        out += f.data
-    return bytes(out)
+def binder_bytes(b: Bnd4) -> bytes:
+    """The binder as the game's regulation stores it. Every table's uncompressed size is its length (tables are not
+    compressed inside the binder), so a table that was edited never keeps the size it was read with."""
+    return write_bnd4(replace(b, entries=[replace(e, uncompressed=-1) for e in b.entries]))
 
 
 # ----------------------------------------------------------------------------- DCX and encryption
@@ -284,7 +194,7 @@ def read_regulation(raw: bytes, oodle=None) -> Regulation:
     dec = decrypt_regulation(raw)
     if dec[:4] != b"DCX\0":
         raise FormatError("not a DCX file")
-    return Regulation(bytes(dec[:DCX_DATA_OFFSET]), read_bnd4(dcx_decompress(dec, oodle)))
+    return Regulation(bytes(dec[:DCX_DATA_OFFSET]), read_binder(dcx_decompress(dec, oodle)))
 
 
 ZSTD_WINDOW_LOG = 16  # 64 KB window: every zstd block then holds at most 64 KB, which the game requires (below)
@@ -309,7 +219,7 @@ def write_regulation(reg: Regulation, level: int = 9) -> bytes:
     """The encrypted file. Always ZSTD (what the game's own regulation uses)."""
     from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-    body = write_bnd4(reg.bnd)
+    body = binder_bytes(reg.bnd)
     payload = compress_regulation_body(body, level)
     header = bytearray(reg.dcx_header)
     if header[0x28:0x2C] != b"ZSTD":

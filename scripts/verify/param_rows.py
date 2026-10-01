@@ -40,8 +40,8 @@ def main() -> int:
     after = pf.read_regulation(combined, dec)
 
     tables, problems = [], []
-    for f in reg.bnd.files:
-        short = f.name.replace("\\", "/").rsplit("/", 1)[-1]
+    for f in reg.bnd.entries:
+        short = (f.name or "").replace("\\", "/").rsplit("/", 1)[-1]
         param = pf.read_param(f.data)
         ids = Counter(r.id for r in param.rows)
         dups = {i: n for i, n in ids.items() if n > 1}
@@ -67,8 +67,8 @@ def main() -> int:
                 problems.append(f"{short}: {what}")
 
     # 4. a pack that changes only the second row sharing an ID: only that row changes, nothing moves
-    for f in reg.bnd.files:
-        short = f.name.replace("\\", "/").rsplit("/", 1)[-1]
+    for f in reg.bnd.entries:
+        short = (f.name or "").replace("\\", "/").rsplit("/", 1)[-1]
         param = pf.read_param(f.data)
         seen: Counter = Counter()
         target = None

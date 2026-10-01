@@ -18,6 +18,7 @@ from __future__ import annotations
 import bisect
 from dataclasses import dataclass, field
 
+from roundtable_souls.mods import formats
 from roundtable_souls.mods import paramfile as pf
 
 WORD = 4
@@ -93,12 +94,12 @@ def combine(base_raw: bytes, packs: list[tuple[str, bytes]], oodle=None) -> tupl
     base = pf.read_regulation(base_raw, oodle)
     regs = [(name, pf.read_regulation(raw, oodle)) for name, raw in packs]
     report = Report(base.version, [PackReport(name, r.version) for name, r in regs])
-    names = [f.name for f in base.bnd.files]
-    extra: dict[str, pf.BndFile] = {}
+    names = [e.name or "" for e in base.bnd.entries]
+    extra: dict[str, formats.Entry] = {}
     for _name, r in regs:
-        for f in r.bnd.files:
-            if base.bnd.get(_short(f.name)) is None:
-                extra[_short(f.name).lower()] = f  # a table the game does not have: the last pack's
+        for f in r.bnd.entries:
+            if base.bnd.get(_short(f.name or "")) is None:
+                extra[_short(f.name or "").lower()] = f  # a table the game does not have: the last pack's
     for full in names:
         short = _short(full)
         vfile = base.bnd.get(short)
@@ -168,6 +169,7 @@ def combine(base_raw: bytes, packs: list[tuple[str, bytes]], oodle=None) -> tupl
             vfile.data = pf.write_param(v)
             report.tables += 1
     for f in extra.values():
-        base.bnd.files.append(pf.BndFile(f.name, f.data, max((x.id for x in base.bnd.files), default=-1) + 1, f.flags))
+        new_id = max((x.id for x in base.bnd.entries), default=-1) + 1
+        base.bnd.entries.append(formats.Entry(f.name, new_id, f.data, f.flags))
         report.tables += 1
     return pf.write_regulation(base), report

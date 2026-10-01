@@ -173,8 +173,8 @@ def check_regulation(record: dict, pkg: Path, dec, failures: list, notes: list) 
     pregs = [(Path(p["path"]).parent.name, pf.read_regulation(Path(p["path"]).read_bytes(), dec)) for p in packs]
     short = lambda n: n.replace("\\", "/").rsplit("/", 1)[-1]  # noqa: E731
     counts = {"tables": 0, "rows": 0, "rows_changed_by_packs": 0, "chunk_limitation": 0, "size_mismatch_skipped": 0}
-    for f in breg.bnd.files:
-        name = short(f.name)
+    for f in breg.bnd.entries:
+        name = short(f.name or "")
         counts["tables"] += 1
         vp = pf.read_param(f.data)
         vrows = param_merge._keyed(vp.rows)

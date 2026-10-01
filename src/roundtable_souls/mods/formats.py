@@ -147,6 +147,13 @@ class Bnd4:
     extended: int
     entries: list[Entry] = field(default_factory=list)
 
+    def get(self, short: str) -> Entry | None:
+        """The first entry whose file name (the last part of its path) is `short`, ignoring case."""
+        low = short.lower()
+        return next(
+            (e for e in self.entries if (e.name or "").replace("\\", "/").rsplit("/", 1)[-1].lower() == low), None
+        )
+
 
 def _read_format(raw: int, bit_big_endian: bool) -> int:
     reverse = bit_big_endian or ((raw & 1) != 0 and (raw & 0x80) == 0)
@@ -218,7 +225,8 @@ def read_bnd4(body: bytes) -> Bnd4:
     return out
 
 
-def _path_hash32(name: str) -> int:
+def path_hash(name: str) -> int:
+    """The archive's hash of a stored path (the whole path, drive included)."""
     h = 0
     text = name.strip().replace("\\", "/").lower()
     if not text.startswith("/"):
@@ -236,7 +244,7 @@ def _hash_table(entries: list[Entry], at: int) -> bytes:
     groups = next(p for p in range(len(entries) // 7, 100001) if _is_prime(p))
     buckets: list[list[tuple[int, int]]] = [[] for _ in range(groups)]
     for i, e in enumerate(entries):
-        h = _path_hash32(e.name or "")
+        h = path_hash(e.name or "")
         buckets[h % groups].append((h, i))
     table = bytearray(struct.pack("<qiBBBB", at + 16 + groups * 8, groups, 0x10, 8, 8, 0))
     start = 0

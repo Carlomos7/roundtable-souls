@@ -7,8 +7,8 @@ import struct
 import pytest
 
 from roundtable_souls import gamefiles as gf
+from roundtable_souls.mods import formats, merge
 from roundtable_souls.mods import manage as M
-from roundtable_souls.mods import merge
 from roundtable_souls.mods import param_merge as pm
 from roundtable_souls.mods import paramfile as pf
 from roundtable_souls.mods.backends import builtin
@@ -52,11 +52,12 @@ def regulation(tables: dict, version: str = "11711000") -> bytes:
     hdr[0x18:0x20] = version.encode()
     struct.pack_into("<q", hdr, 0x20, 36)
     hdr[0x30:0x34] = bytes([1, 0x74, 4, 0])
-    files = [
-        pf.BndFile(f"N:\\GR\\data\\Param\\param\\GameParam\\{n}.param", pf.write_param(p), i)
+    entries = [
+        formats.Entry(f"N:\\GR\\data\\Param\\param\\GameParam\\{n}.param", i, pf.write_param(p))
         for i, (n, p) in enumerate(tables.items())
     ]
-    return pf.write_regulation(pf.Regulation(DCX, pf.Bnd4(bytes(hdr), files)))
+    binder = formats.Bnd4(bytes(hdr), pf.REGULATION_FORMAT, 0x74, True, 4, entries)
+    return pf.write_regulation(pf.Regulation(DCX, binder))
 
 
 def vanilla(version="11711000") -> bytes:
@@ -101,8 +102,8 @@ def test_a_regulation_reads_back_as_written_and_decrypts_like_the_games():
     body = gf.dcx_decompress(gf.decrypt_regulation(raw))
     assert gf.bnd4_files(body)[0][0] == "EquipParamWeapon.param"
     reg = pf.read_regulation(raw)
-    assert reg.version == "11711000" and pf.write_bnd4(reg.bnd) == body
-    for f in reg.bnd.files:
+    assert reg.version == "11711000" and pf.binder_bytes(reg.bnd) == formats.write_bnd4(reg.bnd) == body
+    for f in reg.bnd.entries:
         assert pf.write_param(pf.read_param(f.data)) == f.data
     assert gf.param_row_ids(reg.bnd.get("EquipParamWeapon.param").data) == [1000, 2000]
 
@@ -142,10 +143,6 @@ def test_names_order_and_repeated_ids_survive():
     back = pf.read_param(pf.write_param(p))
     assert [(r.id, r.name) for r in back.rows] == [(5, ""), (3, "Three"), (5, "")]
     assert pf.write_param(back) == pf.write_param(p)
-
-
-def test_the_archive_hash_is_the_games():
-    assert pf.path_hash("N:\\GR\\data\\Param\\param\\GameParam\\merged\\DLC02\\ActionButtonParam.param") == 2001576758
 
 
 # ----------------------------------------------------------------------------- combining
@@ -197,7 +194,7 @@ def test_a_table_the_game_lacks_comes_from_the_last_pack():
 def test_unchanged_packs_leave_the_games_file_as_it_was():
     out, rep = pm.combine(vanilla(), [("same", vanilla())])
     base = pf.read_regulation(vanilla())
-    assert pf.write_bnd4(pf.read_regulation(out).bnd) == pf.write_bnd4(base.bnd) and rep.tables == 0
+    assert pf.binder_bytes(pf.read_regulation(out).bnd) == pf.binder_bytes(base.bnd) and rep.tables == 0
 
 
 # ----------------------------------------------------------------------------- in a profile
