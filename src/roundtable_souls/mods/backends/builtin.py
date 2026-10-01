@@ -19,6 +19,7 @@ from roundtable_souls import formats
 from roundtable_souls.game import config as game_config
 from roundtable_souls.game import oodle as game_oodle
 from roundtable_souls.merging import record as merge_record
+from roundtable_souls.merging.build import Build, BuildError
 from roundtable_souls.mods.backends import BackendError
 
 RECORD = "combined-parameters.json"
@@ -41,8 +42,18 @@ def is_combined(folder: Path) -> bool:
 
 
 def find(profile: Path, all_layers: list[dict]) -> CombineTool | None:
+    """The combined package's tool. A rebuild of it that was interrupted while being put in place is undone first,
+    so what is read (its record, its files, its health) is one whole build."""
+    from roundtable_souls.merging.build import recover
+
     layer = next((l for l in all_layers if is_combined(l["folder"])), None)
-    return CombineTool(Path(profile), layer) if layer is not None else None
+    if layer is None:
+        return None
+    try:
+        recover(Path(layer["folder"]))
+    except OSError:
+        pass  # left for the next rebuild, which tries again before it starts
+    return CombineTool(Path(profile), layer)
 
 
 def game_regulation() -> Path | None:
@@ -258,12 +269,15 @@ class CombineTool:
 
         layers = merge.layers(self.profile) if all_layers is None else all_layers
         packs = self.inputs(layers, until)
+        build = Build(self.folder, RECORD)  # finishes undoing an interrupted rebuild first, if there was one
         self.previous = self._keep_previous()
-        files = self._merge_files(log, layers, until)
+        files = self._merge_files(log, layers, until, build)
         base = game_regulation()
         if not packs:
-            (self.folder / REGULATION).unlink(missing_ok=True)
-            return self._write_record(files, None, [], None, __version__)
+            build.remove(REGULATION)
+            record = self._write_record(files, None, [], None, __version__, build=build)
+            self._activate(build)
+            return record
         if base is None:
             raise BackendError(self.problem() or "no base regulation")
         log(
@@ -288,15 +302,15 @@ class CombineTool:
             raise BackendError(f"Combining parameters failed: {e}") from e
         for line in report.lines():
             log(f"  {line}")
-        self.folder.mkdir(parents=True, exist_ok=True)
-        tmp = self.folder / (REGULATION + ".tmp")
-        tmp.write_bytes(out)
-        tmp.replace(self.folder / REGULATION)
-        record = self._write_record(files, base, packs, report, __version__, out)
+        build.path(REGULATION).write_bytes(out)
+        record = self._write_record(files, base, packs, report, __version__, out, build=build)
+        self._activate(build)
         log(f"combine: done in {time.time() - start:.1f}s ({len(report.conflicts)} overlapping rows)")
         return record
 
-    def _write_record(self, files: dict, base, packs, report, version, out: bytes | None = None) -> dict:
+    def _write_record(
+        self, files: dict, base, packs, report, version, out: bytes | None = None, build: Build | None = None
+    ) -> dict:
         from roundtable_souls.system import common
 
         record = {
@@ -307,10 +321,7 @@ class CombineTool:
             "archives": archives_fingerprint(common.game_dir()),
         } | merge_record.facts()
         if base is None:
-            self.folder.mkdir(parents=True, exist_ok=True)
-            tmp = self.folder / (RECORD + ".tmp")
-            tmp.write_text(json.dumps(record, indent=1), encoding="utf-8")
-            tmp.replace(self.folder / RECORD)
+            self._put_record(record, build)
             return record
         record |= {
             "base": str(base),
@@ -332,12 +343,41 @@ class CombineTool:
             "report": report.lines(limit=200),
             "output_sha256": hashlib.sha256(out).hexdigest(),
         }
+        self._put_record(record, build)
+        return record
+
+    def _put_record(self, record: dict, build: Build | None) -> None:
+        if build is not None:
+            build.path(RECORD).write_text(json.dumps(record, indent=1), encoding="utf-8")
+            return
+        self.folder.mkdir(parents=True, exist_ok=True)
         tmp = self.folder / (RECORD + ".tmp")
         tmp.write_text(json.dumps(record, indent=1), encoding="utf-8")
         tmp.replace(self.folder / RECORD)
-        return record
 
-    def _merge_files(self, log, layers: list[dict], until: dict | None) -> dict:
+    def _activate(self, build: Build) -> None:
+        """Read every staged output back, then put them in place (refused while the game runs)."""
+        from roundtable_souls.game.oodle import find_oodle
+        from roundtable_souls.system import common
+
+        game_dir = common.game_dir()
+        dec = find_oodle(Path(game_dir)) if game_dir else None
+
+        def read(rel: str, data: bytes) -> None:
+            if rel == REGULATION:
+                formats.regulation.read_regulation(data, dec)
+                return
+            body = formats.dcx.unpack(data, dec)[0]
+            if formats.bnd4.is_bnd4(body):
+                formats.bnd4.read_bnd4(body)
+
+        try:
+            build.check(read)
+            build.activate(lambda: "Close the game first: it has these files open." if common.game_running() else None)
+        except BuildError as e:
+            raise BackendError(f"The rebuild was not put in place: {e}. The previous result is unchanged.") from e
+
+    def _merge_files(self, log, layers: list[dict], until: dict | None, build: Build) -> dict:
         """Merge every file two or more packages before `until` ship into this package; drop merged files no longer
         needed. Returns the record's files: {rel (lower): {rel, sources, output, parts, clashes | skipped}}."""
         from roundtable_souls.game import archives as gamearchive
@@ -349,7 +389,7 @@ class CombineTool:
         before = self.record().get("files") or {}
         for low, had in before.items():  # merged before, not needed now
             if low not in shared and had.get("output"):
-                (self.folder / had["rel"]).unlink(missing_ok=True)
+                build.remove(had["rel"])
         if not shared:
             return {}
         game_dir = common.game_dir()
@@ -363,7 +403,6 @@ class CombineTool:
                 for o in owners
             ]
             entry = {"rel": rel, "sources": sources, "output": False}
-            dest = self.folder / rel
             try:
                 vanilla = gamearchive.read(Path(game_dir), rel) if game_dir else None
                 if vanilla is None:
@@ -375,10 +414,7 @@ class CombineTool:
                     if not result.merged:
                         entry["skipped"] = "not an archive or a text table the launcher can merge yet"
                     else:
-                        dest.parent.mkdir(parents=True, exist_ok=True)
-                        tmp = dest.with_name(dest.name + ".tmp")
-                        tmp.write_bytes(result.data)
-                        tmp.replace(dest)
+                        build.path(rel).write_bytes(result.data)
                         entry |= {
                             "output": True,
                             "parts": len(result.changed),
@@ -393,7 +429,7 @@ class CombineTool:
             except (OSError, formats.FormatError, gamearchive.ArchiveError) as e:
                 entry["skipped"] = f"could not be merged: {e}"
             if entry.get("skipped"):
-                dest.unlink(missing_ok=True)
+                build.remove(rel)
                 log(f"  {rel}: {entry['skipped']}; the later package's copy is used")
             out[low] = entry
         return out

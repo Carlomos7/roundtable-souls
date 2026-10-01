@@ -134,3 +134,30 @@ def test_the_record_says_how_the_build_was_made_and_other_rules_make_it_out_of_d
     older = {**rec, "merger_revision": record.MERGER_REVISION - 1}
     assert record.reasons(older) == ["the launcher's merging changed since this was built"]
     assert record.reasons({"files": {}}) == []  # a record from before these fields: its inputs are still checked
+
+
+def test_an_interrupted_rebuild_leaves_the_previous_result_and_the_next_one_finishes(prof, monkeypatch):
+    from roundtable_souls.merging import build as B
+
+    merge.rebuild(prof, lambda s: None)
+    folder = builtin.find(prof, merge.layers(prof)).folder
+    before = {p.relative_to(folder).as_posix(): p.read_bytes() for p in folder.rglob("*") if p.is_file()}
+    real, n = B.os.replace, {"i": 0}
+
+    def crash(src, dst, *a, **k):  # the first file put in place, after the journal is written
+        if (folder / B.JOURNAL).exists() and str(dst).startswith(str(folder)) and not n["i"]:
+            n["i"] += 1
+            raise OSError("power cut")
+        return real(src, dst, *a, **k)
+
+    monkeypatch.setattr(B.os, "replace", crash)
+    with pytest.raises(Exception):  # noqa: B017  (whatever the interruption raises)
+        merge.rebuild(prof, lambda s: None)
+    monkeypatch.undo()
+    assert (folder / B.JOURNAL).exists()  # interrupted while being put in place
+    merge.health(prof)  # looking at it undoes the interrupted rebuild
+    assert not (folder / B.JOURNAL).exists()
+    after = {p.relative_to(folder).as_posix(): p.read_bytes() for p in folder.rglob("*") if p.is_file()}
+    assert after == before
+    merge.rebuild(prof, lambda s: None)
+    assert merge.health(prof)["state"] in ("current", "single")
