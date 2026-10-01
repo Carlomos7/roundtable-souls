@@ -1,88 +1,94 @@
-"""Build the share bundle and SHA256SUMS.txt in dist/share.
+"""Turn vpk's output (dist/vpk) into the release files (dist/share), under the names releases keep using.
 
-Windows: RoundtableSouls.zip (the exe and docs/How to use.txt), plus the exe itself and the setup when it was built.
-Linux:   RoundtableSouls-linux-x86_64.tar.gz (the program, the guide and the licence files).
+Windows: RoundtableSouls-Setup.exe     the Velopack setup (the name versions up to 3.13.2 update from)
+         RoundtableSouls-win-Portable.zip
+         <packId>-<version>-full.nupkg (+ -delta.nupkg when vpk had the previous release to diff against)
+         releases.win.json            this release's feed (signed by the release workflow)
+Linux:   RoundtableSouls-linux-x86_64.AppImage, <packId>-<version>-linux-full.nupkg (+ delta), releases.linux.json
 
-Settings and logs are never included. Run by scripts/build.py after PyInstaller; safe to run by hand.
+The feed lists this version's packages, plus the full package the delta was made against (a file of an earlier
+release; listed so the launcher knows which version the delta needs). SHA256SUMS.txt covers the files here; the
+release workflow writes the final one over both systems' files.
+
+uv run python scripts/make_share.py --pack-id <id> --version <version>     (scripts/build.py runs it)
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import shutil
 import sys
-import tarfile
-import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-EXE_NAME = "RoundtableSouls"
 DIST = ROOT / "dist"
+VPK_OUT = DIST / "vpk"
 SHARE = DIST / "share"
-STALE = ("launcher_settings.json",)
+WINDOWS = sys.platform == "win32"
+CHANNEL = "win" if WINDOWS else "linux"
+
+
+def arg(name: str) -> str:
+    argv = sys.argv[1:]
+    if name not in argv:
+        raise SystemExit(f"make_share: {name} is required")
+    return argv[argv.index(name) + 1]
+
+
+def version_key(v: str) -> tuple:
+    sys.path.insert(0, str(ROOT / "src"))
+    from roundtable_souls.updates import version_key as key
+
+    return key(v)
+
+
+def release_feed(doc: dict, version: str) -> dict:
+    """This version's entries, plus the newest earlier full package when there is a delta (its base)."""
+    mine = [a for a in doc["Assets"] if version_key(a["Version"]) == version_key(version)]
+    if not any(a["Type"] == "Full" for a in mine):
+        raise SystemExit(f"make_share: vpk's feed has no full package of {version}")
+    if any(a["Type"] == "Delta" for a in mine):
+        older = [a for a in doc["Assets"] if a["Type"] == "Full" and version_key(a["Version"]) < version_key(version)]
+        if older:
+            mine.append(max(older, key=lambda a: version_key(a["Version"])))
+    return {"Assets": mine}
 
 
 def write_checksums(files: list[Path]) -> Path:
     sums = SHARE / "SHA256SUMS.txt"
-    lines = [f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}" for p in files if p.is_file()]
+    lines = [f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}" for p in sorted(files) if p.is_file()]
     sums.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     return sums
 
 
-def linux_bundle() -> int:
-    src = DIST / EXE_NAME
-    if not src.is_file():
-        print(f"make_share: {src} not found (run scripts/build.py first)", file=sys.stderr)
-        return 1
-    SHARE.mkdir(parents=True, exist_ok=True)
-    out = SHARE / f"{EXE_NAME}-linux-x86_64.tar.gz"
-    with tarfile.open(out, "w:gz") as tar:
-        tar.add(src, arcname=EXE_NAME)
-        for extra in (ROOT / "docs" / "How to use.txt", ROOT / "LICENSE", ROOT / "THIRD_PARTY_NOTICES.md"):
-            if extra.is_file():
-                tar.add(extra, arcname=extra.name)
-    with tarfile.open(out, "r:gz") as tar:
-        size = tar.getmember(EXE_NAME).size
-    if size != src.stat().st_size:
-        print("make_share: archive did not verify", file=sys.stderr)
-        return 1
-    sums = write_checksums([out])
-    print(f"Shared: {out}; checksums in {sums.name}")
-    return 0
-
-
 def main() -> int:
-    if sys.platform.startswith("linux"):
-        return linux_bundle()
-    src = DIST / f"{EXE_NAME}.exe"
-    if not src.is_file():
-        print(f"make_share: {src} not found (run scripts/build.py first)", file=sys.stderr)
-        return 1
-    SHARE.mkdir(parents=True, exist_ok=True)
-    for name in STALE:
-        (SHARE / name).unlink(missing_ok=True)
-    logs = SHARE / "logs"
-    if logs.is_dir():
-        for f in logs.iterdir():
-            f.unlink()
-        logs.rmdir()
-    exe = SHARE / src.name
-    shutil.copyfile(src, exe)
-    docs = ROOT / "docs" / "How to use.txt"
-    out = SHARE / f"{EXE_NAME}.zip"
-    tmp = out.with_suffix(".zip.tmp")
-    with zipfile.ZipFile(tmp, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as z:
-        z.write(exe, exe.name)
-        if docs.is_file():
-            z.write(docs, docs.name)
-    tmp.replace(out)
-    with zipfile.ZipFile(out) as z:
-        sizes = {i.filename: i.file_size for i in z.infolist()}
-    if sizes.get(exe.name) != exe.stat().st_size:
-        print("make_share: zip did not verify", file=sys.stderr)
-        return 1
-    sums = write_checksums([out, exe, SHARE / f"{EXE_NAME}-Setup.exe"])
-    print(f"Shared: {out} ({', '.join(sizes)}); checksums in {sums.name}")
+    pack_id, version = arg("--pack-id"), arg("--version")
+    feed_name = f"releases.{CHANNEL}.json"
+    doc = json.loads((VPK_OUT / feed_name).read_text(encoding="utf-8-sig"))
+    feed = release_feed(doc, version)
+    shutil.rmtree(SHARE, ignore_errors=True)
+    SHARE.mkdir(parents=True)
+    out: list[Path] = []
+    for a in feed["Assets"]:
+        if version_key(a["Version"]) == version_key(version):
+            src = VPK_OUT / a["FileName"]
+            if src.stat().st_size != a["Size"]:
+                raise SystemExit(f"make_share: {src.name} does not match vpk's feed")
+            out.append(Path(shutil.copy2(src, SHARE / a["FileName"])))
+    renames = (
+        {f"{pack_id}-win-Setup.exe": "RoundtableSouls-Setup.exe", f"{pack_id}-win-Portable.zip": "RoundtableSouls-win-Portable.zip"}
+        if WINDOWS
+        else {f"{pack_id}.AppImage": "RoundtableSouls-linux-x86_64.AppImage"}
+    )  # fmt: skip
+    for src_name, dst_name in renames.items():
+        out.append(Path(shutil.copy2(VPK_OUT / src_name, SHARE / dst_name)))
+    (SHARE / feed_name).write_text(json.dumps(feed, indent=1), encoding="utf-8", newline="\n")
+    out.append(SHARE / feed_name)
+    sums = write_checksums(out)
+    for p in sorted(out):
+        print(f"  {p.name:55} {p.stat().st_size / 1e6:9.2f} MB")
+    print(f"Shared: {SHARE}; checksums in {sums.name}")
     return 0
 
 

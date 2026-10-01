@@ -13,6 +13,9 @@ concurrency:
   group: release
   cancel-in-progress: false
 
+env:
+  VPK_VERSION: "1.2.161"  # = the velopack package pinned in pyproject.toml / uv.lock
+
 jobs:
   verify:
     # A release must come from a commit on main whose version matches the tag.
@@ -39,6 +42,7 @@ jobs:
     runs-on: windows-latest
     env:
       QT_QPA_PLATFORM: offscreen
+      GH_TOKEN: ${{ github.token }}
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -58,34 +62,53 @@ jobs:
     - name: Run tests
       run: uv run pytest
 
-    - name: Install Inno Setup
-      shell: pwsh
-      run: |
-        if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+    - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      with:
+        dotnet-version: "10.0.x"
 
-    - name: Build the exe, installer and zip
+    - name: Install vpk (pinned)
+      shell: bash
+      run: |
+        dotnet tool install vpk --version "$VPK_VERSION" --tool-path "$RUNNER_TEMP/vpk"
+        echo "VPK=$RUNNER_TEMP/vpk/vpk.exe" >> "$GITHUB_ENV"
+
+    # vpk diffs against the previous release's full package to make a delta; none before the first Velopack release.
+    - name: Previous release, for a delta package
+      shell: bash
+      run: |
+        pre=""; [[ "$GITHUB_REF_NAME" == *-* ]] && pre="--pre"
+        "$VPK" download github --repoUrl "https://github.com/$GITHUB_REPOSITORY" --channel win --outputDir dist/vpk \
+          --token "$GH_TOKEN" $pre || echo "no earlier Velopack release: full package only"
+
+    - name: Build the program, the setup, the portable zip and the packages
       run: uv run python scripts/build.py --no-test
 
-    - name: Smoke-test the exe
+    - name: Smoke-test the program
       shell: bash
-      run: test -f dist/share/RoundtableSouls-Setup.exe && ./dist/RoundtableSouls.exe --shots shots && ls shots
+      run: ./dist/RoundtableSouls/RoundtableSouls.exe --shots shots && ls shots
+
+    # The setup on a clean runner: the previous release installed first (the Inno install of 3.13.2 and earlier is
+    # replaced, settings kept, shortcuts pointed at the new copy), then uninstall keeps the data.
+    - name: Install, migration and uninstall test
+      shell: pwsh
+      run: ./scripts/ci/velopack-install-test.ps1
 
     - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: windows
         retention-days: 7
         path: |
-          dist/share/RoundtableSouls-Setup.exe
-          dist/share/RoundtableSouls.zip
-          dist/share/RoundtableSouls.exe
+          dist/share/*
+          !dist/share/SHA256SUMS.txt
 
   linux:
     needs: verify
     if: always() && (needs.verify.result == 'success' || needs.verify.result == 'skipped')
-    # Built on the oldest supported Ubuntu so the binary also runs where glibc is older; SteamOS is newer.
+    # Built on the oldest supported Ubuntu so the program also runs where glibc is older; SteamOS is newer.
     runs-on: ubuntu-22.04
     env:
       QT_QPA_PLATFORM: offscreen
+      GH_TOKEN: ${{ github.token }}
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -94,8 +117,8 @@ jobs:
         enable-cache: true
         python-version-file: ".python-version"
 
-    - name: Install Qt runtime libraries
-      run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3 libglib2.0-0
+    - name: Install Qt runtime libraries and FUSE (to run the AppImage)
+      run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3 libglib2.0-0 libfuse2
 
     - name: Install dependencies (exactly as locked)
       run: uv sync --locked
@@ -103,17 +126,37 @@ jobs:
     - name: Run tests
       run: uv run pytest
 
-    - name: Build the program and archive
+    - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      with:
+        dotnet-version: "10.0.x"
+
+    - name: Install vpk (pinned)
+      run: |
+        dotnet tool install vpk --version "$VPK_VERSION" --tool-path "$RUNNER_TEMP/vpk"
+        echo "VPK=$RUNNER_TEMP/vpk/vpk" >> "$GITHUB_ENV"
+
+    - name: Previous release, for a delta package
+      run: |
+        pre=""; [[ "$GITHUB_REF_NAME" == *-* ]] && pre="--pre"
+        "$VPK" download github --repoUrl "https://github.com/$GITHUB_REPOSITORY" --channel linux --outputDir dist/vpk \
+          --token "$GH_TOKEN" $pre || echo "no earlier Velopack release: full package only"
+
+    - name: Build the program, the AppImage and the packages
       run: uv run python scripts/build.py --no-test
 
-    - name: Smoke-test the program
-      run: ./dist/RoundtableSouls --check
+    - name: Smoke-test the program and the AppImage
+      run: |
+        ./dist/RoundtableSouls/RoundtableSouls --check
+        chmod +x dist/share/RoundtableSouls-linux-x86_64.AppImage
+        ./dist/share/RoundtableSouls-linux-x86_64.AppImage --check
 
     - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: linux
         retention-days: 7
-        path: dist/share/RoundtableSouls-linux-x86_64.tar.gz
+        path: |
+          dist/share/*
+          !dist/share/SHA256SUMS.txt
 
   publish:
     needs: [verify, windows, linux]
@@ -123,35 +166,71 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
-      FILES: RoundtableSouls-Setup.exe RoundtableSouls.zip RoundtableSouls.exe RoundtableSouls-linux-x86_64.tar.gz
+      PUBLIC_KEY: repo/src/roundtable_souls/data/release-signing.pub
     steps:
+    # Only the public key the launcher ships: every signature is checked against exactly what users verify with.
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        path: repo
+        sparse-checkout: src/roundtable_souls/data/release-signing.pub
+        sparse-checkout-cone-mode: false
+
     - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
       with:
         path: assets
         merge-multiple: true
 
-    - name: Checksums for every file
+    - name: Install minisign (pinned release, checked against its known SHA-256)
+      run: |
+        curl -fsSL -o "$RUNNER_TEMP/minisign.tgz" https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-linux.tar.gz
+        echo "9a599b48ba6eb7b1e80f12f36b94ceca7c00b7a5173c95c3efc88d9822957e73  $RUNNER_TEMP/minisign.tgz" | sha256sum --check
+        tar -xzf "$RUNNER_TEMP/minisign.tgz" -C "$RUNNER_TEMP" minisign-linux/x86_64/minisign
+        mkdir -p "$RUNNER_TEMP/bin" && mv "$RUNNER_TEMP/minisign-linux/x86_64/minisign" "$RUNNER_TEMP/bin/minisign"
+        echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+    # The launcher installs only what a signed feed (releases.<os>.json, trusted comment
+    # "roundtable-souls <version> <os>") lists, and only packages matching the sizes and SHA-256 in it.
+    # SHA256SUMS.txt covers every file, for people checking downloads by hand. The private key exists only as the
+    # MINISIGN_KEY secret and in this step's temp file.
+    - name: Checksums for every file; feeds and checksums signed
       working-directory: assets
-      run: sha256sum $FILES > SHA256SUMS.txt && cat SHA256SUMS.txt
+      env:
+        MINISIGN_KEY: ${{ secrets.MINISIGN_KEY }}
+      run: |
+        version="${GITHUB_REF_NAME#v}"
+        ls -la
+        sha256sum -- * > SHA256SUMS.txt && cat SHA256SUMS.txt
+        [ -n "$MINISIGN_KEY" ] || { echo "the MINISIGN_KEY secret is not set" >&2; exit 1; }
+        umask 077
+        key="$RUNNER_TEMP/release.key"
+        trap 'rm -f "$key"' EXIT
+        printf '%s\n' "$MINISIGN_KEY" | tr -d '\r' > "$key"  # the key file was made on Windows
+        minisign -S -s "$key" -m releases.win.json -t "roundtable-souls $version win" </dev/null
+        minisign -S -s "$key" -m releases.linux.json -t "roundtable-souls $version linux" </dev/null
+        minisign -S -s "$key" -m SHA256SUMS.txt -t "roundtable-souls $version" </dev/null
+        for f in releases.win.json releases.linux.json SHA256SUMS.txt; do minisign -V -p "../$PUBLIC_KEY" -m "$f"; done
 
     # Uploaded as a draft first, so nobody (and no update check) sees a half-uploaded release.
     - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
       with:
         name: Roundtable Souls ${{ github.ref_name }}
         draft: true
+        prerelease: ${{ contains(github.ref_name, '-') }}
         generate_release_notes: true
-        files: |
-          assets/RoundtableSouls-Setup.exe
-          assets/RoundtableSouls.zip
-          assets/RoundtableSouls.exe
-          assets/RoundtableSouls-linux-x86_64.tar.gz
-          assets/SHA256SUMS.txt
+        files: assets/*
 
-    - name: Download the draft back and check every file against its checksum
+    - name: Download the draft back and check every file against its checksum and every signature
       run: |
         mkdir check && cd check
         gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY"
         sha256sum --check SHA256SUMS.txt
+        for f in releases.win.json releases.linux.json SHA256SUMS.txt; do minisign -V -p "../$PUBLIC_KEY" -m "$f"; done
 
+    # A tag with a hyphen (v3.14.0-rc.1) is a pre-release: offered only on the Beta channel, never marked latest.
     - name: Publish the verified release
-      run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+      run: |
+        if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+          gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+        else
+          gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+        fi

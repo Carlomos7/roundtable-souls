@@ -8,6 +8,30 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
 - Settings: "Update merged mods before Play" is now "Rebuild merged mods automatically before Play". On (as before) it rebuilds first; off, Play asks first instead of starting with the old result.
 - Mods: Remove and Restore have one button. Files of a removed mod that are still inside the merged mods are named, and Play rebuilds them first (or Rebuild on the Mods page). Load order names the removed mod instead of its folder's inner folder.
 - Mods: a mod's rebuild tool that has not been allowed yet is offered on the Mods page, so a rebuild does not stop in the middle to ask.
+- Installing and updating now use Velopack instead of Inno Setup and the launcher's own file swap. The program is a folder rather than a single exe, so it starts faster (nothing is unpacked to the temp folder first).
+  - Windows: `RoundtableSouls-Setup.exe` installs for your account only, with no administrator prompt, to `%LOCALAPPDATA%\Carlomos7.RoundtableSouls`, and adds a Start menu shortcut.
+  - Portable: `RoundtableSouls-win-Portable.zip` keeps its data in `RoundtableSouls-data` beside it.
+  - Linux and Steam Deck: an AppImage, `RoundtableSouls-linux-x86_64.AppImage`.
+- Settings, logs, backups and the save library never live in a folder that an update or an uninstall replaces. Installed copies (and the AppImage) keep them in `%LOCALAPPDATA%\RoundtableSouls` (Linux: `~/.local/share/RoundtableSouls`), as before; a portable copy keeps them beside it in `RoundtableSouls-data`; `ROUNDTABLE_SOULS_DATA` points any copy at a folder of your choice. Uninstalling leaves them alone.
+- Moving from the old installer happens by itself at the first start of the new one.
+  - The old install (3.13.2 or earlier) is removed. Settings, logs and backups stay where they are.
+  - The Start menu shortcut, and the desktop shortcut if you had one, are recreated for the new copy.
+  - Steam shortcuts that started the old program now start the new one; a backup of Steam's shortcut file is kept.
+  - If Steam is open, that last step waits: close Steam, then use Settings > Steam shortcut > Point Steam shortcuts here.
+  - Versions up to 3.13.2 reach this release through Update now (installed copies). Portable and Linux copies are updated by downloading it from the releases page.
+- Updates are signed. Update now installs only what this system's signed feed lists: the signature must check out with the project key built into the launcher and name this release and system. Every package must match the size and SHA-256 in that feed before it is applied. When this copy is exactly one version behind, only the changes are downloaded. A release that is not newer than the running copy is refused.
+- Updates undo themselves when the new version does not start.
+  - Before an update, this version is kept. The new one must open its window, or get a Play from a Steam shortcut going, within 90 seconds.
+  - If it does not, the kept version is put back and started, and says so.
+  - The failed version is never installed again. A newer release is offered as usual.
+- `RoundtableSouls --update` updates without the window (a terminal, or a Steam shortcut in Gaming Mode), then starts the launcher; `--update --game er --play` starts Play instead.
+- A check that could not reach GitHub (offline, GitHub's hourly limit, an error) now says so and why, on Settings and after Check for updates, instead of reporting "up to date". Settings shows when the last check succeeded.
+  - After failed checks the automatic one waits longer each time (up to a day); Check for updates always asks at once.
+  - Unchanged answers are asked for with the previous answer's tag, which GitHub does not count against its limit.
+- The update notice shows the start of the release notes and a Notes button. Settings has an update channel: Stable (as before) or Beta, which also offers pre-releases. The project can publish a notice asking versions with a known problem to update (it only warns).
+- One window: starting Roundtable Souls again brings the open window forward. Play from a Steam shortcut while the window is open runs Play in that window; a second shortcut Play while one runs is refused; Update now waits while a shortcut Play runs. Two copies with separate data (an installed and a portable one) can still run side by side.
+- Settings are written under a lock, so a change made at the same moment as the update check (or a Steam shortcut Play) writes is no longer lost.
+- Steam shortcut (Settings): Point Steam shortcuts here makes every Steam shortcut with `--play` that starts a Roundtable Souls program elsewhere start this copy (Steam must be closed; a backup is kept). The shortcut target shown is the launcher's stub (or the AppImage), whose path stays the same across updates.
 - Fixed: when the launcher changes a file inside an archive in place (the menu text of the preview Nightreign Revive build), the archive now records that file's new size instead of the size it had before. Archives the launcher does not change are written exactly as before. Not yet checked in game.
 - Inside: parameters and archives are read and written by one shared piece of code (the game's own files come back byte for byte), and the launcher can read and write talk scripts such as the grace menu (checked on every one in the game; not used by merging yet).
 

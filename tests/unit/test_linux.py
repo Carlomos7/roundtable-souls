@@ -1,9 +1,5 @@
 """Linux and Steam Deck detection, exercised on fake home folders so it runs on any OS."""
 
-import hashlib
-import io
-import tarfile
-
 from roundtable_souls import updates
 from roundtable_souls.system import common
 
@@ -97,27 +93,16 @@ def test_me3_paths_follow_its_linux_layout(tmp_path, monkeypatch):
     assert common.me3_profiles_dir() == tmp_path / "cfg" / "me3" / "profiles"
 
 
-def test_linux_update_unpacks_the_program(tmp_path):
-    buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-        data = b"\x7fELF new build"
-        info = tarfile.TarInfo("RoundtableSouls")
-        info.size = len(data)
-        tar.addfile(info, io.BytesIO(data))
-    blob = buf.getvalue()
-    sums = f"{hashlib.sha256(blob).hexdigest()}  {updates.LINUX_ASSET_NAME}\n".encode()
-    urls = {"https://x/tar": blob, "https://x/sums": sums}
-    info = {"assets": {updates.LINUX_ASSET_NAME: "https://x/tar", updates.CHECKSUMS_NAME: "https://x/sums"}}
-    assert updates.update_asset(False, "linux") == updates.LINUX_ASSET_NAME
-    assert (
-        updates.update_asset(True, "win32") == updates.SETUP_NAME
-        and updates.update_asset(False, "win32") == updates.ASSET_NAME
-    )
-    program = updates.download_update(
-        info, opener=lambda url, progress=None: urls[url], workdir=tmp_path, platform="linux"
-    )
-    assert program.name == "RoundtableSouls" and program.read_bytes() == b"\x7fELF new build"
-    current = tmp_path / "RoundtableSouls"
-    current.write_bytes(b"old")
-    assert updates.parked_path(current).name == "RoundtableSouls.old"
-    assert updates.parked_path(tmp_path / "RoundtableSouls.exe").name == "RoundtableSouls.old.exe"
+def test_linux_updates_use_the_linux_feed(monkeypatch):
+    """Velopack's packages for Linux come from releases.linux.json (signed for 'linux'), not the Windows feed."""
+    import importlib
+    import sys as _sys
+
+    monkeypatch.setattr(_sys, "platform", "linux")
+    try:
+        mod = importlib.reload(updates)
+        assert mod.OS_CHANNEL == "linux" and mod.FEED_NAME == "releases.linux.json"
+        assert mod.SIGNATURE_NAME == "releases.linux.json.minisig"
+    finally:
+        monkeypatch.undo()
+        importlib.reload(updates)

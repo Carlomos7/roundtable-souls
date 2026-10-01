@@ -129,6 +129,7 @@ from roundtable_souls.settings import (
     data_dir,
     exe_dir,
     game_setting,
+    launch_target,
     load_settings,
     save_game_settings,
     save_settings,
@@ -138,15 +139,7 @@ from roundtable_souls.system import logging as run_logging
 from roundtable_souls.system import processes as clear_dead_game_shells
 from roundtable_souls.system import session as me3_session
 from roundtable_souls.system.common import PATH_SETTINGS, apply_overrides
-from roundtable_souls.updates import (
-    RELEASES_URL,
-    apply_update,
-    can_self_update,
-    download_update,
-    launcher_update,
-    run_installer,
-    skip_update,
-)
+from roundtable_souls.updates import RELEASES_URL
 
 HERE = exe_dir()
 DATA_DIR = data_dir()
@@ -664,7 +657,7 @@ def play_command(game: games.Game | None = None) -> tuple[str, str]:
     game = game or common.GAME
     opts = f"--game {game.key} --play"
     if FROZEN:
-        return sys.executable, opts
+        return str(launch_target()), opts  # the stub or AppImage: its path stays the same across updates
     return sys.executable, f"-m roundtable_souls {opts}"
 
 

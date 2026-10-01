@@ -36,7 +36,6 @@ jobs:
             - "src/**"
             - "tests/**"
             - "scripts/**"
-            - "installer/**"
             - "pyproject.toml"
             - "uv.lock"
             - ".python-version"

@@ -35,3 +35,6 @@ cache/
 
 # real-data checks: machine-specific paths
 scripts/verify/local.toml
+
+# a test build's identity override (scripts/build.py --identity); never committed
+src/roundtable_souls/data/build-identity.json
