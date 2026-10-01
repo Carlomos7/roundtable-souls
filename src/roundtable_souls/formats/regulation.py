@@ -8,12 +8,16 @@ from __future__ import annotations
 
 import os
 import struct
-from compression import zstd
 from dataclasses import dataclass
 
 from roundtable_souls.formats import FormatError
 from roundtable_souls.formats.bnd4 import COMPRESSION, IDS, NAMES1, NAMES2, Bnd4, bnd4_files, read_bnd4, write_bnd4
-from roundtable_souls.formats.dcx import DCX_DATA_OFFSET, dcx_decompress
+from roundtable_souls.formats.dcx import (  # noqa: F401  (ZSTD_WINDOW_LOG: also read from here)
+    DCX_DATA_OFFSET,
+    ZSTD_WINDOW_LOG,
+    dcx_decompress,
+    zstd_frame,
+)
 from roundtable_souls.formats.param import param_row_ids
 
 REGULATION_KEY = bytes.fromhex("99BFFC366A6BC8C6F5827D093602D676C42892A01C207FB024D3AF4E493FEF99")
@@ -68,9 +72,6 @@ def read_regulation(raw: bytes, oodle=None) -> Regulation:
     return Regulation(bytes(dec[:DCX_DATA_OFFSET]), read_binder(dcx_decompress(dec, oodle)))
 
 
-ZSTD_WINDOW_LOG = 16  # 64 KB window: every zstd block then holds at most 64 KB, which the game requires (below)
-
-
 def compress_regulation_body(body: bytes, level: int = 9) -> bytes:
     """The zstd frame the game accepts.
 
@@ -80,10 +81,7 @@ def compress_regulation_body(body: bytes, level: int = 9) -> bytes:
     game on Elden Ring 1.17.1 (2026-09-30): the game's own bytes re-encrypted load; the same content recompressed
     with default blocks crashes, whatever the IV, level or window.
     """
-    P = zstd.CompressionParameter
-    return zstd.compress(
-        body, options={P.compression_level: level, P.content_size_flag: 0, P.window_log: ZSTD_WINDOW_LOG}
-    )
+    return zstd_frame(body, level)
 
 
 def write_regulation(reg: Regulation, level: int = 9) -> bytes:

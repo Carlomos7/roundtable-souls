@@ -41,7 +41,9 @@ def mergeable(body: bytes) -> bool:
     return formats.bnd4.is_bnd4(body) or formats.fmg.is_fmg(body)
 
 
-def merge(vanilla: bytes | None, layers: list[tuple[str, bytes]], oodle=None, compressor=None) -> Result:
+def merge(
+    vanilla: bytes | None, layers: list[tuple[str, bytes]], oodle=None, compressor=None, dflt_fallback: bool = False
+) -> Result:
     """Merge the mods' copies of one file (as stored: DCX-compressed or not), in load order, against the game's own
     copy (None when the game has no such file: the first mod's copy is then the base)."""
     if not layers:
@@ -67,7 +69,7 @@ def merge(vanilla: bytes | None, layers: list[tuple[str, bytes]], oodle=None, co
         raise formats.FormatError(f"a copy is damaged or not in the format it claims ({e})") from e
     if not result.merged:
         return Result(layers[-1][1], result.changed, result.clashes, merged=False)
-    result.data = formats.dcx.pack(result.data, how, compressor) if result.data != base else vanilla
+    result.data = formats.dcx.pack(result.data, how, compressor, dflt_fallback) if result.data != base else vanilla
     return result
 
 

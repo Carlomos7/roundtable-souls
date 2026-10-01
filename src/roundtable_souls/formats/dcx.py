@@ -12,9 +12,21 @@ from roundtable_souls.formats import FormatError
 from roundtable_souls.game import oodle as game_oodle
 
 DCX_DATA_OFFSET = 0x4C
-# Kraken files are written with the layout of the tested Elden Ring files: compression level 6 in the payload and the
-# same 6 in the header (the "6/6" layout). Other levels and header values are not written until tested in game.
+# The layouts written, each loaded in game (Elden Ring; data/games/eldenring.json lists them and a test keeps the two
+# the same). Kraken: level 6 in the payload and in the header (the "6/6" layout). DFLT fallback: zlib level 9. ZSTD: a
+# 64 KB window and no content size in the frame (the game's decoder keeps 64 KB of history: zstd's defaults crash it).
 KRAKEN_LEVEL = 6
+DFLT_FALLBACK_LEVEL = 9
+ZSTD_LEVEL = 9
+ZSTD_WINDOW_LOG = 16
+
+
+def zstd_frame(body: bytes, level: int = ZSTD_LEVEL) -> bytes:
+    """A zstd frame the game reads: a 64 KB window, and the content size left out of the frame header."""
+    P = zstd.CompressionParameter
+    return zstd.compress(
+        body, options={P.compression_level: level, P.content_size_flag: 0, P.window_log: ZSTD_WINDOW_LOG}
+    )
 
 
 def dcx_decompress(data: bytes, oodle=None) -> bytes:
@@ -48,12 +60,18 @@ def unpack(raw: bytes, oodle=None) -> tuple[bytes, Dcx | None]:
     return dcx_decompress(raw, oodle), Dcx(bytes(raw[:DCX_DATA_OFFSET]), bytes(raw[0x28:0x2C]))
 
 
-def pack(body: bytes, how: Dcx | None, compressor=None) -> bytes:
-    """Compress content the way `how` says (as the game's own copy was), or return it as is when it was not a DCX."""
+def pack(body: bytes, how: Dcx | None, compressor=None, dflt_fallback: bool = False) -> bytes:
+    """Compress content the way `how` says (as the game's own copy was), or return it as is when it was not a DCX.
+    dflt_fallback: without the game's Oodle library, write a KRAK file as DFLT instead (only for file types the game
+    has loaded so; see game.config) rather than stop."""
     if how is None:
         return body
     header = bytearray(how.header)
-    if how.kind == b"KRAK":
+    if how.kind == b"KRAK" and compressor is None and dflt_fallback:
+        header[0x28:0x2C] = b"DFLT"
+        header[0x30] = DFLT_FALLBACK_LEVEL
+        payload = zlib.compress(body, DFLT_FALLBACK_LEVEL)
+    elif how.kind == b"KRAK":
         if compressor is None:
             raise FormatError("writing Oodle-compressed files needs the game's oo2core DLL (Windows only)")
         header[0x30] = KRAKEN_LEVEL
@@ -61,7 +79,8 @@ def pack(body: bytes, how: Dcx | None, compressor=None) -> bytes:
     elif how.kind == b"DFLT":
         payload = zlib.compress(body, header[0x30] or 9)
     elif how.kind == b"ZSTD":
-        payload = zstd.compress(body, header[0x30] or 15)
+        header[0x30] = ZSTD_LEVEL
+        payload = zstd_frame(body)
     else:
         raise FormatError(f"unknown DCX compression {how.kind!r}")
     struct.pack_into(">II", header, 0x1C, len(body), len(payload))

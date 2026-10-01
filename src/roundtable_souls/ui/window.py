@@ -1080,6 +1080,15 @@ class Launcher(FluentWindow):
         self.load_exp.setExpand(True)
         QTimer.singleShot(0, lambda: self.mods_page.ensureWidgetVisible(self.load_exp, 0, 40))
 
+    def _order_unverified(self) -> str | None:
+        """A note when the installed me3 is a version whose load order the launcher's was not checked against."""
+        from roundtable_souls.mods import order
+
+        version = (getattr(self, "_me3", None) or {}).get("version")
+        if not version or order.supported(version):
+            return None
+        return f"load order worked out as me3 {order.ME3_ORDER_VERSIONS[0]} and later do; not checked for me3 {version}"
+
     def _fill_conflicts(self, r):
         if (
             self.setup
@@ -1121,6 +1130,9 @@ class Launcher(FluentWindow):
         refused = scan.get("order_problem")
         if refused:  # first: the rest of the card assumes an order me3 would never use
             parts.insert(0, f"me3 will not start with this profile ({refused}); the order below is the file's")
+        unverified = self._order_unverified()
+        if unverified:
+            parts.append(unverified)
         self.conf_note.setText("  \u00b7  ".join(parts))
         bad = counts.get("stale") or counts.get("unreached") or missing
         tone_label(self.conf_note, "error" if missing or refused else "warning" if bad else "muted")
@@ -4115,6 +4127,8 @@ class Launcher(FluentWindow):
 
     def _on_me3(self, f):
         self._me3 = f
+        if getattr(self, "_conf_result", None):  # the Load order card may need the version note
+            self._fill_conflicts(self._conf_result)
         if f.get("error"):
             self.me3_line.setText(f"me3: {f['error']}")
             return

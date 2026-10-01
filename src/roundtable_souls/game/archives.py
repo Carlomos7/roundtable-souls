@@ -10,15 +10,14 @@ Nothing here writes to the game folder. Elden Ring only (the files the merger co
 
 from __future__ import annotations
 
-import json
 import os
 import struct
 import threading
 from pathlib import Path
 
-from roundtable_souls.resources import DATA_DIR
+from roundtable_souls.game import config as game_config
 
-ARCHIVES = ("Data0", "Data1", "Data2", "Data3", "DLC")
+ARCHIVES = tuple(game_config.load().archive_names)
 ENTRY = struct.Struct("<QiiqQQ")  # path hash, padded size, unpadded size, offset, SHA offset, AES key offset
 _lock = threading.Lock()
 _indexes: dict[str, tuple[tuple, dict[int, tuple], bytes]] = {}  # archive -> (fingerprint, entries, index bytes)
@@ -40,7 +39,7 @@ def path_hash(rel: str) -> int:
 
 
 def _keys() -> dict[str, str]:
-    return json.loads((DATA_DIR / "archives" / "eldenring.json").read_text(encoding="utf-8"))["archives"]
+    return dict(game_config.load().archives)
 
 
 def _rsa_open(data: bytes, pem: str) -> bytes:

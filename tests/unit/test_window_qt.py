@@ -1272,3 +1272,13 @@ def test_a_steam_shortcut_play_is_run_by_the_open_window(sandbox, monkeypatch):
     w._on_instance_message("rm -rf")  # anything else is ignored
     QTest.qWait(100)
     assert launched == ["nightreign"]
+
+
+def test_the_load_order_card_says_when_me3_is_older_than_the_order_checked(sandbox):
+    w = sandbox
+    w._me3 = {"version": "0.13.0"}
+    assert w._order_unverified() is None
+    w._me3 = {"version": "0.9.2"}
+    assert "not checked for me3 0.9.2" in w._order_unverified()
+    w._me3 = {}
+    assert w._order_unverified() is None  # unknown: nothing to say

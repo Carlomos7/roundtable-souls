@@ -1,0 +1,138 @@
+{
+ "$defs": {
+  "DcxWriter": {
+   "additionalProperties": false,
+   "properties": {
+    "krak": {
+     "$ref": "#/$defs/KrakenLayout"
+    },
+    "dflt": {
+     "$ref": "#/$defs/DfltLayout"
+    },
+    "zstd": {
+     "$ref": "#/$defs/ZstdLayout"
+    }
+   },
+   "required": [
+    "krak",
+    "dflt",
+    "zstd"
+   ],
+   "title": "DcxWriter",
+   "type": "object"
+  },
+  "DfltLayout": {
+   "additionalProperties": false,
+   "properties": {
+    "level": {
+     "title": "Level",
+     "type": "integer"
+    },
+    "header_level": {
+     "title": "Header Level",
+     "type": "integer"
+    }
+   },
+   "required": [
+    "level",
+    "header_level"
+   ],
+   "title": "DfltLayout",
+   "type": "object"
+  },
+  "KrakenLayout": {
+   "additionalProperties": false,
+   "properties": {
+    "level": {
+     "title": "Level",
+     "type": "integer"
+    },
+    "header_level": {
+     "title": "Header Level",
+     "type": "integer"
+    }
+   },
+   "required": [
+    "level",
+    "header_level"
+   ],
+   "title": "KrakenLayout",
+   "type": "object"
+  },
+  "ZstdLayout": {
+   "additionalProperties": false,
+   "properties": {
+    "level": {
+     "title": "Level",
+     "type": "integer"
+    },
+    "window_log": {
+     "title": "Window Log",
+     "type": "integer"
+    },
+    "content_size": {
+     "title": "Content Size",
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "level",
+    "window_log",
+    "content_size"
+   ],
+   "title": "ZstdLayout",
+   "type": "object"
+  }
+ },
+ "additionalProperties": false,
+ "description": "One game's files: its archives (names and the RSA public keys of their headers), the Oodle library it ships,\nthe DCX layouts the launcher writes for it, and the file types it loads as DFLT in place of KRAK.",
+ "properties": {
+  "game": {
+   "title": "Game",
+   "type": "string"
+  },
+  "note": {
+   "default": "",
+   "title": "Note",
+   "type": "string"
+  },
+  "archive_names": {
+   "items": {
+    "type": "string"
+   },
+   "title": "Archive Names",
+   "type": "array"
+  },
+  "archives": {
+   "additionalProperties": {
+    "type": "string"
+   },
+   "title": "Archives",
+   "type": "object"
+  },
+  "oodle_library": {
+   "title": "Oodle Library",
+   "type": "string"
+  },
+  "dcx_writer": {
+   "$ref": "#/$defs/DcxWriter"
+  },
+  "dflt_fallback": {
+   "items": {
+    "type": "string"
+   },
+   "title": "Dflt Fallback",
+   "type": "array"
+  }
+ },
+ "required": [
+  "game",
+  "archive_names",
+  "archives",
+  "oodle_library",
+  "dcx_writer",
+  "dflt_fallback"
+ ],
+ "title": "GameConfig",
+ "type": "object"
+}

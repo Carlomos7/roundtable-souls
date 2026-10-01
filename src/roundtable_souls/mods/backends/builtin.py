@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 
 from roundtable_souls import formats
+from roundtable_souls.game import config as game_config
 from roundtable_souls.game import oodle as game_oodle
 from roundtable_souls.mods.backends import BackendError
 
@@ -367,7 +368,8 @@ class CombineTool:
                     entry["skipped"] = "the game has no such file, so there is nothing to compare the copies with"
                 else:
                     layers_ = [(o["name"], (Path(o["folder"]) / o["rel"]).read_bytes()) for o in owners]
-                    result = filemerge.merge(vanilla, layers_, dec, comp)
+                    fallback = game_config.load().dflt_fallback_for(rel)
+                    result = filemerge.merge(vanilla, layers_, dec, comp, fallback)
                     if not result.merged:
                         entry["skipped"] = "not an archive or a text table the launcher can merge yet"
                     else:

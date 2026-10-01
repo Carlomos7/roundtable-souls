@@ -5,6 +5,9 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
 ## [Unreleased]
 
 - Load order: the launcher now works out the order exactly as me3 does (the same steps, checked against me3's own code on more than 100,000 profiles), so the file a mod wins or loses is shown right. Before, a mod placed with load_after could be shown in the wrong place. Mods named in another mod's Load after list load in that list's order. Switched-off mods take part in the order as in me3, mods whose folder is missing are left out, and a profile me3 would refuse (a loop, or a required mod that is missing, missing its folder or named with different capital letters) is shown as such on the Load order card.
+- Load order: when the installed me3 is older than 0.11.0, the Load order card says the order shown was not checked for that version.
+- Files the launcher writes with ZSTD compression all use the frame the game reads (a 64 KB window), as regulation.bin already did.
+- Without the game's Oodle library (Linux), menu text, player animations and effects are written as DFLT, which the game loads, instead of stopping. Reading the game's own Oodle-compressed files there still needs Oodle.
 - Combine: the combined-parameters package is added to the Load after list of the mod that must stay last, so me3 loads it before that mod.
 
 ## [3.14.0] - 2026-10-01

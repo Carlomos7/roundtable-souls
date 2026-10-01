@@ -1,11 +1,39 @@
 {
  "game": "eldenring",
- "note": "RSA public keys of the game's archive headers (Data0-3.bhd, DLC.bhd), as published by the modding community (UXM).",
+ "note": "What the launcher knows about the game's files. archives: RSA public keys of the game's archive headers (Data0-3.bhd, DLC.bhd), as published by the modding community (UXM). dcx_writer: the layouts the launcher writes, each loaded in game (docs/decisions). dflt_fallback: file types the game has loaded as DFLT in place of KRAK, written so only when the game's Oodle library is not there.",
+ "archive_names": [
+  "Data0",
+  "Data1",
+  "Data2",
+  "Data3",
+  "DLC"
+ ],
  "archives": {
   "Data0": "-----BEGIN RSA PUBLIC KEY-----\nMIIBCwKCAQEA9Rju2whruXDVQZpfylVEPeNxm7XgMHcDyaaRUIpXQE0qEo+6Y36L\nP0xpFvL0H0kKxHwpuISsdgrnMHJ/yj4S61MWzhO8y4BQbw/zJehhDSRCecFJmFBz\n3I2JC5FCjoK+82xd9xM5XXdfsdBzRiSghuIHL4qk2WZ/0f/nK5VygeWXn/oLeYBL\njX1S8wSSASza64JXjt0bP/i6mpV2SLZqKRxo7x2bIQrR1yHNekSF2jBhZIgcbtMB\nxjCywn+7p954wjcfjxB5VWaZ4hGbKhi1bhYPccht4XnGhcUTWO3NmJWslwccjQ4k\nsutLq3uRjLMM0IeTkQO6Pv8/R7UNFtdCWwIERzH8IQ==\n-----END RSA PUBLIC KEY-----",
   "Data1": "-----BEGIN RSA PUBLIC KEY-----\nMIIBCwKCAQEAxaBCHQJrtLJiJNdG9nq3deA9sY4YCZ4dbTOHO+v+YgWRMcE6iK6o\nZIJq+nBMUNBbGPmbRrEjkkH9M7LAypAFOPKC6wMHzqIMBsUMuYffulBuOqtEBD11\nCAwfx37rjwJ+/1tnEqtJjYkrK9yyrIN6Y+jy4ftymQtjk83+L89pvMMmkNeZaPON\n4O9q5M9PnFoKvK8eY45ZV/Jyk+Pe+xc6+e4h4cx8ML5U2kMM3VDAJush4z/05hS3\n/bC4B6K9+7dPwgqZgKx1J7DBtLdHSAgwRPpijPeOjKcAa2BDaNp9Cfon70oC+ZCB\n+HkQ7FjJcF7KaHsH5oHvuI7EZAl2XTsLEQIENa/2JQ==\n-----END RSA PUBLIC KEY-----",
   "Data2": "-----BEGIN RSA PUBLIC KEY-----\nMIIBDAKCAQEA0iDVVQ230RgrkIHJNDgxE7I/2AaH6Li1Eu9mtpfrrfhfoK2e7y4O\nWU+lj7AGI4GIgkWpPw8JHaV970Cr6+sTG4Tr5eMQPxrCIH7BJAPCloypxcs2BNfT\nGXzm6veUfrGzLIDp7wy24lIA8r9ZwUvpKlN28kxBDGeCbGCkYeSVNuF+R9rN4OAM\nRYh0r1Q950xc2qSNloNsjpDoSKoYN0T7u5rnMn/4mtclnWPVRWU940zr1rymv4Jc\n3umNf6cT1XqrS1gSaK1JWZfsSeD6Dwk3uvquvfY6YlGRygIlVEMAvKrDRMHylsLt\nqqhYkZNXMdy0NXopf1rEHKy9poaHEmJldwIFAP////8=\n-----END RSA PUBLIC KEY-----",
   "Data3": "-----BEGIN RSA PUBLIC KEY-----\nMIIBCwKCAQEAvRRNBnVq3WknCNHrJRelcEA2v/OzKlQkxZw1yKll0Y2Kn6G9ts94\nSfgZYbdFCnIXy5NEuyHRKrxXz5vurjhrcuoYAI2ZUhXPXZJdgHywac/i3S/IY0V/\neDbqepyJWHpP6I565ySqlol1p/BScVjbEsVyvZGtWIXLPDbx4EYFKA5B52uK6Gdz\n4qcyVFtVEhNoMvg+EoWnyLD7EUzuB2Khl46CuNictyWrLlIHgpKJr1QD8a0ld0PD\nPHDZn03q6QDvZd23UW2d9J+/HeBt52j08+qoBXPwhndZsmPMWngQDaik6FM7EVRQ\netKPi6h5uprVmMAS5wR/jQIVTMpTj/zJdwIEXszeQw==\n-----END RSA PUBLIC KEY-----",
   "DLC": "-----BEGIN RSA PUBLIC KEY-----\nMIIBCwKCAQEAmYJ/5GJU4boJSvZ81BFOHYTGdBWPHnWYly3yWo01BYjGRnz8NTkz\nDHUxsbjIgtG5XqsQfZstZILQ97hgSI5AaAoCGrT8sn0PeXg2i0mKwL21gRjRUdvP\nDp1Y+7hgrGwuTkjycqqsQ/qILm4NvJHvGRd7xLOJ9rs2zwYhceRVrq9XU2AXbdY4\npdCQ3+HuoaFiJ0dW0ly5qdEXjbSv2QEYe36nWCtsd6hEY9LjbBX8D1fK3D2c6C0g\nNdHJGH2iEONUN6DMK9t0v2JBnwCOZQ7W+Gt7SpNNrkx8xKEM8gH9na10g9ne11Mi\nO1FnLm8i4zOxVdPHQBKICkKcGS1o3C2dfwIEXw/f3w==\n-----END RSA PUBLIC KEY-----"
- }
+ },
+ "oodle_library": "oo2core_*_win64.dll",
+ "dcx_writer": {
+  "krak": {
+   "level": 6,
+   "header_level": 6
+  },
+  "dflt": {
+   "level": 9,
+   "header_level": 9
+  },
+  "zstd": {
+   "level": 9,
+   "window_log": 16,
+   "content_size": false
+  }
+ },
+ "dflt_fallback": [
+  ".msgbnd.dcx",
+  ".anibnd.dcx",
+  ".ffxbnd.dcx"
+ ]
 }
