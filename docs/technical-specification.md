@@ -1,6 +1,6 @@
 # Roundtable Souls — Technical Specification, Directory Blueprint, and Agent Action Plan
 
-**Specification version:** 1.1 · **Date:** 2026-09-30 · **Core implementation phases:** 0–6 · **Follow-on feature:** Phase 7 rename; optional Phase 8 UI extraction
+**Specification version:** 1.1 · **Date:** 2026-09-30 (status updated 2026-10-01) · **Core implementation phases:** 0–6 · **Follow-on feature:** Phase 7 rename; optional Phase 8 UI extraction
 
 This document supersedes earlier conversation phase numbering and architectural sketches. Core Phase 0–6 numbers below are authoritative; Section 8 adds an independent UI change and explicitly scoped follow-on Phase 7/8 work without renumbering the core plan. It specifies the intended implementation, not a declaration that proposed modules or capabilities already exist. Confirm the current checkout before modifying code; retain completed work and update status from evidence. Existing repository instructions and explicit user authorization govern git operations and publication.
 
@@ -231,6 +231,8 @@ Retain raw row bytes, ordering, names, metadata and duplicate IDs. Row identity 
 
 Current merge granularity is **four-byte chunks**, not genuine fields. Separate fields within one chunk may conflict; report/document this limitation. Preserve existing behavior of retaining absent rows and skipping incompatible row sizes until a separately specified change is validated. Mod-vs-current-vanilla differences from older versions can include vanilla drift; header/version labels are evidence to investigate, not an automatic trusted baseline.
 
+The regulation's zstd frame MUST use a 64 KB window (`window_log` 16) without the content-size field: zstd's default frame crashes Elden Ring 1.17.1 at start even with unchanged content, and so does a 64 MB window with 64 KB blocks (evidence ledger E-011). Phase 1 MUST NOT change this.
+
 Soulstruct's evaluated parameter writer lost 26 duplicate-ID rows in RandomAppearParam and altered NetworkParam rows. Do not use it as the regulation writer or sole duplicate-row oracle. The existing output's 194-table match to Assets.exe was reference agreement, not independently derived intended semantics.
 
 ### 4.5 ESD adaptation and safe merge envelope
@@ -269,7 +271,17 @@ Port upstream tests and independently compare with a pinned Rust harness. The ol
 
 ### 4.8 Evidence ledger
 
-Independent report: archive structures/contents match the derived result and reference on tested outputs; the derived removal rule shares the same unvalidated assumption. Text matches the reference in **15 languages**; specific 166 map changes and 27 new strings were checked in English only. PARAM matches all 194 reference tables but intended output was not independently derived. Soulstruct uses Oodle too, so structural independence is not independent compression implementation. ESD structural rewrite was checked once; broader four-source and in-game tests remain required unless completed in the current checkout. TPF byte-exactness was established on one 56-texture file only and is deferred.
+`docs/evidence-ledger.md` is the record; this is its summary as of 2026-10-01. Accepted on Windows (Elden Ring 1.17.1,
+me3 0.13.0): launcher-written menu text and player animations in the KRAK layouts 6/6, 4/4 and 4/6 and in DFLT, and
+launcher-written parameters once the regulation's zstd frame was fixed (E-005, E-006, E-011). Each in-game test shows
+that the game loaded the file and, for text and parameters, that a marker change took effect; for animations it shows
+only that the archive loaded (no visible change was tested). Withdrawn: the earlier claim that a played Revive build
+was launcher-written; it was Revive's tool's output (E-001). Independent reading (E-002) still stands with its limits:
+Soulstruct uses Oodle too; text matched the reference in 15 languages but the 166 map changes and 27 new strings were
+checked in English only; PARAM matches all 194 reference tables but the intended output was not independently
+derived; the removal rule shares the reference tool's unvalidated assumption. ESD structural rewrite was checked once.
+TPF byte-exactness was shown on one 56-texture file only and is deferred. Open: a visible animation change, the intent
+behind the 58 omitted animations (E-007), me3 ordering parity (E-010, Phase 3), every Deck check, and Linux.
 
 ## 5. PHASED AGENT ACTION PLAN (CHRONOLOGICAL CHECKLIST)
 
@@ -277,20 +289,22 @@ Independent report: archive structures/contents match the derived result and ref
 
 **Goal:** create a calibrated baseline and resolve platform/format uncertainties. This work may run alongside Phase 1; unperformed human/game checks remain pending.
 
-- [ ] Inventory the checkout, current workflows, callers, supported capabilities and existing verification artifacts.
-- [ ] Establish `scripts/verify/` and isolated output paths; make input paths configurable.
-- [ ] Calibrate readers against known-good vanilla/reference data before interpreting failures.
-- [ ] Verify PARAM checks retain ordered duplicate-ID occurrences and metadata.
-- [ ] Enumerate actual animation removals/additions; investigate the 58 omissions against the mod's target baseline and changelog; record unknowns.
-- [ ] Test DCX 4/4, 4/6 and 6/6 on isolated outputs; record payload/header/file-type/game-version/platform separately.
-- [ ] Test DFLT replacement on representative KRAK file types; record output encoding acceptance separately from Linux decoding availability.
-- [ ] Use a marker FMG, an obvious regulation change and a controlled animation change to demonstrate launcher output is loaded.
-- [ ] Record effects/animations/text/parameter acceptance on Windows and Deck; do not silently treat unavailable Deck tests as passed.
-- [ ] Record the ordering-model mismatch and the Rust-parity work required in Phase 3.
+- [x] Inventory the checkout, current workflows, callers, supported capabilities and existing verification artifacts. *(Ledger section 1.)*
+- [x] Establish `scripts/verify/` and isolated output paths; make input paths configurable. *(`--game`/`--out` or `local.toml`; outputs refused inside the game, profiles, saves or repo.)*
+- [x] Calibrate readers against known-good vanilla/reference data before interpreting failures. *(E-009; pyooz not calibrated.)*
+- [x] Verify PARAM checks retain ordered duplicate-ID occurrences and metadata. *(E-008.)*
+- [ ] Enumerate actual animation removals/additions; investigate the 58 omissions against the mod's target baseline and changelog; record unknowns. *(Enumerated and recorded as unknown, E-007; the intent investigation is open and moved to Phase 4 by the owner's decision.)*
+- [x] Test DCX 4/4, 4/6 and 6/6 on isolated outputs; record payload/header/file-type/game-version/platform separately. *(Windows, E-005; Deck open under the item below.)*
+- [x] Test DFLT replacement on representative KRAK file types; record output encoding acceptance separately from Linux decoding availability. *(Windows, menu text and player animations written by the launcher, E-006; effects only as Revive's tool's output, E-001.)*
+- [ ] Use a marker FMG, an obvious regulation change and a controlled animation change to demonstrate launcher output is loaded. *(Marker text and parameter change seen in game, E-005 and E-011; the controlled animation change is open: no clip pair with an obvious difference identified yet.)*
+- [ ] Record effects/animations/text/parameter acceptance on Windows and Deck; do not silently treat unavailable Deck tests as passed. *(Windows recorded; every Deck check open: no Deck available.)*
+- [x] Record the ordering-model mismatch and the Rust-parity work required in Phase 3. *(E-010; parity itself is Phase 3 work and open.)*
 
 **Deletions:** none.
 
 **Verification/completion:** a versioned evidence ledger identifies accepted paths, failed experiments and unresolved checks. Shipping a chosen path requires its relevant acceptance evidence; every experimental variant need not pass.
+
+**Status (2026-10-01): not complete.** Seven of ten checks are done. Open: the controlled animation change, the intent behind the 58 omitted animations (moved to Phase 4), and every Deck check. Phase 1 runs alongside, as allowed above.
 
 ### Phase 1 — Consolidate BND4
 

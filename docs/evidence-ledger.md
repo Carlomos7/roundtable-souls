@@ -7,7 +7,7 @@ never reported as passing. Newest entries are added at the end of each section.
 Status words: **accepted** (shown to work where stated), **failed**, **pending** (not done yet), **unknown** (looked
 into, not resolved).
 
-## 1. Current state (Phase 0 inventory, 2026-09-30, release 3.13.1, commit ac14414)
+## 1. Current state (Phase 0 inventory, 2026-09-30, release 3.13.1, commit ac14414; regulation writer as of 3.13.2)
 
 **What the launcher writes today (Elden Ring, Windows)**
 
@@ -99,10 +99,18 @@ fix. The owner ran each package's `launch.cmd`:
 | 4/4 | both tags shown | loads (no crash) | both classes' values shown | **accepted** | pending: needs a Deck |
 | 4/6 | both tags shown | loads (no crash) | both classes' values shown | **accepted** | pending: needs a Deck |
 
-"Both tags": the title menu read "NEW GAME [RS <layout> A]" and "SYSTEM [RS <layout> B]", so the merged text file
-loaded with both mods' changes. Parameters: Vagabond Vigor 20 / Mind 5 and Warrior Vigor 16 / Mind 7 in class
-selection (the balanced marker edit). Animations: the archive with the added unused clip loaded; a visible change is
-still the open check at the end of this file.
+What each check demonstrates, and what it does not:
+
+- **Menu text.** The title menu read "NEW GAME [RS <layout> A]" and "SYSTEM [RS <layout> B]". Each mod changed one
+  entry, so this shows the game read the launcher-merged `menu_dlc02.msgbnd.dcx` in that layout and that both mods'
+  entries survived the merge. It does not show the other 14 languages in game.
+- **Parameters.** Class selection showed Vagabond Vigor 20 / Mind 5 and Warrior Vigor 16 / Mind 7 (one mod changed
+  each class). This shows the game read the launcher-combined regulation.bin and applied both mods' rows of
+  CharaInitParam. It does not exercise any other table in game.
+- **Player animations.** The game reached the title screen and class selection, where the player model is shown,
+  without a crash, with the launcher-merged `c0000_a00_hi.anibnd.dcx` (one unused clip added) in the package. This
+  shows the archive in that layout did not stop the game from loading. It does not show that any clip plays or that
+  a change applies: no visible change was in the package, and the optional movement step's result was not reported.
 
 Before play (same day, earlier): each stored file reads back to the merged content. `verify_output.py` with
 Soulstruct 2.6.0: 6/6 and 4/6 have 0 validation failures (inner files, IDs, flags, contents; both mods' menu text
@@ -110,7 +118,8 @@ changes merged entry by entry; exactly the 2 changed parameter rows); dflt the s
 4/4 not opened by Soulstruct (E-003), so its contents were checked only by the read-back.
 
 Only 6/6 is written by the launcher. The others are experiments; 3.13.1's header regression tests keep the writer
-at 6/6 until a decision says otherwise. Header byte 4 (E-003) is accepted by the game: 4/4 loaded.
+at 6/6. Header byte 4 (E-003) is accepted by the game: 4/4 loaded. That 4/4 and 4/6 are accepted and faster to write
+is recorded as a separate performance decision, not adopted: `docs/decisions/0002-kraken-layout-speed.md`.
 
 An earlier run of these packages (afternoon) crashed at start in every layout; the cause was the regulation writer
 (E-011), not the layouts: the 6/6 text file alone loaded, the regulation alone crashed.
@@ -184,22 +193,27 @@ f10e60a8 "DCX ZSTD fix?" (2024-08-17) changed its zstd writer from library defau
 `ZSTD_c_windowLog = 16`, and WitchyBND shipped ZSTD writing that day; TKGP's SoulsFormats (2024-11, ZstdSharp level
 21) and Soulstruct 2.6.0 (`_compress_dcx_zstd`, level 15) use the identical overrides.
 
-Fix: `mods/paramfile.py` `compress_regulation_body` (level 9, no content size, `ZSTD_WINDOW_LOG = 16`); the unit test
+Decision record: `docs/decisions/0001-regulation-zstd-window.md`. Fix: `mods/paramfile.py` `compress_regulation_body` (level 9, no content size, `ZSTD_WINDOW_LOG = 16`); the unit test
 `test_the_zstd_frame_is_shaped_as_the_game_requires` parses the written frame and pins the shape (no content size,
 window at most 64 KB, one block per 64 KB of input). Files come out about 1% larger than the game's own (2,058,144
 against 2,045,728 bytes for the unchanged regulation) and compress in well under a second.
 
-Affected releases: `write_regulation` had the default zstd shape since 3.6.0 (commit 1300639, 2026-09-29). It is
-reached by Combine (two packages that both ship a regulation.bin) and by the engine's `params` step (the
-nightreign-revive-lite recipe). Neither had run on the owner's setup (E-001), so no played build was affected here;
-any user who did combine parameters with 3.6.0 to 3.13.1 got a regulation the game crashes on at start. Fixed in the
-working tree; the release decision is the owner's.
+Releases: v3.6.0 to v3.13.1 shipped the same compressor settings (zstd library defaults; the source of
+`write_regulation` at every one of those tags was inspected, 2026-10-01). The crash was demonstrated with the current
+pre-fix writer on Elden Ring 1.17.1 (tests 4, 7, 8, 9 and 11 above); the historical releases were inspected, not run
+in game, and a game version other than 1.17.1 was not tested. The writer is reached by Combine (two packages that both
+ship a regulation.bin) and by the engine's `params` step (the nightreign-revive-lite recipe). Neither had run on the
+owner's setup (E-001). Fixed in 3.13.2 (released 2026-10-01).
 
 ## 3. Open checks
 
-- E-001 (Revive's tool's output): rain; co-op revive animations; all Deck checks.
+- Phase 0 is not complete: the three checks below marked (Phase 0) stay open.
+- (Phase 0) A controlled animation change seen in game (see the last item).
+- (Phase 0) Every Deck check.
+- (Phase 0, moved to Phase 4) E-007: the intent behind the 58 omissions, with the omission policy.
+- E-010: me3 ordering parity (Phase 3).
+- E-001 (Revive's tool's output): rain; co-op revive animations.
 - E-005 and E-006: every layout on the Deck (pending: needs a Deck). Windows is done.
-- E-007: the 58 omissions (Phase 4, with the omission policy).
 - E-011: a Linux-written regulation in game (same writer, no Oodle involved; expected to match Windows).
 - Linux: KRAK input decoding (a separate prerequisite from any DFLT output result).
 - A controlled animation change seen in game (`ingame_package.py --anim-swap CLIP=SOURCE`), once a clip pair with an

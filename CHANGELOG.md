@@ -4,7 +4,8 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
 
 ## [3.13.2] - 2026-10-01
 
-- Fixed: combined parameters (regulation.bin) crashed the game at start, in every version since 3.6.0 that combined them. The file is now compressed the way the game's own is (a 64 KB window), the shape every regulation editor writes; checked in game on Windows together with each layout the launcher can write for merged archives and text.
+- Fixed: combined parameters (regulation.bin) written by the launcher crashed the game at start. The file is now compressed with a 64 KB window, the frame regulation editors write; checked in game on Windows with Elden Ring 1.17.1, together with each layout the launcher can write for merged archives and text.
+- Versions 3.6.0 to 3.13.1 use the same compression settings for combined parameters as the writer that crashed. The crash was reproduced with that writer on Elden Ring 1.17.1; the older versions themselves were inspected, not run in game. Combining parameters only happens when two enabled mods both ship a regulation.bin, or in the preview Nightreign Revive build.
 
 ## [3.13.1] - 2026-09-30
 
