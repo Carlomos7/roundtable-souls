@@ -421,7 +421,7 @@ def test_entry_problems_follow_me3_rules(tmp_path):
     assert "Load order loops: a" in by[0] and "Load order loops" in by[1]
     assert "used twice" in by[0] and "Folder missing" in by[2]
     assert "'nowhere', which is not in this profile" in by[3] and "fine" not in by[3]  # optional is fine
-    assert "'off.dll', which is off" in by[4]
+    assert not any("'off.dll'" in x for x in by[4])  # switched off: me3 orders it anyway, nothing stops
     assert "'a', which is not in this profile" in by[4]  # a native cannot wait for a package
     assert by[5] == "" and "Not a .dll" in by[6]
 
@@ -724,3 +724,20 @@ def test_regulation_placement_follows_the_package_if_the_profile_changed_meanwhi
     plan["insert_before"] = "gone"  # the package was removed meanwhile: goes last
     M.install(p, plan)
     assert [x["id"] for x in tomllib.loads(p.read_text(encoding="utf-8"))["packages"]][-1] == "other"
+
+
+def test_me3_stops_for_a_required_dependency_whose_folder_is_missing_or_whose_id_differs_in_case(tmp_path):
+    p = tmp_path / "my.me3"
+    p.write_text(
+        'profileVersion = "v1"\n\n'
+        "[[packages]]\nid = \"Base\"\npath = 'mod/base'\n\n"
+        "[[packages]]\nid = \"gone\"\npath = 'mod/gone'\n\n"
+        '[[packages]]\nid = "x"\npath = \'mod/x\'\nload_after = [{ id = "base", optional = false }, '
+        '{ id = "gone", optional = false }]\n',
+        encoding="utf-8",
+    )
+    for d in ("mod/base/parts", "mod/x/parts"):
+        (tmp_path / d).mkdir(parents=True)
+    by = {i: " | ".join(v) for i, v in M.entry_problems(p, M.entries(p)).items()}
+    assert "'base', but the profile calls it 'Base'" in by[2]
+    assert "'gone', whose folder is missing: me3 stops" in by[2]

@@ -120,7 +120,7 @@ def test_a_new_package_goes_before_it_and_is_listed(world, tmp_path):
     text = world.profile.read_text(encoding="utf-8")
     assert text.index(f'id = "{plan["id"]}"') < text.index('id = "last"')
     assert (plan["id"], True) in _after(text, "package", "last")
-    ids = [r["id"] for r in profile_tools.effective_order(profile_tools.package_rows(text))]
+    ids = [r["id"] for r in profile_tools.me3_order(None, text).rows]
     assert ids[-1] == "last"
 
 
@@ -259,7 +259,7 @@ def test_random_profiles_keep_it_last_and_leave_every_other_entry_alone(tmp_path
             assert new == text and "loop" in problem
             continue
         assert _blocks_except(new, {'id = "last"'}) == _blocks_except(text, {'id = "last"'})
-        order = [r["id"] for r in profile_tools.effective_order(profile_tools.package_rows(new))]
+        order = [r["id"] for r in profile_tools.me3_order(None, new).rows]
         if "last" in order:
             before_it = {i for i in order[: order.index("last")]}
             enabled = {r["id"] for r in profile_tools.package_rows(new)} - {"last"}

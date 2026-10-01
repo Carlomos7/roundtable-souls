@@ -192,24 +192,33 @@ def reconcile(
 
 
 # ----------------------------------------------------------------------------- what the Load order card shows
-def _order(rows: list[dict]) -> list[str]:
-    from roundtable_souls.mods import profile as profile_tools
+def _order(profile: Path, rows: list[dict]) -> list[str]:
+    """The enabled entries' names (lower-case) in the order me3 loads them (mods.order)."""
+    from roundtable_souls.mods import order
 
-    return [r["id"].lower() for r in profile_tools.effective_order(rows)]
+    ordered = order.order_rows(rows, Path(profile).parent, lambda r: mod_manage.resolve(profile, r["path"]).exists())
+    return [r["id"].lower() for r in ordered.rows]
 
 
 def _rows(items: list[dict], kind: str) -> list[dict]:
+    """Every entry of one kind (switched-off ones too: me3 orders them, then leaves them out), with the id me3 uses:
+    a package's id (its path when it has none), a native's DLL file name."""
+    from roundtable_souls.mods.profile import _dependents
+
     out = []
     for e in items:
-        if e["kind"] != kind or not e.get("enabled", True) or not e["path"]:
+        if e["kind"] != kind or not e["path"]:
             continue
+        me3_id = (e.get("id") or None) if kind == "package" else Path(e["path"]).name
         out.append(
             {
                 "index": e["index"],
                 "id": mod_manage.entry_ref(e),
+                "me3_id": me3_id,
                 "path": e["path"],
-                "load_after": [str(d["id"]) for d in e.get("load_after") or []],
-                "load_before": [str(d["id"]) for d in e.get("load_before") or []],
+                "enabled": e.get("enabled", True) is not False,
+                "after": _dependents(e.get("load_after")),
+                "before": _dependents(e.get("load_before")),
             }
         )
     return out
@@ -240,7 +249,7 @@ def status(profile: Path) -> dict | None:
             if e["kind"] == owner["kind"] and e["index"] not in mine_idx and e["index"] != owner["index"]
         ]
         after = _kept_after(owner, others, skip)
-        order = _order(_rows(items, owner["kind"]))
+        order = _order(profile, _rows(items, owner["kind"]))
         ref = mod_manage.entry_ref(owner).lower()
         if ref not in order:
             continue  # switched off

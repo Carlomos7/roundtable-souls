@@ -52,28 +52,70 @@ def test_settings_roundtrip_keeps_comments_and_crlf():
     for bad in ("C:\\saves\\x.sl2", "sub/x.sl2"):
         with pytest.raises(ValueError):
             P.set_setting(arr, "savefile", bad)
-    rows = [
-        {"id": "a", "path": "a", "load_after": ["b"], "load_before": []},
-        {"id": "b", "path": "b", "load_after": ["a"], "load_before": []},
-    ]
-    assert len(P.effective_order(rows)) == 2  # a cycle still terminates
+    loop = "[[packages]]\nid = 'a'\npath = 'a'\nload_after = [{ id = 'b', optional = false }]\n\n"
+    loop += "[[packages]]\nid = 'b'\npath = 'b'\nload_after = [{ id = 'a', optional = false }]\n"
+    looped = P.me3_order(None, loop)
+    assert [r["id"] for r in looped.rows] == ["a", "b"] and "cycles" in looped.problem  # me3 would not start
     assert P.read_settings("this is = = not toml") == {} and P.package_rows("[[[") == []
 
 
-def test_effective_order_respects_load_after_and_before():
-    rows = P.package_rows(PROFILE)
-    assert [r["id"] for r in rows] == ["a", "b", "c"]  # disabled one dropped
-    assert [r["id"] for r in P.effective_order(rows)] == ["a", "c", "b"]
-    rows2 = [
-        {"id": "x", "path": "x", "load_after": [], "load_before": ["a"]},
-        {"id": "a", "path": "a", "load_after": [], "load_before": []},
-    ]
-    assert [r["id"] for r in P.effective_order(rows2)] == ["x", "a"]
-    rows3 = [
-        {"id": "a", "path": "a", "load_after": [], "load_before": []},
-        {"id": "x", "path": "x", "load_after": [], "load_before": ["a"]},
-    ]
-    assert [r["id"] for r in P.effective_order(rows3)] == ["x", "a"]
+def _profile(*blocks: str) -> str:
+    return "\n".join(f"[[packages]]\n{b}\n" for b in blocks)
+
+
+def test_me3_order_follows_load_after_and_before():
+    assert [r["id"] for r in P.package_rows(PROFILE)] == ["a", "b", "c"]  # switched off: left out
+    assert [r["id"] for r in P.package_rows(PROFILE, include_disabled=True)] == ["a", "b", "c", "off"]
+    assert [r["id"] for r in P.me3_order(None, PROFILE).rows] == ["a", "c", "b"]
+    x_first = _profile("id = 'x'\npath = 'x'\nload_before = [{ id = 'a', optional = false }]", "id = 'a'\npath = 'a'")
+    assert [r["id"] for r in P.me3_order(None, x_first).rows] == ["x", "a"]
+    x_last = _profile("id = 'a'\npath = 'a'", "id = 'x'\npath = 'x'\nload_before = [{ id = 'a', optional = false }]")
+    assert [r["id"] for r in P.me3_order(None, x_last).rows] == ["x", "a"]
+
+
+def test_me3_moves_a_dependency_run_where_the_old_launcher_order_did_not():
+    # The case that showed the old order wrong: D loads after A. me3 loads D right after A (A D B C); the launcher
+    # used to leave it last (A B C D), so a file D and B or C both ship had the wrong winner.
+    text = _profile(
+        "id = 'A'\npath = 'A'",
+        "id = 'B'\npath = 'B'",
+        "id = 'C'\npath = 'C'",
+        "id = 'D'\npath = 'D'\nload_after = [{ id = 'A', optional = false }]",
+    )
+    assert [r["id"] for r in P.me3_order(None, text).rows] == ["A", "D", "B", "C"]
+
+
+def test_me3_orders_switched_off_packages_and_drops_missing_folders(tmp_path):
+    (tmp_path / "a").mkdir()
+    (tmp_path / "c").mkdir()
+    prof = tmp_path / "p.me3"
+    text = _profile(
+        "id = 'a'\npath = 'a'",
+        "id = 'gone'\npath = 'nowhere'",  # no folder: me3 leaves it out before ordering
+        "id = 'c'\npath = 'c'\nload_after = [{ id = 'gone', optional = true }]",
+        "id = 'off'\npath = 'a'\nenabled = false",
+    )
+    ordered = P.me3_order(prof, text)
+    assert [r["id"] for r in ordered.rows] == ["a", "c"] and [r["id"] for r in ordered.dropped] == ["gone"]
+    required = text.replace("optional = true", "optional = false")
+    refused = P.me3_order(prof, required)
+    assert refused.problem == "Required dependency is unavailable: gone"  # me3 would not start
+
+
+def test_what_a_load_after_list_names_loads_in_the_lists_order():
+    # me3 links the listed ids in the list's order and takes the first one ready: the list, not the file, decides
+    # the order of what it names (and so which of them wins a file they both ship).
+    text = _profile(
+        "id = 'a'\npath = 'a'",
+        "id = 'b'\npath = 'b'",
+        "id = 'last'\npath = 'last'\nload_after = [{ id = 'b', optional = true }, { id = 'a', optional = true }]",
+    )
+    assert [r["id"] for r in P.me3_order(None, text).rows] == ["b", "a", "last"]
+
+
+def test_a_dependency_without_optional_counts_as_required():
+    text = _profile("id = 'a'\npath = 'a'\nload_after = ['b']")
+    assert P.me3_order(None, text).problem == "Required dependency is unavailable: b"
 
 
 def test_conflict_scan_finds_shared_paths_and_winner(tmp_path):

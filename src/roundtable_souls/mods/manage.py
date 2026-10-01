@@ -1066,7 +1066,7 @@ def regulation_order(profile: Path, skip: Path | None = None) -> dict:
     profile = Path(profile)
     text = read_text(profile)
     items = {e["index"]: e for e in entries(profile)}
-    order = profile_tools.effective_order(profile_tools.package_rows(text))
+    order = profile_tools.me3_order(profile, text).rows
     by_id = {
         (e.get("id") or Path(e.get("path") or "").name).lower(): e for e in items.values() if e["kind"] == "package"
     }
@@ -1455,9 +1455,15 @@ def _find_loop(after: dict[int, set[int]]) -> list[int] | None:
     return None
 
 
+def _present(profile: Path, e: dict) -> bool:
+    """me3 leaves out an entry whose path does not exist before it orders the rest."""
+    return bool(e.get("path")) and resolve(profile, e["path"]).exists()
+
+
 def entry_problems(profile: Path, items: list[dict]) -> dict[int, list[str]]:
     """What would make me3 refuse or skip an entry, by index. Load order only links entries of the same kind, and a
-    dependency that is not optional must be present and enabled, or me3 stops."""
+    dependency that is not optional must be in the profile with its folder (or DLL) there, under exactly that id, or
+    me3 stops (see mods.order). A dependency that is switched off is fine: me3 orders switched-off entries too."""
     profile = Path(profile)
     out: dict[int, list[str]] = {e["index"]: [] for e in items}
     for kind in ("package", "native"):
@@ -1484,10 +1490,19 @@ def entry_problems(profile: Path, items: list[dict]) -> dict[int, list[str]]:
                     if d.get("optional"):
                         continue
                     hits = refs.get(str(d["id"]).lower()) or []
+                    exact = [h for h in hits if entry_ref(h) == str(d["id"])]
                     if not hits:
                         say.append(f"Must load {word} '{d['id']}', which is not in this profile: me3 stops")
-                    elif not any(h.get("enabled", True) for h in hits):
-                        say.append(f"Must load {word} '{d['id']}', which is off: me3 stops")
+                    elif not exact:
+                        say.append(
+                            f"Must load {word} '{d['id']}', but the profile calls it '{entry_ref(hits[0])}' and me3 "
+                            "matches ids exactly: me3 stops"
+                        )
+                    elif not any(_present(profile, h) for h in exact):
+                        say.append(
+                            f"Must load {word} '{d['id']}', whose {'folder' if kind == 'package' else 'DLL'} "
+                            "is missing: me3 stops"
+                        )
         # a loop in the order (a after b, b after a) cannot be satisfied
         after: dict[int, set[int]] = {e["index"]: set() for e in group}
         for e in group:

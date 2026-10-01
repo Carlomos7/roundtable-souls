@@ -1118,9 +1118,12 @@ class Launcher(FluentWindow):
             parts.append("missing folder: " + ", ".join(missing))
         if scan.get("truncated"):
             parts.append("scan stopped early (very large packages)")
+        refused = scan.get("order_problem")
+        if refused:  # first: the rest of the card assumes an order me3 would never use
+            parts.insert(0, f"me3 will not start with this profile ({refused}); the order below is the file's")
         self.conf_note.setText("  \u00b7  ".join(parts))
         bad = counts.get("stale") or counts.get("unreached") or missing
-        tone_label(self.conf_note, "error" if missing else "warning" if bad else "muted")
+        tone_label(self.conf_note, "error" if missing or refused else "warning" if bad else "muted")
         per = ov.get("packages") or {}
         lines = []
         for pid, n in per.items():

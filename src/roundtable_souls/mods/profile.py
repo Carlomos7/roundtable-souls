@@ -113,8 +113,25 @@ def set_setting(text: str, key: str, value) -> str:
 
 
 # ----------------------------------------------------------------------------- packages in load order
-def package_rows(text: str) -> list[dict]:
-    """Enabled packages with id, path, load_after ids, in file order. Both me3 shapes."""
+def _dependents(raw) -> list:
+    """load_after / load_before as me3 reads them: {id, optional}. An entry without optional, or a bare name, is
+    taken as required (me3 itself does not read such a profile)."""
+    from roundtable_souls.mods.order import Dependent
+
+    out = []
+    for d in raw or []:
+        if isinstance(d, dict) and d.get("id"):
+            out.append(Dependent(str(d["id"]), d.get("optional") is True))
+        elif isinstance(d, str):
+            out.append(Dependent(d, False))
+    return out
+
+
+def package_rows(text: str, include_disabled: bool = False) -> list[dict]:
+    """Packages with id, path, load_after / load_before ids, in file order. Both me3 shapes. id is the name the
+    launcher uses (the id, else the folder name); me3_id is the id me3 uses (None: me3 uses the path); after and
+    before keep each dependency's optional flag. include_disabled: switched-off packages too (me3 orders them, then
+    leaves them out)."""
     try:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError:
@@ -124,51 +141,42 @@ def package_rows(text: str) -> list[dict]:
         rows = [rows]
     out = []
     for i, row in enumerate(rows):
-        if not isinstance(row, dict) or row.get("enabled", True) is False:
+        if not isinstance(row, dict):
             continue
-        path = str(row.get("path") or "")
+        enabled = row.get("enabled", True) is not False
+        if not enabled and not include_disabled:
+            continue
+        path = str(row.get("path") or row.get("source") or "")
         if not path:
             continue
-        ident = str(row.get("id") or Path(path).name)
-        deps = []
-        for d in row.get("load_after") or []:
-            if isinstance(d, dict) and d.get("id"):
-                deps.append(str(d["id"]))
-            elif isinstance(d, str):
-                deps.append(d)
-        before = []
-        for d in row.get("load_before") or []:
-            if isinstance(d, dict) and d.get("id"):
-                before.append(str(d["id"]))
-            elif isinstance(d, str):
-                before.append(d)
-        out.append({"index": i, "id": ident, "path": path, "load_after": deps, "load_before": before})
+        after = _dependents(row.get("load_after"))
+        before = _dependents(row.get("load_before"))
+        out.append(
+            {
+                "index": i,
+                "id": str(row.get("id") or Path(path).name),
+                "me3_id": str(row["id"]) if row.get("id") else None,
+                "path": path,
+                "enabled": enabled,
+                "load_after": [d.id for d in after],
+                "load_before": [d.id for d in before],
+                "after": after,
+                "before": before,
+            }
+        )
     return out
 
 
-def effective_order(rows: list[dict]) -> list[dict]:
-    """File order, then move each package behind everything it must load after (and ahead of load_before)."""
-    order = list(rows)
-    for _ in range(len(order) + 1):
-        moved = False
-        ids = [r["id"] for r in order]
-        for r in list(order):
-            i = ids.index(r["id"])
-            need = max((ids.index(d) for d in r["load_after"] if d in ids), default=-1)
-            if need > i:
-                order.remove(r)
-                order.insert(need, r)
-                moved = True
-                break
-            limit = min((ids.index(d) for d in r["load_before"] if d in ids), default=len(ids))
-            if limit < i:
-                order.remove(r)
-                order.insert(limit, r)
-                moved = True
-                break
-        if not moved:
-            break
-    return order
+def me3_order(profile: Path | None, text: str):
+    """The enabled packages in the order me3 loads them (mods.order.Ordered: rows, problem, dropped). With the
+    profile's path, packages whose folder is missing are left out first, as me3 does."""
+    from roundtable_souls.mods import order
+
+    rows = package_rows(text, include_disabled=True)
+    if profile is None:
+        return order.order_rows(rows)
+    profile = Path(profile)
+    return order.order_rows(rows, profile.parent, lambda r: resolve(profile, r["path"]).exists())
 
 
 def resolve(profile: Path, path: str) -> Path:
@@ -194,7 +202,8 @@ def scan_conflicts(profile: Path, text: str | None = None, max_files: int = 4000
     profile = Path(profile)
     if text is None:
         text = profile.read_text(encoding="utf-8", errors="replace")
-    order = effective_order(package_rows(text))
+    ordered = me3_order(profile, text)
+    order = ordered.rows + [r for r in ordered.dropped if r.get("enabled", True)]  # missing folders: shown, empty
     seen: dict[str, list[tuple[int, str, int, float]]] = {}
     packages = []
     total = 0
@@ -252,4 +261,11 @@ def scan_conflicts(profile: Path, text: str | None = None, max_files: int = 4000
             {"path": win[1], "category": cat, "winner": winner["id"], "winner_size": win[2], "losers": losers}
         )
     conflicts.sort(key=lambda c: (c["category"], c["path"].lower()))
-    return {"packages": packages, "conflicts": conflicts, "files": total, "by_category": by_cat, "truncated": truncated}
+    return {
+        "packages": packages,
+        "conflicts": conflicts,
+        "files": total,
+        "by_category": by_cat,
+        "truncated": truncated,
+        "order_problem": ordered.problem,  # me3 would not start with this profile (the order shown is the file's)
+    }

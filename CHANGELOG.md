@@ -2,6 +2,11 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
+## [Unreleased]
+
+- Load order: the launcher now works out the order exactly as me3 does (the same steps, checked against me3's own code on more than 100,000 profiles), so the file a mod wins or loses is shown right. Before, a mod placed with load_after could be shown in the wrong place. Mods named in another mod's Load after list load in that list's order. Switched-off mods take part in the order as in me3, mods whose folder is missing are left out, and a profile me3 would refuse (a loop, or a required mod that is missing, missing its folder or named with different capital letters) is shown as such on the Load order card.
+- Combine: the combined-parameters package is added to the Load after list of the mod that must stay last, so me3 loads it before that mod.
+
 ## [3.14.0] - 2026-10-01
 
 - Play: the game no longer starts with merged mods that are out of date without asking. When they cannot be rebuilt first (the rebuild tool was not allowed or failed, or something stops it), Play asks, and Play anyway starts it this once. A Steam shortcut or Gaming Mode does not start the game then and shows why, with a way to open Roundtable Souls.

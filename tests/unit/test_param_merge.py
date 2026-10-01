@@ -298,6 +298,22 @@ def test_with_an_overlay_tool_the_combine_sits_right_before_it_and_feeds_it(tmp_
     assert struct.unpack("<4I", combined[1000].data)[0] == 111 and struct.unpack("<4I", combined[2000].data)[3] == 222
 
 
+def test_the_combined_package_is_listed_for_the_overlay_so_me3_loads_it_before_it(tmp_path, monkeypatch):
+    from test_mod_merge import World
+
+    from roundtable_souls.mods import profile as P
+
+    w = World(tmp_path, monkeypatch)
+    (w.game / "regulation.bin").write_bytes(vanilla())
+    for name in ("a", "b"):
+        (w.pack(name) / "regulation.bin").write_bytes(pack({"EquipParamWeapon": set_word(1000, 1, 5)}))
+    merge.ensure_combined(w.profile, merge.overlay(w.profile)[0])  # before the tool rewrites anything
+    text = w.profile.read_text(encoding="utf-8")
+    assert '{ id = "combined-parameters", optional = true }' in text.split('id = "last"')[1]
+    order = [r["id"] for r in P.me3_order(w.profile, text).rows]
+    assert order.index("combined-parameters") < order.index("last")
+
+
 def test_two_packs_before_a_tool_without_a_combine_are_stacked(tmp_path, monkeypatch):
     from test_mod_merge import World
 

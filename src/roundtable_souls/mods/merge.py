@@ -106,7 +106,7 @@ def layers(profile: Path) -> list[dict]:
         if e["kind"] == "package" and e.get("enabled", True) and e.get("path"):
             by_id[(e.get("id") or Path(e["path"]).name).lower()] = e
     out = []
-    for row in profile_tools.effective_order(profile_tools.package_rows(text)):
+    for row in profile_tools.me3_order(profile, text).rows:
         e = by_id.get(str(row["id"]).lower())
         if e:
             out.append(
@@ -534,9 +534,16 @@ def ensure_combined(profile: Path, target: dict | None):
     """The combined-parameters package: made (an empty folder with its record, and an entry right before the
     overlay, or after the last package with parameters) when the profile has none, and moved there when a pack
     ended up after it. Returns its CombineTool."""
+    from roundtable_souls.mods import stay_last
     from roundtable_souls.mods.backends import builtin
 
     profile = Path(profile)
+
+    def _write_keeping_last(profile: Path, text: str) -> None:
+        # The entry has to be in the overlay's load_after too: me3 orders by load_after runs, so a package the
+        # overlay does not list loads after it (and the overlay would win the files the combine made).
+        mod_manage._write_ordered(profile, text, "combined parameters", stay_last.target(profile))
+
     all_layers = layers(profile)
     combine = builtin.find(profile, all_layers)
     text = mod_manage.read_text(profile)
@@ -558,7 +565,7 @@ def ensure_combined(profile: Path, target: dict | None):
             ident, n = f"{builtin.FOLDER}-{n}", n + 1
         row = {"kind": "package", "id": ident, "path": mod_manage.rel(profile, folder)}
         text = _place(profile, text, row, target, all_layers)
-        mod_manage._write(profile, text)
+        _write_keeping_last(profile, text)
     else:
         order = [l["index"] for l in all_layers]
         at = order.index(combine.package["index"])
@@ -574,9 +581,9 @@ def ensure_combined(profile: Path, target: dict | None):
             o = mod_manage.block_options(text, combine.package["index"])
             row = {"kind": "package", "id": o["id"], "path": o["path"]}
             text = mod_manage.remove_block(text, combine.package["index"])
-            mod_manage._write(profile, text)
+            _write_keeping_last(profile, text)
             text = _place(profile, mod_manage.read_text(profile), row, overlay(profile)[0], layers(profile))
-            mod_manage._write(profile, text)
+            _write_keeping_last(profile, text)
     found = builtin.find(profile, layers(profile))
     if found is None:
         raise MergeError("The combined-parameters package could not be added to the profile.")

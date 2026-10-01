@@ -55,14 +55,21 @@ class World:
         self.fake_run(None)  # a first merge, as the tool's own installer leaves it
         merge.approve(merge.find_backend(self.profile))
 
-    def pack(self, name, files=("regulation.bin",), before="last"):
+    def pack(self, name, files=("regulation.bin",), before="last", listed=True):
+        """A package placed before the merger and (listed) in its load_after, as the launcher's install does: me3
+        orders by load_after runs, so a package the merger does not list loads after it."""
         d = self.base / "mod" / name
         for f in files:
             (d / f).parent.mkdir(parents=True, exist_ok=True)
             (d / f).write_bytes(f"{name}:{f}".encode())
         text = self.profile.read_text(encoding="utf-8")
         at = text.index("# the merger's package")
-        self.profile.write_text(text[:at] + f"[[packages]]\nid = \"{name}\"\npath = 'mod/{name}'\n\n" + text[at:])
+        text = text[:at] + f"[[packages]]\nid = \"{name}\"\npath = 'mod/{name}'\n\n" + text[at:]
+        marker = "load_after = [\n"
+        if listed and marker in text[at:]:  # at the end of the list: me3 loads what it names in its order
+            i = text.index("]\n", text.index(marker, at))
+            text = text[:i] + f'  {{ id = "{name}", optional = true }},\n' + text[i:]
+        self.profile.write_text(text)
         return d
 
     def fake_run(self, backend, rewrite=True, fail=False, sources_from_game=False):
