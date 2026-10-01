@@ -10,6 +10,43 @@ those authors, and each part keeps its own license.
   game's archives (BHD5/BDT, BND4), compressed files (DCX, and the Oodle settings the game needs) and text tables (FMG)
   that the file merger reads and writes were learned from it; the launcher's code is its own.
 
+## Soulstruct (GPL-3.0-or-later)
+
+- [Soulstruct](https://github.com/Grimrukh/soulstruct) by Scott Mooney (Grimrukh). The reader and writer of ESD
+  (EzState) files in `src/roundtable_souls/mods/formats_esd/` are adapted from its `base/ezstate/esd` modules at
+  commit `12b69189a2ccebbc623a1b6565be89a18d6c9958` (version 2.6.0). Each adapted file names its source and lists
+  what was changed and when. Soulstruct itself is not a dependency of the launcher; the real-data checks can use it,
+  optionally, as an independent reader.
+
+## constrata (MIT)
+
+- [constrata](https://github.com/Grimrukh/constrata) by Scott Mooney (Grimrukh), the binary structure library the
+  ESD code reads and writes with. A dependency (version 1.3.3 or later).
+
+```
+MIT License
+
+Copyright (c) 2017-2024 Scott Mooney (aka Grimrukh)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ## UXM Selective Unpack
 
 - [UXM-Selective-Unpack](https://github.com/Nordgaren/UXM-Selective-Unpack) by Nordgaren, after TKGP's UXM: the RSA
