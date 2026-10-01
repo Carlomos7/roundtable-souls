@@ -42,8 +42,8 @@ The window never touches a save directly. Every read goes through `save_info`, e
 - Opt-in, per-item repairs on a Review & fix page, every one backed up and undoable; copies between standard and co-op saves
 - Parameter packs for Elden Ring: a green or red pill says whether they all apply, Load order explains every file two mods both ship; see which pack's regulation.bin applies, combine several into one so all of them apply (row by row against the game's own file), and keep an overhaul's own rebuild tool in step, with checks that say when the result is out of date and an update before Play when mods changed; files two mods ship (archives, text) merged against the game's own copy so both apply; the overhaul that must stay last stays last however mods are added, and that choice travels with the profile folder (roundtable.json)
 - A save library of named copies to swap in, and copying a single character between saves or Steam accounts; backups kept in the launcher's own data folder
-- Windows installer (per-user, no administrator prompt) or portable zip; Linux build for desktop and Steam Deck
-- Update now: downloads the release for this kind of copy, checks the release's minisign signature (key built into the launcher) and its SHA-256 checksums, installs it and restarts into it; a failed update is reported at the next start, and a portable copy puts the old version back if the new one does not start. Stable or Beta (pre-release) channel
+- Windows setup (per-user, no administrator prompt) or portable zip; Linux AppImage for desktop and Steam Deck; installs and updates through Velopack, with data kept outside the program folder
+- Update now (or `--update` without the window): installs only what the release's minisign-signed feed lists, after checking every full or delta package against it; a version that does not start is undone and never installed again. Stable or Beta (pre-release) channel
 - Activity: every Play, repair, install and rebuild with how it went and its full log (me3's output kept with each Play), a red count for failures you have not seen, and logs you can share with your user name and Steam IDs masked
 - Responsive layout down to narrow windows and high display scaling; keyboard shortcuts; find and replace in the editors
 
@@ -69,8 +69,9 @@ The window never touches a save directly. Every read goes through `save_info`, e
 - pytest and coverage - tests, on Windows and Linux in CI
 - ruff - lint, import order and formatting
 - pyright - type checking (standard mode)
-- PyInstaller - one-file program for Windows and Linux
-- Inno Setup - the Windows installer
+- PyInstaller - the program folder for Windows and Linux
+- Velopack - the Windows setup and portable zip, the Linux AppImage, and applying updates
+- minisign - the release signature (signed in CI; checked in the launcher with `cryptography`)
 
 ## Getting Started
 
@@ -88,9 +89,10 @@ Users: download from [Releases](https://github.com/Carlomos7/roundtable-souls/re
 | File | For |
 | --- | --- |
 | `RoundtableSouls-Setup.exe` | Windows, installed per user (recommended) |
-| `RoundtableSouls.zip` | Windows, portable |
-| `RoundtableSouls-linux-x86_64.tar.gz` | Linux and Steam Deck |
-| `SHA256SUMS.txt` | checksums for all of the above |
+| `RoundtableSouls-win-Portable.zip` | Windows, portable |
+| `RoundtableSouls-linux-x86_64.AppImage` | Linux and Steam Deck |
+| `SHA256SUMS.txt` (+ `.minisig`) | checksums for every file, signed |
+| `releases.win.json`, `releases.linux.json` (+ `.minisig`), `*.nupkg` | what Update now reads and installs |
 
 See [docs/How to use.txt](docs/How%20to%20use.txt) for the full guide.
 
@@ -105,7 +107,7 @@ uv run roundtable-souls
 
 ### Configuration
 
-Settings are one validated JSON file, `launcher_settings.json`, with a default for every key in `settings.LauncherSettings`; a broken file falls back to the defaults. Installed copies keep it in `%LOCALAPPDATA%\RoundtableSouls`, portable copies next to the program (or in `%LOCALAPPDATA%` / `~/.local/share` when that folder is read-only). Settings > Locations overrides me3, the game and the profile folder when detection is wrong; the game executable is kept per game. Elden Ring's per-game values stay at the top level of the file, where older builds read them, and every other game's live under `games`.
+Settings are one validated JSON file, `launcher_settings.json`, with a default for every key in `settings.LauncherSettings`; a broken file falls back to the defaults. Installed copies and the AppImage keep it in `%LOCALAPPDATA%\RoundtableSouls` (`~/.local/share/RoundtableSouls`), a portable copy in `RoundtableSouls-data` beside it, any copy in `ROUNDTABLE_SOULS_DATA` when that is set; never in the program folder, which updates replace (`settings.data_dir`). Settings > Locations overrides me3, the game and the profile folder when detection is wrong; the game executable is kept per game. Elden Ring's per-game values stay at the top level of the file, where older builds read them, and every other game's live under `games`.
 
 ## Running the tests
 
@@ -141,12 +143,14 @@ uv run roundtable-souls --game nr            # the window, on Nightreign (this r
 uv run roundtable-souls --game er --play     # Play Elden Ring without the window (Steam shortcut)
 uv run roundtable-souls --game nr --check    # print what was detected for Nightreign
 uv run roundtable-souls --shots DIR          # render every page to PNG files
+RoundtableSouls --update [--game er --play]  # (installed copy) update without the window, then restart
 ```
 
-Build for the current platform (tests, icon, PyInstaller, the installer when Inno Setup is available, the share bundle and checksums):
+Build for the current platform (tests, icon, PyInstaller into `dist/RoundtableSouls`, then `vpk pack` and the release files in `dist/share`). `vpk` comes from `dotnet tool install vpk --version 1.2.161` (it must match the `velopack` package in `uv.lock`) and is found as `$VPK` or on `PATH`; without it the build stops after PyInstaller.
 
 ```bash
 uv run python scripts/build.py
+uv run python scripts/build.py --identity test.json   # an isolated test build: own app ID, title, feed and key
 ```
 
 Rebuild the game item list from a local checkout of the item ID tables (`ER_SAVE_EDITOR`, or pass the folder):
@@ -167,7 +171,15 @@ git checkout main && git merge dev    # when dev is ready to ship
 
 ## Releases
 
-Pushing a version tag releases (`.github/workflows/release.yml`). The workflow first checks that the tagged commit is on `main` and that the tag matches the package version, then builds and tests on Windows and Linux. On Windows it also installs the latest published release and updates it with the new setup the way Update now does (`scripts/ci/installer-update-test.ps1`): the new version registered, settings kept, an older setup refused, the launcher reopened after a refused update, and an uninstall that keeps the settings. `SHA256SUMS.txt` is signed with minisign (`SHA256SUMS.txt.minisig`, trusted comment `roundtable-souls <version>`). The release is uploaded as a draft, every file is downloaded back and checked against the checksums and the signature, and only then is it published. A tag with a hyphen (`v3.4.0-rc.1`) is published as a pre-release, which only the Beta channel offers. Only repository admins can create or move `v*` tags. Starting the workflow by hand from the Actions tab builds everything without publishing.
+Pushing a version tag releases (`.github/workflows/release.yml`).
+
+1. **Verify.** The tagged commit must be on `main`, and the tag must match the package version.
+2. **Build.** Windows and Linux each lint, test, build with PyInstaller and pack with `vpk` 1.2.161. Before packing, they fetch the previous release's full package with `vpk download github`, so the release also carries a delta for copies one version behind.
+3. **Install test (Windows only).** `scripts/ci/velopack-install-test.ps1` installs the latest published release, then the new setup. It checks that the old Inno install is replaced, the data is kept and the Start menu shortcut points at the new copy, then that uninstalling keeps the data.
+4. **Sign.** The publish job signs each feed (`releases.win.json`, `releases.linux.json`; trusted comment `roundtable-souls <version> <os>`) and `SHA256SUMS.txt` with minisign.
+5. **Publish.** The release is uploaded as a draft. Every file is downloaded back and checked against the checksums and the signatures, and only then is the release published. A tag with a hyphen (`v3.4.0-rc.1`) becomes a pre-release, which only the Beta channel offers.
+
+Only repository admins can create or move `v*` tags. Starting the workflow by hand from the Actions tab builds and tests everything without publishing.
 
 ```bash
 git checkout main && git merge dev
@@ -178,7 +190,7 @@ git tag -a v3.3.0 -m "Roundtable Souls 3.3.0"
 git push && git push --tags
 ```
 
-Signing needs the `MINISIGN_KEY` repository secret (the minisign secret key file, without a password); the matching public key is `src/roundtable_souls/data/release-signing.pub`. Replacing the key is described in [docs/decisions/0003-signed-releases.md](docs/decisions/0003-signed-releases.md).
+Updates, failed-start rollback, the Inno migration, portable data and uninstall are tested end to end on isolated test builds (their own app ID, data folder, feed and key) before a release; Steam Deck checks are done by hand. Signing needs the `MINISIGN_KEY` repository secret (the minisign secret key file, without a password); the matching public key is `src/roundtable_souls/data/release-signing.pub`. Replacing the key is described in [docs/decisions/0003-signed-releases.md](docs/decisions/0003-signed-releases.md).
 
 `advisory.json` on `main` is read with every update check: setting `"minimum"` to a version (with a `"message"` and, optionally, a `"url"`) shows every older copy a notice asking it to update. It only warns.
 

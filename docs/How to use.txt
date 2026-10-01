@@ -15,19 +15,30 @@ installation also works; it brings its own me3.
 
 Windows, installer (recommended)
   Run RoundtableSouls-Setup.exe. It installs for your account only, with no
-  administrator prompt, adds a Start menu entry, and can be removed from
-  Settings > Apps like any other program.
+  administrator prompt, into %LOCALAPPDATA%\Carlomos7.RoundtableSouls, adds a
+  Start menu entry, and can be removed from Settings > Apps like any other
+  program. Uninstalling leaves your settings, logs and backups where they are.
+
+  Coming from 3.13.2 or earlier (the old installer): the first start of the
+  new one removes the old install, keeps your settings and backups, and
+  points the Start menu shortcut, a desktop shortcut you had and your Steam
+  shortcuts at the new copy. If Steam is open then, close it and use
+  Settings > Steam shortcut > Point Steam shortcuts here.
 
 Windows, portable
-  Unzip RoundtableSouls.zip into a folder of its own and run
-  RoundtableSouls.exe. It keeps its settings and logs in that folder.
+  Unzip RoundtableSouls-win-Portable.zip into a folder of its own and run
+  "Roundtable Souls.exe". It keeps its settings, logs and backups beside
+  itself, in RoundtableSouls-data; move the whole folder to move both. An old
+  portable copy's files (launcher_settings.json, logs, backups) can be moved
+  into RoundtableSouls-data by hand.
 
   Either way, Windows may warn the first time because the program is not
   signed: choose "More info", then "Run anyway".
 
 Linux and Steam Deck (Desktop Mode)
-  Unpack RoundtableSouls-linux-x86_64.tar.gz and run RoundtableSouls. Install
-  me3 for Linux first. The game runs through Proton; Roundtable Souls finds
+  Make RoundtableSouls-linux-x86_64.AppImage executable (chmod +x, or the
+  file's Properties) and run it. Settings live in
+  ~/.local/share/RoundtableSouls. Install me3 for Linux first. The game runs through Proton; Roundtable Souls finds
   your saves inside the game's Proton folder, on the internal drive or an SD
   card.
 
@@ -394,18 +405,22 @@ when it last checked. If a check could not reach GitHub it says so and why
 
 When a new version is out, a bar shows the start of its release notes and
 offers Update now (or Download), Notes and Skip this version. Update now
-downloads the new version, checks its signature (made with the project's key,
-which is built into the launcher) and its checksum, installs it and restarts
-into it. An interrupted download continues where it stopped. Your settings,
+checks the release's signature (made with the project's key, which is built
+into the launcher), downloads only what it lists (just the changes, when you
+are one version behind), checks every file against it, and then installs and
+restarts. An interrupted download continues where it stopped. Your settings,
 logs and backups are kept. Nothing is ever installed without that click, and
 an older version is never installed over a newer one. Skip this version hides
-that one version. Releases from before signing was added are offered as a
-Download from the releases page instead.
+that one version.
 
-If an update does not install, the launcher says so the next time it opens,
-with the reason, Try again and Open log (the installed copy's setup writes its
-log in the logs folder). A portable copy waits for the new version's window to
-open; if it does not, the old version is put back.
+If the new version does not start (its window does not open within 90
+seconds), the version you had is put back by itself and started, and says
+so. The failed version is never installed again; the next release is offered
+as usual.
+
+Without the window: RoundtableSouls --update (a terminal, or a Steam shortcut
+whose launch options are --update) updates and then opens the launcher;
+--update --game er --play starts Play instead.
 
 Update channel (Settings > Launcher): Stable, or Beta, which also offers
 pre-releases. Pre-releases get less testing.
@@ -429,10 +444,10 @@ WHERE FILES LIVE
 
 Everything Roundtable Souls keeps is in one folder, its data folder:
   installed on Windows   %LOCALAPPDATA%\RoundtableSouls
-  portable               next to the program (or the folder above when that
-                         folder cannot be written)
-  Linux                  ~/.local/share/RoundtableSouls when the program's
-                         folder cannot be written
+  portable (Windows)     RoundtableSouls-data, beside "Roundtable Souls.exe"
+  Linux (AppImage)       ~/.local/share/RoundtableSouls
+  any copy               the folder ROUNDTABLE_SOULS_DATA names, when set
+Never inside the program's own folder: updates replace that one.
 
 Inside it:
   launcher_settings.json                 your settings
