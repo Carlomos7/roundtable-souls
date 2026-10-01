@@ -7,7 +7,7 @@ output folder from the packages before it:
     copy_tree / copy   files of the download, as they are
     config             a settings file of the player's: kept when it is there (new keys of a newer default are added,
                        their values never changed), else the download's default
-    merge              one file merged by the launcher (mods.filemerge): the last package before it that ships the
+    merge              one file merged by the launcher (merging.merger): the last package before it that ships the
                        file, then the mod's own copy (`patch`), against the game's copy; with no package shipping
                        it, the mod's copy as it is
     text               a text archive: the mod's strings (a JSON list, `texts` by `each` folder) set in one of its
@@ -401,7 +401,9 @@ def _codecs(game_dir: Path):
 
 def _launcher_step(step, each, setup, inputs, game_dir, mod, sources, log) -> Path:
     from roundtable_souls.game import archives as gamearchive
-    from roundtable_souls.mods import filemerge, param_merge
+    from roundtable_souls.merging import merger
+    from roundtable_souls.merging.rules import fmg as fmg_rule
+    from roundtable_souls.merging.rules import param as param_merge
 
     values = {"each": each or ""}
     rel = _fill(step["file"], values)
@@ -433,7 +435,7 @@ def _launcher_step(step, each, setup, inputs, game_dir, mod, sources, log) -> Pa
         texts = {int(k): v for k, v in json.loads(texts_file.read_text(encoding="utf-8-sig")).items()}
         body, how = formats.dcx.unpack(vanilla, dec)
         fallback = game_config.load().dflt_fallback_for(rel)
-        patch = formats.dcx.pack(filemerge.add_text(body, step["table"], texts), how, comp, fallback)
+        patch = formats.dcx.pack(fmg_rule.add_text(body, step["table"], texts), how, comp, fallback)
     else:
         patch = (setup / _fill(step["patch"], values)).read_bytes()
         if source is None:  # nothing to merge with: the mod's own copy, as it is
@@ -445,7 +447,7 @@ def _launcher_step(step, each, setup, inputs, game_dir, mod, sources, log) -> Pa
         layers.append((Path(source).as_posix(), source.read_bytes()))
     layers.append(("the mod", patch))
     log(f"  merging {rel}")
-    result = filemerge.merge(vanilla, layers, dec, comp, game_config.load().dflt_fallback_for(rel))
+    result = merger.merge(vanilla, layers, dec, comp, game_config.load().dflt_fallback_for(rel))
     if result.clashes:
         log(f"  {rel}: {result.summary()}")
     out.write_bytes(result.data)

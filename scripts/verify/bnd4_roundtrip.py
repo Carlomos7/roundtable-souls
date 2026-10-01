@@ -98,7 +98,7 @@ def check_archives(game: Path, dec, files) -> list[dict]:
 def check_regulation(body: bytes) -> dict:
     from roundtable_souls.formats.bnd4 import bnd4_files
     from roundtable_souls.formats.param import param_row_ids
-    from roundtable_souls.mods import param_merge
+    from roundtable_souls.merging.rules import param as param_merge
 
     problems: list[str] = []
     b = formats.regulation.read_binder(body)

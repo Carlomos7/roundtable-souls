@@ -78,7 +78,7 @@ def test_a_compressed_entry_keeps_the_size_its_writer_gave():
 def test_text_added_to_a_text_archive_is_stored_with_its_new_size(text):
     from fakegame import fmg
 
-    from roundtable_souls.mods import filemerge
+    from roundtable_souls.merging.rules import fmg as fmg_rule
 
     menu = fmg({1: "first", 2: "second entry"})
     archive = formats.bnd4.Bnd4(
@@ -89,7 +89,7 @@ def test_text_added_to_a_text_archive_is_stored_with_its_new_size(text):
         4,
         [formats.bnd4.Entry("N:\\GR\\data\\Menu.fmg", 0, menu)],
     )
-    out = filemerge.add_text(formats.bnd4.write_bnd4(archive), "Menu.fmg", {2: text})
+    out = fmg_rule.add_text(formats.bnd4.write_bnd4(archive), "Menu.fmg", {2: text})
     entry = formats.bnd4.read_bnd4(out).entries[0]
     assert sizes(out, 0) == (len(entry.data), len(entry.data)) and len(entry.data) != len(menu)
     assert formats.fmg.read_fmg(entry.data).entries[2] == text

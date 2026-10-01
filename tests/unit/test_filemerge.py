@@ -8,7 +8,8 @@ from fakegame import bnd, dcx, files_of, fmg, texts_of
 
 from roundtable_souls import formats
 from roundtable_souls.game import archives as gamearchive
-from roundtable_souls.mods import filemerge
+from roundtable_souls.merging import merger
+from roundtable_souls.merging.rules import fmg as fmg_rule
 
 GAME = {"a.hkx": b"walk", "b.hkx": b"run", "c.hkx": b"roll"}
 
@@ -39,7 +40,7 @@ def test_changes_additions_and_removals_of_different_mods_all_apply():
     game = dcx(bnd(GAME))
     a = dcx(bnd({"a.hkx": b"sekiro walk", "c.hkx": b"roll"}))  # changes a, removes b
     b = dcx(bnd({**GAME, "new.hkx": b"revive"}))  # adds one
-    r = filemerge.merge(game, [("anims", a), ("revive", b)])
+    r = merger.merge(game, [("anims", a), ("revive", b)])
     assert files_of(r.data) == {"a.hkx": b"sekiro walk", "c.hkx": b"roll", "new.hkx": b"revive"}
     assert not r.clashes and r.merged
 
@@ -48,10 +49,10 @@ def test_the_same_part_changed_by_two_mods_goes_to_the_later_and_is_reported():
     game = dcx(bnd(GAME))
     a = dcx(bnd({**GAME, "a.hkx": b"first"}))
     b = dcx(bnd({**GAME, "a.hkx": b"second"}))
-    r = filemerge.merge(game, [("one", a), ("two", b)])
+    r = merger.merge(game, [("one", a), ("two", b)])
     assert files_of(r.data)["a.hkx"] == b"second"
     assert list(r.clashes.values()) == [["one", "two"]]
-    same = filemerge.merge(game, [("one", a), ("two", a)])  # the same change twice is no clash
+    same = merger.merge(game, [("one", a), ("two", a)])  # the same change twice is no clash
     assert not same.clashes
 
 
@@ -59,40 +60,40 @@ def test_text_tables_changed_by_two_mods_merge_entry_by_entry():
     game = dcx(bnd({"t.fmg": fmg({1: "one", 2: "two"}), "u.fmg": fmg({9: "nine"})}))
     a = dcx(bnd({"t.fmg": fmg({1: "ONE", 2: "two"}), "u.fmg": fmg({9: "nine"})}))
     b = dcx(bnd({"t.fmg": fmg({1: "one", 2: "two", 3: "three"}), "u.fmg": fmg({9: "nine"})}))
-    r = filemerge.merge(game, [("a", a), ("b", b)])
+    r = merger.merge(game, [("a", a), ("b", b)])
     assert texts_of(r.data, "t.fmg") == {1: "ONE", 2: "two", 3: "three"} and not r.clashes
     c = dcx(bnd({"t.fmg": fmg({1: "Uno", 2: "two"}), "u.fmg": fmg({9: "nine"})}))
-    r = filemerge.merge(game, [("a", a), ("c", c)])
+    r = merger.merge(game, [("a", a), ("c", c)])
     assert texts_of(r.data, "t.fmg")[1] == "Uno" and any(k.endswith("#1") for k in r.clashes)
 
 
 def test_nothing_changed_gives_the_games_own_bytes():
     game = dcx(bnd(GAME))
-    assert filemerge.merge(game, [("same", dcx(bnd(GAME)))]).data == game
+    assert merger.merge(game, [("same", dcx(bnd(GAME)))]).data == game
 
 
 def test_a_file_that_is_not_an_archive_is_the_later_mods_whole():
-    r = filemerge.merge(b"plain game file", [("a", b"mod a"), ("b", b"mod b")])
+    r = merger.merge(b"plain game file", [("a", b"mod a"), ("b", b"mod b")])
     assert not r.merged and r.data == b"mod b" and r.clashes
 
 
 def test_a_file_the_game_lacks_uses_the_first_copy_as_the_base():
     a = dcx(bnd({"x.hkx": b"1"}))
     b = dcx(bnd({"x.hkx": b"1", "y.hkx": b"2"}))
-    assert files_of(filemerge.merge(None, [("a", a), ("b", b)]).data) == {"x.hkx": b"1", "y.hkx": b"2"}
+    assert files_of(merger.merge(None, [("a", a), ("b", b)]).data) == {"x.hkx": b"1", "y.hkx": b"2"}
 
 
 def test_a_damaged_copy_is_a_format_error_naming_it():
     with pytest.raises(formats.FormatError, match="broken"):
-        filemerge.merge(dcx(bnd(GAME)), [("broken", b"DCX\0 short")])
+        merger.merge(dcx(bnd(GAME)), [("broken", b"DCX\0 short")])
 
 
 def test_adding_text_to_a_table():
     body = bnd({"EventTextForTalk.fmg": fmg({1: "a"})})
-    out = filemerge.add_text(body, "eventtextfortalk.fmg", {99: "b"})
+    out = fmg_rule.add_text(body, "eventtextfortalk.fmg", {99: "b"})
     assert formats.fmg.read_fmg(formats.bnd4.read_bnd4(out).entries[0].data).entries == {1: "a", 99: "b"}
     with pytest.raises(formats.FormatError):
-        filemerge.add_text(body, "missing.fmg", {1: "x"})
+        fmg_rule.add_text(body, "missing.fmg", {1: "x"})
 
 
 # ----------------------------------------------------------------------------- the game's archives

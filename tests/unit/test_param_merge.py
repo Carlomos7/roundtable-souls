@@ -7,9 +7,9 @@ import struct
 import pytest
 
 from roundtable_souls import formats
+from roundtable_souls.merging.rules import param as pm
 from roundtable_souls.mods import manage as M
 from roundtable_souls.mods import merge
-from roundtable_souls.mods import param_merge as pm
 from roundtable_souls.mods.backends import builtin
 from roundtable_souls.system import common
 

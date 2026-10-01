@@ -31,7 +31,7 @@ def main() -> int:
     _common.sandbox_launcher(out, game)
 
     from roundtable_souls.game.oodle import find_oodle
-    from roundtable_souls.mods import param_merge
+    from roundtable_souls.merging.rules import param as param_merge
 
     dec = find_oodle(game)
     source = args.regulation or game / "regulation.bin"

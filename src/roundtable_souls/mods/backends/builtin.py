@@ -1,6 +1,6 @@
 """The launcher's own combine: a package it manages (combined-parameters) holding one regulation.bin that applies
-every pack's changes to the game's own file (see mods.param_merge), every other game file two or more packages ship
-merged the same way (see mods.filemerge: archives file by file, text entry by entry), and a record of what went in.
+every pack's changes to the game's own file (see merging.rules.param), every other game file two or more packages ship
+merged the same way (see merging.merger: archives file by file, text entry by entry), and a record of what went in.
 
 It sits after the last package that ships parameters, or, when a package that must stay last has a rebuild tool of
 its own, right before that package, so that tool takes the combined file as its source. It is found by its record,
@@ -251,7 +251,8 @@ class CombineTool:
     # -------------------------------------------------------------- running
     def run(self, log, all_layers: list[dict] | None = None, until: dict | None = None) -> dict:
         from roundtable_souls import __version__
-        from roundtable_souls.mods import merge, param_merge
+        from roundtable_souls.merging.rules import param as param_merge
+        from roundtable_souls.mods import merge
         from roundtable_souls.system import common
 
         layers = merge.layers(self.profile) if all_layers is None else all_layers
@@ -340,7 +341,7 @@ class CombineTool:
         needed. Returns the record's files: {rel (lower): {rel, sources, output, parts, clashes | skipped}}."""
         from roundtable_souls.game import archives as gamearchive
         from roundtable_souls.game.oodle import find_oodle
-        from roundtable_souls.mods import filemerge
+        from roundtable_souls.merging import merger
         from roundtable_souls.system import common
 
         shared = shared_files(self.file_inputs(layers, until))
@@ -369,7 +370,7 @@ class CombineTool:
                 else:
                     layers_ = [(o["name"], (Path(o["folder"]) / o["rel"]).read_bytes()) for o in owners]
                     fallback = game_config.load().dflt_fallback_for(rel)
-                    result = filemerge.merge(vanilla, layers_, dec, comp, fallback)
+                    result = merger.merge(vanilla, layers_, dec, comp, fallback)
                     if not result.merged:
                         entry["skipped"] = "not an archive or a text table the launcher can merge yet"
                     else:

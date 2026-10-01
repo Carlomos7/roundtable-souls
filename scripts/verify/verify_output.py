@@ -162,7 +162,7 @@ def check_file(entry: dict, pkg: Path, game: Path, dec, read, fmg, failures: lis
 
 
 def check_regulation(record: dict, pkg: Path, dec, failures: list, notes: list) -> dict:
-    from roundtable_souls.mods import param_merge
+    from roundtable_souls.merging.rules import param as param_merge
 
     base, packs = Path(record["base"]), record.get("packs") or []
     for src in [{"path": record["base"], "sha256": record["base_sha256"]}, *packs]:
