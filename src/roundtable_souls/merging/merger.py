@@ -53,7 +53,7 @@ def merge(
     except damaged as e:
         raise formats.FormatError(f"a copy is damaged or not in the format it claims ({e})") from e
     if not result.merged:
-        return Result(layers[-1][1], result.changed, result.clashes, merged=False)
+        return Result(layers[-1][1], result.changed, result.clashes, merged=False, removed=result.removed)
     result.data = formats.dcx.pack(result.data, how, compressor, dflt_fallback) if result.data != base else vanilla
     return result
 

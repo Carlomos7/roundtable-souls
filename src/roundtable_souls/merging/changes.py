@@ -13,6 +13,7 @@ class Result:
     changed: dict[str, list[str]] = field(default_factory=dict)  # inner path -> the mods that changed it
     clashes: dict[str, list[str]] = field(default_factory=dict)  # inner path -> mods whose changes met; the last won
     merged: bool = True  # False: the file could not be merged and the last mod's copy is used whole
+    removed: dict[str, list[str]] = field(default_factory=dict)  # inner path -> mods whose copy left it out
 
     def summary(self) -> str:
         n = len(self.changed)

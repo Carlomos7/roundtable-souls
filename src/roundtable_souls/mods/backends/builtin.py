@@ -18,6 +18,7 @@ from pathlib import Path
 from roundtable_souls import formats
 from roundtable_souls.game import config as game_config
 from roundtable_souls.game import oodle as game_oodle
+from roundtable_souls.merging import record as merge_record
 from roundtable_souls.mods.backends import BackendError
 
 RECORD = "combined-parameters.json"
@@ -218,7 +219,7 @@ class CombineTool:
         had = rec.get("packs") or []
         have = {os.path.normcase(str(Path(l["folder"]) / REGULATION)): l for l in want}
         was = {os.path.normcase(str(Path(p["path"]))): p for p in had if isinstance(p, dict) and p.get("path")}
-        out = self.file_reasons(all_layers, until)
+        out = merge_record.reasons(rec) + self.file_reasons(all_layers, until)
         if not want and not had:
             return out
         if not (self.folder / REGULATION).is_file() or not had and want:
@@ -304,7 +305,7 @@ class CombineTool:
             "when": time.strftime("%Y-%m-%d %H:%M:%S"),
             "files": files,
             "archives": archives_fingerprint(common.game_dir()),
-        }
+        } | merge_record.facts()
         if base is None:
             self.folder.mkdir(parents=True, exist_ok=True)
             tmp = self.folder / (RECORD + ".tmp")
@@ -378,8 +379,15 @@ class CombineTool:
                         tmp = dest.with_name(dest.name + ".tmp")
                         tmp.write_bytes(result.data)
                         tmp.replace(dest)
-                        entry |= {"output": True, "parts": len(result.changed), "clashes": result.clashes}
+                        entry |= {
+                            "output": True,
+                            "parts": len(result.changed),
+                            "clashes": result.clashes,
+                            "removed": result.removed,
+                        }
                         log(f"  merged {rel} from {' and '.join(o['name'] for o in owners)}: {result.summary()}")
+                        if result.removed:
+                            log(f"    {len(result.removed)} part(s) left out by a mod's copy are left out")
                         for part, who in list(result.clashes.items())[:5]:
                             log(f"    {part}: changed by {', '.join(who)}; {who[-1]}'s is used")
             except (OSError, formats.FormatError, gamearchive.ArchiveError) as e:

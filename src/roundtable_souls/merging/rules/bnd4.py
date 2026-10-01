@@ -12,11 +12,13 @@ def merge(base: bytes, bodies: list[tuple[str, bytes]], where: str) -> Result:
     from roundtable_souls.merging.merger import _inner, _merge_body, mergeable  # they dispatch back here
 
     van = formats.bnd4.read_bnd4(base)
+    _unique(van, "the game's")
     vmap = {e.key: e for e in van.entries}
     order = [e.key for e in van.entries]
     touched: dict[str, list[tuple[str, object]]] = {}
     for label, body in bodies:
         b = formats.bnd4.read_bnd4(body)
+        _unique(b, f"{label}'s")
         lmap = {e.key: e for e in b.entries}
         for key, e in lmap.items():
             v = vmap.get(key)
@@ -43,6 +45,7 @@ def merge(base: bytes, bodies: list[tuple[str, bytes]], where: str) -> Result:
                 sub = _merge_body(inner_base, inner, path)
                 out.changed.update(sub.changed)
                 out.clashes.update(sub.clashes)
+                out.removed.update(sub.removed)
                 data = formats.dcx.pack(sub.data, how) if how is not None and sub.data != inner_base else sub.data
                 if sub.data == inner_base:
                     data = vmap[key].data
@@ -55,8 +58,23 @@ def merge(base: bytes, bodies: list[tuple[str, bytes]], where: str) -> Result:
             last = changes[-1][1]
         if last is REMOVED:
             result.pop(key, None)
+            if key in vmap:
+                out.removed[path] = [label for label, e in changes if e is REMOVED]
         else:
             result[key] = last
     van.entries = [result[k] for k in order if k in result]
     out.data = formats.bnd4.write_bnd4(van)
     return out
+
+
+def _unique(b: formats.bnd4.Bnd4, whose: str) -> None:
+    """Inner files are matched by name, case and slashes aside: two that differ only so cannot be told apart, and one
+    would be lost. The game's own archives have none."""
+    seen: dict[str, str] = {}
+    for e in b.entries:
+        other = seen.get(e.key)
+        if other is not None:
+            raise formats.FormatError(
+                f"{whose} copy has two inner files that differ only in capital letters or slashes: {other} and {e.name}"
+            )
+        seen[e.key] = e.name or f"#{e.id}"

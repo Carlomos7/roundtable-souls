@@ -27,6 +27,8 @@ def merge(base: bytes, bodies: list[tuple[str, bytes]], where: str) -> Result:
         last = changes[-1][1]
         if last is REMOVED:
             entries.pop(tid, None)
+            if tid in van.entries:
+                out.removed[path] = [label for label, t in changes if t is REMOVED]
         else:
             entries[tid] = last
     if who:

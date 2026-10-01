@@ -119,3 +119,18 @@ def test_a_file_the_launcher_cannot_merge_is_left_to_the_later_mod(prof, monkeyp
     assert "nothing to compare" in rec["files"][REL.lower()]["skipped"]
     assert not (prof.parent / "mod" / "combined-parameters" / REL).exists()
     assert not merge.health(prof)["reasons"]  # known and unchanged: not out of date
+
+
+def test_the_record_says_how_the_build_was_made_and_other_rules_make_it_out_of_date(prof):
+    from roundtable_souls.merging import record
+
+    merge.rebuild(prof, lambda s: None)
+    tool = builtin.find(prof, merge.layers(prof))
+    rec = tool.record()
+    assert rec["merger_revision"] == record.MERGER_REVISION and rec["ordering"].startswith("me3 sort_dependencies")
+    assert rec["removal_choice"] == record.REMOVAL_CHOICE and len(rec["game_config_sha256"]) == 64
+    assert "removed" in rec["files"][REL.lower()]
+    assert merge.health(prof)["state"] in ("current", "single")
+    older = {**rec, "merger_revision": record.MERGER_REVISION - 1}
+    assert record.reasons(older) == ["the launcher's merging changed since this was built"]
+    assert record.reasons({"files": {}}) == []  # a record from before these fields: its inputs are still checked

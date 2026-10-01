@@ -146,3 +146,26 @@ def _only_data0(real):
 
 def test_path_hash_is_case_and_slash_blind():
     assert gamearchive.path_hash("Menu\\HI\\x.dcx") == gamearchive.path_hash("/menu/hi/x.dcx")
+
+
+# ----------------------------------------------------------------------------- what a merge reports
+def test_removals_are_listed_with_the_mods_that_left_the_part_out():
+    game = dcx(bnd(GAME))
+    a = dcx(bnd({"a.hkx": b"walk", "b.hkx": b"run"}))  # leaves c.hkx out
+    b = dcx(bnd({**GAME, "a.hkx": b"WALK"}))
+    r = merger.merge(game, [("a", a), ("b", b)])
+    assert "c.hkx" not in files_of(r.data)  # the launcher's rule: left out is removed
+    assert [(k.rsplit("/", 1)[-1], v) for k, v in r.removed.items()] == [("c.hkx", ["a"])]
+    # two mods change the same text table: it is merged entry by entry, and m's leaving out entry 2 is listed
+    text = dcx(bnd({"t.fmg": fmg({1: "one", 2: "two"})}))
+    gone = dcx(bnd({"t.fmg": fmg({1: "one"})}))
+    other = dcx(bnd({"t.fmg": fmg({1: "ONE", 2: "two"})}))
+    rt = merger.merge(text, [("m", gone), ("n", other)])
+    assert list(rt.removed.values()) == [["m"]] and next(iter(rt.removed)).endswith("#2")
+
+
+def test_inner_files_that_differ_only_in_case_are_refused():
+    game = dcx(bnd(GAME))
+    twice = dcx(bnd({**GAME, "A.hkx": b"other"}))
+    with pytest.raises(formats.FormatError, match="differ only in capital letters"):
+        merger.merge(game, [("bad", twice)])
