@@ -27,6 +27,7 @@ Without either, the game is found through Steam, as the launcher finds it.
 | `verify_output.py --package DIR` | A combined package matches a result worked out from its inputs: inner files, IDs, flags, contents, text entry by entry, parameters byte by byte. Removals (a part missing from a mod's copy) are listed separately. |
 | `param_rows.py` | The parameter code keeps every row: duplicate IDs in order, write-back unchanged, merge keys, a change to one duplicate row. |
 | `ingame_package.py --layout 6/6` | Builds a package to play: two marker mods merged by the launcher's Combine, stored in a DCX layout (6/6, 4/4, 4/6 or dflt), a me3 profile on a separate save, `launch.cmd` and `CHECK.txt`. |
+| `theme_shots.py` | Screenshots of every page and control state in light and dark, offscreen, with Play and every job disabled. The shots show the machine's real profiles and characters: keep them private. `--compare BEFORE AFTER` counts differing pixels. |
 
 Independent readers are optional and not dependencies of the launcher. With Soulstruct (GPL-3.0):
 

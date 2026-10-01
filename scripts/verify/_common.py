@@ -88,9 +88,10 @@ def output_dir(given: Path | None, name: str, game: Path | None = None) -> Path:
     return out
 
 
-def sandbox_launcher(out: Path, game: Path) -> None:
-    """Point the launcher's code at a data folder inside `out` and at `game`. Its settings, caches, history and logs
-    then live there (run from source, the launcher would otherwise keep them beside the code)."""
+def sandbox_launcher(out: Path, game: Path | None) -> None:
+    """Point the launcher's code at a data folder inside `out` and at `game` (None: the launcher finds the game itself,
+    or runs without one). Its settings, caches, history and logs then live there (run from source, the launcher would
+    otherwise keep them beside the code)."""
     from roundtable_souls import settings
 
     data = out / "launcher-data"
@@ -103,7 +104,8 @@ def sandbox_launcher(out: Path, game: Path) -> None:
     from roundtable_souls import core  # noqa: F401  (applies the (empty) sandbox settings on import)
     from roundtable_souls.system import common
 
-    common.GAME_EXE_OVERRIDE = str(game / "eldenring.exe")
+    if game is not None:
+        common.GAME_EXE_OVERRIDE = str(game / "eldenring.exe")
     common._DETECT_CACHE.clear()
 
 
