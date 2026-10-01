@@ -70,6 +70,14 @@ jobs:
       shell: bash
       run: test -f dist/share/RoundtableSouls-Setup.exe && ./dist/RoundtableSouls.exe --shots shots && ls shots
 
+    # The latest published release, updated by this build's setup the way Update now runs it; then a refused
+    # downgrade, the launcher reopened after it, and an uninstall that keeps the settings.
+    - name: Update test (previous release to this build)
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: ./scripts/ci/installer-update-test.ps1
+
     - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: windows
@@ -124,15 +132,43 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       FILES: RoundtableSouls-Setup.exe RoundtableSouls.zip RoundtableSouls.exe RoundtableSouls-linux-x86_64.tar.gz
+      PUBLIC_KEY: repo/src/roundtable_souls/data/release-signing.pub
     steps:
+    # Only the public key the launcher ships: the signature is checked against exactly what users verify with.
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        path: repo
+        sparse-checkout: src/roundtable_souls/data/release-signing.pub
+        sparse-checkout-cone-mode: false
+
     - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
       with:
         path: assets
         merge-multiple: true
 
-    - name: Checksums for every file
+    - name: Install minisign (pinned release, checked against its known SHA-256)
+      run: |
+        curl -fsSL -o "$RUNNER_TEMP/minisign.tgz" https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-linux.tar.gz
+        echo "9a599b48ba6eb7b1e80f12f36b94ceca7c00b7a5173c95c3efc88d9822957e73  $RUNNER_TEMP/minisign.tgz" | sha256sum --check
+        tar -xzf "$RUNNER_TEMP/minisign.tgz" -C "$RUNNER_TEMP" minisign-linux/x86_64/minisign
+        mkdir -p "$RUNNER_TEMP/bin" && mv "$RUNNER_TEMP/minisign-linux/x86_64/minisign" "$RUNNER_TEMP/bin/minisign"
+        echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+    # Update now refuses a release whose checksums are not signed with the project key, or whose trusted comment
+    # names another version. The private key exists only as the MINISIGN_KEY secret and in this step's temp file.
+    - name: Checksums for every file, signed
       working-directory: assets
-      run: sha256sum $FILES > SHA256SUMS.txt && cat SHA256SUMS.txt
+      env:
+        MINISIGN_KEY: ${{ secrets.MINISIGN_KEY }}
+      run: |
+        sha256sum $FILES > SHA256SUMS.txt && cat SHA256SUMS.txt
+        [ -n "$MINISIGN_KEY" ] || { echo "the MINISIGN_KEY secret is not set" >&2; exit 1; }
+        umask 077
+        key="$RUNNER_TEMP/release.key"
+        trap 'rm -f "$key"' EXIT
+        printf '%s\n' "$MINISIGN_KEY" | tr -d '\r' > "$key"  # the key file was made on Windows
+        minisign -S -s "$key" -m SHA256SUMS.txt -t "roundtable-souls ${GITHUB_REF_NAME#v}" </dev/null
+        minisign -V -p "../$PUBLIC_KEY" -m SHA256SUMS.txt
 
     # Uploaded as a draft first, so nobody (and no update check) sees a half-uploaded release.
     - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
@@ -146,12 +182,20 @@ jobs:
           assets/RoundtableSouls.exe
           assets/RoundtableSouls-linux-x86_64.tar.gz
           assets/SHA256SUMS.txt
+          assets/SHA256SUMS.txt.minisig
 
-    - name: Download the draft back and check every file against its checksum
+    - name: Download the draft back and check every file against its checksum and the signature
       run: |
         mkdir check && cd check
         gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY"
         sha256sum --check SHA256SUMS.txt
+        minisign -V -p "../$PUBLIC_KEY" -m SHA256SUMS.txt
 
+    # A tag with a hyphen (v3.14.0-rc.1) is a pre-release: offered only on the Beta channel, never marked latest.
     - name: Publish the verified release
-      run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+      run: |
+        if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+          gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+        else
+          gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+        fi

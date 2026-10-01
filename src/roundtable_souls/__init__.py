@@ -30,7 +30,7 @@ def main() -> int:
             print(f"Unknown game. --game takes one of: {games.names_help()}", file=sys.stderr)
             return 2
         if "--play" in sys.argv:
-            return core.play_headless(game)
+            return play_from_shortcut(game)
         if "--check" in sys.argv:
             core.check(game)
             return 0
@@ -38,3 +38,24 @@ def main() -> int:
     from roundtable_souls.ui.window import main as window_main
 
     return int(window_main() or 0)
+
+
+def play_from_shortcut(game) -> int:
+    """--play: when the window is open, it runs Play itself (one launcher manages the session); otherwise Play runs
+    here, holding the PLAY name so a second shortcut start, or a silent update, waits for it to end."""
+    from roundtable_souls import core
+    from roundtable_souls.system import instance
+
+    if instance.held(instance.WINDOW) and instance.send(f"play {game.key}"):
+        core.common.start_log("launcher: play (no window)")
+        core.common.log("Roundtable Souls is open: Play was handed to its window")
+        return 0
+    hold = instance.acquire(instance.PLAY)
+    if hold is None:
+        core.common.start_log("launcher: play (no window)")
+        core.common.log("error: a Play from a Steam shortcut is already running")
+        return 1
+    try:
+        return core.play_headless(game)
+    finally:
+        hold.release()

@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QHeaderView,
+    QMessageBox,
     QSizePolicy,
     QTableWidgetItem,
     QVBoxLayout,
@@ -66,7 +67,7 @@ from qfluentwidgets import (
 )
 from qfluentwidgets import FluentIcon as FI
 
-from roundtable_souls import core, games
+from roundtable_souls import core, games, updates
 from roundtable_souls.core import (
     CUSTOM,
     LOGS,
@@ -80,8 +81,6 @@ from roundtable_souls.core import (
     VERSION,
     VOLUME_STOPS,
     apply_overrides,
-    apply_update,
-    can_self_update,
     character_detail,
     choice_label,
     create_profile,
@@ -89,7 +88,6 @@ from roundtable_souls.core import (
     delete_backup,
     delete_profile,
     discover,
-    download_update,
     export_text,
     fix_checksums,
     fix_loading,
@@ -103,7 +101,6 @@ from roundtable_souls.core import (
     job_play_offline,
     job_repair,
     label_of,
-    launcher_update,
     list_backups,
     load_settings,
     logo_path,
@@ -130,7 +127,6 @@ from roundtable_souls.core import (
     restore_backup,
     restore_vanilla,
     route_logs,
-    run_installer,
     run_job,
     same_source,
     save_game_settings,
@@ -141,7 +137,6 @@ from roundtable_souls.core import (
     set_mod_options,
     setting_face,
     setup_from_path,
-    skip_update,
     steam_state,
     uninstall_mod,
     use_game,
@@ -152,6 +147,7 @@ from roundtable_souls.core import (
 from roundtable_souls.mods import configs as mod_configs
 from roundtable_souls.resources import ASSETS_DIR
 from roundtable_souls.settings import FROZEN, is_installed
+from roundtable_souls.system import instance
 from roundtable_souls.ui.activity import ActivityView
 from roundtable_souls.ui.config_files import ConfigFilesDialog
 from roundtable_souls.ui.dialogs import (
@@ -294,10 +290,14 @@ class Launcher(FluentWindow):
         self.bus.shells.connect(self._on_shells)
         self.bus.me3.connect(self._on_me3)
         self.bus.update.connect(self._on_update)
-        self.bus.update_checked.connect(self._on_update_checked)
+        self.bus.update_landed.connect(self._on_update_landed)
+        self.bus.update_outcome.connect(self._on_update_outcome)
         self.bus.update_progress.connect(self._on_update_progress)
         self.bus.update_ready.connect(self._on_update_ready)
         self._update_bar = None
+        self._offered = None  # the version the update notice shows
+        self._instance_hold = None
+        self._instance_server = None
         self.bus.conflicts.connect(self._fill_conflicts)
         self.stackedWidget.currentChanged.connect(self._on_page_changed)
         self.bus.merge.connect(self._on_merge)  # a health result on its own (the overview scan sends it too)
@@ -2544,7 +2544,24 @@ class Launcher(FluentWindow):
                 "Check for updates on start",
                 "At most once an hour, from this project's GitHub releases. A notice only; you choose when to install.",
                 sw,
-                "Update now downloads the release, checks it, swaps the exe and restarts. Skip hides one version.",
+                "Update now downloads the release, checks its signature and checksum, installs it and restarts. "
+                "Skip hides one version.",
+            )
+        )
+        self.channel_box = ComboBox()
+        self.channel_box.addItems(["Stable", "Beta"])
+        self.channel_box.setMinimumWidth(140)
+        self.channel_box.blockSignals(True)
+        self.channel_box.setCurrentIndex(1 if self.settings.get("launcher_channel") == "beta" else 0)
+        self.channel_box.blockSignals(False)
+        self.channel_box.currentIndexChanged.connect(self._on_channel)
+        cl.addWidget(
+            SettingRow(
+                "Update channel",
+                "Stable offers releases. Beta also offers pre-releases, which get less testing.",
+                self.channel_box,
+                "Going back to Stable never installs an older version: the next stable release is offered once it is "
+                "newer than this one.",
             )
         )
         lay.addWidget(c)
@@ -3685,63 +3702,130 @@ class Launcher(FluentWindow):
     def _check_launcher_update(self, force=False):
         def work():
             try:
-                info = launcher_update(force=force)
+                check = updates.check_launcher_update(force=force)
             except Exception as e:
-                info = {"error": str(e)} if force else None
-            self.bus.update.emit(info)
-            if force:
-                self.bus.update_checked.emit(info)
+                check = updates.UpdateCheck("error", reason=str(e))
+            try:
+                advisory = updates.check_advisory(force=force)
+            except Exception:
+                advisory = None
+            self.bus.update.emit({"check": check, "advisory": advisory, "force": force})
 
         threading.Thread(target=work, daemon=True, name="launcher-update").start()
 
-    def _on_update_checked(self, info):
-        """The answer to Check for updates, including 'nothing new'."""
-        if info and info.get("error"):
-            self._toast("Could not check", info["error"], error=True)
-        elif not info:
-            self._toast("Up to date", f"{TITLE} {VERSION} is the latest release.", info=True)
-            self.launcher_line.setText(f"{TITLE} {VERSION}  \u00b7  {self._install_kind()}  \u00b7  up to date")
-            tone_label(self.launcher_line, "muted")
+    def _on_channel(self, index):
+        channel = "beta" if index == 1 else "stable"
+        save_settings(launcher_channel=channel)
+        self.settings["launcher_channel"] = channel
+        self._offered = None
+        self._check_launcher_update(force=True)
 
-    def _on_update(self, info):
-        if not info or info.get("error"):
+    def _launcher_status(self, check) -> tuple[str, str]:
+        """The Settings line: version, kind of copy, and what the last check found (never 'up to date' after a check
+        that failed)."""
+        parts = [f"{TITLE} {VERSION}", self._install_kind()]
+        if self.settings.get("launcher_channel") == "beta":
+            parts.append("beta channel")
+        tone = "muted"
+        if check.offer:
+            parts.append(f"{check.offer['version']} is available")
+            tone = "accent"
+        elif check.failed or check.status == "waiting":
+            parts.append(f"could not check: {check.reason}" if check.reason else "could not check")
+            tone = "warning"
+        elif check.status == "off":
+            parts.append("update checks off")
+        else:
+            parts.append("up to date")
+        if check.checked:
+            same_day = time.strftime("%Y%m%d", time.localtime(check.checked)) == time.strftime("%Y%m%d")
+            stamp = time.strftime("%H:%M" if same_day else "%d %b %H:%M", time.localtime(check.checked))
+            parts.append(f"last checked {stamp}")
+        return "  ·  ".join(parts), tone
+
+    def _on_update(self, payload):
+        check, advisory, force = payload["check"], payload.get("advisory"), payload.get("force")
+        text, tone = self._launcher_status(check)
+        self.launcher_line.setText(text)
+        tone_label(self.launcher_line, tone)
+        if advisory:
+            self._show_advisory(advisory, check.offer)
+        if force:
+            if check.failed:
+                later = (
+                    f" The next automatic check is after {time.strftime('%H:%M', time.localtime(check.retry_at))}."
+                    if check.retry_at
+                    else ""
+                )
+                self._toast("Could not check", f"{check.reason}.{later}", error=True)
+            elif not check.offer:
+                self._toast("Up to date", f"{TITLE} {VERSION} is the latest release.", info=True)
+        if check.offer and check.offer["version"] != self._offered:
+            self._offer_update(check.offer)
+
+    def _show_advisory(self, advisory, offer):
+        """The project asks everyone below a version to update (advisory.json on main). A notice only."""
+        if getattr(self, "_advisory_shown", False):
             return
+        self._advisory_shown = True
+        msg = advisory.get("message") or "This version has a known problem."
+        target = f" Update to {offer['version']}." if offer else " Update to the newest release."
+        go = ghost_btn("Details", FI.LINK)
+        go.clicked.connect(lambda: core.common.open_path(advisory.get("url") or RELEASES_URL))
+        notice(self, "warning", f"{TITLE} {VERSION} should be updated", msg + target, actions=(go,))
+
+    def _offer_update(self, info):
         version = info["version"]
-        self.launcher_line.setText(f"{TITLE} {VERSION}  \u00b7  {self._install_kind()}  \u00b7  {version} is available")
-        tone_label(self.launcher_line, "accent")
-        can_apply = FROZEN and can_self_update(info, is_installed())
+        self._offered = version
+        signed = updates.can_self_update(info, is_installed())
+        can_apply = FROZEN and signed
         if can_apply:
             go = primary_btn("Update now")
-            go.setToolTip(
-                "Download the release, check its checksum, swap the exe and restart. The releases page is on Settings."
-            )
+            go.setToolTip("Download it, check its signature and checksum, install it and restart.")
         else:
             go = ghost_btn("Download", FI.DOWNLOAD)
-            go.setToolTip("Open the releases page in the browser.")
+            go.setToolTip(
+                "Open the releases page in the browser."
+                if signed or not FROZEN
+                else "This release is not signed, so it is installed by hand from the releases page."
+            )
+        notes = ghost_btn("Notes")
+        notes.setToolTip("The full release notes, on GitHub.")
+        notes.clicked.connect(lambda: core.common.open_path(info.get("url") or RELEASES_URL))
         skip = ghost_btn("Skip this version")
         skip.setToolTip("Do not mention this version again; the next one will show.")
+        summary = updates.release_notes(info.get("notes", ""), lines=4)
+        how = (
+            "One click, then a restart. Settings stay."
+            if can_apply
+            else "Get it from the releases page. Settings stay."
+        )
+        kind = "pre-release " if info.get("prerelease") else ""
         bar = notice(
             self,
             "info",
-            f"{TITLE} {version} is available",
-            "One click, then a restart. Settings stay."
-            if can_apply
-            else "Get the zip, replace the exe. Settings stay.",
-            actions=(go, skip),
+            f"{TITLE} {kind}{version} is available",
+            f"{summary}\n\n{how}" if summary else how,
+            actions=(go, notes, skip),
         )
         if can_apply:
             go.clicked.connect(lambda: self._start_update(info, bar))
         else:
-            go.clicked.connect(lambda: core.common.open_path(info["url"]))
-        skip.clicked.connect(lambda: (skip_update(version), bar.close()))
+            go.clicked.connect(lambda: core.common.open_path(info.get("url") or RELEASES_URL))
+        skip.clicked.connect(lambda: (updates.skip_update(version), bar.close()))
+
+    def _cannot_update(self) -> str:
+        """Why the program cannot be replaced now, or ''."""
+        if self.game_running:
+            return f"Close {self.game.name} first."
+        if self.busy:
+            return "Wait for the current job."
+        return updates.busy_reason()
 
     def _start_update(self, info, bar):
-        if self.busy or self.game_running:
-            self._toast(
-                "Cannot update now",
-                f"Close {self.game.name} first." if self.game_running else "Wait for the current job.",
-                error=True,
-            )
+        why = self._cannot_update()
+        if why:
+            self._toast("Cannot update now", why, error=True)
             return
         bar.close()
         self._update_bar = notice(self, "info", f"Downloading {TITLE} {info['version']}", "Starting...", closable=False)
@@ -3753,7 +3837,7 @@ class Launcher(FluentWindow):
 
         def work():
             try:
-                exe = download_update(info, progress=progress, installed=is_installed())
+                exe = updates.download_update(info, progress=progress, installed=is_installed())
                 self.bus.update_ready.emit({"exe": str(exe), "version": version})
             except Exception as e:
                 self.bus.update_ready.emit({"error": str(e)})
@@ -3775,12 +3859,13 @@ class Launcher(FluentWindow):
                 pass
             self._update_bar = None
         if result.get("error"):
+            self._offered = None  # the next check offers it again
             notice(self, "error", "Update not applied", result["error"])
             return
         new_exe = Path(result["exe"])
         go = primary_btn("Restart now")
         later = ghost_btn("Later")
-        later.setToolTip("Keep using this version; the notice returns next time.")
+        later.setToolTip("Keep using this version; the download is kept and the notice returns next time.")
         bar = notice(
             self,
             "success",
@@ -3788,26 +3873,161 @@ class Launcher(FluentWindow):
             "Restart to finish. Nothing changes until you do.",
             actions=(go, later),
         )
-        go.clicked.connect(lambda: self._restart_updated(new_exe))
+        go.clicked.connect(lambda: self._restart_updated(new_exe, result["version"]))
         later.clicked.connect(bar.close)
 
-    def _restart_updated(self, new_exe):
-        if self.busy or self.game_running:
-            self._toast("Cannot restart now", "Wait for the game and the current job to finish.", error=True)
+    def _restart_updated(self, new_exe, version):
+        why = self._cannot_update()
+        if why:
+            self._toast("Cannot restart now", why, error=True)
             return
         self.close()  # asks about unsaved edits; a cancel there leaves the window open
         if self.isVisible():
             return
+        self._release_instance()  # the setup (AppMutex) and the new copy both wait for this window's name
         try:
             if is_installed():
-                run_installer(new_exe)  # the setup closes this window's process, installs, and reopens the app
-            else:
-                apply_update(new_exe, Path(sys.executable))
+                updates.run_installer(new_exe, version, Path(sys.executable).parent)
+                QApplication.instance().quit()  # the setup reopens the launcher: the new one, or this one on failure
+                return
+            _parked, proc = updates.apply_update(new_exe, Path(sys.executable), version)
         except Exception as e:
+            self._take_instance()
             self.show()
-            self._toast("Update not applied", f"{e}. This version keeps running.", error=True)
+            self._toast("Update not applied", f"{e} This version keeps running.", error=True)
             return
-        QApplication.instance().quit()
+
+        def work():  # the window stays hidden while the new copy starts; it reports through the settings file
+            outcome = updates.wait_for_new_version(proc, version)
+            if outcome == "exited":
+                updates.roll_back(Path(sys.executable), "the new version closed before its window opened")
+            self.bus.update_landed.emit(outcome)
+
+        threading.Thread(target=work, daemon=True, name="launcher-handover").start()
+
+    def _on_update_landed(self, outcome):
+        if outcome in ("ok", "slow"):
+            QApplication.instance().quit()
+            return
+        self._take_instance()
+        self.show()
+        self._on_update_outcome(updates.update_outcome() or {})
+
+    def _on_update_outcome(self, result):
+        """How the last update went, shown once."""
+        if not result:
+            return
+        status, version = result.get("status"), result.get("version", "")
+        updates.clear_outcome()
+        if status == "ok":
+            was = f" (was {result['from']})" if result.get("from") else ""
+            self._toast("Updated", f"{TITLE} {version} is running{was}.")
+            return
+        self._offered = None
+        again = ghost_btn("Try again", FI.UPDATE)
+        actions = [again]
+        log = result.get("log")
+        if log and Path(log).is_file():
+            show = ghost_btn("Open log", FI.DOCUMENT)
+            show.clicked.connect(lambda: core.common.open_path(log))
+            actions.append(show)
+        if status == "rolled_back":
+            title = f"{TITLE} {version} did not start; this version was put back"
+        else:
+            title = f"The update to {TITLE} {version} did not finish"
+        detail = result.get("error") or ""
+        bar = notice(self, "error", title, f"{detail}\nThis version keeps running." if detail else "", actions=actions)
+        again.clicked.connect(lambda: (self._check_launcher_update(force=True), bar.close()))
+
+    # ---------------------------------------------------------------- one window
+    def _take_instance(self, hold=None):
+        """Hold the window's name and answer second starts: show (come forward) or play <game> (a Steam shortcut)."""
+        from PySide6.QtNetwork import QLocalServer
+
+        self._instance_hold = hold or self._instance_hold or instance.acquire(instance.WINDOW)
+        if self._instance_server is not None:
+            return
+        name = instance.server_name()
+        QLocalServer.removeServer(name)  # only a crashed window's leftover (Linux): we hold the name, none is live
+        server = QLocalServer(self)
+        server.setSocketOptions(QLocalServer.SocketOption.UserAccessOption)
+        server.newConnection.connect(self._on_instance_connection)
+        if server.listen(name):
+            self._instance_server = server
+        else:
+            server.deleteLater()
+
+    def _release_instance(self):
+        if self._instance_server is not None:
+            self._instance_server.close()
+            self._instance_server.deleteLater()
+            self._instance_server = None
+        if self._instance_hold is not None:
+            self._instance_hold.release()
+            self._instance_hold = None
+
+    def _on_instance_connection(self):
+        server = self._instance_server
+        while server is not None and (sock := server.nextPendingConnection()) is not None:
+            buf = bytearray()
+
+            def read(s=sock, b=buf):
+                b.extend(bytes(s.readAll().data()))
+                while b"\n" in b:
+                    line, _, rest = bytes(b).partition(b"\n")
+                    b[:] = rest
+                    self._on_instance_message(line.decode("utf-8", "replace").strip())
+
+            sock.readyRead.connect(read)
+            sock.disconnected.connect(sock.deleteLater)
+            if sock.bytesAvailable():
+                read()
+
+    def _on_instance_message(self, message):
+        word, _, arg = message.partition(" ")
+        if word not in ("show", "play"):
+            return
+        self._bring_forward()
+        if word == "play":
+            QTimer.singleShot(0, lambda: self._play_requested(arg))
+
+    def _bring_forward(self):
+        if self.isMinimized():
+            self.showNormal()
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def _play_requested(self, key):
+        """A Steam shortcut (--play) started while this window is open: Play here, for that game."""
+        g = games.get(key)
+        if self.busy or self.game_running:
+            self._toast("Play from Steam ignored", f"{self.game.name} or a job is already running here.", error=True)
+            return
+        if g.key != self.game.key:
+            if not self._settle_unsaved(f"switching to {g.name}"):
+                return
+            self._set_game(g, remember=True)
+        self.launch()
+
+    def after_show(self):
+        """For a real start only (tests build the window without it): confirm an update to this version, report how
+        the last one went, and tidy old downloads."""
+        confirmed = updates.confirm_started()  # a portable copy's old process waits for this
+
+        def work():
+            outcome = confirmed or updates.update_outcome()
+            pending = (load_settings().get("update_pending") or {}).get("version")
+            try:
+                updates.clean_downloads(keep=pending)
+            except Exception:
+                pass
+            self.bus.update_outcome.emit(outcome or {})
+
+        threading.Thread(target=work, daemon=True, name="launcher-update-outcome").start()
+        if FROZEN:  # the old copy holds its parked exe until it has seen the confirmation
+            for delay in (5_000, 30_000, 120_000):
+                QTimer.singleShot(delay, lambda: updates.remove_parked_exe(Path(sys.executable)))
 
     def _on_me3(self, f):
         self._me3 = f
@@ -5569,6 +5789,23 @@ def main():
     dark = load_settings().get("theme", "dark") == "dark"
     setTheme(Theme.DARK if dark else Theme.LIGHT)
     setThemeColor(ACCENT if dark else ACCENT_LIGHT)
+    hold = None
+    if "--shots" not in sys.argv:
+        hold = instance.acquire(instance.WINDOW)
+        if hold is None and instance.send("show"):
+            return 0  # the open window came forward
+        deadline = time.monotonic() + 5
+        while hold is None and time.monotonic() < deadline:  # a window closing for an update hand-off
+            time.sleep(0.25)
+            hold = instance.acquire(instance.WINDOW)
+        if hold is None:
+            QMessageBox.warning(
+                None,
+                TITLE,
+                f"{TITLE} is already open but does not answer. Close it (or end it in Task Manager), then start "
+                "it again.",
+            )
+            return 1
     w = Launcher()
     if "--shots" in sys.argv:
         out = Path(sys.argv[sys.argv.index("--shots") + 1])
@@ -5655,5 +5892,7 @@ def main():
 
         QTimer.singleShot(2500, shoot)
         return app.exec()
+    w._take_instance(hold)
     w.show()
+    QTimer.singleShot(0, w.after_show)
     return app.exec()

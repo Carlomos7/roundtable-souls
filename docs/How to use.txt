@@ -348,8 +348,9 @@ Saves
   restore a backup from before the crash.
 
 Settings
-  Launcher: the version and whether this copy is installed or portable,
-  Check for updates, the releases page and the launcher's logs.
+  Launcher: the version, whether this copy is installed or portable, and when
+  updates were last checked; Check for updates, the releases page, the
+  launcher's logs, and the update channel (Stable or Beta).
   Steam shortcut: see "Playing from Steam" below.
   Appearance: dark or light, and the logo.
   Maintenance: repair saves now, and clear leftover game processes (Windows).
@@ -387,10 +388,31 @@ UPDATES
 -------
 
 Roundtable Souls checks for a new version at most once an hour when it starts
-(Settings > Launcher can turn that off, or check right away). When one is out,
-a bar offers Update now (or Download) and Skip this version. It downloads the new version, checks it against the
-published checksums, and restarts into it. Your settings, logs and backups are
-kept. Nothing is ever installed without that click. Skip this version hides that one version.
+(Settings > Launcher can turn that off, or check right away). Settings shows
+when it last checked. If a check could not reach GitHub it says so and why
+(never "up to date"), and the next automatic check waits longer.
+
+When a new version is out, a bar shows the start of its release notes and
+offers Update now (or Download), Notes and Skip this version. Update now
+downloads the new version, checks its signature (made with the project's key,
+which is built into the launcher) and its checksum, installs it and restarts
+into it. An interrupted download continues where it stopped. Your settings,
+logs and backups are kept. Nothing is ever installed without that click, and
+an older version is never installed over a newer one. Skip this version hides
+that one version. Releases from before signing was added are offered as a
+Download from the releases page instead.
+
+If an update does not install, the launcher says so the next time it opens,
+with the reason, Try again and Open log (the installed copy's setup writes its
+log in the logs folder). A portable copy waits for the new version's window to
+open; if it does not, the old version is put back.
+
+Update channel (Settings > Launcher): Stable, or Beta, which also offers
+pre-releases. Pre-releases get less testing.
+
+Only one window runs at a time: starting Roundtable Souls again brings it to
+the front, and Play from a Steam shortcut while the window is open is run by
+the window. Updates wait while a Play from a Steam shortcut runs.
 
 
 SAVE REPAIRS

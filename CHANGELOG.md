@@ -4,6 +4,14 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
 
 ## [Unreleased]
 
+- Updates: a check that could not reach GitHub (offline, GitHub's hourly limit, an error) now says so and why, on Settings and after Check for updates, instead of reporting "up to date". Settings shows when the last check succeeded. After failed checks the automatic one waits longer each time (up to a day); Check for updates always asks at once. Unchanged answers are asked for with the previous answer's tag, which GitHub does not count against its limit.
+- Updates: releases are signed. Update now checks the release's checksum file against the project's key built into the launcher, and that the signature names the version being installed, before it trusts any checksum; an unsigned release (every earlier one) is offered as a download from the releases page instead. A release that is not newer than the running copy is refused.
+- Updates: the download is written to the launcher's data folder as it arrives instead of being held in memory, continues where it stopped after an interruption, and is removed once the update is done. Download folders earlier versions left in the temp folder are cleared.
+- Updates: an installed copy's update writes a setup log (in the logs folder), and the setup reopens the launcher whether or not it installed. When the update did not install, the launcher says so at the next start with the reason from the log, Try again and Open log. A portable copy waits for the new version's window to open; if the new version closes before that, the previous one is put back and says why.
+- Updates: the update notice shows the start of the release notes and a Notes button. Settings has an update channel: Stable (as before) or Beta, which also offers pre-releases. The project can publish a notice asking versions with a known problem to update (it only warns).
+- One window: starting Roundtable Souls again brings the open window forward. Play from a Steam shortcut while the window is open runs Play in that window; a second shortcut Play while one runs is refused. Update now waits while a shortcut Play runs, and the setup does not install while the launcher or a shortcut Play is open.
+- Settings are written under a lock, so a change made at the same moment as the update check (or a Steam shortcut Play) writes is no longer lost.
+- Installer: a silent setup refuses to replace a newer installed version with an older one (the setup wizard asks first). Program files left in the install folder by a portable-style update are removed.
 - Fixed: when the launcher changes a file inside an archive in place (the menu text of the preview Nightreign Revive build), the archive now records that file's new size instead of the size it had before. Archives the launcher does not change are written exactly as before. Not yet checked in game.
 
 ## [3.13.2] - 2026-10-01

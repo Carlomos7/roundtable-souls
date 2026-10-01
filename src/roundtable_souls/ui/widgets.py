@@ -415,10 +415,11 @@ class Bus(QObject):
     steam = Signal(bool, bool)
     shells = Signal(int)
     me3 = Signal(dict)
-    update = Signal(object)
-    update_checked = Signal(object)
+    update = Signal(object)  # {'check': UpdateCheck, 'advisory', 'force'}
     update_progress = Signal(str)
     update_ready = Signal(object)
+    update_landed = Signal(str)  # the new portable copy: ok, slow or exited
+    update_outcome = Signal(object)  # how the last update went, at start
     conflicts = Signal(dict)
     saves = Signal(dict)
     merge = Signal(dict)

@@ -43,7 +43,7 @@ The window never touches a save directly. Every read goes through `save_info`, e
 - Parameter packs for Elden Ring: a green or red pill says whether they all apply, Load order explains every file two mods both ship; see which pack's regulation.bin applies, combine several into one so all of them apply (row by row against the game's own file), and keep an overhaul's own rebuild tool in step, with checks that say when the result is out of date and an update before Play when mods changed; files two mods ship (archives, text) merged against the game's own copy so both apply; the overhaul that must stay last stays last however mods are added, and that choice travels with the profile folder (roundtable.json)
 - A save library of named copies to swap in, and copying a single character between saves or Steam accounts; backups kept in the launcher's own data folder
 - Windows installer (per-user, no administrator prompt) or portable zip; Linux build for desktop and Steam Deck
-- Update now: downloads the release for this kind of copy, checks it against published SHA-256 checksums, and restarts into it
+- Update now: downloads the release for this kind of copy, checks the release's minisign signature (key built into the launcher) and its SHA-256 checksums, installs it and restarts into it; a failed update is reported at the next start, and a portable copy puts the old version back if the new one does not start. Stable or Beta (pre-release) channel
 - Activity: every Play, repair, install and rebuild with how it went and its full log (me3's output kept with each Play), a red count for failures you have not seen, and logs you can share with your user name and Steam IDs masked
 - Responsive layout down to narrow windows and high display scaling; keyboard shortcuts; find and replace in the editors
 
@@ -167,15 +167,20 @@ git checkout main && git merge dev    # when dev is ready to ship
 
 ## Releases
 
-Pushing a version tag releases (`.github/workflows/release.yml`). The workflow first checks that the tagged commit is on `main` and that the tag matches the package version, then builds and tests on Windows and Linux. The release is uploaded as a draft, every file is downloaded back and checked against `SHA256SUMS.txt`, and only then is it published. Only repository admins can create or move `v*` tags. Starting the workflow by hand from the Actions tab builds everything without publishing.
+Pushing a version tag releases (`.github/workflows/release.yml`). The workflow first checks that the tagged commit is on `main` and that the tag matches the package version, then builds and tests on Windows and Linux. On Windows it also installs the latest published release and updates it with the new setup the way Update now does (`scripts/ci/installer-update-test.ps1`): the new version registered, settings kept, an older setup refused, the launcher reopened after a refused update, and an uninstall that keeps the settings. `SHA256SUMS.txt` is signed with minisign (`SHA256SUMS.txt.minisig`, trusted comment `roundtable-souls <version>`). The release is uploaded as a draft, every file is downloaded back and checked against the checksums and the signature, and only then is it published. A tag with a hyphen (`v3.4.0-rc.1`) is published as a pre-release, which only the Beta channel offers. Only repository admins can create or move `v*` tags. Starting the workflow by hand from the Actions tab builds everything without publishing.
 
 ```bash
 git checkout main && git merge dev
-uv run python scripts/bump_version.py 3.3.0   # updates pyproject.toml and __init__.py
+uv run python scripts/bump_version.py 3.3.0   # pyproject.toml and __init__.py (3.4.0-rc.1 for a pre-release)
+uv lock                                       # uv.lock records the version; the release builds --locked
 git commit -am "Release 3.3.0"
-git tag v3.3.0
+git tag -a v3.3.0 -m "Roundtable Souls 3.3.0"
 git push && git push --tags
 ```
+
+Signing needs the `MINISIGN_KEY` repository secret (the minisign secret key file, without a password); the matching public key is `src/roundtable_souls/data/release-signing.pub`. Replacing the key is described in [docs/decisions/0003-signed-releases.md](docs/decisions/0003-signed-releases.md).
+
+`advisory.json` on `main` is read with every update check: setting `"minimum"` to a version (with a `"message"` and, optionally, a `"url"`) shows every older copy a notice asking it to update. It only warns.
 
 ## Documentation
 

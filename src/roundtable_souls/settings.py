@@ -5,11 +5,15 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
+from collections.abc import Callable
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+from roundtable_souls.system import filelock
 
 FROZEN = bool(getattr(sys, "frozen", False))
 APP_DIR_NAME = "RoundtableSouls"
@@ -101,9 +105,19 @@ class LauncherSettings(BaseModel):
     me3_latest: dict[str, Any] | None = None
     me3_latest_checked: float = 0.0
     me3_info_cache: dict[str, str] = Field(default_factory=dict)
-    launcher_latest: dict[str, Any] | None = None
-    launcher_latest_checked: float = 0.0
+    launcher_latest: dict[str, Any] | None = None  # the newest release GitHub named, for launcher_channel
+    launcher_latest_checked: float = 0.0  # when GitHub last answered (a 304 counts)
+    launcher_latest_etag: str = ""  # sent back as If-None-Match; a 304 does not count against GitHub's hourly limit
     launcher_update_skipped: str = ""
+    launcher_channel: Literal["stable", "beta"] = "stable"  # beta also offers pre-releases
+    launcher_check_failures: int = 0  # failed checks in a row; each one doubles the wait before the next
+    launcher_next_check: float = 0.0  # no automatic check before this (after failures, or GitHub's limit)
+    launcher_check_error: str = ""  # why the last check failed, shown on Settings; empty after a good one
+    launcher_advisory: dict[str, Any] | None = None  # the project's minimum-version notice, as last fetched
+    launcher_advisory_etag: str = ""
+    launcher_advisory_checked: float = 0.0
+    update_pending: dict[str, Any] | None = None  # an update handed to the setup or a new exe, until it is confirmed
+    update_result: dict[str, Any] | None = None  # how the last update went, shown once on the next start
 
 
 def settings_path() -> Path:
@@ -126,18 +140,40 @@ def load_settings() -> dict[str, Any]:
         return LauncherSettings.model_validate(clean).model_dump()
 
 
-def save_settings(**changes: Any) -> None:
-    """Merge changes into the file, atomically."""
-    current = load_settings()
-    current.update(changes)
-    model = LauncherSettings.model_validate(current)
+_WRITE_LOCK = threading.RLock()  # threads of this process; the lock file covers other processes
+_tmp_count = 0
+
+
+def _write(values: dict[str, Any]) -> None:
+    global _tmp_count
+    model = LauncherSettings.model_validate(values)
     path = settings_path()
-    tmp = path.with_suffix(".json.tmp")
+    _tmp_count += 1
+    tmp = path.with_name(f"{path.name}.{os.getpid()}-{_tmp_count}.tmp")  # never shared with another writer
     try:
         tmp.write_text(json.dumps(model.model_dump(), indent=1), encoding="utf-8")
         tmp.replace(path)
     except OSError:
-        pass
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def change_settings(change: Callable[[dict[str, Any]], dict[str, Any]]) -> dict[str, Any]:
+    """Read, change and write the file as one step: change(current) returns the keys to set. No other thread or
+    launcher process writes in between, so a value computed from the current one (a counter) is never lost.
+    Returns the settings as written."""
+    with _WRITE_LOCK, filelock.locked(settings_path()):
+        current = load_settings()
+        current.update(change(dict(current)))
+        _write(current)
+        return current
+
+
+def save_settings(**changes: Any) -> None:
+    """Merge changes into the file, atomically, without losing another thread's or process's change."""
+    change_settings(lambda current: changes)
 
 
 GAME_KEYS = ("setup", "game_exe")  # values each game keeps for itself

@@ -137,15 +137,7 @@ from roundtable_souls.system import logging as run_logging
 from roundtable_souls.system import processes as clear_dead_game_shells
 from roundtable_souls.system import session as me3_session
 from roundtable_souls.system.common import PATH_SETTINGS, apply_overrides
-from roundtable_souls.updates import (
-    RELEASES_URL,
-    apply_update,
-    can_self_update,
-    download_update,
-    launcher_update,
-    run_installer,
-    skip_update,
-)
+from roundtable_souls.updates import RELEASES_URL
 
 HERE = exe_dir()
 DATA_DIR = data_dir()
