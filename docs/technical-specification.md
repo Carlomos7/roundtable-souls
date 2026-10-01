@@ -310,17 +310,19 @@ behind the 58 omitted animations (E-007), me3 ordering parity (E-010, Phase 3), 
 
 **Goal:** one archive reader/writer with no unrelated policy change.
 
-- [ ] Inventory callers of both BND4 implementations.
-- [ ] Keep `mods/formats.py` as the shared location for this phase.
-- [ ] Adapt the general implementation to preserve both existing layout requirements where necessary.
-- [ ] Migrate `paramfile.py` binder operations; use a thin data-model adapter only if needed.
-- [ ] Preserve format metadata/order and existing archive/hash behavior.
-- [ ] Remove duplicate `read_bnd4`, `write_bnd4`, `_hash_table`, `_is_prime`, `_align` and other now-unused binder-only helpers from `paramfile.py`.
-- [ ] Run existing regression tests and byte-exact archive/binder round trips.
-- [ ] Compare all 194 regulation tables by ordered rows, duplicate occurrences, row contents and metadata.
-- [ ] Report moved callers and deleted code; keep compression/removal policy unchanged.
+- [x] Inventory callers of both BND4 implementations. *(Regulation side: `param_merge.py`, three verify scripts, `test_param_merge.py`; general side unchanged.)*
+- [x] Keep `mods/formats.py` as the shared location for this phase.
+- [x] Adapt the general implementation to preserve both existing layout requirements where necessary. *(No adaptation needed: it already reproduced the regulation binder byte for byte; added `Bnd4.get` and a public `path_hash`.)*
+- [x] Migrate `paramfile.py` binder operations; use a thin data-model adapter only if needed. *(`read_binder` checks the layout, `binder_bytes` keeps the size rule; no data-model adapter.)*
+- [x] Preserve format metadata/order and existing archive/hash behavior.
+- [x] Remove duplicate `read_bnd4`, `write_bnd4`, `_hash_table`, `_is_prime`, `_align` and other now-unused binder-only helpers from `paramfile.py`. *(Also `BndFile`, its `Bnd4` and `path_hash`.)*
+- [x] Run existing regression tests and byte-exact archive/binder round trips. *(E-012; `tests/unit/test_bnd4.py`.)*
+- [x] Compare all 194 regulation tables by ordered rows, duplicate occurrences, row contents and metadata. *(E-012.)*
+- [x] Report moved callers and deleted code; keep compression/removal policy unchanged. *(Finding E-013 recorded, not changed.)*
 
 **Completion:** one BND4 binary implementation serves archives and regulation. The decrypted/decompressed regulation binder is tested byte-exact; encrypted-IV differences are not false failures.
+
+**Status (2026-10-01): complete** (E-012). Moving formats into the `formats/` package is Phase 3, not done here.
 
 ### Phase 2 — Adapt ESD reading and writing
 

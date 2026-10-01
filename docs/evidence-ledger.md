@@ -23,7 +23,7 @@ into, not resolved).
 |---|---|---|
 | `gamefiles.py` | DCX decompression (KRAK with the game's Oodle, DFLT, ZSTD), regulation decryption | `mods/formats.py`, `mods/paramfile.py`, `mods/item_names.py` |
 | `mods/formats.py` | DCX write, BND4 (general), FMG | `mods/filemerge.py`, `mods/backends/builtin.py`, `mods/engine.py` |
-| `mods/paramfile.py` | its own BND4 copy (regulation), PARAM, regulation read/write | `mods/param_merge.py` (Phase 1 folds its BND4 into `formats.py`) |
+| `mods/paramfile.py` | PARAM, the regulation's binder rules and read/write (its own BND4 copy removed in Phase 1, E-012) | `mods/param_merge.py` |
 | `mods/gamearchive.py` | the game's BHD5/BDT archives (RSA-decrypted indexes, cached) | `mods/backends/builtin.py`, `mods/engine.py` |
 | `mods/filemerge.py` | three-way merge of archives and text | `mods/backends/builtin.py`, `mods/engine.py` |
 | `mods/param_merge.py` | three-way merge of parameters, 4-byte chunks | `mods/backends/builtin.py`, `mods/engine.py` |
@@ -205,6 +205,43 @@ in game, and a game version other than 1.17.1 was not tested. The writer is reac
 ship a regulation.bin) and by the engine's `params` step (the nightreign-revive-lite recipe). Neither had run on the
 owner's setup (E-001). Fixed in 3.13.2 (released 2026-10-01).
 
+### E-012 One BND4 implementation serves archives and the regulation (Phase 1): accepted
+
+2026-10-01, Elden Ring 1.17.1 / regulation 11711000, Windows. The regulation's own BND4 reader and writer were
+removed; it reads and writes its binder with the shared code in `mods/formats.py`, through `paramfile.read_binder`
+(refuses any layout but 36-byte entries, Unicode names, stored format 0x74) and `paramfile.binder_bytes` (each
+table's stored size taken from its data, as the removed writer did). Compression and removal behaviour unchanged.
+
+Before the change (`scripts/verify` probe on the game's own files): the shared writer reproduced the regulation
+binder and all ten archives below byte for byte; the regulation's own writer reproduced the binder and two archives,
+and differed on eight (the header's data-start field, empty-entry alignment, stored sizes).
+
+After (`scripts/verify/bnd4_roundtrip.py`, commit with this entry):
+
+| Check | Result |
+|---|---|
+| Ten game archives (menu text English and Japanese, item text, menu layout, low and high player animations, player animations, behaviour, common effects, talk scripts; 14,997 entries in the largest), unwrapped, read and written back | all byte-identical |
+| The game's regulation binder (54,111,776 bytes), read and written back | byte-identical (also through the general writer alone) |
+| Its 194 tables against an independent reader and the stored entry headers | same names, IDs, flags, contents, order |
+| Their 179,358 rows: ID and occurrence, row bytes, name; table header, type and names area | unchanged by reading and writing; IDs in order match an independent reader |
+| Duplicate IDs | RandomAppearParam, 26 IDs (52 rows), kept in order; the merger's keys cover every row once |
+| Same inputs, old code against new: the unchanged regulation, and the 6/6 package's combined regulation (two marker mods, two edited rows) | binders byte-identical |
+| Same inputs, old code against new: every merged text and animation file of the 6/6 package | byte-identical |
+| `param_rows.py` (duplicate rows through write-back, combine and a one-row edit) | 0 problems |
+
+The encrypted files differ on every write (random IV) and were not compared. Not re-tested in game: the outputs are
+byte-identical to the ones accepted in E-005 and E-011 once decrypted and decompressed.
+
+### E-013 Editing an entry in place leaves its old stored size: open
+
+Found 2026-10-01 while consolidating. The general writer keeps each entry's stored uncompressed size as read. Where
+code replaces an entry's data in place, the header then carries the old size: the engine's text step
+(`filemerge.add_text`, the preview Nightreign Revive build) and the marker mods `ingame_package.py` writes (shown:
+GR_MenuText.fmg stored as 92,668 bytes, 92,712 or 92,752 actual). The merged files the launcher writes when two mods
+change an entry are not affected (the size is set), and the files played in E-005 had correct sizes. Whether the game
+tolerates a stale size is untested. Not changed in Phase 1 (no behaviour change); the regulation always writes sizes
+from the data (E-012). To decide: set the size from the data for entries stored uncompressed, with a test.
+
 ## 3. Open checks
 
 - Phase 0 is not complete: the three checks below marked (Phase 0) stay open.
@@ -212,6 +249,7 @@ owner's setup (E-001). Fixed in 3.13.2 (released 2026-10-01).
 - (Phase 0) Every Deck check.
 - (Phase 0, moved to Phase 4) E-007: the intent behind the 58 omissions, with the omission policy.
 - E-010: me3 ordering parity (Phase 3).
+- E-013: stale stored sizes after an in-place entry edit (decision and test).
 - E-001 (Revive's tool's output): rain; co-op revive animations.
 - E-005 and E-006: every layout on the Deck (pending: needs a Deck). Windows is done.
 - E-011: a Linux-written regulation in game (same writer, no Oodle involved; expected to match Windows).
