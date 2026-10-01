@@ -1,14 +1,13 @@
 # Adapted from Soulstruct (https://github.com/Grimrukh/soulstruct), src/soulstruct/base/ezstate/esd/command.py at
-# commit 12b69189a2ccebbc623a1b6565be89a18d6c9958 (version 2.6.0, 2026-09-27). Copyright (c) Scott Mooney (Grimrukh).
-# Licensed under the GNU General Public License v3.0 or later, as is Roundtable Souls.
+# commit 12b69189a2ccebbc623a1b6565be89a18d6c9958 (version 2.6.0, 2026-09-27). Copyright (c) Scott Mooney
+# (Grimrukh). Licensed under the GNU General Public License v3.0 or later, as is Roundtable Souls.
 #
 # Modified for Roundtable Souls, 2026-10-01:
 #   - imports constrata directly instead of soulstruct.utilities.binary (a re-export of it);
-#   - removed the ESP script and HTML output (to_esp, to_html) and with them the command name tables (functions.py)
-#     and the EZL decompiler (ezl_parser.py), which reading and writing do not use;
+#   - removed the ESP script and HTML output (to_esp, to_html) and with them the command name tables
+#     (functions.py) and the EZL decompiler (ezl_parser.py), and the _indent field;
 #   - __eq__ also compares the number of arguments: before, zip() let two commands whose arguments differed only in
-#     count compare equal, which the writer relies on when it shares identical conditions;
-#   - removed the unused _indent field (HTML output only).
+#     count compare equal.
 
 """A command an ESD state runs: a bank and index (which function) and its arguments, each kept as opaque EZL bytes."""
 
