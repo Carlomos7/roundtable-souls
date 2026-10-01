@@ -287,12 +287,30 @@ def read_regulation(raw: bytes, oodle=None) -> Regulation:
     return Regulation(bytes(dec[:DCX_DATA_OFFSET]), read_bnd4(dcx_decompress(dec, oodle)))
 
 
+ZSTD_WINDOW_LOG = 16  # 64 KB window: every zstd block then holds at most 64 KB, which the game requires (below)
+
+
+def compress_regulation_body(body: bytes, level: int = 9) -> bytes:
+    """The zstd frame the game accepts.
+
+    The game crashes at start (access violation) on a frame whose blocks hold more than 64 KB of data, which is what
+    zstd writes by default (128 KB). Its own regulation and every editor's output (SoulsFormats, Soulstruct) keep
+    blocks at 64 KB by capping the window at 64 KB, and leave the content size out of the frame header. Checked in
+    game on Elden Ring 1.17.1 (2026-09-30): the game's own bytes re-encrypted load; the same content recompressed
+    with default blocks crashes, whatever the IV, level or window.
+    """
+    P = zstd.CompressionParameter
+    return zstd.compress(
+        body, options={P.compression_level: level, P.content_size_flag: 0, P.window_log: ZSTD_WINDOW_LOG}
+    )
+
+
 def write_regulation(reg: Regulation, level: int = 9) -> bytes:
     """The encrypted file. Always ZSTD (what the game's own regulation uses)."""
     from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
     body = write_bnd4(reg.bnd)
-    payload = zstd.compress(body, level)
+    payload = compress_regulation_body(body, level)
     header = bytearray(reg.dcx_header)
     if header[0x28:0x2C] != b"ZSTD":
         raise FormatError("the base regulation is not ZSTD-compressed; rebuild from the game's own file")

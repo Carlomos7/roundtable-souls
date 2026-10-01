@@ -107,6 +107,36 @@ def test_a_regulation_reads_back_as_written_and_decrypts_like_the_games():
     assert gf.param_row_ids(reg.bnd.get("EquipParamWeapon.param").data) == [1000, 2000]
 
 
+def zstd_blocks(frame: bytes) -> list[int]:
+    """The compressed size of each block of a zstd frame that has no content size and no checksum."""
+    assert frame[:4] == bytes.fromhex("28b52ffd")
+    descriptor, window = frame[4], frame[5]
+    assert descriptor == 0 and window <= (pf.ZSTD_WINDOW_LOG - 10) << 3  # no content size or checksum; window <= 64 KB
+    pos, sizes = 6, []
+    while True:
+        header = int.from_bytes(frame[pos : pos + 3], "little")
+        last, kind, size = header & 1, (header >> 1) & 3, header >> 3
+        sizes.append(size)
+        pos += 3 + (1 if kind == 1 else size)  # an RLE block stores one byte
+        if last:
+            return sizes
+
+
+def test_the_zstd_frame_is_shaped_as_the_game_requires():
+    # 64 KB blocks, no content size: the game crashes at start on zstd's default 128 KB blocks (in-game finding,
+    # 2026-09-30, Elden Ring 1.17.1); its own regulation and every editor keep to this shape.
+    body = bytes(range(256)) * 1000 + bytes(50_000)  # 306 000 bytes: five blocks of 64 KB (the last one shorter)
+    frame = pf.compress_regulation_body(body)
+    assert len(zstd_blocks(frame)) == -(-len(body) // 65536) == 5 and frame[5] == 0x30  # a 64 KB window exactly
+    from compression import zstd
+
+    assert zstd.decompress(frame) == body and zstd.get_frame_info(frame).decompressed_size is None
+    raw = vanilla()
+    plain = gf.decrypt_regulation(raw)
+    compressed_size = struct.unpack_from(">I", plain, 0x20)[0]
+    assert zstd_blocks(plain[0x4C : 0x4C + compressed_size])  # the written file carries that same shape
+
+
 def test_names_order_and_repeated_ids_survive():
     p = table("T", [(5, row(1)), (3, row(2)), (5, row(3))], names={3: "Three"})
     back = pf.read_param(pf.write_param(p))
