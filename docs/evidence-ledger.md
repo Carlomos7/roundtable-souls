@@ -15,7 +15,7 @@ into, not resolved).
 |---|---|---|
 | Merged archives and text (files two mods ship) | `mods/filemerge.py` via `mods/backends/builtin.py` (Combine) | DCX KRAK, Oodle level 6, header byte 6 (6/6), from the game's own Oodle DLL |
 | Nightreign Revive build (preview setting) | `mods/engine.py` with the recipe `data/recipes/nightreign-revive-lite.json` | as above; the grace menu (ESD) still comes from Revive's Assets.exe |
-| Combined parameters | `mods/param_merge.py` + `mods/paramfile.py` | regulation.bin: BND4 in DCX ZSTD, AES-encrypted |
+| Combined parameters | `mods/param_merge.py` + `mods/paramfile.py` | regulation.bin: BND4 in DCX ZSTD (64 KB window, no content size: E-011), AES-encrypted |
 
 **Format code and its callers**
 
@@ -44,18 +44,22 @@ results are recorded below as E-001 to E-004.
 
 ## 2. Evidence
 
-### E-001 Launcher-written 6/6 files load in game (Windows): accepted, with gaps
+### E-001 Launcher-written 6/6 files load in game (Windows): withdrawn (not the launcher's files)
 
-2026-09-30, Windows, Elden Ring regulation 11711000, me3 0.13.0 (installed at the time of writing). The owner rebuilt Nightreign Revive with the
-launcher's engine (branch hotfix-3.13.1, commit 377e49f: 6/6 layout) and played.
+2026-09-30, Windows, Elden Ring regulation 11711000, me3 0.13.0. The owner played 15:13 to 15:19 from the hotfix build
+(branch hotfix-3.13.1, commit 377e49f) after its "Rebuild combined parameters" job. Checked afterwards (that build's
+`dist/logs/launcher.log`, the Revive folder's `installation.json` and `merge-report.txt`, the files' headers): the
+job ran **Revive's own rebuild tool** (0.1.33-rc3, through the `manifest_refresh` backend), not the launcher's engine.
+Every file played was that tool's: regulation.bin in its editor shape (zero IV, 64 KB zstd window), the high-detail
+player animations and the common effects as **DFLT level 9**, menu text and the grace menu as KRAK 6. No
+launcher-written file was in that session, so this entry shows nothing about the launcher's writers. The launcher's
+engine and its Combine had never run on the owner's setup before 2026-09-30 (no log line, no record).
 
-- Save loads; player animations (the Sekiro animation mod, merged with Revive's) look normal; the grace menu shows the
-  map mod's options and Revive's session settings in English; map markers work; common effects (hits, grace glow)
-  look normal: **accepted**.
-- Rain (effects archive, real-rain mod): **pending** (no rain during the session).
-- Co-op downed/revived animations (Revive's own clips): **pending** (needs co-op).
-- The grace menu in that build still came from Revive's tool, not the launcher.
-- Steam Deck: **pending: needs a Deck.**
+What the session does show: Revive's tool's output loads and plays (save loads, animations, grace menu, map markers,
+common effects normal), including DFLT 9 archives for animations and effects on Windows, which bears on E-006.
+Rain, co-op revive animations and the Deck stay **pending** as before.
+
+The launcher's own files in game are E-005, E-006 and E-011.
 
 ### E-002 Independent reading of that output: accepted, with stated limits
 
@@ -81,30 +85,43 @@ A full engine build of Revive took 267 s at 6/6 (about 90 s before, when large f
 archive alone took 150 s and the high-detail player animations 9 s. Level 4 and level 6 are different settings, so
 this is not an equal-settings benchmark of two writers.
 
-### E-005 DCX layouts 4/4, 4/6, 6/6 in game: pending
+### E-005 DCX layouts 4/4, 4/6, 6/6 in game (Windows): accepted
 
 Packages are made by `scripts/verify/ingame_package.py --layout 6/6|4/4|4/6`: two marker mods merged by the
 launcher's own Combine, then stored in the layout under test, played on a separate save.
 
+2026-09-30 (evening), Windows, Elden Ring 1.17.1 / regulation 11711000, me3 0.13.0, packages rebuilt after E-011's
+fix. The owner ran each package's `launch.cmd`:
+
 | Layout | Menu text (KRAK) | Player animations (KRAK) | Parameters | Windows | Deck |
 |---|---|---|---|---|---|
-| 6/6 | | | | pending | pending: needs a Deck |
-| 4/4 | | | | pending | pending: needs a Deck |
-| 4/6 | | | | pending | pending: needs a Deck |
+| 6/6 | both tags shown | loads (no crash) | both classes' values shown | **accepted** | pending: needs a Deck |
+| 4/4 | both tags shown | loads (no crash) | both classes' values shown | **accepted** | pending: needs a Deck |
+| 4/6 | both tags shown | loads (no crash) | both classes' values shown | **accepted** | pending: needs a Deck |
 
-Before play (2026-09-30, regulation 11711000): all four packages built; each stored file reads back to the merged
-content. `verify_output.py` with Soulstruct 2.6.0: 6/6 and 4/6 have 0 validation failures (inner files, IDs, flags,
-contents; both mods' menu text changes merged entry by entry; exactly the 2 changed parameter rows); dflt the same, with
-its different layout noted; 4/4 not opened by Soulstruct (E-003), so its contents were checked only by the read-back.
+"Both tags": the title menu read "NEW GAME [RS <layout> A]" and "SYSTEM [RS <layout> B]", so the merged text file
+loaded with both mods' changes. Parameters: Vagabond Vigor 20 / Mind 5 and Warrior Vigor 16 / Mind 7 in class
+selection (the balanced marker edit). Animations: the archive with the added unused clip loaded; a visible change is
+still the open check at the end of this file.
+
+Before play (same day, earlier): each stored file reads back to the merged content. `verify_output.py` with
+Soulstruct 2.6.0: 6/6 and 4/6 have 0 validation failures (inner files, IDs, flags, contents; both mods' menu text
+changes merged entry by entry; exactly the 2 changed parameter rows); dflt the same, with its different layout noted;
+4/4 not opened by Soulstruct (E-003), so its contents were checked only by the read-back.
 
 Only 6/6 is written by the launcher. The others are experiments; 3.13.1's header regression tests keep the writer
-at 6/6 until a result here says otherwise.
+at 6/6 until a decision says otherwise. Header byte 4 (E-003) is accepted by the game: 4/4 loaded.
 
-### E-006 DFLT in place of KRAK: pending
+An earlier run of these packages (afternoon) crashed at start in every layout; the cause was the regulation writer
+(E-011), not the layouts: the 6/6 text file alone loaded, the regulation alone crashed.
 
-Same packages with `--layout dflt` (zlib level 9 in the same header). Whether the game accepts it for menu text and
-player animations on Windows is pending; on the Deck, pending: needs a Deck. This is only about output: reading the
-game's own KRAK files on Linux still needs Oodle, whatever the result.
+### E-006 DFLT in place of KRAK (Windows): accepted
+
+Same packages with `--layout dflt` (zlib level 9 in the same header). 2026-09-30 (evening), Windows: the dflt package
+loaded with both text tags and both classes' parameter values shown, and the player animation archive loaded
+(`ingame_package.py --layout dflt`, same session as E-005). Independently, Revive's tool writes the high-detail
+player animations and the common effects as DFLT 9 and the owner has played those (E-001). Deck: pending: needs a
+Deck. This is only about output: reading the game's own KRAK files on Linux still needs Oodle, whatever the result.
 
 ### E-007 The 58 animations the Sekiro animation mod leaves out: unknown
 
@@ -137,11 +154,53 @@ gives A D B C, the launcher A B C D. Both satisfy the constraints but pick diffe
 predicted file winner can be wrong. Phase 3 ports `sort_dependencies` from me3 `9b1e080bcf691608021e7bd8a4447198a2dcb94c`
 with a pinned Rust harness for parity. Installed me3 here: 0.13.0.
 
+### E-011 regulation.bin written by the launcher crashed the game; fixed (64 KB zstd window): accepted
+
+2026-09-30, Windows, Elden Ring 1.17.1 / regulation 11711000, me3 0.13.0. Every package with a launcher-written
+regulation.bin crashed at start (`0xc0000005` in eldenring.exe at offset `0x1ebb809`), including the game's own
+regulation read and written back **with no change**. The 6/6 menu text alone loaded, so the layouts were not the
+cause. Single-file tests (one package each, separate save), run by the owner:
+
+| Test | regulation.bin | Result |
+|---|---|---|
+| 6 | the game's decrypted bytes, untouched, re-encrypted with a random IV | title screen |
+| 7 | launcher writer (zstd level 9, default 128 KB blocks, content size in the frame), zero IV | crash |
+| 8 | as 7, content size left out, 4 MB window | crash |
+| 9 | as 8 at level 21 with a 64 MB window (the game's own frame header, byte for byte) | crash |
+| 11 | 64 MB window, level 21, a block flushed every 64 KB of input (the game's own block layout) | crash |
+| 10 | 64 KB window (`window_log` 16), content size left out, level 9 | title screen |
+| 4 | the fixed writer, unchanged parameters, random IV | title screen |
+| 5 | the fixed writer, balanced marker edit | class selection shows the edit |
+
+Offline controls: encrypting the game's plaintext with a zero IV reproduces its file byte for byte; `write_bnd4`
+reproduces its decompressed body byte for byte; the DCX headers differ only in the two size fields. So the AES step
+and the archive were right and the zstd frame was wrong. Reading: the game's decoder keeps 64 KB of history whatever
+the frame header declares (the game's own file declares 64 MB but, by its block count, was compressed in 64 KB
+pieces; test 11 shows a real 64 MB window crashes). Every file known to load has a 64 KB window: the game's own
+(in effect), Revive's tool's, and map-for-goblins' editor output.
+
+The same two settings are what every community writer uses, and they were a fix there too: SoulsFormatsNEXT commit
+f10e60a8 "DCX ZSTD fix?" (2024-08-17) changed its zstd writer from library defaults to `ZSTD_c_contentSizeFlag = 0`,
+`ZSTD_c_windowLog = 16`, and WitchyBND shipped ZSTD writing that day; TKGP's SoulsFormats (2024-11, ZstdSharp level
+21) and Soulstruct 2.6.0 (`_compress_dcx_zstd`, level 15) use the identical overrides.
+
+Fix: `mods/paramfile.py` `compress_regulation_body` (level 9, no content size, `ZSTD_WINDOW_LOG = 16`); the unit test
+`test_the_zstd_frame_is_shaped_as_the_game_requires` parses the written frame and pins the shape (no content size,
+window at most 64 KB, one block per 64 KB of input). Files come out about 1% larger than the game's own (2,058,144
+against 2,045,728 bytes for the unchanged regulation) and compress in well under a second.
+
+Affected releases: `write_regulation` had the default zstd shape since 3.6.0 (commit 1300639, 2026-09-29). It is
+reached by Combine (two packages that both ship a regulation.bin) and by the engine's `params` step (the
+nightreign-revive-lite recipe). Neither had run on the owner's setup (E-001), so no played build was affected here;
+any user who did combine parameters with 3.6.0 to 3.13.1 got a regulation the game crashes on at start. Fixed in the
+working tree; the release decision is the owner's.
+
 ## 3. Open checks
 
-- E-001: rain; co-op revive animations; all Deck checks.
-- E-005 and E-006: every layout in game (Windows now; Deck pending: needs a Deck).
+- E-001 (Revive's tool's output): rain; co-op revive animations; all Deck checks.
+- E-005 and E-006: every layout on the Deck (pending: needs a Deck). Windows is done.
 - E-007: the 58 omissions (Phase 4, with the omission policy).
+- E-011: a Linux-written regulation in game (same writer, no Oodle involved; expected to match Windows).
 - Linux: KRAK input decoding (a separate prerequisite from any DFLT output result).
 - A controlled animation change seen in game (`ingame_package.py --anim-swap CLIP=SOURCE`), once a clip pair with an
   obvious difference is identified; until then the animation archive shows it loads, not that a change applies.

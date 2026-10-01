@@ -34,8 +34,10 @@ MENU = "gr_menutext.fmg"
 NEW_GAME = (401303, 406001)  # the title menu's NEW GAME (with and without a save)
 SYSTEM = 401304
 CHARA = "CharaInitParam.param"
-VIGOR = 194  # byte offset of base Vigor in a starting class's row (checked against the game's values below)
-CLASSES = {3000: ("Vagabond", bytes([15, 10, 11, 14, 13, 9, 9, 7]), 42), 3001: ("Warrior", bytes([11, 12, 11, 10, 16, 10, 8, 9]), 43)}  # fmt: skip
+VIGOR = 194  # byte offset of base Vigor (Mind follows) in a starting class's row (checked against the game's values)
+# (class, its stats Vigor..Arcane, new Vigor and Mind). A class's level must match its stats' total (a change that
+# broke that crashed the game at start), so Vigor gains what Mind loses.
+CLASSES = {3000: ("Vagabond", bytes([15, 10, 11, 14, 13, 9, 9, 7]), (20, 5)), 3001: ("Warrior", bytes([11, 12, 11, 10, 16, 10, 8, 9]), (16, 7))}  # fmt: skip
 ANIMS = "chr/c0000_a00_hi.anibnd.dcx"  # the player's animations: a large Oodle archive
 UNUSED_CLIP = "a000_999990.hkx"  # marker B adds this copy of a clip; nothing plays it
 
@@ -96,11 +98,11 @@ def main() -> int:
         bf = reg.bnd.get(CHARA)
         assert bf is not None
         param = pf.read_param(bf.data)
-        name, stats, vigor = CLASSES[row_id]
+        name, stats, new = CLASSES[row_id]
         row = next(r for r in param.rows if r.id == row_id)
         if row.data[VIGOR : VIGOR + len(stats)] != stats:
             sys.exit(f"{name}'s starting stats are not where expected; the game version may differ")
-        row.data = row.data[:VIGOR] + bytes([vigor]) + row.data[VIGOR + 1 :]
+        row.data = row.data[:VIGOR] + bytes(new) + row.data[VIGOR + 2 :]
         bf.data = pf.write_param(param)
         return pf.write_regulation(reg)
 
@@ -156,7 +158,8 @@ def main() -> int:
         "# Roundtable Souls in-game check. Plays on a separate save file; online stays off.\n"
         'profileVersion = "v1"\n'
         f'savefile = "{SAVE}"\n'
-        "start_online = false\n\n"
+        "start_online = false\n"
+        "disable_arxan = true\n\n"  # as in a working Elden Ring profile (see the in-game checklist)
         '[[supports]]\ngame = "eldenring"\n\n'
         '[[packages]]\nid = "marker-a"\npath = "mods/marker-a"\n\n'
         '[[packages]]\nid = "marker-b"\npath = "mods/marker-b"\n',
@@ -219,9 +222,9 @@ def main() -> int:
     reg_out = combined / "regulation.bin"
     check = pf.read_regulation(reg_out.read_bytes(), dec)
     rows = {r.id: r.data for r in pf.read_param(check.bnd.get(CHARA).data).rows}  # type: ignore[union-attr]
-    for row_id, (name, _stats, vigor) in CLASSES.items():
-        if rows[row_id][VIGOR] != vigor:
-            sys.exit(f"the combined parameters do not give {name} Vigor {vigor}")
+    for row_id, (name, _stats, new) in CLASSES.items():
+        if rows[row_id][VIGOR : VIGOR + 2] != bytes(new):
+            sys.exit(f"the combined parameters do not give {name} Vigor {new[0]} and Mind {new[1]}")
 
     # ---------------------------------------------------------------- what to do with it
     me3 = _common.me3_exe()
@@ -249,7 +252,7 @@ def main() -> int:
         "   your save folder; your characters are not loaded. Online play stays off.\n"
         f'3. Title screen: the menu reads "NEW GAME [RS {label} A]" and "SYSTEM [RS {label} B]".\n'
         "   Both texts: the merged text file loaded, with both mods' changes. Normal text: it did not load.\n"
-        "4. New Game, class selection: Vagabond has Vigor 42 and Warrior Vigor 43 (normally 15 and 11).\n"
+        "4. New Game, class selection: Vagabond Vigor 20, Mind 5; Warrior Vigor 16, Mind 7 (usually 15/10, 11/12).\n"
         "   Both: the combined parameters loaded.\n"
         "5. Optional: create a throwaway character on this save, then walk, run, roll and attack.\n"
         f"{anim_line}"
@@ -274,7 +277,9 @@ def main() -> int:
                     | {str(SYSTEM): f"SYSTEM [RS {label} B]"}
                 }
             },
-            "parameters": {CHARA: {str(k): {"class": v[0], "vigor": v[2]} for k, v in CLASSES.items()}},
+            "parameters": {
+                CHARA: {str(k): {"class": v[0], "vigor": v[2][0], "mind": v[2][1]} for k, v in CLASSES.items()}
+            },
             "animation_swap": args.anim_swap or None,
         },
     }
