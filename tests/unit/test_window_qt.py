@@ -1141,16 +1141,18 @@ def test_advisory_warns_once(sandbox):
     assert sum("should be updated" in b.title for b in _bars(w)) == 1
 
 
-def test_a_failed_update_is_reported_at_start_with_its_log(sandbox, tmp_path):
+def test_update_outcomes_are_reported_once_at_start(sandbox):
     w = sandbox
-    log = tmp_path / "setup.log"
-    log.write_text("x", encoding="utf-8")
-    w._on_update_outcome({"status": "failed", "version": "9.9.9", "error": "Access denied", "log": str(log)})
+    w._on_update_outcome({"status": "failed", "version": "9.9.9", "error": "The update did not finish installing."})
     QTest.qWait(200)
     bar = next(b for b in _bars(w) if "did not finish" in b.title)
     labels = [b.text() for b in bar.findChildren(QPushButton)]
-    assert "Try again" in labels and "Open log" in labels and "Access denied" in bar.content
+    assert "Try again" in labels and "Releases" in labels and "did not finish installing" in bar.content
     assert window.load_settings()["update_result"] is None  # shown once
+    w._on_update_outcome({"status": "rolled_back", "version": "9.9.8", "error": "it did not finish starting"})
+    QTest.qWait(200)
+    bar = next(b for b in _bars(w) if "was put back" in b.title)
+    assert "not offered again" in bar.content and "Try again" not in [b.text() for b in bar.findChildren(QPushButton)]
 
 
 def test_update_is_refused_while_a_shortcut_play_runs(sandbox, monkeypatch):

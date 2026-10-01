@@ -16,6 +16,7 @@ Pages (navigation rail on the left):
 from __future__ import annotations
 
 import datetime
+import os
 import sys
 import threading
 import time
@@ -67,7 +68,7 @@ from qfluentwidgets import (
 )
 from qfluentwidgets import FluentIcon as FI
 
-from roundtable_souls import core, games, updates
+from roundtable_souls import core, games, migration, updates
 from roundtable_souls.core import (
     CUSTOM,
     LOGS,
@@ -146,7 +147,7 @@ from roundtable_souls.core import (
 )
 from roundtable_souls.mods import configs as mod_configs
 from roundtable_souls.resources import ASSETS_DIR
-from roundtable_souls.settings import FROZEN, is_installed
+from roundtable_souls.settings import FROZEN, appimage, is_installed, is_portable
 from roundtable_souls.system import instance
 from roundtable_souls.ui.activity import ActivityView
 from roundtable_souls.ui.config_files import ConfigFilesDialog
@@ -290,7 +291,8 @@ class Launcher(FluentWindow):
         self.bus.shells.connect(self._on_shells)
         self.bus.me3.connect(self._on_me3)
         self.bus.update.connect(self._on_update)
-        self.bus.update_landed.connect(self._on_update_landed)
+        self.bus.migration.connect(self._on_migration)
+        self.bus.steam_retarget.connect(self._on_steam_retarget)
         self.bus.update_outcome.connect(self._on_update_outcome)
         self.bus.update_progress.connect(self._on_update_progress)
         self.bus.update_ready.connect(self._on_update_ready)
@@ -2589,6 +2591,15 @@ class Launcher(FluentWindow):
             )
             row.addWidget(copy)
             cl.addWidget(row_w)
+        row_w, row = action_row()
+        b = ghost_btn("Point Steam shortcuts here", FI.LINK)
+        b.setToolTip(
+            "Steam shortcuts with --play that start a Roundtable Souls program in another folder (an older install) "
+            "start this copy instead. Steam must be closed; a backup of each changed file is kept."
+        )
+        b.clicked.connect(self._point_steam_shortcuts)
+        row.addWidget(b)
+        cl.addWidget(row_w)
         lay.addWidget(c)
         c, cl = card("Appearance", FI.BRUSH)
         row = QHBoxLayout()
@@ -2879,7 +2890,7 @@ class Launcher(FluentWindow):
         b.clicked.connect(lambda: core.common.open_path(str(core.DATA_DIR)))
         row.addWidget(b)
         bl.addLayout(row)
-        where = "Next to this exe." if core.DATA_DIR == core.HERE else "In this Windows account's app data."
+        where = updates.data_location_text()
         p = hint(where)
         p.setToolTip(str(core.DATA_DIR))
         bl.addWidget(p)
@@ -3697,7 +3708,11 @@ class Launcher(FluentWindow):
     def _install_kind() -> str:
         if not FROZEN:
             return "running from source"
-        return "installed" if is_installed() else "portable"
+        if is_installed():
+            return "installed"
+        if is_portable():
+            return "portable"
+        return "AppImage" if appimage() else "not installed"
 
     def _check_launcher_update(self, force=False):
         def work():
@@ -3758,6 +3773,12 @@ class Launcher(FluentWindow):
                     else ""
                 )
                 self._toast("Could not check", f"{check.reason}.{later}", error=True)
+            elif check.blocked:
+                self._toast(
+                    "Not offered again",
+                    f"{check.blocked} failed to start here and was undone. A newer release will be offered.",
+                    info=True,
+                )
             elif not check.offer:
                 self._toast("Up to date", f"{TITLE} {VERSION} is the latest release.", info=True)
         if check.offer and check.offer["version"] != self._offered:
@@ -3777,7 +3798,7 @@ class Launcher(FluentWindow):
     def _offer_update(self, info):
         version = info["version"]
         self._offered = version
-        signed = updates.can_self_update(info, is_installed())
+        signed = updates.can_self_update(info)
         can_apply = FROZEN and signed
         if can_apply:
             go = primary_btn("Update now")
@@ -3787,7 +3808,8 @@ class Launcher(FluentWindow):
             go.setToolTip(
                 "Open the releases page in the browser."
                 if signed or not FROZEN
-                else "This release is not signed, so it is installed by hand from the releases page."
+                else "This copy cannot update itself (or the release has no signed feed): install it from the "
+                "releases page."
             )
         notes = ghost_btn("Notes")
         notes.setToolTip("The full release notes, on GitHub.")
@@ -3837,8 +3859,10 @@ class Launcher(FluentWindow):
 
         def work():
             try:
-                exe = updates.download_update(info, progress=progress, installed=is_installed())
-                self.bus.update_ready.emit({"exe": str(exe), "version": version})
+                prepared = updates.download_update(info, progress=progress)
+                self.bus.update_progress.emit("Keeping this version, to put it back if the new one does not start")
+                prepared.rollback = updates.stage_rollback()
+                self.bus.update_ready.emit({"prepared": prepared, "version": version})
             except Exception as e:
                 self.bus.update_ready.emit({"error": str(e)})
 
@@ -3862,21 +3886,23 @@ class Launcher(FluentWindow):
             self._offered = None  # the next check offers it again
             notice(self, "error", "Update not applied", result["error"])
             return
-        new_exe = Path(result["exe"])
+        prepared = result["prepared"]
         go = primary_btn("Restart now")
         later = ghost_btn("Later")
         later.setToolTip("Keep using this version; the download is kept and the notice returns next time.")
+        kind = "an update of" if prepared.delta else "the full"
         bar = notice(
             self,
             "success",
             f"{TITLE} {result['version']} is ready",
-            "Restart to finish. Nothing changes until you do.",
+            f"Checked: signature and {kind} package. Restart to finish; if it does not start, this version comes "
+            "back by itself.",
             actions=(go, later),
         )
-        go.clicked.connect(lambda: self._restart_updated(new_exe, result["version"]))
+        go.clicked.connect(lambda: self._restart_updated(prepared))
         later.clicked.connect(bar.close)
 
-    def _restart_updated(self, new_exe, version):
+    def _restart_updated(self, prepared):
         why = self._cannot_update()
         if why:
             self._toast("Cannot restart now", why, error=True)
@@ -3884,34 +3910,15 @@ class Launcher(FluentWindow):
         self.close()  # asks about unsaved edits; a cancel there leaves the window open
         if self.isVisible():
             return
-        self._release_instance()  # the setup (AppMutex) and the new copy both wait for this window's name
+        self._release_instance()  # the new version takes the window's name when it starts
         try:
-            if is_installed():
-                updates.run_installer(new_exe, version, Path(sys.executable).parent)
-                QApplication.instance().quit()  # the setup reopens the launcher: the new one, or this one on failure
-                return
-            _parked, proc = updates.apply_update(new_exe, Path(sys.executable), version)
+            updates.apply_update(prepared)  # Velopack applies after this process exits, then restarts the launcher
         except Exception as e:
             self._take_instance()
             self.show()
             self._toast("Update not applied", f"{e} This version keeps running.", error=True)
             return
-
-        def work():  # the window stays hidden while the new copy starts; it reports through the settings file
-            outcome = updates.wait_for_new_version(proc, version)
-            if outcome == "exited":
-                updates.roll_back(Path(sys.executable), "the new version closed before its window opened")
-            self.bus.update_landed.emit(outcome)
-
-        threading.Thread(target=work, daemon=True, name="launcher-handover").start()
-
-    def _on_update_landed(self, outcome):
-        if outcome in ("ok", "slow"):
-            QApplication.instance().quit()
-            return
-        self._take_instance()
-        self.show()
-        self._on_update_outcome(updates.update_outcome() or {})
+        QApplication.instance().quit()
 
     def _on_update_outcome(self, result):
         """How the last update went, shown once."""
@@ -3924,20 +3931,67 @@ class Launcher(FluentWindow):
             self._toast("Updated", f"{TITLE} {version} is running{was}.")
             return
         self._offered = None
-        again = ghost_btn("Try again", FI.UPDATE)
-        actions = [again]
-        log = result.get("log")
-        if log and Path(log).is_file():
-            show = ghost_btn("Open log", FI.DOCUMENT)
-            show.clicked.connect(lambda: core.common.open_path(log))
-            actions.append(show)
+        releases = ghost_btn("Releases", FI.LINK)
+        releases.clicked.connect(lambda: core.common.open_path(RELEASES_URL))
+        actions = [releases]
         if status == "rolled_back":
             title = f"{TITLE} {version} did not start; this version was put back"
+            detail = (
+                f"{version} {result.get('error') or 'did not start'}. It is not offered again; a newer release will "
+                "be. Your settings and data were not touched."
+            )
         else:
             title = f"The update to {TITLE} {version} did not finish"
-        detail = result.get("error") or ""
-        bar = notice(self, "error", title, f"{detail}\nThis version keeps running." if detail else "", actions=actions)
-        again.clicked.connect(lambda: (self._check_launcher_update(force=True), bar.close()))
+            detail = result.get("error") or ""
+            again = ghost_btn("Try again", FI.UPDATE)
+            again.clicked.connect(lambda: self._check_launcher_update(force=True))
+            actions.insert(0, again)
+        notice(self, "error", title, detail, actions=actions)
+
+    def _on_migration(self, record):
+        """The move from the old (Inno Setup) install, reported once per state."""
+        if not record:
+            return
+        status = record.get("status")
+        if status == "waiting":
+            notice(self, "warning", "The old Roundtable Souls is still open", record.get("reason", ""))
+        elif status == "failed":
+            notice(self, "error", "The old install could not be removed", record.get("reason", ""))
+        elif status in ("done", "steam_pending"):
+            steam = record.get("steam_changed") or []
+            lines = [
+                f"The old install ({record.get('old_version') or 'Inno Setup'}) was removed; settings, logs and "
+                "backups stayed where they were.",
+                "Start menu shortcut updated"
+                + (" and desktop shortcut recreated." if record.get("had_desktop") else "."),
+            ]
+            if steam:
+                lines.append(f"Steam shortcuts now start this copy: {', '.join(steam)}.")
+            if status == "steam_pending":
+                lines.append("Close Steam, then Settings > Steam shortcut > Point Steam shortcuts here.")
+            notice(self, "success" if status == "done" else "warning", "Moved to the new installer", "\n".join(lines))
+
+    def _point_steam_shortcuts(self):
+        def work():
+            try:
+                record = load_settings().get("inno_migration") or {}
+                if record.get("steam_pending") or (record.get("old_exe") and not record.get("steam_done")):
+                    changed = migration.finish_steam_step()
+                else:
+                    changed = migration.point_play_shortcuts_here()
+                self.bus.steam_retarget.emit({"changed": [s.name for s in changed]})
+            except Exception as e:
+                self.bus.steam_retarget.emit({"error": str(e)})
+
+        threading.Thread(target=work, daemon=True, name="steam-shortcuts").start()
+
+    def _on_steam_retarget(self, result):
+        if result.get("error"):
+            self._toast("Steam shortcuts not changed", result["error"], error=True)
+        elif result.get("changed"):
+            self._toast("Steam shortcuts updated", f"Now starting this copy: {', '.join(result['changed'])}.")
+        else:
+            self._toast("Nothing to change", "No Steam shortcut with --play starts another copy.", info=True)
 
     # ---------------------------------------------------------------- one window
     def _take_instance(self, hold=None):
@@ -4011,23 +4065,24 @@ class Launcher(FluentWindow):
         self.launch()
 
     def after_show(self):
-        """For a real start only (tests build the window without it): confirm an update to this version, report how
-        the last one went, and tidy old downloads."""
-        confirmed = updates.confirm_started()  # a portable copy's old process waits for this
+        """For a real start only (tests build the window without it): tell an update's watchdog this version is up,
+        report how the last update went, finish the move from the old installer, and tidy old downloads."""
+        confirmed = updates.mark_ready("window")
 
         def work():
             outcome = confirmed or updates.update_outcome()
+            self.bus.update_outcome.emit(outcome or {})
             pending = (load_settings().get("update_pending") or {}).get("version")
             try:
                 updates.clean_downloads(keep=pending)
             except Exception:
                 pass
-            self.bus.update_outcome.emit(outcome or {})
+            try:
+                self.bus.migration.emit(migration.migrate_from_inno() or {})
+            except Exception as e:
+                self.bus.migration.emit({"status": "failed", "reason": str(e)})
 
-        threading.Thread(target=work, daemon=True, name="launcher-update-outcome").start()
-        if FROZEN:  # the old copy holds its parked exe until it has seen the confirmation
-            for delay in (5_000, 30_000, 120_000):
-                QTimer.singleShot(delay, lambda: updates.remove_parked_exe(Path(sys.executable)))
+        threading.Thread(target=work, daemon=True, name="launcher-start-tasks").start()
 
     def _on_me3(self, f):
         self._me3 = f
@@ -5783,6 +5838,10 @@ class Launcher(FluentWindow):
 
 
 def main():
+    from roundtable_souls import identity
+
+    if identity.get().qt_platform:  # an isolated test build (Velopack starts it with the user's own environment)
+        os.environ["QT_QPA_PLATFORM"] = identity.get().qt_platform
     app = QApplication(sys.argv)
     app.setApplicationName(TITLE)
     use_theme_text()

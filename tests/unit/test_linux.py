@@ -93,12 +93,16 @@ def test_me3_paths_follow_its_linux_layout(tmp_path, monkeypatch):
     assert common.me3_profiles_dir() == tmp_path / "cfg" / "me3" / "profiles"
 
 
-def test_linux_update_file_and_parked_names(tmp_path):
-    """The download itself is covered in test_updates (test_linux_update_unpacks_the_program)."""
-    assert updates.update_asset(False, "linux") == updates.LINUX_ASSET_NAME
-    assert (
-        updates.update_asset(True, "win32") == updates.SETUP_NAME
-        and updates.update_asset(False, "win32") == updates.ASSET_NAME
-    )
-    assert updates.parked_path(tmp_path / "RoundtableSouls").name == "RoundtableSouls.old"
-    assert updates.parked_path(tmp_path / "RoundtableSouls.exe").name == "RoundtableSouls.old.exe"
+def test_linux_updates_use_the_linux_feed(monkeypatch):
+    """Velopack's packages for Linux come from releases.linux.json (signed for 'linux'), not the Windows feed."""
+    import importlib
+    import sys as _sys
+
+    monkeypatch.setattr(_sys, "platform", "linux")
+    try:
+        mod = importlib.reload(updates)
+        assert mod.OS_CHANNEL == "linux" and mod.FEED_NAME == "releases.linux.json"
+        assert mod.SIGNATURE_NAME == "releases.linux.json.minisig"
+    finally:
+        monkeypatch.undo()
+        importlib.reload(updates)

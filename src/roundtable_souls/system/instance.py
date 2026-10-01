@@ -1,12 +1,12 @@
 """One window at a time, and knowing what else of ours is running.
 
-Three names, each held for as long as the thing it stands for runs:
+Two names, each held for as long as the thing it stands for runs:
   WINDOW  the launcher window (a second start asks it to come forward, or to Play, and exits)
   PLAY    a Play started from a Steam shortcut (--play), which runs without a window
-  SETUP   the installer while it installs (named by the installer itself, SetupMutex in RoundtableSouls.iss)
 
-On Windows these are named mutexes, the same objects the installer's AppMutex checks, so a silent update never
-replaces the program while one of them runs. On Linux they are lock files in the runtime folder.
+Names are scoped to the data folder: two copies that share settings and saves can never run at once, while a
+portable copy with its own data (or an isolated test build) is independent. On Windows they are named mutexes, on
+Linux lock files in the runtime folder.
 
 A second start talks to the window through a local socket (a named pipe on Windows) the window serves with
 QLocalServer; only this user can connect to it.
@@ -22,9 +22,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-WINDOW = "RoundtableSouls.Window"
-PLAY = "RoundtableSouls.Play"
-SETUP = "RoundtableSouls.Setup"
+WINDOW = "Window"
+PLAY = "Play"
 
 _ERROR_ALREADY_EXISTS = 183
 _SYNCHRONIZE = 0x00100000
@@ -36,6 +35,20 @@ def _user_tag() -> str:
     except Exception:
         user = "user"
     return hashlib.sha256(user.encode("utf-8")).hexdigest()[:12]
+
+
+def _scope() -> str:
+    """Identifies the data folder these names belong to."""
+    from roundtable_souls import identity
+    from roundtable_souls.settings import data_dir
+
+    where = str(data_dir()).lower() if sys.platform == "win32" else str(data_dir())
+    return f"{identity.get().instance_prefix}.{hashlib.sha256(where.encode('utf-8')).hexdigest()[:12]}"
+
+
+def full_name(name: str) -> str:
+    """WINDOW / PLAY become names scoped to this data folder; a name with a dot is used as it is (tests)."""
+    return name if "." in name else f"{_scope()}.{name}"
 
 
 def _lock_dir() -> Path:
@@ -67,6 +80,7 @@ class Hold:
 
 def acquire(name: str) -> Hold | None:
     """Hold name, or None when another process (or another Hold in this one) already does."""
+    name = full_name(name)
     if sys.platform == "win32":
         import ctypes
         from ctypes import wintypes
@@ -98,6 +112,7 @@ def acquire(name: str) -> Hold | None:
 
 def held(name: str) -> bool:
     """Whether some process holds name right now."""
+    name = full_name(name)
     if sys.platform == "win32":
         import ctypes
         from ctypes import wintypes
@@ -122,7 +137,7 @@ def held(name: str) -> bool:
 
 def server_name() -> str:
     """What the window's QLocalServer listens on: a pipe name on Windows, a socket path on Linux (per user)."""
-    base = f"RoundtableSouls-{_user_tag()}"
+    base = f"{_scope()}-{_user_tag()}"
     if sys.platform == "win32":
         return base
     return str(_lock_dir() / f"{base}.sock")

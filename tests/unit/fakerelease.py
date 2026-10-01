@@ -1,20 +1,20 @@
 """A release as GitHub serves it, signed like release.yml signs it, for the updater tests: a throwaway minisign key,
-the release file, SHA256SUMS.txt and SHA256SUMS.txt.minisig, behind fake URLs."""
+Velopack packages (bytes standing in for .nupkg files), releases.<os>.json and its signature, behind fake URLs."""
 
 from __future__ import annotations
 
 import base64
 import hashlib
-import io
+import json
 import os
-import tarfile
-import zipfile
 from dataclasses import dataclass, field
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
-from roundtable_souls import signing, updates
+from roundtable_souls import identity, signing, updates
+
+PACK = identity.get().pack_id
 
 
 @dataclass
@@ -35,31 +35,29 @@ class Key:
         return f"untrusted comment: test\n{line}\ntrusted comment: {comment}\n{glob}\n"
 
 
-def zip_with(exe: bytes) -> bytes:
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w") as z:
-        z.writestr("RoundtableSouls.exe", exe)
-        z.writestr("How to use.txt", "hi")
-    return buf.getvalue()
-
-
-def tar_with(program: bytes) -> bytes:
-    buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-        info = tarfile.TarInfo("RoundtableSouls")
-        info.size = len(program)
-        tar.addfile(info, io.BytesIO(program))
-    return buf.getvalue()
+def entry(version: str, kind: str, data: bytes) -> dict:
+    suffix = "" if updates.OS_CHANNEL == "win" else "-linux"
+    return {
+        "PackageId": PACK,
+        "Version": version,
+        "Type": kind,
+        "FileName": f"{PACK}-{version}{suffix}-{kind.lower()}.nupkg",
+        "SHA1": hashlib.sha1(data).hexdigest().upper(),
+        "SHA256": hashlib.sha256(data).hexdigest().upper(),
+        "Size": len(data),
+    }
 
 
 @dataclass
 class Release:
-    """info (as check_launcher_update offers it), urls (url -> bytes), key, and fetch / fetch_file stand-ins that
-    record the URLs asked for."""
+    """info (as check_launcher_update offers it), urls (url -> bytes), key, the feed's entries, and fetch /
+    fetch_file stand-ins that record the URLs asked for."""
 
     info: dict
     urls: dict[str, bytes]
     key: Key
+    full: dict
+    delta: dict | None
     calls: list[str] = field(default_factory=list)
 
     def fetch(self, url: str) -> bytes:
@@ -76,32 +74,51 @@ class Release:
             progress(len(data), len(data))
         return hashlib.sha256(data).hexdigest()
 
-    def download(self, **kw):
+    def download(self, base_available=lambda feed, current: False, **kw):
         kw.setdefault("key", self.key.public)
-        return updates.download_update(self.info, fetch_file=self.fetch_file, fetch=self.fetch, **kw)
+        kw.setdefault("current", "1.0.0")
+        return updates.download_update(
+            self.info, fetch_file=self.fetch_file, fetch=self.fetch, base_available=base_available, **kw
+        )
 
 
 def make(
-    name: str = updates.ASSET_NAME,
-    payload: bytes | None = None,
     version: str = "99.0.0",
+    base: str | None = "98.0.0",
     signed_for: str | None = None,
-    signed: bool = True,
+    channel: str | None = None,
     key: Key | None = None,
-    corrupt: bool = False,
+    with_delta: bool = True,
+    feed_edit=None,
+    package_edit=None,
+    signed: bool = True,
 ) -> Release:
+    """A release of version whose delta was made against base. feed_edit(doc) changes the feed after signing (an
+    attacker without the key); package_edit(bytes) changes the full package on the server."""
     key = key or Key()
-    if payload is None:
-        payload = {
-            updates.ASSET_NAME: lambda: zip_with(b"new exe"),
-            updates.LINUX_ASSET_NAME: lambda: tar_with(b"\x7fELF new build"),
-        }.get(name, lambda: b"MZ fake setup")()
-    digest = "0" * 64 if corrupt else hashlib.sha256(payload).hexdigest()
-    sums = f"{digest}  {name}\n{'1' * 64}  RoundtableSouls.exe\n".encode()
-    urls = {f"https://x/{name}": payload, "https://x/sums": sums}
-    assets = {name: f"https://x/{name}", updates.CHECKSUMS_NAME: "https://x/sums"}
+    full_bytes = f"full package {version}".encode() * 50
+    delta_bytes = f"delta {base}->{version}".encode() * 5
+    full = entry(version, "Full", full_bytes)
+    assets_feed = [full]
+    delta = None
+    urls = {}
+    if with_delta and base:
+        delta = entry(version, "Delta", delta_bytes)
+        assets_feed += [delta, entry(base, "Full", f"full package {base}".encode() * 50)]
+        urls[f"https://x/{delta['FileName']}"] = delta_bytes
+    raw = json.dumps({"Assets": assets_feed}).encode()
+    comment = updates.SIGNED_COMMENT.format(version=signed_for or version, channel=channel or updates.OS_CHANNEL)
+    sig = key.sign(raw, comment).encode()
+    if feed_edit:
+        doc = json.loads(raw)
+        feed_edit(doc)
+        raw = json.dumps(doc).encode()
+    urls[f"https://x/{full['FileName']}"] = package_edit(full_bytes) if package_edit else full_bytes
+    urls["https://x/feed"] = raw
+    assets = {name.rsplit("/", 1)[-1]: url for url, name in ((u, u) for u in urls if u.endswith(".nupkg"))}
+    assets[updates.FEED_NAME] = "https://x/feed"
     if signed:
-        comment = updates.SIGNED_COMMENT.format(version=signed_for or version)
-        urls["https://x/sig"] = key.sign(sums, comment).encode()
+        urls["https://x/sig"] = sig
         assets[updates.SIGNATURE_NAME] = "https://x/sig"
-    return Release(info={"version": version, "url": "", "assets": assets}, urls=urls, key=key)
+    info = {"version": version, "url": "", "assets": assets}
+    return Release(info=info, urls=urls, key=key, full=full, delta=delta)

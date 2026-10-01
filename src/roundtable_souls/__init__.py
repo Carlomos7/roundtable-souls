@@ -4,7 +4,7 @@ __version__ = "3.13.2"
 
 
 def main() -> int:
-    """Console entry point: the window, or --check / --shots without one."""
+    """Console entry point: the window; or without one --play, --check, --update (see updates.update_headless)."""
     import sys
 
     from roundtable_souls.system import logging as run_logging
@@ -17,11 +17,13 @@ def main() -> int:
 
     sys.excepthook = crashed
     if getattr(sys, "frozen", False):
-        from pathlib import Path
+        from roundtable_souls import updates
 
-        from roundtable_souls.updates import remove_parked_exe
+        updates.velopack_startup()  # Velopack's install/update/uninstall hooks exit here
+    if "--update" in sys.argv:
+        from roundtable_souls import updates
 
-        remove_parked_exe(Path(sys.executable))  # the exe an Update now replaced; ignored while it is still exiting
+        return updates.update_headless([a for a in sys.argv[1:] if a != "--update"])
     if "--play" in sys.argv or "--check" in sys.argv or any(a.startswith("--game") for a in sys.argv):
         from roundtable_souls import core, games
 
@@ -43,9 +45,10 @@ def main() -> int:
 def play_from_shortcut(game) -> int:
     """--play: when the window is open, it runs Play itself (one launcher manages the session); otherwise Play runs
     here, holding the PLAY name so a second shortcut start, or a silent update, waits for it to end."""
-    from roundtable_souls import core
+    from roundtable_souls import core, updates
     from roundtable_souls.system import instance
 
+    updates.mark_ready("play")  # this version starts and runs: an update's watchdog can stand down
     if instance.held(instance.WINDOW) and instance.send(f"play {game.key}"):
         core.common.start_log("launcher: play (no window)")
         core.common.log("Roundtable Souls is open: Play was handed to its window")

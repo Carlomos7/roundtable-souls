@@ -128,6 +128,7 @@ from roundtable_souls.settings import (
     data_dir,
     exe_dir,
     game_setting,
+    launch_target,
     load_settings,
     save_game_settings,
     save_settings,
@@ -655,7 +656,7 @@ def play_command(game: games.Game | None = None) -> tuple[str, str]:
     game = game or common.GAME
     opts = f"--game {game.key} --play"
     if FROZEN:
-        return sys.executable, opts
+        return str(launch_target()), opts  # the stub or AppImage: its path stays the same across updates
     return sys.executable, f"-m roundtable_souls {opts}"
 
 

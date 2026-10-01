@@ -418,7 +418,8 @@ class Bus(QObject):
     update = Signal(object)  # {'check': UpdateCheck, 'advisory', 'force'}
     update_progress = Signal(str)
     update_ready = Signal(object)
-    update_landed = Signal(str)  # the new portable copy: ok, slow or exited
+    migration = Signal(object)  # the move from the old installer, at start
+    steam_retarget = Signal(object)  # Point Steam shortcuts here
     update_outcome = Signal(object)  # how the last update went, at start
     conflicts = Signal(dict)
     saves = Signal(dict)

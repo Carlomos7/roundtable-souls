@@ -1,9 +1,12 @@
-"""The launcher's own updates: the check (cache, ETag, failures, backoff, channels, skip), the signed download
-(signature, checksum, resume, downgrade refusal, cleanup), and applying it (portable hand-over and roll-back,
-the silent setup and how its outcome is reported)."""
+"""The launcher's own updates: the check (cache, ETag, failures, backoff, channels, skip, blocked versions), the
+verified download (signed Velopack feed, full or delta package, resume, downgrade refusal, cleanup), applying it
+through Velopack with a watchdog, readiness and rollback reporting, and where a copy keeps its data."""
 
 import hashlib
 import io
+import json
+import os
+import sys
 import threading
 import urllib.error
 from email.message import Message
@@ -253,60 +256,144 @@ def test_the_shipped_release_key_reads():
     assert len(key.key) == 32 and key.id_hex == "7E6CB2F456375629"
 
 
-# ---------------------------------------------------------------------------- download
+# ---------------------------------------------------------------------------- download and verify
 
 
-def test_download_verifies_signature_and_checksum_then_unpacks(tmp_path):
+def test_download_verifies_the_signed_feed_then_the_full_package(tmp_path):
     rel = fakerelease.make()
     seen = []
-    exe = rel.download(progress=lambda d, t: seen.append((d, t)), workdir=tmp_path, platform="win32")
-    assert (
-        exe.name == "RoundtableSouls.exe" and exe.read_bytes() == b"new exe" and exe.is_relative_to(tmp_path / "99.0.0")
-    )
-    assert rel.calls == ["https://x/sums", "https://x/sig", f"https://x/{updates.ASSET_NAME}"] and seen
+    prepared = rel.download(progress=lambda d, t: seen.append((d, t)), workdir=tmp_path)
+    assert prepared.version == "99.0.0" and prepared.files == [rel.full["FileName"]] and not prepared.delta
+    assert rel.calls[:2] == ["https://x/feed", "https://x/sig"] and seen
+    local = json.loads((prepared.folder / updates.FEED_NAME).read_text(encoding="utf-8"))
+    assert local == {"Assets": [rel.full]}  # Velopack reads only entries copied from the signed feed
+    assert sorted(p.name for p in prepared.folder.iterdir()) == sorted([updates.FEED_NAME, rel.full["FileName"]])
+    updates.verify_prepared(prepared)
+
+
+def test_the_delta_is_used_only_against_the_version_it_was_made_from(tmp_path):
+    rel = fakerelease.make(base="98.0.0")
+    prepared = rel.download(base_available=updates._base_available, current="98.0.0", workdir=tmp_path)
+    assert prepared.files == [rel.full["FileName"]]  # no packages folder here: Velopack has no base, full it is
+    rel = fakerelease.make(base="98.0.0")
+    prepared = rel.download(base_available=lambda feed, current: True, current="98.0.0", workdir=tmp_path / "d")
+    assert prepared.delta and prepared.files == [rel.delta["FileName"]]
+    local = json.loads((prepared.folder / updates.FEED_NAME).read_text(encoding="utf-8"))
+    assert local == {"Assets": [rel.full, rel.delta]}  # the target's full entry, its file not needed
+    assert rel.full["FileName"] not in [c.rsplit("/", 1)[-1] for c in rel.calls]  # only the delta downloaded
+    updates.verify_prepared(prepared)
+
+
+def test_base_available_needs_the_exact_base_in_velopacks_packages(tmp_path, monkeypatch):
+    rel = fakerelease.make(base="98.0.0")
+    feed = updates.verified_feed(rel.info, fetch=rel.fetch, key=rel.key.public)
+    packages = tmp_path / "packages"
+    packages.mkdir()
+    monkeypatch.setattr(updates, "velopack_packages_dir", lambda: packages)
+    assert not updates._base_available(feed, "98.0.0")  # base package missing
+    (packages / feed.base["FileName"]).write_bytes(b"x")
+    assert updates._base_available(feed, "98.0.0")
+    assert not updates._base_available(feed, "97.0.0")  # this copy is two versions behind: full package
 
 
 def test_download_refuses_what_it_cannot_trust(tmp_path):
+    other_key = fakerelease.Key()
     cases = {
-        "not signed": fakerelease.make(signed=False),
-        "did not check out": fakerelease.make(),  # checked against another key below
-        "for 98.0.0": fakerelease.make(signed_for="98.0.0"),  # an older release's signed checksums
-        "did not match its checksum": fakerelease.make(corrupt=True),
+        "no signed update feed": fakerelease.make(signed=False),
+        "did not check out": fakerelease.make(key=other_key),
+        "not 99.0.0 on": fakerelease.make(signed_for="98.0.0"),  # an older release's signed feed
+        "on " + updates.OS_CHANNEL: fakerelease.make(channel="mac"),  # another system's feed
+        "signature did not": fakerelease.make(feed_edit=lambda d: d["Assets"][0].update(SHA256="0" * 64)),
+        "did not match the signed feed": fakerelease.make(package_edit=lambda b: b[:-1] + b"X"),
     }
     for expect, rel in cases.items():
         key = fakerelease.Key().public if expect == "did not check out" else rel.key.public
         with pytest.raises(updates.UpdateError, match=expect):
-            rel.download(workdir=tmp_path, platform="win32", key=key)
-    assert not list(tmp_path.rglob("*.exe"))
+            rel.download(workdir=tmp_path, key=key)
+    assert not list(tmp_path.rglob("*.nupkg"))
 
 
-def test_download_refuses_a_version_that_is_not_newer(tmp_path):
-    rel = fakerelease.make(version=__version__)
+def test_feed_entries_are_checked_even_when_signed(tmp_path):
+    for edit, expect in (
+        (lambda e: e.update(FileName="..\\evil.exe"), "unsafe file"),
+        (lambda e: e.update(PackageId="Someone.Else"), "not this launcher"),
+        (lambda e: e.update(Size=0), "no usable size"),
+    ):
+        key = fakerelease.Key()
+        rel = fakerelease.make(key=key)
+        doc = json.loads(rel.urls["https://x/feed"])
+        edit(doc["Assets"][0])
+        raw = json.dumps(doc).encode()
+        rel.urls["https://x/feed"] = raw
+        rel.urls["https://x/sig"] = key.sign(
+            raw, updates.SIGNED_COMMENT.format(version="99.0.0", channel=updates.OS_CHANNEL)
+        ).encode()
+        with pytest.raises(updates.UpdateError, match=expect):
+            rel.download(workdir=tmp_path)
+
+
+def test_download_refuses_not_newer_and_blocked_versions(tmp_path):
+    rel = fakerelease.make(version="1.0.0")
     with pytest.raises(updates.UpdateError, match="not newer"):
-        rel.download(workdir=tmp_path, platform="win32")
+        rel.download(workdir=tmp_path, current="1.0.0")
+    settings.save_settings(update_blocked=["99.0.0"])
+    rel = fakerelease.make()
+    with pytest.raises(updates.UpdateError, match="failed to start here before"):
+        rel.download(workdir=tmp_path)
     assert rel.calls == []  # refused before anything was downloaded
 
 
-def test_unsigned_releases_go_through_the_releases_page():
-    assert not updates.can_self_update(fakerelease.make(signed=False).info, installed=False, platform="win32")
-    assert updates.can_self_update(fakerelease.make().info, installed=False, platform="win32")
+def test_verify_prepared_catches_anything_changed_after_the_check(tmp_path):
+    for change in (
+        lambda p: (p.folder / p.files[0]).write_bytes(b"swapped"),
+        lambda p: (p.folder / "extra.nupkg").write_bytes(b"x"),
+        lambda p: (p.folder / updates.FEED_NAME).write_text(
+            json.dumps({"Assets": [{**p.signed[0], "SHA256": "A" * 64}]}), encoding="utf-8"
+        ),
+    ):
+        prepared = fakerelease.make().download(workdir=tmp_path / str(len(list(tmp_path.iterdir()))))
+        change(prepared)
+        with pytest.raises(updates.UpdateError):
+            updates.verify_prepared(prepared)
 
 
-def test_installed_copy_downloads_the_setup(tmp_path):
-    rel = fakerelease.make(name=updates.SETUP_NAME)
-    assert updates.can_self_update(rel.info, installed=True, platform="win32")
-    assert not updates.can_self_update(rel.info, installed=False, platform="win32")
-    setup = rel.download(workdir=tmp_path, installed=True, platform="win32")
-    assert setup.name == updates.SETUP_NAME and setup.read_bytes() == b"MZ fake setup"
-    calls = len(rel.calls)
-    assert rel.download(workdir=tmp_path, installed=True, platform="win32") == setup
-    assert len(rel.calls) == calls + 2  # a finished download is reused: only the checksums and signature again
+def test_only_a_managed_copy_with_a_signed_feed_updates_itself(monkeypatch, tmp_path):
+    info = fakerelease.make().info
+    monkeypatch.setattr(updates, "velopack_root", lambda: None)
+    monkeypatch.setattr(updates, "appimage", lambda: None)
+    assert not updates.can_self_update(info)  # running from source or a raw build
+    monkeypatch.setattr(updates, "velopack_root", lambda: tmp_path)
+    monkeypatch.setattr(updates, "identity_matches", lambda: False)
+    assert not updates.can_self_update(info)  # a build of another app ID never updates this install
+    monkeypatch.setattr(updates, "identity_matches", lambda: True)
+    assert updates.can_self_update(info)
+    assert not updates.can_self_update(fakerelease.make(signed=False).info)
 
 
-def test_linux_update_unpacks_the_program(tmp_path):
-    rel = fakerelease.make(name=updates.LINUX_ASSET_NAME)
-    program = rel.download(workdir=tmp_path, platform="linux")
-    assert program.name == "RoundtableSouls" and program.read_bytes() == b"\x7fELF new build"
+def test_rollback_package_comes_from_velopacks_packages_or_the_release(tmp_path, monkeypatch):
+    monkeypatch.setattr(updates, "appimage", lambda: None)
+    packages = tmp_path / "packages"
+    packages.mkdir()
+    suffix = "" if updates.OS_CHANNEL == "win" else "-linux"
+    kept = packages / f"{fakerelease.PACK}-5.0.0{suffix}-full.nupkg"
+    kept.write_bytes(b"installed version")
+    monkeypatch.setattr(updates, "velopack_packages_dir", lambda: packages)
+    out = updates.stage_rollback(current="5.0.0", release_of=lambda v: pytest.fail("no download needed"))
+    assert out.read_bytes() == b"installed version" and out.parent == updates.rollback_dir()
+    kept.unlink()  # a portable copy has no package of its own version: it comes from that version's release
+    rel = fakerelease.make(version="5.0.0", base=None)
+    out = updates.stage_rollback(
+        current="5.0.0", release_of=lambda v: rel.info, fetch=rel.fetch, fetch_file=rel.fetch_file, key=rel.key.public
+    )
+    assert out.name == rel.full["FileName"] and out.stat().st_size == rel.full["Size"]
+
+
+def test_rollback_on_linux_keeps_the_appimage(tmp_path, monkeypatch):
+    image = tmp_path / "RoundtableSouls.AppImage"
+    image.write_bytes(b"ELF current")
+    monkeypatch.setattr(updates, "appimage", lambda: image)
+    out = updates.stage_rollback(current="5.0.0")
+    assert out.read_bytes() == b"ELF current" and "5.0.0" in out.name
 
 
 def test_fetch_to_file_resumes_and_hashes_the_whole_file(tmp_path):
@@ -361,196 +448,168 @@ def test_fetch_to_file_keeps_the_part_when_the_connection_drops(tmp_path):
     assert part.read_bytes() == b"01234"
 
 
-def test_clean_downloads_keeps_the_pending_one_and_recent_temp_folders(tmp_path):
+def test_clean_downloads_keeps_the_pending_one_this_versions_rollback_and_recent_temp_folders(tmp_path):
     root = updates.updates_dir()
     for v in ("9.0.0", "9.1.0"):
         (root / v).mkdir(parents=True)
         (root / v / "f").write_text("x")
     (root / "not-a-version").mkdir()
+    keep = updates.rollback_dir()
+    keep.mkdir(parents=True)
+    (keep / "X-5.0.0-full.nupkg").write_text("this")
+    (keep / "X-4.0.0-full.nupkg").write_text("older")
     temp = tmp_path / "temp"
     old, new = temp / "roundtable-update-old", temp / "roundtable-update-new"
     old.mkdir(parents=True)
     new.mkdir()
-    other = temp / "someone-else"
-    other.mkdir()
-    import os
-
     os.utime(old, (1, 1))
-    assert updates.clean_downloads(keep="9.1.0", temp=temp) == 2
+    assert updates.clean_downloads(keep="9.1.0", current="5.0.0", temp=temp) == 3
     assert not (root / "9.0.0").exists() and (root / "9.1.0").exists() and (root / "not-a-version").exists()
-    assert not old.exists() and new.exists() and other.exists()
+    assert sorted(p.name for p in keep.iterdir()) == ["X-5.0.0-full.nupkg"]
+    assert not old.exists() and new.exists()
 
 
-# ---------------------------------------------------------------------------- applying: portable
+# ---------------------------------------------------------------------------- applying, readiness, rollback
 
 
-def _swap_setup(tmp_path):
-    current = tmp_path / "RoundtableSouls.exe"
-    current.write_bytes(b"old exe")
-    new = tmp_path / "dl" / "RoundtableSouls.exe"
-    new.parent.mkdir()
-    new.write_bytes(b"new exe")
-    return current, new
+class _FakeVelopack:
+    """Stands in for the velopack module: records what the updater asks of it."""
+
+    def __init__(self, target="99.0.0"):
+        self.calls = []
+        outer = self
+
+        class Asset:
+            Version = target
+
+        class Info:
+            TargetFullRelease = Asset()
+
+        class UpdateManager:
+            def __init__(self, source, options=None):
+                outer.calls.append(("source", source))
+
+            def check_for_updates(self):
+                return Info()
+
+            def download_updates(self, info):
+                outer.calls.append(("download",))
+
+            def wait_exit_then_apply_updates(self, info, silent=False, restart=True, restart_args=None):
+                outer.calls.append(("apply", silent, restart, list(restart_args or [])))
+
+        self.UpdateManager = UpdateManager
+        self.UpdateOptions = lambda *a: a
 
 
-def test_apply_update_swaps_parks_and_records_it_pending(tmp_path):
-    current, new = _swap_setup(tmp_path)
-    parked, proc = updates.apply_update(new, current, "99.0.0", restart=False)
-    assert proc is None and current.read_bytes() == b"new exe" and parked.read_bytes() == b"old exe"
-    assert parked.name == "RoundtableSouls.old.exe" and not new.exists()
-    assert settings.load_settings()["update_pending"]["version"] == "99.0.0"
-    assert updates.remove_parked_exe(current) and not parked.exists() and updates.remove_parked_exe(current)
+def _managed(monkeypatch, tmp_path):
+    root = tmp_path / "root"
+    (root / "current").mkdir(parents=True)
+    image = tmp_path / "RoundtableSouls.AppImage"
+    image.write_bytes(b"ELF")
+    monkeypatch.setattr(updates, "velopack_root", lambda: root if updates.OS_CHANNEL == "win" else None)
+    monkeypatch.setattr(updates, "appimage", lambda: image if updates.OS_CHANNEL == "linux" else None)
+    monkeypatch.setattr(updates, "identity_matches", lambda: True)
+    return root
 
 
-def test_apply_update_restores_on_failure(tmp_path):
-    current = tmp_path / "RoundtableSouls.exe"
-    current.write_bytes(b"old exe")
-    with pytest.raises(FileNotFoundError):
-        updates.apply_update(tmp_path / "missing.exe", current, "99.0.0", restart=False)
-    assert current.read_bytes() == b"old exe" and not updates.parked_path(current).exists()
-    assert settings.load_settings()["update_pending"] is None
-
-
-def test_relaunch_drops_pyinstaller_markers(tmp_path, monkeypatch):
-    monkeypatch.setenv("_PYI_ARCHIVE_FILE", "x")
-    monkeypatch.setenv("_MEIPASS2", "z")
-    monkeypatch.setenv("PATH_KEEP_ME", "1")
-    current, new = _swap_setup(tmp_path)
-    seen = {}
-
-    def popen(args, **kw):
-        seen.update(kw, args=args)
-        return object()
-
-    updates.apply_update(new, current, "99.0.0", popen=popen)
-    env = seen["env"]
-    assert seen["args"] == [str(current)] and "_PYI_ARCHIVE_FILE" not in env and env["PATH_KEEP_ME"] == "1"
-
-
-def test_a_new_copy_that_cannot_start_is_rolled_back_at_once(tmp_path):
-    current, new = _swap_setup(tmp_path)
-
-    def popen(args, **kw):
-        raise OSError("blocked")
-
-    with pytest.raises(updates.UpdateError, match="put back"):
-        updates.apply_update(new, current, "99.0.0", popen=popen)
-    assert current.read_bytes() == b"old exe" and updates.failed_path(current).read_bytes() == b"new exe"
-    s = settings.load_settings()
-    assert s["update_pending"] is None and s["update_result"]["status"] == "rolled_back"
-
-
-class _Proc:
-    def __init__(self, code=None):
-        self.code = code
-
-    def poll(self):
-        return self.code
-
-
-def test_hand_over_waits_for_the_new_window_to_confirm(tmp_path):
-    current, new = _swap_setup(tmp_path)
-    updates.apply_update(new, current, "99.0.0", restart=False)
-    proc = _Proc()
-    ticks = [0.0]
-
-    def sleep(_):
-        ticks[0] += 1
-        if ticks[0] == 3:  # the new copy's window opens
-            assert updates.confirm_started(current="99.0.0", now=lambda: 5.0)["status"] == "ok"
-
-    assert updates.wait_for_new_version(proc, "99.0.0", sleep=sleep, now=lambda: ticks[0]) == "ok"
-    s = settings.load_settings()
-    assert s["update_pending"] is None and s["update_result"]["from"] == __version__
-
-
-def test_hand_over_rolls_back_when_the_new_copy_exits_without_confirming(tmp_path):
-    current, new = _swap_setup(tmp_path)
-    updates.apply_update(new, current, "99.0.0", restart=False)
-    assert updates.wait_for_new_version(_Proc(code=1), "99.0.0", sleep=lambda _: None) == "exited"
-    assert updates.roll_back(current, "it closed")
-    assert current.read_bytes() == b"old exe" and updates.failed_path(current).read_bytes() == b"new exe"
-    assert not updates.parked_path(current).exists()
-    result = updates.update_outcome(current=__version__)
-    assert result["status"] == "rolled_back" and result["version"] == "99.0.0" and result["error"] == "it closed"
-
-
-def test_hand_over_leaves_a_slow_new_copy_alone():
-    ticks = [0.0]
-
-    def sleep(_):
-        ticks[0] += 10
-
-    assert updates.wait_for_new_version(_Proc(), "99.0.0", timeout=30, sleep=sleep, now=lambda: ticks[0]) == "slow"
-
-
-def test_confirm_started_only_for_the_pending_version():
-    assert updates.confirm_started(current="99.0.0") is None  # nothing pending
-    settings.save_settings(update_pending={"version": "99.0.0", "kind": "portable", "from": "1.0.0"})
-    assert updates.confirm_started(current="98.0.0") is None
-    assert updates.confirm_started(current="99.0.0")["status"] == "ok"
-
-
-# ---------------------------------------------------------------------------- applying: installed
-
-
-def test_installer_runs_silently_with_a_log_into_this_folder(tmp_path):
-    seen = {}
-
-    def popen(args, **kw):
-        seen.update(kw, args=args)
-
-    log = updates.run_installer(tmp_path / "setup.exe", "99.0.0", tmp_path / "app", popen=popen)
-    args = seen["args"]
-    assert args[0] == str(tmp_path / "setup.exe") and "/VERYSILENT" in args and "/RELAUNCH=1" in args
-    assert f"/DIR={tmp_path / 'app'}" in args and f"/LOG={log}" in args and log.parent.is_dir()
+def test_apply_hands_velopack_the_verified_folder_and_starts_the_watchdog(tmp_path, monkeypatch):
+    _managed(monkeypatch, tmp_path)
+    prepared = fakerelease.make().download(workdir=tmp_path / "dl")
+    prepared.rollback = tmp_path / "kept.nupkg"
+    prepared.rollback.write_bytes(b"previous")
+    vp, started = _FakeVelopack(), []
+    updates.apply_update(prepared, restart_args=["--game", "er", "--play"], velopack_module=vp,
+                         popen=lambda args, **kw: started.append((args, kw)))  # fmt: skip
+    assert vp.calls[0] == ("source", str(prepared.folder))
+    assert vp.calls[-1] == ("apply", True, True, ["--game", "er", "--play"])
+    ((args, kw),) = started
+    assert "99.0.0" in args and str(prepared.rollback) in args and kw["cwd"] == str(updates.state_dir())
+    assert (
+        updates.state_dir() / ("update-watchdog.ps1" if updates.OS_CHANNEL == "win" else "update-watchdog.sh")
+    ).is_file()
     pending = settings.load_settings()["update_pending"]
-    assert pending == {**pending, "version": "99.0.0", "kind": "installed", "log": str(log)}
+    assert pending["version"] == "99.0.0" and pending["rollback"] == str(prepared.rollback)
 
 
-def test_installed_update_that_landed_is_confirmed_at_start():
-    settings.save_settings(update_pending={"version": "99.0.0", "kind": "installed", "log": ""})
-    result = updates.update_outcome(current="99.0.0", held=lambda name: False)
-    assert result["status"] == "ok" and settings.load_settings()["update_pending"] is None
-
-
-def test_installed_update_that_failed_is_reported_with_the_logs_reason(tmp_path):
-    log = tmp_path / "setup.log"
-    log.write_text(
-        "2026-10-01 12:00:00.123   Log opened.\n"
-        "2026-10-01 12:00:00.200   Roundtable Souls: a newer version (99.1.0) is installed; refusing 99.0.0.\n"
-        "2026-10-01 12:00:00.300   Log closed.\n",
-        encoding="utf-8",
-    )
-    settings.save_settings(update_pending={"version": "99.0.0", "kind": "installed", "log": str(log)})
-    result = updates.update_outcome(current=__version__, held=lambda name: False)
-    assert result["status"] == "failed" and "newer version (99.1.0)" in result["error"] and result["log"] == str(log)
+def test_apply_refuses_without_a_rollback_copy_or_with_another_target(tmp_path, monkeypatch):
+    _managed(monkeypatch, tmp_path)
+    prepared = fakerelease.make().download(workdir=tmp_path / "dl")
+    with pytest.raises(updates.UpdateError, match="put this version back"):
+        updates.apply_update(prepared, velopack_module=_FakeVelopack(), popen=lambda *a, **k: None)
+    prepared.rollback = tmp_path / "kept.nupkg"
+    prepared.rollback.write_bytes(b"previous")
+    with pytest.raises(updates.UpdateError, match="did not match"):
+        updates.apply_update(prepared, velopack_module=_FakeVelopack(target="98.5.0"), popen=lambda *a, **k: None)
     assert settings.load_settings()["update_pending"] is None
-    updates.clear_outcome()
-    assert updates.update_outcome(current=__version__, held=lambda name: False) is None  # shown once
 
 
-def test_outcome_waits_for_a_setup_that_is_still_running():
-    settings.save_settings(update_pending={"version": "99.0.0", "kind": "installed", "log": ""})
-    running = [True, True, False]
-    result = updates.update_outcome(
-        current=__version__, held=lambda name: running.pop(0) if running else False, sleep=lambda _: None
+def test_ready_finishes_a_pending_update(tmp_path):
+    assert updates.mark_ready("window", current="99.0.0") is None  # nothing pending: just the marker
+    assert (updates.state_dir() / "ready-99.0.0").is_file()
+    settings.save_settings(update_pending={"version": "99.0.0", "from": "98.0.0", "started": 1.0})
+    result = updates.mark_ready("play", current="99.0.0")
+    assert result["status"] == "ok" and result["how"] == "play" and settings.load_settings()["update_pending"] is None
+
+
+def test_a_rollback_is_reported_once_and_blocks_that_version():
+    settings.save_settings(update_pending={"version": "99.0.0", "from": "98.0.0", "started": 1.0})
+    state = updates.state_dir()
+    state.mkdir(parents=True)
+    (state / "rollback.json").write_text(
+        '﻿{"version": "99.0.0", "reason": "it did not finish starting within 90 seconds"}', encoding="utf-8"
     )
-    assert result["status"] == "failed"
-    settings.save_settings(update_pending={"version": "99.0.0", "kind": "installed", "log": ""})
-    assert updates.update_outcome(current=__version__, held=lambda n: True, sleep=lambda _: None, setup_wait=1) is None
-    assert settings.load_settings()["update_pending"]  # reported at a later start
+    result = updates.update_outcome(current="98.0.0")
+    assert result["status"] == "rolled_back" and result["version"] == "99.0.0" and "90 seconds" in result["error"]
+    s = settings.load_settings()
+    assert s["update_blocked"] == ["99.0.0"] and s["update_pending"] is None and not (state / "rollback.json").exists()
+    fetch = _fetcher(updates.Fetched("ok", data=_rel("99.0.0")))
+    check = updates.check_launcher_update(fetch=fetch, force=True, current="98.0.0")
+    assert check.offer is None and check.blocked == "99.0.0"  # not even Check for updates offers it
+    check = updates.check_launcher_update(
+        fetch=_fetcher(updates.Fetched("ok", data=_rel("99.0.1"))), force=True, current="98.0.0"
+    )
+    assert check.offer["version"] == "99.0.1"  # a newer release is offered
+    updates.clear_outcome()
+    assert updates.update_outcome(current="98.0.0") is None
 
 
-def test_busy_reason_names_a_shortcut_play_or_a_setup(monkeypatch):
+def test_an_update_that_never_applied_is_reported_after_the_watchdogs_time():
+    settings.save_settings(update_pending={"version": "99.0.0", "from": "98.0.0", "started": 1000.0})
+    assert updates.update_outcome(current="98.0.0", now=lambda: 1000.0 + 60) is None  # still being applied
+    late = 1000.0 + updates.WATCHDOG_APPLY + updates.WATCHDOG_READY + 61
+    result = updates.update_outcome(current="98.0.0", now=lambda: late)
+    assert result["status"] == "failed" and settings.load_settings()["update_pending"] is None
+
+
+def test_busy_reason_names_a_shortcut_play(monkeypatch):
     from roundtable_souls.system import instance
 
     monkeypatch.setattr(instance, "held", lambda name: name == instance.PLAY)
     assert "Steam shortcut" in updates.busy_reason()
-    monkeypatch.setattr(instance, "held", lambda name: name == instance.SETUP)
-    assert "being installed" in updates.busy_reason()
     monkeypatch.setattr(instance, "held", lambda name: False)
     assert updates.busy_reason() == ""
+
+
+def test_velopack_startup_never_auto_applies(monkeypatch):
+    calls = []
+
+    class App:
+        def set_auto_apply_on_startup(self, value):
+            calls.append(("auto", value))
+            return self
+
+        def run(self):
+            calls.append(("run",))
+
+    monkeypatch.setattr(updates, "velopack_root", lambda: None)
+    monkeypatch.setattr(updates, "appimage", lambda: None)
+    monkeypatch.setattr(updates, "_velopack", lambda: pytest.fail("not a Velopack copy"))
+    updates.velopack_startup()
+    monkeypatch.setattr(updates, "velopack_root", lambda: Path("x"))
+    monkeypatch.setattr(updates, "_velopack", lambda: type("vp", (), {"App": App}))
+    updates.velopack_startup()
+    assert calls == [("auto", False), ("run",)]
 
 
 # ---------------------------------------------------------------------------- settings under concurrent writers
@@ -579,12 +638,91 @@ def test_settings_writes_from_many_threads_lose_nothing():
     assert not list(settings.settings_path().parent.glob("*.tmp"))
 
 
-def test_install_kind_is_detected_from_the_uninstaller(tmp_path, monkeypatch):
+def _frozen_at(monkeypatch, exe: Path):
     monkeypatch.setattr(settings, "FROZEN", True)
-    monkeypatch.setattr(settings, "exe_dir", lambda: tmp_path)
-    assert not settings.is_installed()
-    (tmp_path / "unins000.exe").write_bytes(b"x")
-    assert settings.is_installed()
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
-    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "local"))
-    assert settings.data_dir() == tmp_path / "local" / settings.APP_DIR_NAME  # installed copies never write beside it
+    monkeypatch.setattr(sys, "executable", str(exe))
+    monkeypatch.delenv(settings.DATA_ENV, raising=False)
+    monkeypatch.delenv("APPIMAGE", raising=False)
+
+
+def test_data_never_lives_where_updates_or_uninstall_replace_files(tmp_path, monkeypatch):
+    local = tmp_path / "local"
+    monkeypatch.setenv("LOCALAPPDATA", str(local))
+    monkeypatch.setenv("XDG_DATA_HOME", str(local))
+    root = tmp_path / "Carlomos7.RoundtableSouls"
+    (root / "current").mkdir(parents=True)
+    (root / "Update.exe").write_bytes(b"x")
+    _frozen_at(monkeypatch, root / "current" / "RoundtableSouls.exe")
+    assert settings.velopack_root() == root and settings.is_installed() and not settings.is_portable()
+    assert settings.data_dir() == local / settings.APP_DIR_NAME  # installed: per-user app data
+    (root / ".portable").write_text("")
+    assert settings.is_portable() and not settings.is_installed()
+    assert settings.data_dir() == root / "RoundtableSouls-data"  # portable: beside Update.exe, never in current\
+    monkeypatch.setenv(settings.DATA_ENV, str(tmp_path / "explicit"))
+    assert settings.data_dir() == tmp_path / "explicit"
+
+
+def test_data_folder_and_install_folder_can_never_be_the_same(tmp_path, monkeypatch):
+    local = tmp_path / "local"
+    monkeypatch.setenv("LOCALAPPDATA", str(local))
+    monkeypatch.setenv("XDG_DATA_HOME", str(local))
+    root = local / settings.APP_DIR_NAME  # an app ID equal to the data folder's name
+    (root / "current").mkdir(parents=True)
+    (root / "Update.exe").write_bytes(b"x")
+    _frozen_at(monkeypatch, root / "current" / "RoundtableSouls.exe")
+    with pytest.raises(RuntimeError, match="app ID must differ"):
+        settings.data_dir()
+    from roundtable_souls import identity
+
+    assert identity.Identity().pack_id.lower() != identity.Identity().data_dir_name.lower()  # the release default
+
+
+def test_appimage_and_raw_builds(tmp_path, monkeypatch):
+    local = tmp_path / "local"
+    monkeypatch.setenv("LOCALAPPDATA", str(local))
+    monkeypatch.setenv("XDG_DATA_HOME", str(local))
+    mount = tmp_path / "mount"
+    mount.mkdir()
+    _frozen_at(monkeypatch, mount / "RoundtableSouls")
+    assert settings.data_dir() == mount  # a build run straight from its folder keeps data beside itself
+    monkeypatch.setenv("APPIMAGE", str(tmp_path / "RoundtableSouls.AppImage"))
+    assert settings.data_dir() == local / settings.APP_DIR_NAME  # never the AppImage's read-only mount
+    assert settings.launch_target() == tmp_path / "RoundtableSouls.AppImage"
+
+
+def test_shortcuts_start_the_stub_not_the_replaceable_program(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    (root / "current").mkdir(parents=True)
+    (root / "Update.exe").write_bytes(b"x")
+    (root / "Roundtable Souls.exe").write_bytes(b"stub")
+    _frozen_at(monkeypatch, root / "current" / "RoundtableSouls.exe")
+    assert settings.launch_target() == root / "Roundtable Souls.exe"
+
+
+def test_apply_refuses_when_the_build_is_not_this_installs(tmp_path, monkeypatch):
+    _managed(monkeypatch, tmp_path)
+    monkeypatch.setattr(updates, "identity_matches", lambda: False)
+    prepared = fakerelease.make().download(workdir=tmp_path / "dl")
+    prepared.rollback = tmp_path / "kept.nupkg"
+    prepared.rollback.write_bytes(b"previous")
+    with pytest.raises(updates.UpdateError, match="app ID"):
+        updates.apply_update(
+            prepared, velopack_module=_FakeVelopack(), popen=lambda *a, **k: pytest.fail("no watchdog")
+        )
+
+
+def test_identity_matches_reads_the_installed_app_id(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    (root / "current").mkdir(parents=True)
+    (root / "Update.exe").write_bytes(b"x")
+    _frozen_at(monkeypatch, root / "current" / "RoundtableSouls.exe")
+    from roundtable_souls import identity
+
+    (root / "current" / "sq.version").write_text(
+        f"<package><metadata><id>{identity.get().pack_id}</id><version>1.0.0</version></metadata></package>"
+    )
+    assert settings.installed_pack_id() == identity.get().pack_id and settings.identity_matches()
+    (root / "current" / "sq.version").write_text("<package><metadata><id>Someone.Else</id></metadata></package>")
+    assert not settings.identity_matches()
+    (root / "current" / "sq.version").unlink()
+    assert not settings.identity_matches()  # unknown: treated as not ours
