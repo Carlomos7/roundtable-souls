@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 import struct
 from compression import zstd
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from roundtable_souls.gamefiles import (
     DCX_DATA_OFFSET,
@@ -159,7 +159,7 @@ def write_param(p: Param) -> bytes:
 
 # ----------------------------------------------------------------------------- the binder
 # The regulation's binder is a BND4 archive read and written by the shared code in formats.py. What is particular to
-# it is checked and kept here: its layout, and each table's stored size taken from its data on write.
+# it is checked here: its layout.
 REGULATION_FORMAT = IDS | NAMES1 | NAMES2 | COMPRESSION  # 0x74 as stored: 36-byte entries with IDs and Unicode names
 REGULATION_ENTRY = 36
 
@@ -173,9 +173,9 @@ def read_binder(body: bytes) -> Bnd4:
 
 
 def binder_bytes(b: Bnd4) -> bytes:
-    """The binder as the game's regulation stores it. Every table's uncompressed size is its length (tables are not
-    compressed inside the binder), so a table that was edited never keeps the size it was read with."""
-    return write_bnd4(replace(b, entries=[replace(e, uncompressed=-1) for e in b.entries]))
+    """The binder as the game's regulation stores it. Tables are not compressed inside it, so each one's sizes are its
+    length (the shared writer's rule for such entries)."""
+    return write_bnd4(b)
 
 
 # ----------------------------------------------------------------------------- DCX and encryption

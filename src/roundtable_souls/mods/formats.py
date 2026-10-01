@@ -122,6 +122,7 @@ def pack(body: bytes, how: Dcx | None, compressor=None) -> bytes:
 
 # ----------------------------------------------------------------------------- BND4
 IDS, NAMES1, NAMES2, LONG_OFFSETS, COMPRESSION = 0x02, 0x04, 0x08, 0x10, 0x20
+ENTRY_COMPRESSED = 0x01  # an entry's flag: its data is compressed inside the archive
 
 
 @dataclass
@@ -130,7 +131,7 @@ class Entry:
     id: int
     data: bytes  # as stored (a file compressed inside the archive stays compressed)
     flags: int = 0x40
-    uncompressed: int = -1
+    uncompressed: int = -1  # its size decompressed; only used for a compressed entry (see write_bnd4)
 
     @property
     def key(self) -> str:
@@ -261,6 +262,16 @@ def _align(n: int, a: int) -> int:
     return (n + a - 1) // a * a
 
 
+def _uncompressed_size(e: Entry) -> int:
+    """The entry header's second size: the entry decompressed. An entry stored as it is (every entry of the game's own
+    archives checked) is its own length, whatever size it was read with, so an entry whose data was replaced is never
+    stored with its old size. Only for a compressed entry is the size the caller set used, since it cannot be known
+    here without decompressing."""
+    if e.flags & ENTRY_COMPRESSED and e.uncompressed >= 0:
+        return e.uncompressed
+    return len(e.data)
+
+
 def write_bnd4(b: Bnd4) -> bytes:
     fmt = b.format
     size = _entry_size(fmt)
@@ -298,7 +309,7 @@ def write_bnd4(b: Bnd4) -> bytes:
         row = bytearray(struct.pack("<B3xi", e.flags, -1))
         row += struct.pack("<q", len(e.data))
         if fmt & COMPRESSION:
-            row += struct.pack("<q", e.uncompressed if e.uncompressed >= 0 else len(e.data))
+            row += struct.pack("<q", _uncompressed_size(e))
         row += struct.pack("<q", data_at[i]) if fmt & LONG_OFFSETS else struct.pack("<I", data_at[i])
         if fmt & IDS:
             row += struct.pack("<i", e.id)

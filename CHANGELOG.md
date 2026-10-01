@@ -2,6 +2,10 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
+## [Unreleased]
+
+- Fixed: when the launcher changes a file inside an archive in place (the menu text of the preview Nightreign Revive build), the archive now records that file's new size instead of the size it had before. Archives the launcher does not change are written exactly as before. Not yet checked in game.
+
 ## [3.13.2] - 2026-10-01
 
 - Fixed: combined parameters (regulation.bin) written by the launcher crashed the game at start. The file is now compressed with a 64 KB window, the frame regulation editors write; checked in game on Windows with Elden Ring 1.17.1, together with each layout the launcher can write for merged archives and text.
