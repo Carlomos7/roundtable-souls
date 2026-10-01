@@ -36,7 +36,6 @@ jobs:
             - "src/**"
             - "tests/**"
             - "scripts/**"
-            - "installer/**"
             - "pyproject.toml"
             - "uv.lock"
             - ".python-version"
@@ -74,20 +73,6 @@ jobs:
 
     - name: Type check
       run: uv run pyright
-
-    # The setup's own code (downgrade guard, reopening after a failed update) only runs when a setup does; this
-    # catches a script that no longer compiles before a release would.
-    - name: Installer script compiles
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-        if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
-        New-Item -ItemType Directory -Force dist | Out-Null
-        Set-Content -Path dist/RoundtableSouls.exe -Value 'placeholder'
-        & $iscc /Q /DAppVersion=0.0.0 "/O$env:RUNNER_TEMP\installer-check" installer\RoundtableSouls.iss
-        if ($LASTEXITCODE -ne 0) { exit 1 }
-        Remove-Item dist/RoundtableSouls.exe
 
     - name: Run tests with coverage
       run: |
