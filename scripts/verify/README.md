@@ -28,7 +28,6 @@ Without either, the game is found through Steam, as the launcher finds it.
 | `param_rows.py` | The parameter code keeps every row: duplicate IDs in order, write-back unchanged, merge keys, a change to one duplicate row. |
 | `ingame_package.py --layout 6/6` | Builds a package to play: two marker mods merged by the launcher's Combine, stored in a DCX layout (6/6, 4/4, 4/6 or dflt), a me3 profile on a separate save, `launch.cmd` and `CHECK.txt`. |
 | `bnd4_roundtrip.py` | The shared BND4 code writes the game's own archives and regulation binder back byte for byte; every regulation table keeps its rows (IDs and their order, duplicates, bytes, names) and metadata. `--compare A B` compares two regulation.bin files' binders. |
-| `theme_shots.py` | Screenshots of every page and control state in light and dark, offscreen, with Play and every job disabled. The shots show the machine's real profiles and characters: keep them private. `--compare BEFORE AFTER` counts differing pixels. |
 
 Independent readers are optional and not dependencies of the launcher. With Soulstruct (GPL-3.0):
 
