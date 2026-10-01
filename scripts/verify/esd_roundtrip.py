@@ -7,8 +7,11 @@ For every ESD inside the talk archives checked (the game's own, found by name, p
      four header values;
   2. with Soulstruct available (`uv run --with soulstruct ...`), Soulstruct reads the original to the same structure,
      as an independent reader of the same format.
-Written files are laid out afresh: identical conditions are stored once and offsets differ, so their bytes and sizes
-differ from the original. The counts are reported; they are not failures.
+  3. every condition leads to a state of its own machine (the reader refuses anything else), in the original and in
+     the written file.
+The writer lays files out as the game's own are, so the game's talk scripts should come back byte for byte; that is
+reported per file ("identical"). A file another tool wrote may come back laid out differently with the same
+structure; that is reported, not a failure.
 
     uv run python scripts/verify/esd_roundtrip.py [--game DIR] [--out DIR] [--file TALKESDBND ...]
 """
@@ -105,7 +108,7 @@ def check(name: str, data: bytes, other) -> dict:
     problems = []
     if shape(again) != shape(esd):
         problems.append("written file reads back to a different structure")
-    row |= counts(esd) | {"written_bytes": len(written)}
+    row |= counts(esd) | {"written_bytes": len(written), "identical": written == data}
     if other is not None:
         try:
             theirs = other(data)
@@ -145,6 +148,7 @@ def main() -> int:
         for e in esds:
             rows.append({"archive": label} | check((e.name or "").replace("\\", "/").rsplit("/", 1)[-1], e.data, other))
     failed = [r for r in rows if r["result"] != "same structure"]
+    identical = sum(1 for r in rows if r.get("identical"))
     result = {
         "commit": _common.commit(),
         "independent_reader": "soulstruct" if other else "not installed (run with: uv run --with soulstruct ...)",
@@ -152,6 +156,7 @@ def main() -> int:
         "not_in_the_game": missing,
         "esds": len(rows),
         "failed": len(failed),
+        "written_back_byte_for_byte": identical,
         "rows": rows,
         "seconds": round(time.time() - started, 1),
     }
@@ -160,10 +165,13 @@ def main() -> int:
         print(
             f"{r['result']:<16} {r['archive'][-70:]:<70} {r['esd']:<16} machines {r.get('machines', '-'):>3} "
             f"states {r.get('states', '-'):>5} conditions {r.get('conditions', '-'):>5} "
-            f"bytes {r['bytes']} -> {r.get('written_bytes', '-')}"
+            f"bytes {r['bytes']} -> {r.get('written_bytes', '-')}{' identical' if r.get('identical') else ''}"
             + (f" | soulstruct {r['soulstruct']}" if "soulstruct" in r else "")
         )
-    print(f"{len(rows)} ESDs in {len(archives)} archives; not in the game: {len(missing)}; failed: {len(failed)}")
+    print(
+        f"{len(rows)} ESDs in {len(archives)} archives; not in the game: {len(missing)}; failed: {len(failed)}; "
+        f"written back byte for byte: {identical}"
+    )
     print(("PASS" if rows and not failed else "FAIL"), "-", out / "result.json")
     return 0 if rows and not failed else 1
 
