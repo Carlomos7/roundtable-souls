@@ -1,8 +1,7 @@
 # In-game checklist
 
-For each package made by `ingame_package.py`, fill in one block and copy the results into
-[docs/evidence-ledger.md](../../docs/evidence-ledger.md) (E-005 and E-006). A check not done stays **pending**; on the
-Steam Deck, without one, every row is **pending: needs a Deck**.
+For each package made by `ingame_package.py`, fill in one block and keep the results with the change they support. A
+check not done stays **pending**; on the Steam Deck, without one, every row is **pending: needs a Deck**.
 
 ## Before
 

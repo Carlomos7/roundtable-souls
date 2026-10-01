@@ -1,8 +1,8 @@
 # Real-data checks
 
 Checks run on a real game install, by hand, before a change that affects what the launcher writes is released. They
-are not part of the automated tests (those use small made-up files only). Results go into
-[docs/evidence-ledger.md](../../docs/evidence-ledger.md).
+are not part of the automated tests (those use small made-up files only). Record what a check showed with the change
+it supports (its pull request or release notes); decisions that follow from one go in [docs/decisions](../../docs/decisions/).
 
 Rules: real files (the game, me3 profiles, saves, mods) are only read. Each check writes to an output folder of its
 own (`--out`, or `out` in `local.toml`; default `%TEMP%\rs-verify`), and refuses a folder inside the game, me3's

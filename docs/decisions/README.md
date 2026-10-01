@@ -1,12 +1,10 @@
 # Decision records
 
-One file per decision that changes, pins or deliberately keeps behaviour: what was decided, the evidence it rests on
-(entries in [../evidence-ledger.md](../evidence-ledger.md)), and what would reopen it. Numbered in order; a later
-record supersedes an earlier one by saying so, never by editing it.
-
-Status words: **adopted** (in the code), **not adopted** (recorded, no change), **superseded**.
+Why some of the launcher's file-format behaviour is the way it is: what was decided, what it rests on, and what
+would reopen it. One file per decision, numbered in order. A later record supersedes an earlier one by saying so;
+records are not rewritten afterwards.
 
 | No. | Decision | Status |
 |---|---|---|
-| 0001 | [The regulation's zstd frame uses a 64 KB window](0001-regulation-zstd-window.md) | adopted (3.13.2) |
-| 0002 | [Faster Kraken layouts 4/4 and 4/6](0002-kraken-layout-speed.md) | not adopted |
+| 0001 | [regulation.bin is compressed with a 64 KB zstd window](0001-regulation-zstd-window.md) | in use since 3.13.2 |
+| 0002 | [Merged Oodle files stay at level 6 (6/6)](0002-kraken-layout-speed.md) | in use since 3.13.1 |
