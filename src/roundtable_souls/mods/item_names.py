@@ -15,7 +15,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from roundtable_souls import gamefiles
+from roundtable_souls import formats
+from roundtable_souls.game import oodle as game_oodle
 from roundtable_souls.system import common
 
 GOODS = 0x40000000
@@ -109,8 +110,8 @@ def mod_text_names(roots: list[Path], oodle) -> dict[int, tuple[str, str]]:
             if msgbnd.parent.name.lower() != "engus":
                 continue
             try:
-                files = gamefiles.bnd4_files(gamefiles.dcx_decompress(msgbnd.read_bytes(), oodle))
-            except OSError, gamefiles.FormatError, ValueError, IndexError:
+                files = formats.bnd4.bnd4_files(formats.dcx.dcx_decompress(msgbnd.read_bytes(), oodle))
+            except OSError, formats.FormatError, ValueError, IndexError:
                 continue
             source = _package_name(msgbnd)
             for name, blob in files:
@@ -119,7 +120,7 @@ def mod_text_names(roots: list[Path], oodle) -> dict[int, tuple[str, str]]:
                 if bits is None:
                     continue
                 try:
-                    entries = gamefiles.fmg_entries(blob)
+                    entries = formats.fmg.fmg_entries(blob)
                 except ValueError, IndexError:
                     continue
                 for text_id, text in entries.items():
@@ -157,7 +158,7 @@ def item_names(refresh: bool = False) -> ItemNames:
     if _CACHE and _CACHE[0] == key:
         return _CACHE[1]
     names: dict[int, tuple[str, str]] = {}
-    names.update(mod_text_names(roots, gamefiles.find_oodle(common.game_dir())))
+    names.update(mod_text_names(roots, game_oodle.find_oodle(common.game_dir())))
     names.update(seamless_names())
     result = ItemNames(names)
     _CACHE = (key, result)

@@ -58,7 +58,7 @@ from constrata import (
     varint,
 )
 
-from roundtable_souls.gamefiles import FormatError
+from roundtable_souls.formats import FormatError
 
 from .command import Command
 from .condition import Condition

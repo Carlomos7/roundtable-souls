@@ -1,12 +1,12 @@
-"""The ESD (EzState) code in mods/formats_esd, on small ESDs built here. Real talk scripts are a real-data check
+"""The ESD (EzState) code in formats/esd, on small ESDs built here. Real talk scripts are a real-data check
 (scripts/verify/esd_roundtrip.py)."""
 
 import struct
 
 import pytest
 
-from roundtable_souls.gamefiles import FormatError
-from roundtable_souls.mods.formats_esd import ESD, Command, Condition, State, read_esd, write_esd
+from roundtable_souls.formats import FormatError
+from roundtable_souls.formats.esd import ESD, Command, Condition, State, read_esd, write_esd
 
 TRUE = b"\x41\xa1"  # EZL for "true"; condition tests and command arguments are kept as opaque bytes
 EXTERNAL = 0x6C  # the external header's size: internal offsets start after it

@@ -6,7 +6,9 @@ import struct
 import pytest
 from fakegame import bnd, dcx, files_of, fmg, texts_of
 
-from roundtable_souls.mods import filemerge, formats, gamearchive
+from roundtable_souls import formats
+from roundtable_souls.game import archives as gamearchive
+from roundtable_souls.mods import filemerge
 
 GAME = {"a.hkx": b"walk", "b.hkx": b"run", "c.hkx": b"roll"}
 
@@ -14,22 +16,22 @@ GAME = {"a.hkx": b"walk", "b.hkx": b"run", "c.hkx": b"roll"}
 # ----------------------------------------------------------------------------- formats
 def test_archives_text_and_compression_read_back_as_written():
     body = bnd({**GAME, "t.fmg": fmg({1: "one", 2: None, 5: "five"})})
-    b = formats.read_bnd4(body)
-    assert formats.write_bnd4(b) == body
+    b = formats.bnd4.read_bnd4(body)
+    assert formats.bnd4.write_bnd4(b) == body
     assert [e.name.rsplit("\\", 1)[-1] for e in b.entries] == ["a.hkx", "b.hkx", "c.hkx", "t.fmg"]
     t = b.entries[3].data
-    assert formats.is_fmg(t) and formats.write_fmg(formats.read_fmg(t)) == t
-    assert formats.read_fmg(t).entries == {1: "one", 2: None, 5: "five"}
+    assert formats.fmg.is_fmg(t) and formats.fmg.write_fmg(formats.fmg.read_fmg(t)) == t
+    assert formats.fmg.read_fmg(t).entries == {1: "one", 2: None, 5: "five"}
     assert len(t) % 4 == 0
     raw = dcx(body)
-    out, how = formats.unpack(raw)
-    assert out == body and how.kind == b"DFLT" and formats.pack(out, how) == raw
+    out, how = formats.dcx.unpack(raw)
+    assert out == body and how.kind == b"DFLT" and formats.dcx.pack(out, how) == raw
 
 
 def test_writing_oodle_files_needs_the_games_library():
-    how = formats.Dcx(b"DCX\0" + b"\0" * 0x48, b"KRAK")
+    how = formats.dcx.Dcx(b"DCX\0" + b"\0" * 0x48, b"KRAK")
     with pytest.raises(formats.FormatError, match="Oodle"):
-        formats.pack(b"x", how, None)
+        formats.dcx.pack(b"x", how, None)
 
 
 # ----------------------------------------------------------------------------- merging archives
@@ -88,7 +90,7 @@ def test_a_damaged_copy_is_a_format_error_naming_it():
 def test_adding_text_to_a_table():
     body = bnd({"EventTextForTalk.fmg": fmg({1: "a"})})
     out = filemerge.add_text(body, "eventtextfortalk.fmg", {99: "b"})
-    assert formats.read_fmg(formats.read_bnd4(out).entries[0].data).entries == {1: "a", 99: "b"}
+    assert formats.fmg.read_fmg(formats.bnd4.read_bnd4(out).entries[0].data).entries == {1: "a", 99: "b"}
     with pytest.raises(formats.FormatError):
         filemerge.add_text(body, "missing.fmg", {1: "x"})
 

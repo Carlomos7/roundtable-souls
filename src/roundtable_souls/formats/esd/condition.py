@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 
 from constrata import RESERVED, BinaryReader, BinaryStruct, BinaryWriter, varint
 
-from roundtable_souls.gamefiles import FormatError
+from roundtable_souls.formats import FormatError
 
 from .command import Command
 

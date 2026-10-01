@@ -27,6 +27,9 @@ import time
 
 import _common
 
+from roundtable_souls import formats
+from roundtable_souls.game import oodle as game_oodle
+
 LAYOUTS = {"6/6": (b"KRAK", 6, 6), "4/4": (b"KRAK", 4, 4), "4/6": (b"KRAK", 4, 6), "dflt": (b"DFLT", 9, 9)}
 SAVE = "RoundtableTest.sl2"
 TEXT = "msg/engus/menu_dlc02.msgbnd.dcx"  # English menu text; the DLC table is the one the game reads
@@ -57,9 +60,9 @@ def main() -> int:
     out = _common.output_dir(args.out, "ingame-" + label.replace("/", "-"), game)
     _common.sandbox_launcher(out, game)
 
-    from roundtable_souls.gamefiles import find_oodle
-    from roundtable_souls.mods import formats, gamearchive, merge
-    from roundtable_souls.mods import paramfile as pf
+    from roundtable_souls.game import archives as gamearchive
+    from roundtable_souls.game.oodle import find_oodle
+    from roundtable_souls.mods import merge
     from roundtable_souls.mods.backends import builtin
     from roundtable_souls.system import common
 
@@ -68,7 +71,7 @@ def main() -> int:
     # check is switched off for this run only (the launcher itself is unchanged).
     common.game_running = lambda: False
     dec = find_oodle(game)
-    comp = formats.oodle_compressor(game)
+    comp = game_oodle.oodle_compressor(game)
     if comp is None:
         sys.exit("the game's oo2core DLL could not be loaded (Windows only)")
     started = time.time()
@@ -78,36 +81,36 @@ def main() -> int:
     anim_raw = gamearchive.read(game, ANIMS)
     if text_raw is None or anim_raw is None:
         sys.exit("the game's archives do not have the menu text or the animations")
-    text_body, text_how = formats.unpack(text_raw, dec)
-    anim_body, anim_how = formats.unpack(anim_raw, dec)
+    text_body, text_how = formats.dcx.unpack(text_raw, dec)
+    anim_body, anim_how = formats.dcx.unpack(anim_raw, dec)
     reg_raw = (game / "regulation.bin").read_bytes()
 
     def text_with(changes: dict[int, str]) -> bytes:
-        b = formats.read_bnd4(text_body)
+        b = formats.bnd4.read_bnd4(text_body)
         e = next(e for e in b.entries if (e.name or "").replace("\\", "/").rsplit("/", 1)[-1].lower() == MENU)
-        f = formats.read_fmg(e.data)
+        f = formats.fmg.read_fmg(e.data)
         for k, v in changes.items():
             if f.entries.get(k) is None:
                 sys.exit(f"the menu text has no entry {k}; the game version may differ from the one this was made for")
             f.entries[k] = v
-        e.data = formats.write_fmg(f)
-        return formats.pack(formats.write_bnd4(b), text_how, comp)
+        e.data = formats.fmg.write_fmg(f)
+        return formats.dcx.pack(formats.bnd4.write_bnd4(b), text_how, comp)
 
     def regulation_with(row_id: int) -> bytes:
-        reg = pf.read_regulation(reg_raw, dec)
+        reg = formats.regulation.read_regulation(reg_raw, dec)
         bf = reg.bnd.get(CHARA)
         assert bf is not None
-        param = pf.read_param(bf.data)
+        param = formats.param.read_param(bf.data)
         name, stats, new = CLASSES[row_id]
         row = next(r for r in param.rows if r.id == row_id)
         if row.data[VIGOR : VIGOR + len(stats)] != stats:
             sys.exit(f"{name}'s starting stats are not where expected; the game version may differ")
         row.data = row.data[:VIGOR] + bytes(new) + row.data[VIGOR + 2 :]
-        bf.data = pf.write_param(param)
-        return pf.write_regulation(reg)
+        bf.data = formats.param.write_param(param)
+        return formats.regulation.write_regulation(reg)
 
     def anims_with(swap: str | None = None, add_unused: bool = False) -> bytes:
-        b = formats.read_bnd4(anim_body)
+        b = formats.bnd4.read_bnd4(anim_body)
         by = {(e.name or "").replace("\\", "/").rsplit("/", 1)[-1].lower().removesuffix(".hkx"): e for e in b.entries}
         if swap:
             clip, source = (s.strip().lower().removesuffix(".hkx") for s in swap.split("=", 1))
@@ -123,7 +126,7 @@ def main() -> int:
             if model.id != clip_id(name) or any(e.id == clip_id(UNUSED_CLIP) for e in b.entries):
                 sys.exit("the animation archive's IDs do not follow the clip numbers as expected")
             b.entries.append(
-                formats.Entry(
+                formats.bnd4.Entry(
                     model.name[: len(model.name) - len(name)] + UNUSED_CLIP,
                     clip_id(UNUSED_CLIP),
                     model.data,
@@ -131,7 +134,7 @@ def main() -> int:
                     model.uncompressed,
                 )
             )
-        return formats.pack(formats.write_bnd4(b), anim_how, comp)
+        return formats.dcx.pack(formats.bnd4.write_bnd4(b), anim_how, comp)
 
     mods = out / "mods"
     markers = {
@@ -189,13 +192,13 @@ def main() -> int:
             sys.exit(f"{rel}: the launcher did not write the 6/6 layout (kind {raw[0x28:0x2C]!r}, byte {raw[0x30]})")
         if label != "6/6":
             t = time.time()
-            body, how = formats.unpack(raw, dec)
+            body, how = formats.dcx.unpack(raw, dec)
             assert how is not None
             header = bytearray(how.header)
             header[0x28:0x2C] = kind
             header[0x30] = header_level
             if kind == b"KRAK":
-                payload = formats._kraken(body, level, comp)
+                payload = game_oodle.compress_kraken(body, level, comp)
             else:
                 import zlib
 
@@ -205,7 +208,7 @@ def main() -> int:
             struct.pack_into(">II", header, 0x1C, len(body), len(payload))
             data = bytes(header) + payload
             raw = data + b"\0" * (-len(data) % 0x10)
-            if formats.unpack(raw, dec)[0] != body:
+            if formats.dcx.unpack(raw, dec)[0] != body:
                 sys.exit(f"{rel}: the rewritten file does not read back to the same content")
             path.write_bytes(raw)
             print(f"  {rel}: stored as {label} ({time.time() - t:.0f}s)")
@@ -220,8 +223,8 @@ def main() -> int:
             }
         )
     reg_out = combined / "regulation.bin"
-    check = pf.read_regulation(reg_out.read_bytes(), dec)
-    rows = {r.id: r.data for r in pf.read_param(check.bnd.get(CHARA).data).rows}  # type: ignore[union-attr]
+    check = formats.regulation.read_regulation(reg_out.read_bytes(), dec)
+    rows = {r.id: r.data for r in formats.param.read_param(check.bnd.get(CHARA).data).rows}  # type: ignore[union-attr]
     for row_id, (name, _stats, new) in CLASSES.items():
         if rows[row_id][VIGOR : VIGOR + 2] != bytes(new):
             sys.exit(f"the combined parameters do not give {name} Vigor {new[0]} and Mind {new[1]}")
@@ -265,7 +268,7 @@ def main() -> int:
         "layout": label,
         "made": time.strftime("%Y-%m-%d %H:%M:%S"),
         "commit": _common.commit(),
-        "game_regulation_version": pf.read_regulation(reg_raw, dec).version,
+        "game_regulation_version": formats.regulation.read_regulation(reg_raw, dec).version,
         "me3": me3_version,
         "save_file": SAVE,
         "combine_seconds": round(combine_s, 1),

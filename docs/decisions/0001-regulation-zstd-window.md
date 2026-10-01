@@ -5,7 +5,7 @@
 ## Decision
 
 `regulation.bin` is compressed with zstd at level 9, a 64 KB window (`window_log` 16) and no content size in the
-frame header (`compress_regulation_body` in `src/roundtable_souls/mods/paramfile.py`). A unit test parses the
+frame header (`compress_regulation_body` in `src/roundtable_souls/formats/regulation.py`). A unit test parses the
 written frame and fails if the window is larger than 64 KB, the content size is present, or a block holds more than
 64 KB of input.
 

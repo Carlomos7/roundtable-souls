@@ -30,6 +30,9 @@ from pathlib import Path
 import _common
 from esd_roundtrip import counts, shape
 
+from roundtable_souls import formats
+from roundtable_souls.game import oodle as game_oodle
+
 TALK = "script/talk/m00_00_00_00.talkesdbnd.dcx"
 SAVE = "RoundtableTest.sl2"
 
@@ -42,13 +45,13 @@ def main() -> int:
     out = _common.output_dir(args.out, "ingame-esd", game)
     _common.sandbox_launcher(out, game)
 
-    from roundtable_souls.gamefiles import find_oodle
-    from roundtable_souls.mods import formats, gamearchive
-    from roundtable_souls.mods.formats_esd import read_esd, write_esd
+    from roundtable_souls.formats.esd import read_esd, write_esd
+    from roundtable_souls.game import archives as gamearchive
+    from roundtable_souls.game.oodle import find_oodle
 
     started = time.time()
     dec = find_oodle(game)
-    comp = formats.oodle_compressor(game)
+    comp = game_oodle.oodle_compressor(game)
     if args.mod:
         mod = Path(args.mod)
         source = mod / TALK
@@ -64,10 +67,10 @@ def main() -> int:
         raw = found
         package = "game-esd-rewritten"
         origin = "the game"
-    body, how = formats.unpack(raw, dec)
+    body, how = formats.dcx.unpack(raw, dec)
     if how is None:
         sys.exit(f"{TALK} of {origin} is not a DCX file")
-    archive = formats.read_bnd4(body)
+    archive = formats.bnd4.read_bnd4(body)
     rewritten = []
     for e in archive.entries:
         name = (e.name or "").replace("\\", "/").rsplit("/", 1)[-1]
@@ -79,8 +82,8 @@ def main() -> int:
             sys.exit(f"{name}: the rewritten script does not read back to the same structure")
         rewritten.append({"esd": name, "bytes": [len(e.data), len(data)], "identical": data == e.data} | counts(esd))
         e.data = data
-    stored = formats.pack(formats.write_bnd4(archive), how, comp)
-    back = formats.read_bnd4(formats.unpack(stored, dec)[0])
+    stored = formats.dcx.pack(formats.bnd4.write_bnd4(archive), how, comp)
+    back = formats.bnd4.read_bnd4(formats.dcx.unpack(stored, dec)[0])
     if [x.data for x in back.entries] != [x.data for x in archive.entries]:
         sys.exit("the stored archive does not read back")
 

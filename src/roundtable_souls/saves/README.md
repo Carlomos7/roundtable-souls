@@ -21,7 +21,7 @@ Parsing, read-only checks and named repairs for Elden Ring PC saves (`ER0000.sl2
 - Inventory arrays are sparse: holes inside the count are normal and live entries can sit past it. Removing an entry zeroes it and lowers the count.
 - Handles: goods `0xB0000000 | id`, talismans `0xA0000000 | id`, weapons `0x8...`, armour `0x9...`, ashes of war `0xC...`. An empty quick or pouch slot is `(0, 0xFFFFFFFF)`; `equipped_items[22 + i]` mirrors quick slot `i` and `[32 + i]` pouch slot `i`.
 - The per-character DLC block sits 0x20 bytes after the Steam ID: byte 1 marks having entered the Land of Shadow, byte 3 the Tarnished Edition pack.
-- What counts as a game item: `../data/known_item_ids.txt` (rebuilt by `scripts/build_item_list.py`) plus every row of the item tables in the installed game's own `regulation.bin`, read at runtime by `gamefiles.py`. The second covers official items the list lacks, such as the Tarnished Edition pack. Without the game on the PC, a save with the pack flag falls back to treating unlisted equipment as pack gear.
+- What counts as a game item: `../data/known_item_ids.txt` (rebuilt by `scripts/build_item_list.py`) plus every row of the item tables in the installed game's own `regulation.bin`, read at runtime by `formats/regulation.py`. The second covers official items the list lacks, such as the Tarnished Edition pack. Without the game on the PC, a save with the pack flag falls back to treating unlisted equipment as pack gear.
 - Names for foreign items come from the mods themselves (`mods/item_names.py`): Seamless Co-op's language file, and other mods' `msg/engus/item*.msgbnd.dcx` text tables.
 
 Every write path refuses while the game runs and goes through `fix._commit`.

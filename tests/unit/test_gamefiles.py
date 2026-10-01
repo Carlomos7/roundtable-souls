@@ -8,7 +8,7 @@ from compression import zstd
 import pytest
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-from roundtable_souls import gamefiles
+from roundtable_souls import formats
 from roundtable_souls.mods import item_names as N
 from roundtable_souls.saves import analyze as A
 
@@ -76,7 +76,7 @@ def dcx(body, kind=b"ZSTD"):
 def encrypt(plain):
     padded = plain + bytes(-len(plain) % 16)
     iv = bytes(range(16))
-    enc = Cipher(algorithms.AES(gamefiles.REGULATION_KEY), modes.CBC(iv)).encryptor()
+    enc = Cipher(algorithms.AES(formats.regulation.REGULATION_KEY), modes.CBC(iv)).encryptor()
     return iv + enc.update(padded) + enc.finalize()
 
 
@@ -89,12 +89,12 @@ def test_regulation_items_are_read_from_every_item_table():
             ("N:\\GR\\param\\SpEffectParam.param", param([1, 2, 3])),
         ]
     )
-    ids = gamefiles.regulation_item_ids(encrypt(dcx(body)))
+    ids = formats.regulation.regulation_item_ids(encrypt(dcx(body)))
     assert ids == {3560000, 3560001, 0x10000000 | 5350000, 0x40000000 | 2004330}
-    with pytest.raises(gamefiles.FormatError):
-        gamefiles.regulation_item_ids(encrypt(dcx(bnd4([("x.param", param([1]))]))))
-    with pytest.raises(gamefiles.FormatError):
-        gamefiles.regulation_item_ids(b"not a regulation")
+    with pytest.raises(formats.FormatError):
+        formats.regulation.regulation_item_ids(encrypt(dcx(bnd4([("x.param", param([1]))]))))
+    with pytest.raises(formats.FormatError):
+        formats.regulation.regulation_item_ids(b"not a regulation")
 
 
 def test_game_items_count_as_game_items_even_when_unlisted():
@@ -108,8 +108,8 @@ def test_game_items_count_as_game_items_even_when_unlisted():
 
 
 def test_dcx_needs_oodle_for_krak():
-    with pytest.raises(gamefiles.FormatError):
-        gamefiles.dcx_decompress(dcx(b"x")[:0x28] + b"KRAK" + dcx(b"x")[0x2C:], oodle=None)
+    with pytest.raises(formats.FormatError):
+        formats.dcx.dcx_decompress(dcx(b"x")[:0x28] + b"KRAK" + dcx(b"x")[0x2C:], oodle=None)
 
 
 def fake_mods(tmp_path, monkeypatch, seamless=True):

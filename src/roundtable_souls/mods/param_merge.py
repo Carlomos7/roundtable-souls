@@ -18,8 +18,7 @@ from __future__ import annotations
 import bisect
 from dataclasses import dataclass, field
 
-from roundtable_souls.mods import formats
-from roundtable_souls.mods import paramfile as pf
+from roundtable_souls import formats
 
 WORD = 4
 
@@ -63,7 +62,7 @@ def _short(name: str) -> str:
     return name.replace("\\", "/").rsplit("/", 1)[-1]
 
 
-def _keyed(rows: list[pf.Row]) -> dict[tuple[int, int], pf.Row]:
+def _keyed(rows: list[formats.param.Row]) -> dict[tuple[int, int], formats.param.Row]:
     seen: dict[int, int] = {}
     out = {}
     for r in rows:
@@ -91,11 +90,11 @@ def _apply_words(result: bytearray, pack: bytes, base: bytes) -> bool:
 def combine(base_raw: bytes, packs: list[tuple[str, bytes]], oodle=None) -> tuple[bytes, Report]:
     """(encrypted regulation.bin, report) combining packs (name, regulation bytes), in load order, onto base_raw (the
     game's own regulation.bin)."""
-    base = pf.read_regulation(base_raw, oodle)
-    regs = [(name, pf.read_regulation(raw, oodle)) for name, raw in packs]
+    base = formats.regulation.read_regulation(base_raw, oodle)
+    regs = [(name, formats.regulation.read_regulation(raw, oodle)) for name, raw in packs]
     report = Report(base.version, [PackReport(name, r.version) for name, r in regs])
     names = [e.name or "" for e in base.bnd.entries]
-    extra: dict[str, formats.Entry] = {}
+    extra: dict[str, formats.bnd4.Entry] = {}
     for _name, r in regs:
         for f in r.bnd.entries:
             if base.bnd.get(_short(f.name or "")) is None:
@@ -108,9 +107,9 @@ def combine(base_raw: bytes, packs: list[tuple[str, bytes]], oodle=None) -> tupl
         touched = [(i, f) for i, f in touched if f is not None and f.data != vfile.data]
         if not touched:
             continue
-        v = pf.read_param(vfile.data)
+        v = formats.param.read_param(vfile.data)
         vkeyed = _keyed(v.rows)
-        out_rows = [pf.Row(r.id, bytes(r.data), r.name) for r in v.rows]
+        out_rows = [formats.param.Row(r.id, bytes(r.data), r.name) for r in v.rows]
         at = {k: i for i, k in enumerate(vkeyed)}  # key -> position in out_rows
         changers: dict[tuple[int, int], list[str]] = {}
         clashed: set[tuple[int, int]] = set()
@@ -119,8 +118,8 @@ def combine(base_raw: bytes, packs: list[tuple[str, bytes]], oodle=None) -> tupl
             pname = regs[i][0]
             rep = report.packs[i]
             try:
-                p = pf.read_param(f.data)
-            except pf.FormatError as e:
+                p = formats.param.read_param(f.data)
+            except formats.FormatError as e:
                 rep.skipped.append(f"{short}: {e}")
                 continue
             if p.stride != v.stride:
@@ -141,18 +140,18 @@ def combine(base_raw: bytes, packs: list[tuple[str, bytes]], oodle=None) -> tupl
                             clashed.add(key)
                         rep.changed += 1
                         changers.setdefault(key, []).append(pname)
-                    out_rows[at[key]] = pf.Row(cur.id, bytes(data), row.name or cur.name)
+                    out_rows[at[key]] = formats.param.Row(cur.id, bytes(data), row.name or cur.name)
                     did = True
                 elif key in at:  # added by an earlier pack too
                     clashed.add(key)
                     changers.setdefault(key, []).append(pname)
-                    out_rows[at[key]] = pf.Row(row.id, bytes(row.data), row.name)
+                    out_rows[at[key]] = formats.param.Row(row.id, bytes(row.data), row.name)
                     rep.added += 1
                     did = True
                 else:
                     ids = [r.id for r in out_rows]
                     pos = bisect.bisect_right(ids, row.id) if ids == sorted(ids) else len(out_rows)
-                    out_rows.insert(pos, pf.Row(row.id, bytes(row.data), row.name))
+                    out_rows.insert(pos, formats.param.Row(row.id, bytes(row.data), row.name))
                     at = {k: (j + 1 if j >= pos else j) for k, j in at.items()}
                     at[key] = pos
                     changers[key] = [pname]
@@ -166,10 +165,10 @@ def combine(base_raw: bytes, packs: list[tuple[str, bytes]], oodle=None) -> tupl
                 report.conflicts.append((short.rsplit(".", 1)[0], key[0], changers[key]))
         if table_changed:
             v.rows = out_rows
-            vfile.data = pf.write_param(v)
+            vfile.data = formats.param.write_param(v)
             report.tables += 1
     for f in extra.values():
         new_id = max((x.id for x in base.bnd.entries), default=-1) + 1
-        base.bnd.entries.append(formats.Entry(f.name, new_id, f.data, f.flags))
+        base.bnd.entries.append(formats.bnd4.Entry(f.name, new_id, f.data, f.flags))
         report.tables += 1
-    return pf.write_regulation(base), report
+    return formats.regulation.write_regulation(base), report

@@ -6,11 +6,10 @@ import struct
 
 import pytest
 
-from roundtable_souls import gamefiles as gf
-from roundtable_souls.mods import formats, merge
+from roundtable_souls import formats
 from roundtable_souls.mods import manage as M
+from roundtable_souls.mods import merge
 from roundtable_souls.mods import param_merge as pm
-from roundtable_souls.mods import paramfile as pf
 from roundtable_souls.mods.backends import builtin
 from roundtable_souls.system import common
 
@@ -28,14 +27,14 @@ assert len(DCX) == 0x4C
 STRIDE = 16
 
 
-def table(type_name: str, rows, stride: int = STRIDE, names=None) -> pf.Param:
+def table(type_name: str, rows, stride: int = STRIDE, names=None) -> formats.param.Param:
     header = bytearray(0x40)
     struct.pack_into("<H", header, 0x06, 1)
     header[0x2D], header[0x2E] = 0x85, 7
     struct.pack_into("<q", header, 0x10, 0x40)
     tail = type_name.encode() + b"\0" + b"\0\0\0\0"
-    p = pf.Param(bytes(header), [], stride, tail, len(type_name) + 1, True, data_end=0x40)
-    p.rows = [pf.Row(i, bytes(d), (names or {}).get(i, "")) for i, d in rows]
+    p = formats.param.Param(bytes(header), [], stride, tail, len(type_name) + 1, True, data_end=0x40)
+    p.rows = [formats.param.Row(i, bytes(d), (names or {}).get(i, "")) for i, d in rows]
     return p
 
 
@@ -53,11 +52,11 @@ def regulation(tables: dict, version: str = "11711000") -> bytes:
     struct.pack_into("<q", hdr, 0x20, 36)
     hdr[0x30:0x34] = bytes([1, 0x74, 4, 0])
     entries = [
-        formats.Entry(f"N:\\GR\\data\\Param\\param\\GameParam\\{n}.param", i, pf.write_param(p))
+        formats.bnd4.Entry(f"N:\\GR\\data\\Param\\param\\GameParam\\{n}.param", i, formats.param.write_param(p))
         for i, (n, p) in enumerate(tables.items())
     ]
-    binder = formats.Bnd4(bytes(hdr), pf.REGULATION_FORMAT, 0x74, True, 4, entries)
-    return pf.write_regulation(pf.Regulation(DCX, binder))
+    binder = formats.bnd4.Bnd4(bytes(hdr), formats.regulation.REGULATION_FORMAT, 0x74, True, 4, entries)
+    return formats.regulation.write_regulation(formats.regulation.Regulation(DCX, binder))
 
 
 def vanilla(version="11711000") -> bytes:
@@ -71,19 +70,19 @@ def vanilla(version="11711000") -> bytes:
 
 
 def rows_of(raw: bytes, name: str) -> dict:
-    reg = pf.read_regulation(raw)
-    return {r.id: r for r in pf.read_param(reg.bnd.get(name + ".param").data).rows}
+    reg = formats.regulation.read_regulation(raw)
+    return {r.id: r for r in formats.param.read_param(reg.bnd.get(name + ".param").data).rows}
 
 
 def pack(edits: dict, version="11711000", base=None) -> bytes:
     """A pack: the vanilla regulation with edits {table: fn(param)} applied."""
-    reg = pf.read_regulation(base or vanilla(version))
+    reg = formats.regulation.read_regulation(base or vanilla(version))
     for name, fn in edits.items():
         f = reg.bnd.get(name + ".param")
-        p = pf.read_param(f.data)
+        p = formats.param.read_param(f.data)
         fn(p)
-        f.data = pf.write_param(p)
-    return pf.write_regulation(reg)
+        f.data = formats.param.write_param(p)
+    return formats.regulation.write_regulation(reg)
 
 
 def set_word(rid, i, value):
@@ -99,20 +98,25 @@ def set_word(rid, i, value):
 # ----------------------------------------------------------------------------- the file format
 def test_a_regulation_reads_back_as_written_and_decrypts_like_the_games():
     raw = vanilla()
-    body = gf.dcx_decompress(gf.decrypt_regulation(raw))
-    assert gf.bnd4_files(body)[0][0] == "EquipParamWeapon.param"
-    reg = pf.read_regulation(raw)
-    assert reg.version == "11711000" and pf.binder_bytes(reg.bnd) == formats.write_bnd4(reg.bnd) == body
+    body = formats.dcx.dcx_decompress(formats.regulation.decrypt_regulation(raw))
+    assert formats.bnd4.bnd4_files(body)[0][0] == "EquipParamWeapon.param"
+    reg = formats.regulation.read_regulation(raw)
+    assert (
+        reg.version == "11711000"
+        and formats.regulation.binder_bytes(reg.bnd) == formats.bnd4.write_bnd4(reg.bnd) == body
+    )
     for f in reg.bnd.entries:
-        assert pf.write_param(pf.read_param(f.data)) == f.data
-    assert gf.param_row_ids(reg.bnd.get("EquipParamWeapon.param").data) == [1000, 2000]
+        assert formats.param.write_param(formats.param.read_param(f.data)) == f.data
+    assert formats.param.param_row_ids(reg.bnd.get("EquipParamWeapon.param").data) == [1000, 2000]
 
 
 def zstd_blocks(frame: bytes) -> list[int]:
     """The compressed size of each block of a zstd frame that has no content size and no checksum."""
     assert frame[:4] == bytes.fromhex("28b52ffd")
     descriptor, window = frame[4], frame[5]
-    assert descriptor == 0 and window <= (pf.ZSTD_WINDOW_LOG - 10) << 3  # no content size or checksum; window <= 64 KB
+    assert (
+        descriptor == 0 and window <= (formats.regulation.ZSTD_WINDOW_LOG - 10) << 3
+    )  # no content size or checksum; window <= 64 KB
     pos, sizes = 6, []
     while True:
         header = int.from_bytes(frame[pos : pos + 3], "little")
@@ -127,29 +131,29 @@ def test_the_zstd_frame_is_shaped_as_the_game_requires():
     # 64 KB blocks, no content size: the game crashes at start on zstd's default 128 KB blocks (in-game finding,
     # 2026-09-30, Elden Ring 1.17.1); its own regulation and every editor keep to this shape.
     body = bytes(range(256)) * 1000 + bytes(50_000)  # 306 000 bytes: five blocks of 64 KB (the last one shorter)
-    frame = pf.compress_regulation_body(body)
+    frame = formats.regulation.compress_regulation_body(body)
     assert len(zstd_blocks(frame)) == -(-len(body) // 65536) == 5 and frame[5] == 0x30  # a 64 KB window exactly
     from compression import zstd
 
     assert zstd.decompress(frame) == body and zstd.get_frame_info(frame).decompressed_size is None
     raw = vanilla()
-    plain = gf.decrypt_regulation(raw)
+    plain = formats.regulation.decrypt_regulation(raw)
     compressed_size = struct.unpack_from(">I", plain, 0x20)[0]
     assert zstd_blocks(plain[0x4C : 0x4C + compressed_size])  # the written file carries that same shape
 
 
 def test_names_order_and_repeated_ids_survive():
     p = table("T", [(5, row(1)), (3, row(2)), (5, row(3))], names={3: "Three"})
-    back = pf.read_param(pf.write_param(p))
+    back = formats.param.read_param(formats.param.write_param(p))
     assert [(r.id, r.name) for r in back.rows] == [(5, ""), (3, "Three"), (5, "")]
-    assert pf.write_param(back) == pf.write_param(p)
+    assert formats.param.write_param(back) == formats.param.write_param(p)
 
 
 # ----------------------------------------------------------------------------- combining
 def test_each_packs_changes_apply_and_overlaps_go_to_the_later_pack():
     a = pack({"EquipParamWeapon": set_word(1000, 0, 111)})
     b = pack({"EquipParamWeapon": lambda p: (set_word(1000, 0, 222)(p), set_word(1000, 2, 333)(p))})
-    c = pack({"SpEffectParam": lambda p: p.rows.append(pf.Row(11, row(7, 7, 7, 7), "New effect"))})
+    c = pack({"SpEffectParam": lambda p: p.rows.append(formats.param.Row(11, row(7, 7, 7, 7), "New effect"))})
     out, rep = pm.combine(vanilla(), [("a", a), ("b", b), ("c", c)])
     w = rows_of(out, "EquipParamWeapon")
     assert struct.unpack("<4I", w[1000].data) == (222, 2, 333, 4)  # b won word 0, b's word 2, the rest vanilla
@@ -193,8 +197,12 @@ def test_a_table_the_game_lacks_comes_from_the_last_pack():
 
 def test_unchanged_packs_leave_the_games_file_as_it_was():
     out, rep = pm.combine(vanilla(), [("same", vanilla())])
-    base = pf.read_regulation(vanilla())
-    assert pf.binder_bytes(pf.read_regulation(out).bnd) == pf.binder_bytes(base.bnd) and rep.tables == 0
+    base = formats.regulation.read_regulation(vanilla())
+    assert (
+        formats.regulation.binder_bytes(formats.regulation.read_regulation(out).bnd)
+        == formats.regulation.binder_bytes(base.bnd)
+        and rep.tables == 0
+    )
 
 
 # ----------------------------------------------------------------------------- in a profile

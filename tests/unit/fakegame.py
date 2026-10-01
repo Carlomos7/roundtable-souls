@@ -1,9 +1,10 @@
 """Tiny game files for tests: archives (BND4), text tables (FMG) and DCX (zlib, so no Oodle is needed), built with the
-launcher's own writers, and a stand-in for the game's archives (mods.gamearchive.read)."""
+launcher's own writers, and a stand-in for the game's archives (game.archives.read)."""
 
 import struct
 
-from roundtable_souls.mods import formats, gamearchive
+from roundtable_souls import formats
+from roundtable_souls.game import archives as gamearchive
 
 BND_HEADER = (
     b"BND4\0\0\0\0\0\0\x01\0"
@@ -35,26 +36,26 @@ assert len(BND_HEADER) == 0x40 and len(FMG_HEADER) == 0x28 and len(DCX_HEADER) =
 
 def bnd(files: dict[str, bytes]) -> bytes:
     """An archive of these files (name -> bytes), IDs in order."""
-    entries = [formats.Entry(f"N:\\GR\\data\\{name}", i, data) for i, (name, data) in enumerate(files.items())]
-    return formats.write_bnd4(formats.Bnd4(BND_HEADER, 0x2E, 0x74, True, 4, entries))
+    entries = [formats.bnd4.Entry(f"N:\\GR\\data\\{name}", i, data) for i, (name, data) in enumerate(files.items())]
+    return formats.bnd4.write_bnd4(formats.bnd4.Bnd4(BND_HEADER, 0x2E, 0x74, True, 4, entries))
 
 
 def fmg(texts: dict[int, str | None]) -> bytes:
-    return formats.write_fmg(formats.Fmg(FMG_HEADER, dict(texts)))
+    return formats.fmg.write_fmg(formats.fmg.Fmg(FMG_HEADER, dict(texts)))
 
 
 def dcx(body: bytes) -> bytes:
-    return formats.pack(body, formats.Dcx(DCX_HEADER, b"DFLT"))
+    return formats.dcx.pack(body, formats.dcx.Dcx(DCX_HEADER, b"DFLT"))
 
 
 def files_of(raw: bytes) -> dict[str, bytes]:
     """name (the part after the last backslash) -> bytes of a (DCX) archive."""
-    body, _ = formats.unpack(raw)
-    return {(e.name or "").rsplit("\\", 1)[-1]: e.data for e in formats.read_bnd4(body).entries}
+    body, _ = formats.dcx.unpack(raw)
+    return {(e.name or "").rsplit("\\", 1)[-1]: e.data for e in formats.bnd4.read_bnd4(body).entries}
 
 
 def texts_of(raw: bytes, table: str) -> dict[int, str | None]:
-    return formats.read_fmg(files_of(raw)[table]).entries
+    return formats.fmg.read_fmg(files_of(raw)[table]).entries
 
 
 def game(monkeypatch, files: dict[str, bytes]) -> None:

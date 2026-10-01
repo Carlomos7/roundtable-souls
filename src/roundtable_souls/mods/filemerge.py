@@ -17,7 +17,7 @@ import struct
 import zlib
 from dataclasses import dataclass, field
 
-from roundtable_souls.mods import formats
+from roundtable_souls import formats
 
 REMOVED = object()
 
@@ -38,7 +38,7 @@ class Result:
 
 
 def mergeable(body: bytes) -> bool:
-    return formats.is_bnd4(body) or formats.is_fmg(body)
+    return formats.bnd4.is_bnd4(body) or formats.fmg.is_fmg(body)
 
 
 def merge(vanilla: bytes | None, layers: list[tuple[str, bytes]], oodle=None, compressor=None) -> Result:
@@ -50,13 +50,13 @@ def merge(vanilla: bytes | None, layers: list[tuple[str, bytes]], oodle=None, co
         vanilla, layers = layers[0][1], layers
     damaged = (struct.error, ValueError, IndexError, UnicodeDecodeError, zlib.error)
     try:
-        base, how = formats.unpack(vanilla, oodle)
+        base, how = formats.dcx.unpack(vanilla, oodle)
     except damaged as e:
         raise formats.FormatError(f"the game's own copy could not be read ({e})") from e
     bodies = []
     for label, raw in layers:
         try:
-            bodies.append((label, formats.unpack(raw, oodle)[0]))
+            bodies.append((label, formats.dcx.unpack(raw, oodle)[0]))
         except damaged as e:
             raise formats.FormatError(f"{label}'s copy is damaged or not in the format it claims ({e})") from e
     try:
@@ -67,14 +67,14 @@ def merge(vanilla: bytes | None, layers: list[tuple[str, bytes]], oodle=None, co
         raise formats.FormatError(f"a copy is damaged or not in the format it claims ({e})") from e
     if not result.merged:
         return Result(layers[-1][1], result.changed, result.clashes, merged=False)
-    result.data = formats.pack(result.data, how, compressor) if result.data != base else vanilla
+    result.data = formats.dcx.pack(result.data, how, compressor) if result.data != base else vanilla
     return result
 
 
 def _merge_body(base: bytes, bodies: list[tuple[str, bytes]], where: str) -> Result:
-    if formats.is_bnd4(base) and all(formats.is_bnd4(b) for _, b in bodies):
+    if formats.bnd4.is_bnd4(base) and all(formats.bnd4.is_bnd4(b) for _, b in bodies):
         return _merge_bnd(base, bodies, where)
-    if formats.is_fmg(base) and all(formats.is_fmg(b) for _, b in bodies):
+    if formats.fmg.is_fmg(base) and all(formats.fmg.is_fmg(b) for _, b in bodies):
         return _merge_fmg(base, bodies, where)
     changed = [(label, b) for label, b in bodies if b != base]
     out = Result(changed[-1][1] if changed else base, merged=False)
@@ -85,17 +85,17 @@ def _merge_body(base: bytes, bodies: list[tuple[str, bytes]], where: str) -> Res
     return out
 
 
-def _inner(data: bytes) -> tuple[bytes, formats.Dcx | None]:
-    return formats.unpack(data) if data[:4] == b"DCX\0" and data[0x28:0x2C] != b"KRAK" else (data, None)
+def _inner(data: bytes) -> tuple[bytes, formats.dcx.Dcx | None]:
+    return formats.dcx.unpack(data) if data[:4] == b"DCX\0" and data[0x28:0x2C] != b"KRAK" else (data, None)
 
 
 def _merge_bnd(base: bytes, bodies: list[tuple[str, bytes]], where: str) -> Result:
-    van = formats.read_bnd4(base)
+    van = formats.bnd4.read_bnd4(base)
     vmap = {e.key: e for e in van.entries}
     order = [e.key for e in van.entries]
     touched: dict[str, list[tuple[str, object]]] = {}
     for label, body in bodies:
-        b = formats.read_bnd4(body)
+        b = formats.bnd4.read_bnd4(body)
         lmap = {e.key: e for e in b.entries}
         for key, e in lmap.items():
             v = vmap.get(key)
@@ -122,10 +122,10 @@ def _merge_bnd(base: bytes, bodies: list[tuple[str, bytes]], where: str) -> Resu
                 sub = _merge_body(inner_base, inner, path)
                 out.changed.update(sub.changed)
                 out.clashes.update(sub.clashes)
-                data = formats.pack(sub.data, how) if how is not None and sub.data != inner_base else sub.data
+                data = formats.dcx.pack(sub.data, how) if how is not None and sub.data != inner_base else sub.data
                 if sub.data == inner_base:
                     data = vmap[key].data
-                last = formats.Entry(kept[-1][1].name, kept[-1][1].id, data, kept[-1][1].flags, len(sub.data))
+                last = formats.bnd4.Entry(kept[-1][1].name, kept[-1][1].id, data, kept[-1][1].flags, len(sub.data))
             else:
                 out.clashes[path] = [label for label, _ in changes]
                 last = changes[-1][1]
@@ -137,16 +137,16 @@ def _merge_bnd(base: bytes, bodies: list[tuple[str, bytes]], where: str) -> Resu
         else:
             result[key] = last
     van.entries = [result[k] for k in order if k in result]
-    out.data = formats.write_bnd4(van)
+    out.data = formats.bnd4.write_bnd4(van)
     return out
 
 
 def _merge_fmg(base: bytes, bodies: list[tuple[str, bytes]], where: str) -> Result:
-    van = formats.read_fmg(base)
+    van = formats.fmg.read_fmg(base)
     entries = dict(van.entries)
     who: dict[int, list[tuple[str, object]]] = {}
     for label, body in bodies:
-        f = formats.read_fmg(body)
+        f = formats.fmg.read_fmg(body)
         for tid, text in f.entries.items():
             if tid not in van.entries or van.entries[tid] != text:
                 who.setdefault(tid, []).append((label, text))
@@ -166,19 +166,19 @@ def _merge_fmg(base: bytes, bodies: list[tuple[str, bytes]], where: str) -> Resu
     if who:
         labels = sorted({label for changes in who.values() for label, _ in changes})
         out.changed[where or "/"] = labels
-    out.data = formats.write_fmg(formats.Fmg(van.header, entries)) if who else base
+    out.data = formats.fmg.write_fmg(formats.fmg.Fmg(van.header, entries)) if who else base
     return out
 
 
 def add_text(body: bytes, table: str, texts: dict[int, str]) -> bytes:
     """A text archive (a msgbnd, not compressed) with entries set in one of its tables: how a mod that ships its text
     as a list (Nightreign Revive's JSON) becomes a layer like any other."""
-    b = formats.read_bnd4(body)
+    b = formats.bnd4.read_bnd4(body)
     want = table.lower()
     for e in b.entries:
         if (e.name or "").replace("\\", "/").rsplit("/", 1)[-1].lower() == want:
-            f = formats.read_fmg(e.data)
+            f = formats.fmg.read_fmg(e.data)
             f.entries.update(texts)
-            e.data = formats.write_fmg(f)
-            return formats.write_bnd4(b)
+            e.data = formats.fmg.write_fmg(f)
+            return formats.bnd4.write_bnd4(b)
     raise formats.FormatError(f"the text archive has no table named {table}")

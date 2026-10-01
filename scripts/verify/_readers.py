@@ -14,6 +14,8 @@ from __future__ import annotations
 import struct
 from collections.abc import Callable
 
+from roundtable_souls import formats
+
 Parts = dict[str, tuple[int, int, bytes]]  # inner path (lower case, /) -> (ID, flags, contents)
 
 
@@ -35,11 +37,10 @@ def _key(path: str) -> str:
 
 
 def ours(dec) -> Callable[[bytes], Parts]:
-    from roundtable_souls.mods import formats
 
     def read(raw: bytes) -> Parts:
         try:
-            b = formats.read_bnd4(formats.unpack(raw, dec)[0])
+            b = formats.bnd4.read_bnd4(formats.dcx.unpack(raw, dec)[0])
         except Exception as e:  # noqa: BLE001
             raise CannotRead(f"{type(e).__name__}: {e}") from e
         return {_key(e.name or f"#{e.id}"): (e.id, e.flags, bytes(e.data)) for e in b.entries}
@@ -70,9 +71,8 @@ def soulstruct() -> Callable[[bytes], Parts] | None:
 
 
 def fmg_ours(data: bytes) -> dict[int, str]:
-    from roundtable_souls.mods import formats
 
-    return {k: v for k, v in formats.read_fmg(data).entries.items() if v}
+    return {k: v for k, v in formats.fmg.read_fmg(data).entries.items() if v}
 
 
 def fmg_soulstruct() -> Callable[[bytes], dict[int, str]] | None:

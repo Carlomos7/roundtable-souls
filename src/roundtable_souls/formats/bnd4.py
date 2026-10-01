@@ -1,126 +1,15 @@
-"""The containers the file merger reads and writes: DCX (a compressed file), BND4 (an archive of files) and FMG (a
-text table). Layouts as the public modding libraries document them (SoulsFormats, GPL-3.0).
+"""BND4: the game's archive format. Named entries with IDs and flags, a hash table of their paths, and the data.
 
-Everything round-trips: reading a file and writing it back without changes gives the same content, so a merged
-file differs from its inputs only where they did.
-"""
+read_bnd4/write_bnd4 keep every structure as read (format bits, entry order, names, IDs, flags, alignment, the hash
+table), so an unchanged archive is written back byte for byte. bnd4_files is a small reader of names and data only."""
 
 from __future__ import annotations
 
-import ctypes
 import struct
-import sys
-import zlib
 from dataclasses import dataclass, field
-from pathlib import Path
 
-from roundtable_souls.gamefiles import DCX_DATA_OFFSET, FormatError, dcx_decompress
+from roundtable_souls.formats import FormatError
 
-
-# ----------------------------------------------------------------------------- DCX
-@dataclass
-class Dcx:
-    header: bytes  # the 0x4C header as read (kind, compression level, flags)
-    kind: bytes  # b"KRAK", b"DFLT" or b"ZSTD"
-
-
-def unpack(raw: bytes, oodle=None) -> tuple[bytes, Dcx | None]:
-    """(the file's content, how it was compressed) for a DCX file, or (raw, None) when it is not one."""
-    if raw[:4] != b"DCX\0":
-        return raw, None
-    return dcx_decompress(raw, oodle), Dcx(bytes(raw[:DCX_DATA_OFFSET]), bytes(raw[0x28:0x2C]))
-
-
-_compressor = None
-
-
-def oodle_compressor(game_dir: Path | None):
-    """The game's Oodle DLL's compressor, loaded once, or None (not Windows, or not found)."""
-    global _compressor
-    if _compressor is not None:
-        return _compressor
-    if sys.platform != "win32" or not game_dir:
-        return None
-    for dll in sorted(Path(game_dir).glob("oo2core_*_win64.dll"), reverse=True):
-        try:
-            lib = ctypes.WinDLL(str(dll))
-        except OSError:
-            continue
-        _compressor = lib
-        lib.OodleLZ_Compress.restype = ctypes.c_ssize_t
-        lib.OodleLZ_Compress.argtypes = [
-            ctypes.c_int, ctypes.c_char_p, ctypes.c_ssize_t, ctypes.c_char_p, ctypes.c_int, ctypes.c_void_p,
-            ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_ssize_t,
-        ]  # fmt: skip
-        lib.OodleLZ_CompressOptions_GetDefault.restype = ctypes.c_void_p
-        lib.OodleLZ_CompressOptions_GetDefault.argtypes = [ctypes.c_int, ctypes.c_int]
-        lib.OodleLZ_GetCompressedBufferSizeNeeded.restype = ctypes.c_ssize_t
-        lib.OodleLZ_GetCompressedBufferSizeNeeded.argtypes = [ctypes.c_ssize_t]
-        return lib
-    return None
-
-
-class _Options(ctypes.Structure):
-    _fields_ = [
-        ("verbosity", ctypes.c_uint),
-        ("minMatchLen", ctypes.c_int),
-        ("seekChunkReset", ctypes.c_int),
-        ("seekChunkLen", ctypes.c_int),
-        ("profile", ctypes.c_int),
-        ("dictionarySize", ctypes.c_int),
-        ("spaceSpeedTradeoffBytes", ctypes.c_int),
-        ("maxHuffmansPerChunk", ctypes.c_int),
-        ("sendQuantumCRCs", ctypes.c_int),
-        ("maxLocalDictionarySize", ctypes.c_int),
-        ("makeLongRangeMatcher", ctypes.c_int),
-        ("matchTableSizeLog2", ctypes.c_int),
-    ]
-
-
-KRAKEN = 8
-# Kraken files are written with the layout of the tested Elden Ring files: compression level 6 in the payload and the
-# same 6 in the header (the "6/6" layout). Other levels and header values are not written until tested in game.
-KRAKEN_LEVEL = 6
-
-
-def _kraken(body: bytes, level: int, lib) -> bytes:
-    opts = _Options.from_address(lib.OodleLZ_CompressOptions_GetDefault(KRAKEN, level))
-    mine = _Options()
-    ctypes.memmove(ctypes.addressof(mine), ctypes.addressof(opts), ctypes.sizeof(_Options))
-    mine.seekChunkReset = 1  # the game needs it
-    mine.seekChunkLen = 0x40000
-    size = lib.OodleLZ_GetCompressedBufferSizeNeeded(len(body))
-    out = ctypes.create_string_buffer(size)
-    got = lib.OodleLZ_Compress(KRAKEN, body, len(body), out, level, ctypes.byref(mine), None, None, None, 0)
-    if got <= 0:
-        raise FormatError("Oodle could not compress the file")
-    return out.raw[:got]
-
-
-def pack(body: bytes, how: Dcx | None, compressor=None) -> bytes:
-    """Compress content the way `how` says (as the game's own copy was), or return it as is when it was not a DCX."""
-    if how is None:
-        return body
-    header = bytearray(how.header)
-    if how.kind == b"KRAK":
-        if compressor is None:
-            raise FormatError("writing Oodle-compressed files needs the game's oo2core DLL (Windows only)")
-        header[0x30] = KRAKEN_LEVEL
-        payload = _kraken(body, KRAKEN_LEVEL, compressor)
-    elif how.kind == b"DFLT":
-        payload = zlib.compress(body, header[0x30] or 9)
-    elif how.kind == b"ZSTD":
-        from roundtable_souls.gamefiles import zstd
-
-        payload = zstd.compress(body, header[0x30] or 15)
-    else:
-        raise FormatError(f"unknown DCX compression {how.kind!r}")
-    struct.pack_into(">II", header, 0x1C, len(body), len(payload))
-    out = bytes(header) + payload
-    return out + b"\0" * (-len(out) % 0x10)
-
-
-# ----------------------------------------------------------------------------- BND4
 IDS, NAMES1, NAMES2, LONG_OFFSETS, COMPRESSION = 0x02, 0x04, 0x08, 0x10, 0x20
 ENTRY_COMPRESSED = 0x01  # an entry's flag: its data is compressed inside the archive
 
@@ -328,63 +217,26 @@ def write_bnd4(b: Bnd4) -> bytes:
     return bytes(out)
 
 
-# ----------------------------------------------------------------------------- FMG (version 2: Elden Ring)
-@dataclass
-class Fmg:
-    header: bytes  # the first 0x28 bytes as read
-    entries: dict[int, str | None]  # text ID -> text (None: an ID listed without text)
+def _utf16z(data: bytes, offset: int) -> str:
+    end = offset
+    while data[end : end + 2] != b"\0\0":
+        end += 2
+    return data[offset:end].decode("utf-16-le")
 
 
-def is_fmg(body: bytes) -> bool:
-    return len(body) >= 0x28 and body[0] == 0 and body[2] == 2 and struct.unpack_from("<i", body, 0x04)[0] == len(body)
-
-
-def read_fmg(body: bytes) -> Fmg:
-    if body[2] != 2:
-        raise FormatError("only version 2 text tables (Elden Ring) are supported")
-    groups = struct.unpack_from("<i", body, 0x0C)[0]
-    offsets_at = struct.unpack_from("<q", body, 0x18)[0]
-    entries: dict[int, str | None] = {}
-    for g in range(groups):
-        index, first, last, _pad = struct.unpack_from("<iiii", body, 0x28 + g * 16)
-        for k, text_id in enumerate(range(first, last + 1)):
-            at = struct.unpack_from("<q", body, offsets_at + (index + k) * 8)[0]
-            if at > 0:
-                end = at
-                while body[end : end + 2] != b"\0\0":
-                    end += 2
-                entries[text_id] = body[at:end].decode("utf-16-le")
-            else:
-                entries[text_id] = None
-    return Fmg(bytes(body[:0x28]), entries)
-
-
-def write_fmg(f: Fmg) -> bytes:
-    ids = sorted(f.entries)
-    groups = []
-    i = 0
-    while i < len(ids):
-        start = i
-        while i + 1 < len(ids) and ids[i + 1] == ids[i] + 1:
-            i += 1
-        groups.append((start, ids[start], ids[i]))
-        i += 1
-    head = bytearray(f.header)
-    struct.pack_into("<ii", head, 0x0C, len(groups), len(ids))
-    out = head + b"".join(struct.pack("<iiii", s, a, b, 0) for s, a, b in groups)
-    offsets_at = len(out)
-    struct.pack_into("<q", out, 0x18, offsets_at)
-    strings = bytearray()
-    strings_at = offsets_at + 8 * len(ids)
-    offsets = []
-    for text_id in ids:
-        text = f.entries[text_id]
-        if text is None:
-            offsets.append(0)
-        else:
-            offsets.append(strings_at + len(strings))
-            strings += text.encode("utf-16-le") + b"\0\0"
-    out += b"".join(struct.pack("<q", o) for o in offsets) + strings
-    out += b"\0" * (-len(out) % 4)  # the game's own tables end on a multiple of 4
-    struct.pack_into("<i", out, 0x04, len(out))
-    return bytes(out)
+def bnd4_files(body: bytes) -> list[tuple[str, bytes]]:
+    """(file name without folders, bytes) for every file in a BND4 archive of the kind the game uses (format 0x74)."""
+    if body[:4] != b"BND4":
+        raise FormatError("not a BND4 archive")
+    count = struct.unpack_from("<i", body, 0x0C)[0]
+    header_size = struct.unpack_from("<q", body, 0x20)[0]
+    if not body[0x30] or header_size < 36:
+        raise FormatError("unsupported BND4 layout")
+    files = []
+    for i in range(count):
+        o = 0x40 + i * header_size
+        size = struct.unpack_from("<q", body, o + 8)[0]
+        data_offset, _id, name_offset = struct.unpack_from("<III", body, o + 24)
+        name = _utf16z(body, name_offset).replace("\\", "/").rsplit("/", 1)[-1]
+        files.append((name, body[data_offset : data_offset + size]))
+    return files

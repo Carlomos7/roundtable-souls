@@ -31,6 +31,8 @@ import _common
 import _readers
 from calibrate import calibrate
 
+from roundtable_souls import formats
+
 REMOVED = None
 
 
@@ -81,7 +83,7 @@ def intended_parts(van: _readers.Parts, layers: list[tuple[str, _readers.Parts]]
 
 
 def check_file(entry: dict, pkg: Path, game: Path, dec, read, fmg, failures: list, notes: list) -> dict:
-    from roundtable_souls.mods import gamearchive
+    from roundtable_souls.game import archives as gamearchive
 
     rel = entry["rel"]
     raw = (pkg / rel).read_bytes()
@@ -161,35 +163,37 @@ def check_file(entry: dict, pkg: Path, game: Path, dec, read, fmg, failures: lis
 
 def check_regulation(record: dict, pkg: Path, dec, failures: list, notes: list) -> dict:
     from roundtable_souls.mods import param_merge
-    from roundtable_souls.mods import paramfile as pf
 
     base, packs = Path(record["base"]), record.get("packs") or []
     for src in [{"path": record["base"], "sha256": record["base_sha256"]}, *packs]:
         if _sha(Path(src["path"])) != src["sha256"]:
             failures.append(f"regulation: {src['path']} changed after the package was built; rebuild first")
             return {}
-    breg = pf.read_regulation(base.read_bytes(), dec)
-    oreg = pf.read_regulation((pkg / "regulation.bin").read_bytes(), dec)
-    pregs = [(Path(p["path"]).parent.name, pf.read_regulation(Path(p["path"]).read_bytes(), dec)) for p in packs]
+    breg = formats.regulation.read_regulation(base.read_bytes(), dec)
+    oreg = formats.regulation.read_regulation((pkg / "regulation.bin").read_bytes(), dec)
+    pregs = [
+        (Path(p["path"]).parent.name, formats.regulation.read_regulation(Path(p["path"]).read_bytes(), dec))
+        for p in packs
+    ]
     short = lambda n: n.replace("\\", "/").rsplit("/", 1)[-1]  # noqa: E731
     counts = {"tables": 0, "rows": 0, "rows_changed_by_packs": 0, "chunk_limitation": 0, "size_mismatch_skipped": 0}
     for f in breg.bnd.entries:
         name = short(f.name or "")
         counts["tables"] += 1
-        vp = pf.read_param(f.data)
+        vp = formats.param.read_param(f.data)
         vrows = param_merge._keyed(vp.rows)
         of = oreg.bnd.get(name)
         if of is None:
             failures.append(f"regulation: the output has no {name}")
             continue
-        orows = param_merge._keyed(pf.read_param(of.data).rows)
+        orows = param_merge._keyed(formats.param.read_param(of.data).rows)
         want = {k: bytearray(r.data) for k, r in vrows.items()}
         writers: dict[tuple, dict[int, str]] = {}
         for label, reg in pregs:
             pfile = reg.bnd.get(name)
             if pfile is None or pfile.data == f.data:
                 continue
-            prows = param_merge._keyed(pf.read_param(pfile.data).rows)
+            prows = param_merge._keyed(formats.param.read_param(pfile.data).rows)
             for k, r in prows.items():
                 if k not in vrows:
                     want[k] = bytearray(r.data)  # a new row: the last pack's
@@ -238,7 +242,7 @@ def main() -> int:
     game = _common.game_dir(args.game)
     out = _common.output_dir(args.out, "verify-output", game)
     _common.sandbox_launcher(out, game)
-    from roundtable_souls.gamefiles import find_oodle
+    from roundtable_souls.game.oodle import find_oodle
 
     dec = find_oodle(game)
     ss = _readers.soulstruct()

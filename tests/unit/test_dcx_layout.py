@@ -6,7 +6,8 @@ import struct
 
 import pytest
 
-from roundtable_souls.mods import formats
+from roundtable_souls import formats
+from roundtable_souls.game import oodle as game_oodle
 
 # The 0x4C header of the game's own Kraken files, sizes zeroed (the layout the game's files and the public format
 # libraries agree on: DCX version 0x11000, DCS / DCP "KRAK", level 6, 0x10100, DCA).
@@ -41,7 +42,7 @@ def levels(monkeypatch):
         asked.append(level)
         return b"K" * 7
 
-    monkeypatch.setattr(formats, "_kraken", fake)
+    monkeypatch.setattr(game_oodle, "compress_kraken", fake)
     return asked
 
 
@@ -50,7 +51,7 @@ def levels(monkeypatch):
 def test_kraken_files_are_written_6_6_with_the_games_header(levels, source_level, size):
     source = bytearray(ER_KRAKEN_HEADER)
     source[0x30] = source_level  # a source file that recorded another level
-    out = formats.pack(b"\0" * size, formats.Dcx(bytes(source), b"KRAK"), compressor=object())
+    out = formats.dcx.pack(b"\0" * size, formats.dcx.Dcx(bytes(source), b"KRAK"), compressor=object())
     assert levels == [6]
     assert _without_sizes(out) == ER_KRAKEN_HEADER
     assert struct.unpack_from(">II", out, 0x1C) == (size, 7)
@@ -58,9 +59,9 @@ def test_kraken_files_are_written_6_6_with_the_games_header(levels, source_level
 
 
 def test_the_games_own_header_is_kept_byte_for_byte(levels):
-    out = formats.pack(b"body", formats.Dcx(ER_KRAKEN_HEADER, b"KRAK"), compressor=object())
+    out = formats.dcx.pack(b"body", formats.dcx.Dcx(ER_KRAKEN_HEADER, b"KRAK"), compressor=object())
     assert out[:0x1C] == ER_KRAKEN_HEADER[:0x1C] and out[0x24:0x4C] == ER_KRAKEN_HEADER[0x24:0x4C]
 
 
 def test_the_level_is_one_named_constant():
-    assert formats.KRAKEN_LEVEL == 6
+    assert formats.dcx.KRAKEN_LEVEL == 6

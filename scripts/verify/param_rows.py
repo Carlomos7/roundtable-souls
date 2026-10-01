@@ -19,6 +19,8 @@ from pathlib import Path
 
 import _common
 
+from roundtable_souls import formats
+
 
 def main() -> int:
     p = _common.parser((__doc__ or "").split("\n\n")[0])
@@ -28,28 +30,27 @@ def main() -> int:
     out = _common.output_dir(args.out, "param-rows", game)
     _common.sandbox_launcher(out, game)
 
-    from roundtable_souls.gamefiles import find_oodle
+    from roundtable_souls.game.oodle import find_oodle
     from roundtable_souls.mods import param_merge
-    from roundtable_souls.mods import paramfile as pf
 
     dec = find_oodle(game)
     source = args.regulation or game / "regulation.bin"
     raw = source.read_bytes()
-    reg = pf.read_regulation(raw, dec)
+    reg = formats.regulation.read_regulation(raw, dec)
     combined, _report = param_merge.combine(raw, [("unchanged copy", raw)], dec)
-    after = pf.read_regulation(combined, dec)
+    after = formats.regulation.read_regulation(combined, dec)
 
     tables, problems = [], []
     for f in reg.bnd.entries:
         short = (f.name or "").replace("\\", "/").rsplit("/", 1)[-1]
-        param = pf.read_param(f.data)
+        param = formats.param.read_param(f.data)
         ids = Counter(r.id for r in param.rows)
         dups = {i: n for i, n in ids.items() if n > 1}
-        same_bytes = pf.write_param(param) == f.data
+        same_bytes = formats.param.write_param(param) == f.data
         keyed = param_merge._keyed(param.rows)
         keys_ok = len(keyed) == len(param.rows) and list(keyed.values()) == param.rows
         g = after.bnd.get(short)
-        combined_rows = pf.read_param(g.data).rows if g is not None else []
+        combined_rows = formats.param.read_param(g.data).rows if g is not None else []
         combine_ok = [(r.id, r.data, r.name) for r in combined_rows] == [(r.id, r.data, r.name) for r in param.rows]
         tables.append(
             {
@@ -69,7 +70,7 @@ def main() -> int:
     # 4. a pack that changes only the second row sharing an ID: only that row changes, nothing moves
     for f in reg.bnd.entries:
         short = (f.name or "").replace("\\", "/").rsplit("/", 1)[-1]
-        param = pf.read_param(f.data)
+        param = formats.param.read_param(f.data)
         seen: Counter = Counter()
         target = None
         for i, r in enumerate(param.rows):
@@ -79,14 +80,14 @@ def main() -> int:
                 break
         if target is None:
             continue
-        edited = pf.read_regulation(raw, dec)
+        edited = formats.regulation.read_regulation(raw, dec)
         ef = edited.bnd.get(short)
         assert ef is not None
-        ep = pf.read_param(ef.data)
+        ep = formats.param.read_param(ef.data)
         row = ep.rows[target]
         row.data = bytes([row.data[0] ^ 0xFF]) + row.data[1:]
-        ef.data = pf.write_param(ep)
-        got = pf.read_param(pf.read_regulation(param_merge.combine(raw, [("edit", pf.write_regulation(edited))], dec)[0], dec).bnd.get(short).data).rows  # type: ignore[union-attr]  # fmt: skip
+        ef.data = formats.param.write_param(ep)
+        got = formats.param.read_param(formats.regulation.read_regulation(param_merge.combine(raw, [("edit", formats.regulation.write_regulation(edited))], dec)[0], dec).bnd.get(short).data).rows  # type: ignore[union-attr]  # fmt: skip
         changed = [i for i, (a, b) in enumerate(zip(param.rows, got, strict=False)) if (a.id, a.data) != (b.id, b.data)]
         ok = [r.id for r in got] == [r.id for r in param.rows] and changed == [target]
         entry = next(t for t in tables if t["table"] == short)

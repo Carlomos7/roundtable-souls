@@ -15,6 +15,8 @@ import os
 import time
 from pathlib import Path
 
+from roundtable_souls import formats
+from roundtable_souls.game import oodle as game_oodle
 from roundtable_souls.mods.backends import BackendError
 
 RECORD = "combined-parameters.json"
@@ -73,7 +75,7 @@ def shared_files(layers: list[dict]) -> dict[str, list[dict]]:
 
 def archives_fingerprint(game_dir) -> str:
     """Changes when the game's archives do (a game update): the merged files are then merged again."""
-    from roundtable_souls.mods import gamearchive
+    from roundtable_souls.game import archives as gamearchive
 
     parts = []
     for name in gamearchive.ARCHIVES:
@@ -268,7 +270,7 @@ class CombineTool:
         game_dir = common.game_dir()
         oodle = None
         try:
-            from roundtable_souls.gamefiles import find_oodle
+            from roundtable_souls.game.oodle import find_oodle
 
             oodle = find_oodle(Path(game_dir)) if game_dir else None
         except Exception:
@@ -335,8 +337,9 @@ class CombineTool:
     def _merge_files(self, log, layers: list[dict], until: dict | None) -> dict:
         """Merge every file two or more packages before `until` ship into this package; drop merged files no longer
         needed. Returns the record's files: {rel (lower): {rel, sources, output, parts, clashes | skipped}}."""
-        from roundtable_souls.gamefiles import find_oodle
-        from roundtable_souls.mods import filemerge, formats, gamearchive
+        from roundtable_souls.game import archives as gamearchive
+        from roundtable_souls.game.oodle import find_oodle
+        from roundtable_souls.mods import filemerge
         from roundtable_souls.system import common
 
         shared = shared_files(self.file_inputs(layers, until))
@@ -348,7 +351,7 @@ class CombineTool:
             return {}
         game_dir = common.game_dir()
         dec = find_oodle(Path(game_dir)) if game_dir else None
-        comp = formats.oodle_compressor(Path(game_dir)) if game_dir else None
+        comp = game_oodle.oodle_compressor(Path(game_dir)) if game_dir else None
         out: dict = {}
         for low, owners in sorted(shared.items()):
             rel = owners[0]["rel"]

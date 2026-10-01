@@ -4,7 +4,7 @@
    code, gives the game's own bytes.
 2. The regulation binder: the game's regulation.bin, decrypted and decompressed, read and written back gives the
    same bytes. The encrypted file differs on every write (random IV), so it is not compared.
-3. Every table, against an independent reader (gamefiles.bnd4_files) and the stored entry headers: the same names,
+3. Every table, against an independent reader (formats.bnd4.bnd4_files) and the stored entry headers: the same names,
    IDs, flags and contents in the same order. Each table's rows (ID, which occurrence of that ID, row bytes, name),
    read independently of the parameter code for IDs, and its metadata (header, type name, names area) survive
    reading and writing.
@@ -24,6 +24,8 @@ from collections import Counter
 from pathlib import Path
 
 import _common
+
+from roundtable_souls import formats
 
 ARCHIVES = (
     "msg/engus/menu_dlc02.msgbnd.dcx",
@@ -50,25 +52,25 @@ def first_difference(a: bytes, b: bytes) -> int | None:
 
 
 def binder_of(raw: bytes, dec) -> bytes:
-    from roundtable_souls.gamefiles import dcx_decompress, decrypt_regulation
+    from roundtable_souls.formats.dcx import dcx_decompress
+    from roundtable_souls.formats.regulation import decrypt_regulation
 
     return dcx_decompress(decrypt_regulation(raw), dec)
 
 
 def rows_of(data: bytes) -> list[tuple[int, int, bytes, str]]:
     """(ID, occurrence of that ID, row bytes, name), in stored order."""
-    from roundtable_souls.mods import paramfile as pf
 
     seen: Counter = Counter()
     out = []
-    for r in pf.read_param(data).rows:
+    for r in formats.param.read_param(data).rows:
         out.append((r.id, seen[r.id], r.data, r.name))
         seen[r.id] += 1
     return out
 
 
 def check_archives(game: Path, dec, files) -> list[dict]:
-    from roundtable_souls.mods import formats, gamearchive
+    from roundtable_souls.game import archives as gamearchive
 
     results = []
     for rel in files:
@@ -76,12 +78,12 @@ def check_archives(game: Path, dec, files) -> list[dict]:
         if raw is None:
             results.append({"file": rel, "result": "not in the game's archives"})
             continue
-        body, _how = formats.unpack(raw, dec)
-        if not formats.is_bnd4(body):
+        body, _how = formats.dcx.unpack(raw, dec)
+        if not formats.bnd4.is_bnd4(body):
             results.append({"file": rel, "result": "not a BND4 archive"})
             continue
-        b = formats.read_bnd4(body)
-        at = first_difference(formats.write_bnd4(b), body)
+        b = formats.bnd4.read_bnd4(body)
+        at = first_difference(formats.bnd4.write_bnd4(b), body)
         results.append(
             {
                 "file": rel,
@@ -94,17 +96,17 @@ def check_archives(game: Path, dec, files) -> list[dict]:
 
 
 def check_regulation(body: bytes) -> dict:
-    from roundtable_souls.gamefiles import bnd4_files, param_row_ids
-    from roundtable_souls.mods import formats, param_merge
-    from roundtable_souls.mods import paramfile as pf
+    from roundtable_souls.formats.bnd4 import bnd4_files
+    from roundtable_souls.formats.param import param_row_ids
+    from roundtable_souls.mods import param_merge
 
     problems: list[str] = []
-    b = pf.read_binder(body)
-    written = pf.binder_bytes(b)
+    b = formats.regulation.read_binder(body)
+    written = formats.regulation.binder_bytes(b)
     at = first_difference(written, body)
     if at is not None:
         problems.append(f"binder written back differs at {at:#x}")
-    if formats.write_bnd4(b) != body:
+    if formats.bnd4.write_bnd4(b) != body:
         problems.append("the general writer alone does not reproduce the binder")
 
     independent = bnd4_files(body)
@@ -117,16 +119,16 @@ def check_regulation(body: bytes) -> dict:
     if [(e.flags, e.id) for e in b.entries] != stored:
         problems.append("table flags or IDs differ from the stored entry headers")
 
-    back = pf.read_binder(written)
+    back = formats.regulation.read_binder(written)
     rows_total = dup_tables = dup_ids = 0
     for e, e2 in zip(b.entries, back.entries, strict=True):
         name = short(e.name)
-        p = pf.read_param(e.data)
+        p = formats.param.read_param(e.data)
         rows = rows_of(e.data)
         rows_total += len(rows)
         if [r[0] for r in rows] != param_row_ids(e.data):
             problems.append(f"{name}: row IDs or their order differ from the independent reader")
-        if pf.write_param(p) != e.data:
+        if formats.param.write_param(p) != e.data:
             problems.append(f"{name}: the table written back differs (rows, names or metadata)")
         if rows_of(e2.data) != rows or e2.data != e.data or (e2.id, e2.flags, e2.name) != (e.id, e.flags, e.name):
             problems.append(f"{name}: changed by writing the binder")
@@ -147,12 +149,11 @@ def check_regulation(body: bytes) -> dict:
 
 
 def compare(a: bytes, b: bytes) -> dict:
-    from roundtable_souls.mods import paramfile as pf
 
     at = first_difference(a, b)
     if at is None:
         return {"binders": "identical", "bytes": len(a)}
-    ba, bb = pf.read_binder(a), pf.read_binder(b)
+    ba, bb = formats.regulation.read_binder(a), formats.regulation.read_binder(b)
     out: dict = {"binders": f"differ at {at:#x}", "tables": []}
     if [short(e.name) for e in ba.entries] != [short(e.name) for e in bb.entries]:
         out["table_order"] = "differs"
@@ -179,7 +180,7 @@ def main() -> int:
     out = _common.output_dir(args.out, "bnd4-roundtrip", game)
     _common.sandbox_launcher(out, game)
 
-    from roundtable_souls.gamefiles import find_oodle
+    from roundtable_souls.game.oodle import find_oodle
 
     dec = find_oodle(game)
     started = time.time()

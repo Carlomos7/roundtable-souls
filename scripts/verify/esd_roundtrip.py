@@ -1,4 +1,4 @@
-"""Check that the launcher's ESD code (mods/formats_esd) reads and writes talk scripts without losing anything.
+"""Check that the launcher's ESD code (formats/esd) reads and writes talk scripts without losing anything.
 
 For every ESD inside the talk archives checked (the game's own, found by name, plus any --file):
   1. it reads, is written back, and the written file reads again to the same structure: state machines and states in
@@ -24,6 +24,8 @@ import time
 from pathlib import Path
 
 import _common
+
+from roundtable_souls import formats
 
 # Talk archives of the base game and the DLC, tried by name; those the game does not have are skipped.
 GAME_TALK = ["script/talk/m00_00_00_00.talkesdbnd.dcx"] + [
@@ -96,7 +98,7 @@ def soulstruct_reader():
 
 
 def check(name: str, data: bytes, other) -> dict:
-    from roundtable_souls.mods.formats_esd import read_esd, write_esd
+    from roundtable_souls.formats.esd import read_esd, write_esd
 
     row: dict = {"esd": name, "bytes": len(data)}
     try:
@@ -129,8 +131,8 @@ def main() -> int:
     out = _common.output_dir(args.out, "esd-roundtrip", game)
     _common.sandbox_launcher(out, game)
 
-    from roundtable_souls.gamefiles import find_oodle
-    from roundtable_souls.mods import formats, gamearchive
+    from roundtable_souls.game import archives as gamearchive
+    from roundtable_souls.game.oodle import find_oodle
 
     dec = find_oodle(game)
     other = soulstruct_reader()
@@ -142,8 +144,8 @@ def main() -> int:
         if raw is None:
             missing.append(label)
             continue
-        body, _how = formats.unpack(raw, dec)
-        esds = [e for e in formats.read_bnd4(body).entries if (e.name or "").lower().endswith(".esd")]
+        body, _how = formats.dcx.unpack(raw, dec)
+        esds = [e for e in formats.bnd4.read_bnd4(body).entries if (e.name or "").lower().endswith(".esd")]
         archives.append({"archive": label, "esds": len(esds)})
         for e in esds:
             rows.append({"archive": label} | check((e.name or "").replace("\\", "/").rsplit("/", 1)[-1], e.data, other))

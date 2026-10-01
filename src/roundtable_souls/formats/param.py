@@ -1,26 +1,13 @@
-"""Read and write Elden Ring's regulation.bin: AES-256-CBC around a DCX (ZSTD) around a BND4 archive of PARAM tables.
-
-Writing keeps every structure the game's own file has and only recomputes what changes (row counts, offsets, sizes,
-the archive's hash table), so rebuilding an unchanged regulation gives back the same archive bytes. The archive (BND4)
-is the shared one in formats.py. Nothing here
-knows what a field means: a row is its ID, its bytes and its (editor-only) name.
-"""
+"""PARAM: one parameter table of the regulation. A row is its ID, its bytes and its (editor-only) name; nothing here
+knows what a field means. Reading and writing keeps every row (repeated IDs included, in order), names and the
+table's metadata, so an unchanged table is written back byte for byte."""
 
 from __future__ import annotations
 
-import os
 import struct
-from compression import zstd
 from dataclasses import dataclass
 
-from roundtable_souls.gamefiles import (
-    DCX_DATA_OFFSET,
-    REGULATION_KEY,
-    FormatError,
-    dcx_decompress,
-    decrypt_regulation,
-)
-from roundtable_souls.mods.formats import COMPRESSION, IDS, NAMES1, NAMES2, Bnd4, read_bnd4, write_bnd4
+from roundtable_souls.formats import FormatError
 
 NO_NAME = -1  # Param.shared_name when every row's name offset is 0
 ROW_HEADER = 24  # u32 id, u32 pad, i64 data offset, i64 name offset (the 64-bit layout the game uses)
@@ -157,76 +144,7 @@ def write_param(p: Param) -> bytes:
     return bytes(out)
 
 
-# ----------------------------------------------------------------------------- the binder
-# The regulation's binder is a BND4 archive read and written by the shared code in formats.py. What is particular to
-# it is checked here: its layout.
-REGULATION_FORMAT = IDS | NAMES1 | NAMES2 | COMPRESSION  # 0x74 as stored: 36-byte entries with IDs and Unicode names
-REGULATION_ENTRY = 36
-
-
-def read_binder(body: bytes) -> Bnd4:
-    """The regulation's binder. Refuses another layout rather than guess at it."""
-    b = read_bnd4(body)
-    if b.format != REGULATION_FORMAT or not b.unicode or struct.unpack_from("<q", body, 0x20)[0] != REGULATION_ENTRY:
-        raise FormatError("unsupported BND4 layout")
-    return b
-
-
-def binder_bytes(b: Bnd4) -> bytes:
-    """The binder as the game's regulation stores it. Tables are not compressed inside it, so each one's sizes are its
-    length (the shared writer's rule for such entries)."""
-    return write_bnd4(b)
-
-
-# ----------------------------------------------------------------------------- DCX and encryption
-@dataclass
-class Regulation:
-    dcx_header: bytes  # the 0x4C DCX header as read
-    bnd: Bnd4
-
-    @property
-    def version(self) -> str:
-        """The regulation version the archive names (e.g. 11711000)."""
-        return self.bnd.header[0x18:0x20].decode("ascii", "replace").strip("\0")
-
-
-def read_regulation(raw: bytes, oodle=None) -> Regulation:
-    dec = decrypt_regulation(raw)
-    if dec[:4] != b"DCX\0":
-        raise FormatError("not a DCX file")
-    return Regulation(bytes(dec[:DCX_DATA_OFFSET]), read_binder(dcx_decompress(dec, oodle)))
-
-
-ZSTD_WINDOW_LOG = 16  # 64 KB window: every zstd block then holds at most 64 KB, which the game requires (below)
-
-
-def compress_regulation_body(body: bytes, level: int = 9) -> bytes:
-    """The zstd frame the game accepts.
-
-    The game crashes at start (access violation) on a frame whose blocks hold more than 64 KB of data, which is what
-    zstd writes by default (128 KB). Its own regulation and every editor's output (SoulsFormats, Soulstruct) keep
-    blocks at 64 KB by capping the window at 64 KB, and leave the content size out of the frame header. Checked in
-    game on Elden Ring 1.17.1 (2026-09-30): the game's own bytes re-encrypted load; the same content recompressed
-    with default blocks crashes, whatever the IV, level or window.
-    """
-    P = zstd.CompressionParameter
-    return zstd.compress(
-        body, options={P.compression_level: level, P.content_size_flag: 0, P.window_log: ZSTD_WINDOW_LOG}
-    )
-
-
-def write_regulation(reg: Regulation, level: int = 9) -> bytes:
-    """The encrypted file. Always ZSTD (what the game's own regulation uses)."""
-    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-
-    body = binder_bytes(reg.bnd)
-    payload = compress_regulation_body(body, level)
-    header = bytearray(reg.dcx_header)
-    if header[0x28:0x2C] != b"ZSTD":
-        raise FormatError("the base regulation is not ZSTD-compressed; rebuild from the game's own file")
-    struct.pack_into(">II", header, 0x1C, len(body), len(payload))
-    plain = bytes(header) + payload
-    plain += b"\0" * (-len(plain) % 16)
-    iv = os.urandom(16)
-    enc = Cipher(algorithms.AES(REGULATION_KEY), modes.CBC(iv)).encryptor()
-    return iv + enc.update(plain) + enc.finalize()
+def param_row_ids(blob: bytes) -> list[int]:
+    """Row IDs of a PARAM table (the 64-bit layout the game uses)."""
+    count = struct.unpack_from("<H", blob, 0x0A)[0]
+    return [struct.unpack_from("<I", blob, 0x40 + i * 24)[0] for i in range(count)]

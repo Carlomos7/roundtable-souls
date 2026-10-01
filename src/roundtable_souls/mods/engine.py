@@ -39,7 +39,9 @@ import subprocess
 import time
 from pathlib import Path
 
-from roundtable_souls.gamefiles import FormatError
+from roundtable_souls import formats
+from roundtable_souls.formats import FormatError
+from roundtable_souls.game import oodle as game_oodle
 from roundtable_souls.resources import DATA_DIR
 
 RECIPES_DIR = DATA_DIR / "recipes"
@@ -388,17 +390,17 @@ _oodle: dict = {}
 def _codecs(game_dir: Path):
     """(decompressor, compressor) from the game's own Oodle DLL, or None each (not Windows): only files compressed
     with it need them, and merging one without them stops with the reason."""
-    from roundtable_souls.gamefiles import find_oodle
-    from roundtable_souls.mods import formats
+    from roundtable_souls.game.oodle import find_oodle
 
     key = str(game_dir)
     if key not in _oodle:
-        _oodle[key] = (find_oodle(game_dir), formats.oodle_compressor(game_dir))
+        _oodle[key] = (find_oodle(game_dir), game_oodle.oodle_compressor(game_dir))
     return _oodle[key]
 
 
 def _launcher_step(step, each, setup, inputs, game_dir, mod, sources, log) -> Path:
-    from roundtable_souls.mods import filemerge, formats, gamearchive, param_merge
+    from roundtable_souls.game import archives as gamearchive
+    from roundtable_souls.mods import filemerge, param_merge
 
     values = {"each": each or ""}
     rel = _fill(step["file"], values)
@@ -428,8 +430,8 @@ def _launcher_step(step, each, setup, inputs, game_dir, mod, sources, log) -> Pa
         text_map = step["texts"]
         texts_file = setup / text_map.get(each or "", text_map.get("*", ""))
         texts = {int(k): v for k, v in json.loads(texts_file.read_text(encoding="utf-8-sig")).items()}
-        body, how = formats.unpack(vanilla, dec)
-        patch = formats.pack(filemerge.add_text(body, step["table"], texts), how, comp)
+        body, how = formats.dcx.unpack(vanilla, dec)
+        patch = formats.dcx.pack(filemerge.add_text(body, step["table"], texts), how, comp)
     else:
         patch = (setup / _fill(step["patch"], values)).read_bytes()
         if source is None:  # nothing to merge with: the mod's own copy, as it is

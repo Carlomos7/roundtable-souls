@@ -3,7 +3,7 @@
 Adapted from the ESD reader and writer of Soulstruct by Scott Mooney (Grimrukh), https://github.com/Grimrukh/soulstruct,
 at commit 12b69189a2ccebbc623a1b6565be89a18d6c9958 (version 2.6.0), GPL-3.0-or-later. Only reading and writing were
 taken; each file states its source and what was changed. Binary plumbing is constrata (MIT), by the same author. Not
-yet used by the launcher's merging.
+yet used by the launcher's merging. Moved from mods/formats_esd to formats/esd on 2026-10-01 (imports only).
 """
 
 from .command import Command

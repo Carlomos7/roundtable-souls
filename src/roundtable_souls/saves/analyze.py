@@ -12,7 +12,7 @@ import struct
 from collections import Counter
 from dataclasses import dataclass, field
 
-from roundtable_souls import gamefiles
+from roundtable_souls import formats
 from roundtable_souls.resources import DATA_DIR
 
 WEAPON, ARMOUR, TALISMAN, GOODS, ASH = 0x0, 0x1, 0x2, 0x4, 0x8
@@ -57,8 +57,8 @@ def game_item_ids() -> frozenset[int]:
     if _GAME_IDS and _GAME_IDS[0] == stamp:
         return _GAME_IDS[1]
     try:
-        ids = gamefiles.regulation_item_ids(path.read_bytes())
-    except OSError, gamefiles.FormatError, ValueError, IndexError:
+        ids = formats.regulation.regulation_item_ids(path.read_bytes())
+    except OSError, formats.FormatError, ValueError, IndexError:
         ids = frozenset()
     _GAME_IDS = (stamp, ids)
     return ids

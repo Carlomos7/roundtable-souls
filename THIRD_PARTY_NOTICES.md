@@ -13,7 +13,7 @@ those authors, and each part keeps its own license.
 ## Soulstruct (GPL-3.0-or-later)
 
 - [Soulstruct](https://github.com/Grimrukh/soulstruct) by Scott Mooney (Grimrukh). The reader and writer of ESD
-  (EzState) files in `src/roundtable_souls/mods/formats_esd/` are adapted from its `base/ezstate/esd` modules at
+  (EzState) files in `src/roundtable_souls/formats/esd/` are adapted from its `base/ezstate/esd` modules at
   commit `12b69189a2ccebbc623a1b6565be89a18d6c9958` (version 2.6.0). Each adapted file names its source and lists
   what was changed and when. Soulstruct itself is not a dependency of the launcher; the real-data checks can use it,
   optionally, as an independent reader.
