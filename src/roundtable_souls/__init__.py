@@ -1,6 +1,6 @@
 """Roundtable Souls: a launcher and save toolkit for modded FromSoftware games (Elden Ring and Nightreign)."""
 
-__version__ = "3.13.2"
+__version__ = "3.14.0"
 
 
 def main() -> int:

@@ -2,13 +2,14 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
-## [Unreleased]
+## [3.14.0] - 2026-10-01
 
 - Play: the game no longer starts with merged mods that are out of date without asking. When they cannot be rebuilt first (the rebuild tool was not allowed or failed, or something stops it), Play asks, and Play anyway starts it this once. A Steam shortcut or Gaming Mode does not start the game then and shows why, with a way to open Roundtable Souls.
 - Settings: "Update merged mods before Play" is now "Rebuild merged mods automatically before Play". On (as before) it rebuilds first; off, Play asks first instead of starting with the old result.
 - Mods: Remove and Restore have one button. Files of a removed mod that are still inside the merged mods are named, and Play rebuilds them first (or Rebuild on the Mods page). Load order names the removed mod instead of its folder's inner folder.
 - Mods: a mod's rebuild tool that has not been allowed yet is offered on the Mods page, so a rebuild does not stop in the middle to ask.
 - Fixed: when the launcher changes a file inside an archive in place (the menu text of the preview Nightreign Revive build), the archive now records that file's new size instead of the size it had before. Archives the launcher does not change are written exactly as before. Not yet checked in game.
+- Inside: parameters and archives are read and written by one shared piece of code (the game's own files come back byte for byte), and the launcher can read and write talk scripts such as the grace menu (checked on every one in the game; not used by merging yet).
 
 ## [3.13.2] - 2026-10-01
 
