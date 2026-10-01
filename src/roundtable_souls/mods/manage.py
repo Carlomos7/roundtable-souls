@@ -1503,14 +1503,19 @@ def entry_problems(profile: Path, items: list[dict]) -> dict[int, list[str]]:
                             f"Must load {word} '{d['id']}', whose {'folder' if kind == 'package' else 'DLL'} "
                             "is missing: me3 stops"
                         )
-        # a loop in the order (a after b, b after a) cannot be satisfied
-        after: dict[int, set[int]] = {e["index"]: set() for e in group}
-        for e in group:
+        # a loop in the order (a after b, b after a) cannot be satisfied: as me3 sees it (mods.order), between
+        # entries that are there, linked by their exact ids
+        present = [e for e in group if _present(profile, e)]
+        exact: dict[str, list[dict]] = {}
+        for e in present:
+            exact.setdefault(entry_ref(e), []).append(e)
+        after: dict[int, set[int]] = {e["index"]: set() for e in present}
+        for e in present:
             for d in e.get("load_after") or []:
-                for h in refs.get(str(d["id"]).lower()) or []:
+                for h in exact.get(str(d["id"])) or []:
                     after[e["index"]].add(h["index"])
             for d in e.get("load_before") or []:
-                for h in refs.get(str(d["id"]).lower()) or []:
+                for h in exact.get(str(d["id"])) or []:
                     after[h["index"]].add(e["index"])
         names = {e["index"]: entry_ref(e) for e in group}
         loop = _find_loop(after)

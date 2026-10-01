@@ -741,3 +741,20 @@ def test_me3_stops_for_a_required_dependency_whose_folder_is_missing_or_whose_id
     by = {i: " | ".join(v) for i, v in M.entry_problems(p, M.entries(p)).items()}
     assert "'base', but the profile calls it 'Base'" in by[2]
     assert "'gone', whose folder is missing: me3 stops" in by[2]
+
+
+def test_a_loop_is_only_one_me3_sees(tmp_path):
+    p = tmp_path / "my.me3"
+    p.write_text(
+        'profileVersion = "v1"\n\n'
+        '[[packages]]\nid = "a"\npath = \'mod/a\'\nload_after = [{ id = "gone", optional = true }]\n\n'
+        '[[packages]]\nid = "gone"\npath = \'mod/gone\'\nload_after = [{ id = "a", optional = true }]\n\n'
+        '[[packages]]\nid = "b"\npath = \'mod/b\'\nload_after = [{ id = "C", optional = true }]\n\n'
+        '[[packages]]\nid = "c"\npath = \'mod/c\'\nload_after = [{ id = "b", optional = true }]\n',
+        encoding="utf-8",
+    )
+    for d in ("mod/a/parts", "mod/b/parts", "mod/c/parts"):
+        (tmp_path / d).mkdir(parents=True)
+    found = M.entry_problems(p, M.entries(p))
+    # gone's folder is missing (me3 leaves it out) and 'C' is not 'c' (me3 matches ids exactly): no loop either way
+    assert not any("loops" in x for v in found.values() for x in v)
