@@ -28,6 +28,8 @@ Without either, the game is found through Steam, as the launcher finds it.
 | `param_rows.py` | The parameter code keeps every row: duplicate IDs in order, write-back unchanged, merge keys, a change to one duplicate row. |
 | `ingame_package.py --layout 6/6` | Builds a package to play: two marker mods merged by the launcher's Combine, stored in a DCX layout (6/6, 4/4, 4/6 or dflt), a me3 profile on a separate save, `launch.cmd` and `CHECK.txt`. |
 | `bnd4_roundtrip.py` | The shared BND4 code writes the game's own archives and regulation binder back byte for byte; every regulation table keeps its rows (IDs and their order, duplicates, bytes, names) and metadata. `--compare A B` compares two regulation.bin files' binders. |
+| `esd_roundtrip.py [--file TALKESDBND]` | The ESD code reads every talk script in the game's talk archives (and any given) and writes it back to the same structure: machines, states, conditions in order with their targets, nested conditions, commands, and every test and argument byte for byte. With Soulstruct installed it is also compared with Soulstruct's reading. Written files store identical conditions once, so their size differs. |
+| `ingame_esd_package.py` | Builds a package to play: the game's own grace and menu talk scripts, written back by the ESD code with nothing changed (Oodle 6/6), a me3 profile on a separate save, `launch.cmd` and `CHECK.txt` (the grace menu has to behave exactly as usual). |
 
 Independent readers are optional and not dependencies of the launcher. With Soulstruct (GPL-3.0):
 
