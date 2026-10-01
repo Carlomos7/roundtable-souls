@@ -2,6 +2,10 @@
 
 All notable changes to Roundtable Souls. The version is shown in the window title.
 
+## [3.13.2] - 2026-10-01
+
+- Fixed: combined parameters (regulation.bin) crashed the game at start, in every version since 3.6.0 that combined them. The file is now compressed the way the game's own is (a 64 KB window), the shape every regulation editor writes; checked in game on Windows together with each layout the launcher can write for merged archives and text.
+
 ## [3.13.1] - 2026-09-30
 
 - Fixed: Oodle-compressed files the launcher writes (merged files, and the preview build of Nightreign Revive) now use the tested Elden Ring layout: compression level 6, with the same level in the file header. Files over 16 MB were written at a faster level with that level in the header, a layout no game file uses. Merging the largest archives now takes longer (the 88 MB effects archive about two and a half minutes instead of seconds).
