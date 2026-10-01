@@ -875,7 +875,7 @@ def test_removing_a_mod_is_a_job_that_activity_can_restore(sandbox, monkeypatch)
     assert w.activity.rows_shown()[0].title.full_text() == "Restore ersc.dll"
 
 
-def test_removing_a_merged_package_offers_remove_and_rebuild(sandbox, monkeypatch):
+def test_removing_a_merged_package_says_play_rebuilds_first(sandbox, monkeypatch):
     w = sandbox
     prof = w.profiles / "sandbox.me3"
     (w.profiles / "mod" / "near" / "parts").mkdir(parents=True)
@@ -897,15 +897,15 @@ def test_removing_a_merged_package_offers_remove_and_rebuild(sandbox, monkeypatc
     entry = next(e for e in window.profile_entries(prof) if e["name"] == "near")
     w._remove_mod(entry)
     _wait_idle(w)
-    assert shown[0] == ("Remove and rebuild", "Remove only") and [p.name for p in rebuilt] == ["sandbox.me3"]
-    w.game_running = True  # while playing: the rebuild waits, so only Remove is offered
+    assert shown[0] == ("Remove", None) and rebuilt == []  # one button; Play (or Rebuild) brings it up to date
+    w.game_running = True  # while playing: the same one button
     prof.write_text(
         prof.read_text(encoding="utf-8") + "\n[[packages]]\nid = \"near\"\npath = 'mod/near'\n", encoding="utf-8"
     )
     entry = next(e for e in window.profile_entries(prof) if e["name"] == "near")
     w._remove_mod(entry)
     _wait_idle(w)
-    assert shown[1] == ("Remove", None) and len(rebuilt) == 1
+    assert shown[1] == ("Remove", None) and rebuilt == []
     w.game_running = False
 
 
@@ -998,7 +998,7 @@ def _stale_merge(monkeypatch, fail=False):
     ran = []
     h = {"state": "stale", "text": "Combined parameters are out of date", "reasons": ["p changed"], "backend": "t"}
     h.update(packs=["p", "last"], winner="last")
-    monkeypatch.setattr(window.core.mod_merge, "needs_update", lambda p: dict(h))
+    monkeypatch.setattr(window.core.mod_merge, "play_check", lambda p: {**h, "blocked": None})
 
     def update(p, log):
         ran.append(p)
@@ -1020,7 +1020,7 @@ def test_play_updates_the_merged_mods_first_then_starts(sandbox, monkeypatch):
     for _ in range(5):
         QApplication.processEvents()
     assert len(ran) == 1 and resumed == [1]
-    monkeypatch.setattr(window.core.mod_merge, "needs_update", lambda p: None)
+    monkeypatch.setattr(window.core.mod_merge, "play_check", lambda p: None)
     assert w._update_first(lambda: resumed.append(2)) is False  # up to date: Play goes straight on
 
 
@@ -1058,15 +1058,84 @@ def test_a_failed_update_offers_play_anyway_once(sandbox, monkeypatch):
     assert asked and asked[0][1:3] == ("Play anyway", "View details") and "refused" in asked[0][3][0]
     assert resumed == [1]
     assert w._update_first(lambda: None) is False  # Play anyway: this Play starts as it is
-    assert w._update_first(lambda: None) is False  # and it is not tried again with the same inputs this session
+    asked.clear()
+    # Not tried again with the same inputs this session, but never started silently either: it asks again.
+    assert w._update_first(lambda: resumed.append(2)) is True and not w.busy
+    for _ in range(5):
+        QApplication.processEvents()
+    assert asked and asked[0][1:3] == ("Play anyway", "View details") and resumed == [1, 2]
 
 
-def test_the_switch_turns_the_update_off(sandbox, monkeypatch):
+class _Answer:
+    """A ConfirmDialog stand-in that records what was asked and answers with `choice`."""
+
+    asked: list = []
+    choice = "apply"
+
+    def __init__(self, title, parent, **k):
+        _Answer.asked.append((title, k.get("apply_text"), k.get("second_text"), k.get("changes")))
+        self.choice = _Answer.choice
+
+    def exec(self):
+        return self.choice is not None
+
+
+def _fresh_play(w):
+    """The window is shared between tests: no Play anyway armed, no failed update remembered."""
+    w._skip_update_once = False
+    w._update_failed = {}
+
+
+def _answer(monkeypatch, choice):
+    _Answer.asked, _Answer.choice = [], choice
+    monkeypatch.setattr(window, "ConfirmDialog", _Answer)
+    return _Answer.asked
+
+
+def test_with_automatic_rebuilds_off_play_asks_and_never_starts_silently(sandbox, monkeypatch):
     w = sandbox
-    _stale_merge(monkeypatch)
+    _fresh_play(w)
+    ran = _stale_merge(monkeypatch)
     w.settings["play_update_merge"] = False
-    assert w._update_first(lambda: None) is False and not w.busy
     assert not w.play_rows["play_update_merge"].isHidden() or w.game is not window.games.ELDEN_RING
+    asked = _answer(monkeypatch, None)  # closed: nothing happens
+    resumed = []
+    assert w._update_first(lambda: resumed.append(1)) is True and not w.busy and ran == []
+    assert asked[0][1:3] == ("Rebuild and play", "Play anyway")
+    _answer(monkeypatch, "second")  # Play anyway: this once, with the previous result
+    # Play comes back through resume and uses up the "Play anyway" (here: resume asks _update_first, as Play does).
+    assert w._update_first(lambda: resumed.append(2 if w._update_first(lambda: None) is False else 0)) is True
+    assert ran == []
+    for _ in range(5):
+        QApplication.processEvents()
+    assert resumed == [2]
+    _answer(monkeypatch, "apply")  # Rebuild and play
+    assert w._update_first(lambda: resumed.append(3)) is True
+    _wait_idle(w)
+    for _ in range(5):
+        QApplication.processEvents()
+    assert len(ran) == 1 and resumed == [2, 3]
+
+
+def test_play_asks_when_the_merged_mods_cannot_be_rebuilt(sandbox, monkeypatch):
+    w = sandbox
+    _fresh_play(w)
+    ran = _stale_merge(monkeypatch)
+    h = window.core.mod_merge.play_check(None)
+    monkeypatch.setattr(window.core.mod_merge, "play_check", lambda p: {**h, "blocked": "the last package is missing"})
+    asked = _answer(monkeypatch, None)
+    assert w._update_first(lambda: None) is True and ran == [] and not w.busy
+    assert asked[0][1:3] == ("Play anyway", "View details") and "missing" in asked[0][3][1]
+
+
+def test_play_asks_when_the_rebuild_tool_was_not_allowed(sandbox, monkeypatch):
+    w = sandbox
+    _fresh_play(w)
+    ran = _stale_merge(monkeypatch)
+    monkeypatch.setattr(w, "_tool_ready", lambda prof: False)
+    asked = _answer(monkeypatch, None)
+    assert w._update_first(lambda: None) is True and ran == []
+    assert asked[0][1:3] == ("Play anyway", "View details")
 
 
 def test_play_asks_for_the_update_before_anything_else(sandbox, monkeypatch):
@@ -1094,3 +1163,30 @@ def test_install_mod_opens_one_picker_and_cancel_means_cancel(launcher, monkeypa
     assert opened == ["file"] and not installed  # cancelled: no second picker, nothing installed
     folder_choice.trigger()
     assert opened == ["file", "folder"] and not installed
+
+
+def test_an_unapproved_rebuild_tool_is_offered_once_on_the_mods_page(sandbox, monkeypatch):
+    w = sandbox
+    w._approval_offered = set()
+    tool = type(
+        "Tool", (), {"label": "the rebuild tool of revive", "package": {"name": "revive"}, "problem": lambda s: None}
+    )()
+    allowed = {"yes": False}
+    monkeypatch.setattr(window.core.mod_merge, "find_backend", lambda p: tool)
+    monkeypatch.setattr(window.core.mod_merge, "approved", lambda t: allowed["yes"])
+    shown = []
+    monkeypatch.setattr(
+        window, "notice", lambda *a, **k: shown.append(a[2]) or type("B", (), {"close": lambda s: None})()
+    )
+    prof = w.profiles / "sandbox.me3"
+    w.switchTo(w.play_page)
+    w._offer_tool_approval(prof)  # not over another page
+    assert shown == []
+    w.switchTo(w.mods_page)
+    w._offer_tool_approval(prof)
+    w._offer_tool_approval(prof)  # once a session
+    assert shown == ["Allow the rebuild tool of revive to run?"]
+    w._approval_offered = set()
+    allowed["yes"] = True  # already allowed: nothing to ask
+    w._offer_tool_approval(prof)
+    assert len(shown) == 1

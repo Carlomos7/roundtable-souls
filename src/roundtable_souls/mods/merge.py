@@ -462,17 +462,29 @@ def stale_reasons(profile: Path, all_layers: list[dict], packs: list[dict], back
                 reasons.append(f"{rel}: {expected['name']}'s copy changed since the last rebuild")
         elif layer_used:
             p = layer_used[0][0]
-            gone = next((l for l in all_layers if _within(p, l["folder"])), None)
-            who = gone["name"] if gone else p.parent.name
-            reasons.append(
-                f"{rel}: the last rebuild used {who}'s copy, which is no longer loaded before {target['name']}"
-            )
+            moved = next((l for l in all_layers if _within(p, l["folder"])), None)
+            if moved is not None:
+                reasons.append(
+                    f"{rel}: {target['name']}'s build still has {moved['name']}'s copy, which now loads after it"
+                )
+            else:  # the package is no longer in the profile: name it by its folder (the path minus the file)
+                folder = _folder_of(p, rel)
+                reasons.append(
+                    f"{rel}: {folder}'s copy is still in {target['name']}'s build, though {folder} is no longer loaded; "
+                    "the game keeps using it until a rebuild"
+                )
         else:
             for p, h in used:
                 if p.is_file() and not any(_within(p, o) for o in own) and sha256(p) != h:
                     reasons.append(f"{rel}: the game's copy changed since the last rebuild (a game update?)")
                     break
     return reasons
+
+
+def _folder_of(path: Path, rel: str) -> str:
+    """The name of the package folder `path` (a copy of the game file `rel`) sits in."""
+    depth = len(Path(rel).parts)
+    return path.parents[depth - 1].name if len(path.parents) >= depth else path.parent.name
 
 
 def _package_folders(profile: Path) -> list[Path]:
@@ -676,11 +688,12 @@ def rebuild(profile: Path, log, combine: bool | None = None) -> dict:
 AUTO_KEEP = 3  # rebuild tool backups kept after an automatic rebuild (Nightreign Revive's are about 140 MB each)
 
 
-def needs_update(profile: Path) -> dict | None:
-    """The profile's health when Play should rebuild first: a merge exists (the launcher's combine or a rebuild
-    tool) and it is out of date or its last run failed, and nothing stops a rebuild (see setup_problem). None when
-    Play can start as it is. A profile whose packs are only stacked (no merge yet) is not rebuilt by itself: making
-    a combined package is a change to the profile the user asks for."""
+def play_check(profile: Path) -> dict | None:
+    """What Play has to do about the merged mods first. None: nothing, the game can start. Otherwise the profile's
+    health, when a merge exists (the launcher's combine or a rebuild tool) and is out of date or its last run failed,
+    with "blocked": why a rebuild cannot run (see setup_problem), or None when Play should rebuild. A profile whose
+    packs are only stacked (no merge yet) is not rebuilt by itself: making a combined package is a change to the
+    profile the user asks for."""
     profile = Path(profile)
     try:
         if not profile.is_file() or not is_elden_ring(profile):
@@ -690,9 +703,13 @@ def needs_update(profile: Path) -> dict | None:
         return None
     if h["state"] not in ("stale", "failed") or not h["backend"]:
         return None
-    if setup_problem(profile):
-        return None
-    return h
+    return {**h, "blocked": setup_problem(profile) or None}
+
+
+def needs_update(profile: Path) -> dict | None:
+    """The profile's health when Play should rebuild first (play_check, when nothing stops the rebuild)."""
+    h = play_check(profile)
+    return h if h is not None and not h["blocked"] else None
 
 
 def update_before_play(profile: Path, log) -> dict | None:

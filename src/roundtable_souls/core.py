@@ -13,6 +13,7 @@ import sys
 import time
 import traceback
 from pathlib import Path
+from typing import Any
 
 from roundtable_souls import __version__, coop, folders, games
 from roundtable_souls.coop import (
@@ -702,8 +703,11 @@ def play_headless(game: games.Game | None = None) -> int:
             "and choose one on the Play page"
         )
         return 1
-    if play_options(settings)["play_update_merge"]:
-        update_merge_headless(setup)
+    why = update_merge_headless(setup, automatic=play_options(settings)["play_update_merge"])
+    if why:
+        common.log(f"error: the game was not started: {why}")
+        not_started_notice(game, why)
+        return 1
     try:
         job_play(setup)
     except SystemExit as e:
@@ -711,22 +715,74 @@ def play_headless(game: games.Game | None = None) -> int:
     return 0
 
 
-def update_merge_headless(setup) -> None:
-    """--play without the window: bring the merged mods up to date first when the rebuild tool was already allowed
-    (nothing can ask here); a failure is logged and the game starts with the previous result."""
+def update_merge_headless(setup, automatic: bool = True) -> str | None:
+    """--play without the window: bring the merged mods up to date first. None when the game may start (nothing to
+    do, or updated); otherwise why it must not start: the game never runs with merged mods that no longer match the
+    profile (a removed mod still inside them, say). Nothing can ask here, so a rebuild tool runs only when it was
+    already allowed. automatic False (the setting "rebuild ... automatically" off): nothing is rebuilt
+    without being asked, so the game is not started either."""
     prof = Path(setup.profile) if getattr(setup, "profile", None) else None
-    if prof is None or mod_merge.needs_update(prof) is None:
-        return
+    if prof is None:
+        return None
+    h = mod_merge.play_check(prof)
+    if h is None:
+        return None
     common.start_log("launcher: update merged mods before Play (no window)")
-    tool = mod_merge.find_backend(prof)
+    reason = (h.get("reasons") or [h.get("text") or "the merged mods are out of date"])[0]
+    if h["blocked"]:
+        common.log(f"error: the merged mods are out of date ({reason}) and cannot be rebuilt: {h['blocked']}")
+        return f"The merged mods are out of date and cannot be rebuilt: {h['blocked']}"
+    if not automatic:
+        common.log(f"error: the merged mods are out of date ({reason}); automatic rebuilds are off")
+        return (
+            f"The merged mods are out of date ({reason}), and rebuilding them automatically before Play is "
+            "turned off. Open Roundtable Souls to rebuild them."
+        )
+    tool: Any = mod_merge.find_backend(prof)  # a rebuild tool (mods.backends), or None
+    if tool is not None and tool.problem():
+        common.log(f"error: {tool.label} cannot run: {tool.problem()}")
+        return f"The merged mods are out of date and {tool.label} cannot run: {tool.problem()}"
     if tool is not None and not mod_merge.approved(tool):
-        common.log(f"warning: {tool.label} has not been allowed to run yet; open Roundtable Souls and Rebuild once")
-        return
+        common.log(f"error: {tool.label} has not been allowed to run yet; open Roundtable Souls and allow it")
+        return (
+            f"The merged mods are out of date ({reason}), and {tool.label} has not been allowed to run yet. "
+            "Open Roundtable Souls to allow it."
+        )
     try:
         mod_merge.update_before_play(prof, common.log)
         common.log("done: merged mods updated")
+        return None
     except mod_merge.MergeError as e:
-        common.log(f"warning: the merged mods could not be updated, the previous result is used: {e}")
+        common.log(f"error: the merged mods could not be updated: {e}")
+        return f"The merged mods could not be updated: {e}"
+
+
+def not_started_notice(game: games.Game, why: str) -> None:
+    """--play without the window, when the game was not started: a small window saying why, with a way to open the
+    launcher (a Steam shortcut or Gaming Mode has nowhere else to show it). Nothing happens without a display."""
+    try:
+        import subprocess
+
+        from PySide6.QtWidgets import QApplication, QMessageBox
+
+        app = QApplication.instance() or QApplication(sys.argv[:1])
+        box = QMessageBox()
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle(TITLE)
+        box.setText(f"{game.name} was not started: your mods need a rebuild")
+        box.setInformativeText(
+            f"{why}\n\nThe game does not start with merged mods that no longer match your mods, so it cannot run "
+            "with a removed or changed mod still inside them."
+        )
+        open_btn = box.addButton("Open Roundtable Souls", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("Close", QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        del app
+        if box.clickedButton() is open_btn:
+            command = [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-m", "roundtable_souls"]
+            subprocess.Popen([*command, "--game", game.key], close_fds=True)
+    except Exception as e:  # no display (a console, a test): the log says it
+        common.log(f"the notice could not be shown: {e}")
 
 
 def check(game: games.Game | None = None):

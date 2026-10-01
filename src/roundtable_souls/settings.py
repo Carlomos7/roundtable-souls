@@ -81,7 +81,7 @@ class LauncherSettings(BaseModel):
     offline_start_steam: bool = True
     offline_skip_confirm: bool = False
 
-    play_update_merge: bool = True
+    play_update_merge: bool = True  # rebuild out-of-date merged mods before Play by itself; off: ask first
     build_merges: bool = False
     play_backup_before: bool = False
     play_repair_after: bool = True

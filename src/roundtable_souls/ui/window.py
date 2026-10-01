@@ -20,6 +20,7 @@ import sys
 import threading
 import time
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtCore import QEvent, QPoint, Qt, QTimer
 from PySide6.QtGui import QIcon, QKeySequence, QPainter, QPixmap, QShortcut
@@ -1273,6 +1274,7 @@ class Launcher(FluentWindow):
         packs = [m for m in mods if m["kind"] == "package"]
         nats = [m for m in mods if m["kind"] == "native"]
         self.mods_note.setText(Path(s.profile).name)
+        self._offer_tool_approval(Path(s.profile))
         self.mods_note.setToolTip(s.profile)
         try:
             self._pack_tree = core.mod_manage.package_tree(Path(s.profile), mods)
@@ -1941,7 +1943,6 @@ class Launcher(FluentWindow):
                 if other == folder or folder in other.parents:
                     users.append(o["name"])
         merged = self._merged_from(prof, entry)
-        rebuild_ok = bool(merged) and not self.game_running
         changes = [
             f"The [[{'packages' if entry['kind'] == 'package' else 'natives'}]] entry and its own comments are "
             f"deleted from {prof.name}"
@@ -1955,8 +1956,8 @@ class Launcher(FluentWindow):
                 f" and {len(merged) - 3} more" if len(merged) > 3 else ""
             )
             changes.append(
-                f"Its {files} {'is' if len(merged) == 1 else 'are'} inside the combined result, so the game keeps "
-                "using them until it is rebuilt" + (" (after the game closes)" if merged and self.game_running else "")
+                f"Its {files} {'is' if len(merged) == 1 else 'are'} still inside the merged mods: Play rebuilds them "
+                "before the game starts (or Rebuild on the Mods page), so the game does not run with them"
             )
         dlg = ConfirmDialog(
             f"Remove {entry['name']} from the profile",
@@ -1971,13 +1972,9 @@ class Launcher(FluentWindow):
                 else None
             ),
             option_checked=False,
-            apply_text="Remove and rebuild" if rebuild_ok else "Remove",
-            second_text="Remove only" if rebuild_ok else None,
+            apply_text="Remove",
         )
         if not dlg.exec():
-            return
-        rebuild = rebuild_ok and dlg.choice == "apply"
-        if rebuild and not self._tool_ready(prof):
             return
         fresh = self._fresh_entry(entry)
         if fresh is None:
@@ -2013,12 +2010,10 @@ class Launcher(FluentWindow):
             )
             if delete and not out["removed_folder"] and not users:
                 common.log("warning: the folder was kept (the Recycle Bin did not take it)")
-            if rebuild:
-                try:
-                    res = core.mod_merge.rebuild(prof, common.log)
-                    common.log(f"done: removed {name} and rebuilt the combined parameters ({res['backend']})")
-                except core.mod_merge.MergeError as e:
-                    common.log(f"warning: {name} is removed, but the rebuild did not finish: {e}")
+            if merged:
+                common.log(
+                    f"note: the merged mods still hold {name}'s files; Play rebuilds them before the game starts"
+                )
 
         self.start(job, f"Removing {name}...", need_setup=False)
 
@@ -2058,6 +2053,42 @@ class Launcher(FluentWindow):
         except Exception:
             return []
 
+    def _offer_tool_approval(self, prof: Path) -> None:
+        """A mod's rebuild tool the user has not allowed yet: ask on the Mods page, once a session, so a rebuild
+        (before Play, or after a change) does not stop in the middle to ask."""
+        # Only while the Mods page is shown: a notice over another page would take its keyboard focus.
+        if self.game is not games.ELDEN_RING or self.stackedWidget.currentWidget() is not self.mods_page:
+            return
+        try:
+            tool: Any = core.mod_merge.find_backend(prof)  # a rebuild tool (mods.backends), or None
+            if tool is None or tool.problem() or core.mod_merge.approved(tool):
+                return
+        except Exception:
+            return
+        key = (str(prof), tool.label)
+        offered = getattr(self, "_approval_offered", set())
+        if key in offered:
+            return
+        self._approval_offered = offered | {key}
+        allow = ghost_btn("Allow", FI.ACCEPT)
+        bar = notice(
+            self,
+            "info",
+            f"Allow {tool.label} to run?",
+            f"{tool.package['name']} rebuilds the merged mods with a program of its own. Allowing it now means a "
+            "rebuild before Play does not stop to ask. Allow it only for mods you trust.",
+            actions=(allow,),
+        )
+
+        def answer():
+            self._tool_ready(prof)  # shows what the tool runs and asks; the answer is remembered
+            try:
+                bar.close()
+            except Exception:
+                pass
+
+        allow.clicked.connect(answer)
+
     def _tool_ready(self, prof) -> bool:
         """The profile's rebuild tool can run: found, nothing stopping it, and allowed by the user (asked once per
         version of the tool). True when there is no tool (the launcher's own combine needs no permission)."""
@@ -2095,7 +2126,6 @@ class Launcher(FluentWindow):
         if u.get("type") == "rebuild" and self.game_running:
             self._toast("Close the game first", "The rebuild's files are in use while it runs.", error=True)
             return
-        rebuild = False
         if u.get("type") == "rebuild":
             redo = bool(u.get("redo"))
             title = "Redo the rebuild" if redo else "Undo the rebuild"
@@ -2118,7 +2148,6 @@ class Launcher(FluentWindow):
             name = "the rebuild"
         else:
             name = u.get("name") or "it"
-            rebuild_ok = bool(u.get("merged")) and not self.game_running
             in_bin = core.trash.exists(u.get("trash"))
             dlg = ConfirmDialog(
                 f"Restore {name}",
@@ -2126,16 +2155,14 @@ class Launcher(FluentWindow):
                 changes=[
                     f"Its entry goes back into {prof.name}, where it was",
                     "Its folder comes back from the Recycle Bin" if in_bin else "",
-                    "The combined parameters are rebuilt with it" if rebuild_ok else "",
+                    "Play rebuilds the merged mods with it before the game starts (or Rebuild on the Mods page)"
+                    if u.get("merged")
+                    else "",
                 ],
                 safety="The profile as it is now is kept in its versions.",
-                apply_text="Restore and rebuild" if rebuild_ok else "Restore",
-                second_text="Restore only" if rebuild_ok else None,
+                apply_text="Restore",
             )
             if not dlg.exec():
-                return
-            rebuild = rebuild_ok and dlg.choice == "apply"
-            if rebuild and not self._tool_ready(prof):
                 return
         job_id = rec.get("id")
 
@@ -2156,12 +2183,6 @@ class Launcher(FluentWindow):
             if u.get("type") == "rebuild":  # the same swap, the other way
                 core.run_logging.set_undo({**u, "redo": not u.get("redo")})
             common.log(f"done: {said}")
-            if rebuild:
-                try:
-                    core.mod_merge.rebuild(prof, common.log)
-                    common.log(f"done: {said}, and rebuilt the combined parameters")
-                except core.mod_merge.MergeError as e:
-                    common.log(f"warning: {name} is back, but the rebuild did not finish: {e}")
 
         self.start(
             job,
@@ -2620,17 +2641,22 @@ class Launcher(FluentWindow):
         lay.addWidget(c)
         c, cl = card("Play session", FI.PLAY)
         cl.addWidget(
-            hint("What Play does around the game. Each step can be turned off; the launch itself always runs.")
+            hint(
+                "What Play does around the game. The game never starts with merged mods that are out of date (a "
+                "removed or changed mod still inside them) without asking you first. The steps below can be turned "
+                "off; the launch itself always runs."
+            )
         )
         rows = (
             (
                 "play_update_merge",
-                "Update merged mods before Play",
+                "Rebuild merged mods automatically before Play",
                 "When mods, their load order or the game changed, Play rebuilds the merged ones first (combined "
                 "parameters, and a mod's own rebuild tool such as Nightreign Revive's), then starts the game.",
-                "A failed update keeps the previous result and asks before starting. After an automatic rebuild only "
-                "the newest 3 of a rebuild tool's backups are kept; older ones go to the Recycle Bin. Off: Play only "
-                "warns, and Rebuild on the Mods page does it.",
+                "Off: Play asks first (rebuild, or play this once with the previous result); a Steam shortcut "
+                "does not start the game and says why. A failed rebuild keeps the previous result and asks before "
+                "starting. After an automatic rebuild only the newest 3 of a rebuild tool's backups are kept; older "
+                "ones go to the Recycle Bin.",
             ),
             (
                 "build_merges",
@@ -4990,6 +5016,8 @@ class Launcher(FluentWindow):
         if self.stackedWidget.currentWidget() is self.activity_page:
             self.activity.refresh()
             self._mark_activity_seen()
+        if self.stackedWidget.currentWidget() is self.mods_page and self.setup and self.setup.profile:
+            self._offer_tool_approval(Path(self.setup.profile))
 
     def _open_activity(self, failed_only=False):
         self.activity.failed_only.setChecked(failed_only)
@@ -5097,27 +5125,33 @@ class Launcher(FluentWindow):
     UPDATE_LABEL = "Updating merged mods before Play..."
 
     def _update_first(self, resume) -> bool:
-        """Before Play: when the merged mods are out of date (see mod_merge.needs_update), rebuild them as a job and
-        call resume (Play again) when it succeeds. True when that job was started, False to play right away."""
+        """Before Play: when the merged mods are out of date (see mod_merge.play_check), rebuild them as a job and call
+        resume (Play again) when it succeeds. When they cannot be rebuilt now, ask before starting with them as they
+        are. True when Play is handled here (a job started, or the question asked), False to play right away."""
         s = self.setup
         if s is None or not s.profile or self.game is not games.ELDEN_RING or self.game_running:
             return False
-        if not play_options(self.settings).get("play_update_merge", True):
-            return False
-        if getattr(self, "_skip_update_once", False):  # Play anyway, after a failed update
+        if getattr(self, "_skip_update_once", False):  # Play anyway, chosen for this one start
             self._skip_update_once = False
             return False
         prof = Path(s.profile)
-        h = core.mod_merge.needs_update(prof)
+        h = core.mod_merge.play_check(prof)
         if h is None:
             return False
         self._on_merge({**h, "profile": str(prof)})
+        reason = (h.get("reasons") or [h.get("text") or "The merged mods are out of date"])[0]
+        if h["blocked"]:
+            return self._ask_play_stale(resume, reason, f"They cannot be rebuilt now: {h['blocked']}")
         key = tuple(h.get("reasons") or ())
         failed = getattr(self, "_update_failed", {})
         if failed.get(str(prof)) == key:
-            return False  # it failed with exactly these inputs this session: Play warns instead of failing again
+            return self._ask_play_stale(
+                resume, reason, "The last rebuild with these mods failed; its log is on Activity."
+            )
+        if not play_options(self.settings).get("play_update_merge", True) and not self._ask_rebuild(resume, reason):
+            return True
         if not self._tool_ready(prof):
-            return False
+            return self._ask_play_stale(resume, reason, "The rebuild tool did not run (not allowed, or it cannot run).")
         self._update_resume = resume
         self._update_key = (str(prof), key)
         self._update_cancelled = False
@@ -5147,6 +5181,47 @@ class Launcher(FluentWindow):
                 raise SystemExit(1) from e
 
         self.start(job, self.UPDATE_LABEL, need_setup=False)
+        return True
+
+    def _ask_rebuild(self, resume, reason: str) -> bool:
+        """Automatic rebuilds are off: ask before rebuilding. True to rebuild now; False when the question
+        handled Play (Play anyway this once, or cancelled)."""
+        dlg = ConfirmDialog(
+            "Your merged mods are out of date",
+            self,
+            changes=[reason],
+            warning="Playing anyway starts the game with the previous result: a removed or changed mod may still be "
+            "inside it.",
+            apply_text="Rebuild and play",
+            second_text="Play anyway",
+        )
+        if not dlg.exec():
+            return False
+        if dlg.choice == "second":
+            self._skip_update_once = True
+            QTimer.singleShot(0, resume)
+            return False
+        return True
+
+    def _ask_play_stale(self, resume, reason: str, why: str) -> bool:
+        """The merged mods are out of date and are not being rebuilt: say so before the game starts. Play anyway
+        starts it once with the previous result; there is no setting that skips this."""
+        dlg = ConfirmDialog(
+            "Your merged mods are out of date",
+            self,
+            changes=[reason, why],
+            warning="Playing anyway starts the game with the previous result: a removed or changed mod may still be "
+            "inside it. Rebuild on the Mods page brings it up to date.",
+            apply_text="Play anyway",
+            second_text="View details",
+        )
+        if not dlg.exec():
+            return True
+        if dlg.choice == "second":
+            self._open_activity(failed_only=True)
+            return True
+        self._skip_update_once = True
+        QTimer.singleShot(0, resume)
         return True
 
     def _cancel_update(self):

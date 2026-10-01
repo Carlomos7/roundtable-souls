@@ -147,12 +147,13 @@ def test_changed_bytes_disabling_and_uninstalling_a_source_make_it_stale(world):
     merge.rebuild(world.profile, lambda s: None)
     idx = next(e["index"] for e in M.entries(world.profile) if e["name"] == "params")
     M.set_options(world.profile, idx, {"enabled": False})
-    assert "no longer loaded before" in merge.health(world.profile)["reasons"][0]
+    assert "params is no longer loaded" in merge.health(world.profile)["reasons"][0]
     M.set_options(world.profile, idx, {"enabled": True})
     assert merge.health(world.profile)["state"] == "current"
     M.uninstall(world.profile, idx)
     h = merge.health(world.profile)
-    assert h["state"] == "stale" and "no longer loaded before last" in h["reasons"][0]
+    assert h["state"] == "stale" and "params is no longer loaded" in h["reasons"][0]
+    assert "still in last's build" in h["reasons"][0]  # named by its folder, with what it means
 
 
 def test_a_pack_after_the_merger_is_named(world):
