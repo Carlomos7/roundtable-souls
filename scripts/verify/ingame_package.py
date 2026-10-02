@@ -198,7 +198,7 @@ def main() -> int:
             header[0x28:0x2C] = kind
             header[0x30] = header_level
             if kind == b"KRAK":
-                payload = game_oodle.compress_kraken(body, level, comp)
+                payload = comp.compress_kraken(body, level)
             else:
                 import zlib
 

@@ -1,8 +1,8 @@
 """Binary game file formats: what a file contains and how to read and write it, nothing else.
 
 dcx (the compressed wrapper), bnd4 (archives), fmg (text tables), param (parameter tables), regulation (regulation.bin:
-encrypted, compressed, a binder of tables) and esd (talk scripts). Native compression goes through game.oodle; no
-module here knows about game folders, profiles or the window.
+encrypted, compressed, a binder of tables) and esd (talk scripts). The caller passes native (Oodle) compression
+in (game.oodle makes the codecs); no module here knows about game folders, profiles or the window.
 """
 
 
