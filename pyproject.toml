@@ -18,7 +18,7 @@ dependencies = [
 ]
 
 [project.scripts]
-roundtable-souls = "roundtable_souls:main"
+roundtable-souls = "roundtable_souls.cli:main"
 
 [dependency-groups]
 dev = [

@@ -71,8 +71,7 @@ def test_a_second_start_reaches_the_window(name):
 
 
 def test_play_from_a_shortcut_hands_off_or_holds_the_play_name(monkeypatch):
-    import roundtable_souls
-    from roundtable_souls import core, games
+    from roundtable_souls import cli, core, games
 
     played, sent = [], []
     monkeypatch.setattr(core, "play_headless", lambda game: played.append(instance.held(instance.PLAY)) or 0)
@@ -80,14 +79,14 @@ def test_play_from_a_shortcut_hands_off_or_holds_the_play_name(monkeypatch):
     monkeypatch.setattr(instance, "PLAY", f"RoundtableSouls.Test.{uuid.uuid4().hex}")
     monkeypatch.setattr(instance, "send", lambda msg, name=None: sent.append(msg) or True)
     nr = games.get("nightreign")
-    assert roundtable_souls.play_from_shortcut(nr) == 0 and played == [True] and sent == []  # no window: plays here
+    assert cli.play_from_shortcut(nr) == 0 and played == [True] and sent == []  # no window: plays here
     assert not instance.held(instance.PLAY)  # released when Play ends
     window = instance.acquire(instance.WINDOW)
     try:
-        assert roundtable_souls.play_from_shortcut(nr) == 0 and sent == ["play nightreign"] and len(played) == 1
+        assert cli.play_from_shortcut(nr) == 0 and sent == ["play nightreign"] and len(played) == 1
         hold = instance.acquire(instance.PLAY)
         monkeypatch.setattr(instance, "send", lambda msg, name=None: False)  # a window that does not answer
-        assert roundtable_souls.play_from_shortcut(nr) == 1  # a shortcut Play already runs
+        assert cli.play_from_shortcut(nr) == 1  # a shortcut Play already runs
         hold.release()
     finally:
         window.release()

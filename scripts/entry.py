@@ -2,6 +2,6 @@
 
 import sys
 
-from roundtable_souls import main
+from roundtable_souls.cli import main
 
 sys.exit(main())
