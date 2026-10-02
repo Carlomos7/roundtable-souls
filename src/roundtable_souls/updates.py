@@ -870,7 +870,7 @@ def update_headless(restart_args: list[str], log=None, start_log=None) -> int:
     over to Velopack and exits; the launcher restarts with args (none: the window; --game er --play: Play).
 
     Exit codes: 0 updating or already up to date, 1 failed (nothing changed), 3 the newest release is blocked here."""
-    from roundtable_souls.platform import common
+    from roundtable_souls.platform import paths as common
 
     log = log or common.log
     (start_log or common.start_log)("launcher: update (no window)")

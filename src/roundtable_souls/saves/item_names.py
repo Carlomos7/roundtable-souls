@@ -17,7 +17,7 @@ from pathlib import Path
 
 from roundtable_souls import formats
 from roundtable_souls.game import oodle as game_oodle
-from roundtable_souls.platform import common
+from roundtable_souls.platform import paths as common
 
 GOODS = 0x40000000
 SEAMLESS = "Seamless Co-op"

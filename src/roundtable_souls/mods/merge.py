@@ -88,7 +88,7 @@ def sha256(path: Path) -> str | None:
 
 # ----------------------------------------------------------------------------- layers
 def is_elden_ring(profile: Path) -> bool:
-    from roundtable_souls.platform import common
+    from roundtable_souls.platform import paths as common
 
     named = common.profile_games(Path(profile))
     return games.ELDEN_RING.key in named if named else True  # a profile that names no game counts as Elden Ring's
@@ -348,7 +348,7 @@ def health(profile: Path) -> dict:
     """{state, text, packs, winner, backend, reasons, run, combine, can_combine, ...} for the profile; state None
     when this does not apply (not an Elden Ring profile, or no profile)."""
     from roundtable_souls.mods.backends import builtin
-    from roundtable_souls.platform import common
+    from roundtable_souls.platform import paths as common
 
     profile = Path(profile)
     out = {
@@ -613,7 +613,7 @@ def rebuild(profile: Path, log, combine: bool | None = None) -> dict:
     own text when a tool only rewrote it and verifies the result. Raises MergeError (and records the failure)
     otherwise. Returns {backend, profile_note}."""
     from roundtable_souls.mods.backends import builtin
-    from roundtable_souls.platform import common
+    from roundtable_souls.platform import paths as common
 
     profile = Path(profile)
     if not is_elden_ring(profile):

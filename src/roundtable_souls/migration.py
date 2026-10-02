@@ -126,13 +126,13 @@ def steam_root() -> Path | None:
     override = identity.get().steam_root
     if override:
         return Path(override)
-    from roundtable_souls.platform import common
+    from roundtable_souls.platform import paths as common
 
     return common.steam_root()
 
 
 def steam_running() -> bool:
-    from roundtable_souls.platform import common
+    from roundtable_souls.platform import paths as common
 
     if identity.get().steam_root:  # a test build's fake Steam is never running
         return False

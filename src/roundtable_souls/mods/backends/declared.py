@@ -31,7 +31,7 @@ _PLACE = re.compile(r"\{(here|package|profile|profile_dir|game_dir|game_exe|me3)
 
 
 def _values(profile: Path, layer: dict, here: Path) -> dict[str, str]:
-    from roundtable_souls.platform import common
+    from roundtable_souls.platform import paths as common
 
     game_dir = common.game_dir()
     return {

@@ -127,7 +127,7 @@ class Tool:
         return f"{shown}\nin {self.recipe.cwd}"
 
     def run(self, log) -> None:
-        from roundtable_souls.platform import common
+        from roundtable_souls.platform import paths as common
 
         r = self.recipe
         if r.problem:

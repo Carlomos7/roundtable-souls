@@ -16,7 +16,7 @@ _VERSION = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 
 def _no_window():
     try:
-        from roundtable_souls.platform import common
+        from roundtable_souls.platform import paths as common
 
         return common.NO_WINDOW
     except Exception:

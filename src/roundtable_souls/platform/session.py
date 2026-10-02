@@ -6,9 +6,9 @@ import subprocess
 import time
 from pathlib import Path
 
-from roundtable_souls.platform import common
+from roundtable_souls.platform import paths as common
 from roundtable_souls.platform import processes as clear_dead_game_shells
-from roundtable_souls.platform.common import fail, log
+from roundtable_souls.platform.paths import fail, log
 
 
 def _start_steam():

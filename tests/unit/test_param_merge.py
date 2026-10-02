@@ -11,7 +11,7 @@ from roundtable_souls.merging.rules import param as pm
 from roundtable_souls.mods import manage as M
 from roundtable_souls.mods import merge
 from roundtable_souls.mods.backends import builtin
-from roundtable_souls.platform import common
+from roundtable_souls.platform import paths as common
 
 DCX = (  # the 0x4C header of the game's regulation (sizes are filled in on write)
     b"DCX\0"

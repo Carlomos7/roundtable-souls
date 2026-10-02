@@ -8,7 +8,7 @@ from test_mod_merge import World
 
 from roundtable_souls import core
 from roundtable_souls.mods import merge
-from roundtable_souls.platform import common
+from roundtable_souls.platform import paths as common
 
 
 @pytest.fixture

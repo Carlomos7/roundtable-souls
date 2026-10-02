@@ -169,7 +169,7 @@ def _seamless(profile: Path) -> Path | None:
 # ----------------------------------------------------------------------------- the tool
 def run_tool(exe: Path, args: list[str], env: dict, timeout: int, cwd: Path) -> tuple[int, str]:
     """Run the mod's tool once: (exit code, its output)."""
-    from roundtable_souls.platform import common
+    from roundtable_souls.platform import paths as common
 
     try:
         p = subprocess.run(
@@ -267,7 +267,7 @@ def build(
     swap it in, and return {output, previous, restore, sources, seconds}. Raises EngineError; the output in place is
     then unchanged."""
     from roundtable_souls import __version__
-    from roundtable_souls.platform import common
+    from roundtable_souls.platform import paths as common
 
     started = time.time()
     profile, target_folder, setup = Path(profile), Path(target_folder), Path(setup)

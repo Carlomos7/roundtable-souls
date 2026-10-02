@@ -6,8 +6,8 @@ import os
 
 import pytest
 
-from roundtable_souls.platform import common
 from roundtable_souls.platform import logging as rl
+from roundtable_souls.platform import paths as common
 from roundtable_souls.ui import activity as act
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")

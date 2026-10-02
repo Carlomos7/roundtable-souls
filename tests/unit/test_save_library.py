@@ -6,7 +6,7 @@ import json
 import pytest
 
 from roundtable_souls import core, games
-from roundtable_souls.platform import common
+from roundtable_souls.platform import paths as common
 from roundtable_souls.saves import library as Lib
 from roundtable_souls.saves import regulation
 

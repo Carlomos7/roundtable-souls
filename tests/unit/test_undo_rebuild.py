@@ -77,7 +77,7 @@ def test_a_restore_list_pointing_outside_the_profile_is_not_used(tmp_path, monke
 
 
 def test_the_combine_keeps_its_earlier_outputs_and_undo_puts_one_back(tmp_path, monkeypatch):
-    from roundtable_souls.platform import common
+    from roundtable_souls.platform import paths as common
 
     game = tmp_path / "Game"
     game.mkdir()

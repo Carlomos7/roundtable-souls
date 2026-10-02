@@ -174,7 +174,7 @@ class JobDetails(QWidget):
         QApplication.clipboard().setText(text)
 
     def _open(self):
-        from roundtable_souls.platform import common
+        from roundtable_souls.platform import paths as common
 
         path = run_logging.job_file(self._source)
         if path is not None and path.is_file():

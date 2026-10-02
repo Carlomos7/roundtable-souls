@@ -13,7 +13,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 from roundtable_souls import formats
-from roundtable_souls.platform import common
+from roundtable_souls.platform import paths as common
 from roundtable_souls.resources import DATA_DIR
 from roundtable_souls.saves import item_names as mod_item_names  # a module, so tests can stand in for it
 from roundtable_souls.saves import loading as save_loading

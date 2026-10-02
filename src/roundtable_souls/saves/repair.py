@@ -7,8 +7,8 @@ longer RSLT, copies that section from a healthy sibling save. (Moved from system
 
 import time
 
-from roundtable_souls.platform import common
-from roundtable_souls.platform.common import fail, log
+from roundtable_souls.platform import paths as common
+from roundtable_souls.platform.paths import fail, log
 from roundtable_souls.saves import nightreign as repair_nightreign
 from roundtable_souls.saves import regulation as repair
 

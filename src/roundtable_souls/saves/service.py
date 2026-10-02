@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 from roundtable_souls import folders, games, models
-from roundtable_souls.platform import common
+from roundtable_souls.platform import paths as common
 from roundtable_souls.saves import analyze as save_analyze
 from roundtable_souls.saves import container as save_container
 from roundtable_souls.saves import fix as save_fix

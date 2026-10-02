@@ -11,7 +11,7 @@ QtTest = pytest.importorskip("PySide6.QtTest")
 from PySide6.QtCore import Qt  # noqa: E402
 from PySide6.QtWidgets import QApplication, QPushButton  # noqa: E402
 
-from roundtable_souls.platform import common as _common  # noqa: E402
+from roundtable_souls.platform import paths as _common  # noqa: E402
 from roundtable_souls.ui import window  # noqa: E402
 
 REAL_SAVE_FILES = _common.save_files
@@ -82,7 +82,7 @@ def test_pages_fit_a_narrow_window(launcher, app):
 
 def test_game_tabs_switch_every_page(launcher, app):
     from roundtable_souls import games
-    from roundtable_souls.platform import common
+    from roundtable_souls.platform import paths as common
 
     assert list(launcher._game_actions) == [g.key for g in games.GAMES]
     assert launcher.game_btn.text() == "Elden Ring"
@@ -193,7 +193,7 @@ SANDBOX_INI = "[PASSWORD]\ncooppassword = start\n[SCALING]\nenemy_health_scaling
 @pytest.fixture
 def sandbox(app, monkeypatch, tmp_path):
     """The real window pointed at a temp me3 profile and co-op ini, with no saves, so tests can type and save."""
-    from roundtable_souls.platform import common
+    from roundtable_souls.platform import paths as common
 
     profiles = tmp_path / "profiles"
     seamless = profiles / "natives" / "SeamlessCoop"
@@ -279,7 +279,7 @@ def test_saves_page_names_the_file_play_uses_and_lists_the_library(sandbox, monk
     from PySide6.QtCore import QEventLoop, QTimer
 
     from roundtable_souls import games
-    from roundtable_souls.platform import common
+    from roundtable_souls.platform import paths as common
     from roundtable_souls.saves import library, regulation
 
     acct = tmp_path / "EldenRing" / "7656"
@@ -429,7 +429,7 @@ def test_dropping_mods_on_the_mods_page_installs_each_in_turn(sandbox, monkeypat
     from PySide6.QtCore import QEventLoop, QTimer
 
     from roundtable_souls.mods import manage
-    from roundtable_souls.platform import common
+    from roundtable_souls.platform import paths as common
 
     monkeypatch.setattr(common, "start_log", lambda *a, **k: None)  # the job's log stays out of the real logs folder
     monkeypatch.setattr(common, "log", lambda *a, **k: None)
@@ -545,7 +545,7 @@ def test_merge_health_is_a_pill_and_prompts_when_it_goes_stale(sandbox, monkeypa
 def test_an_install_that_asked_for_it_rebuilds_afterwards(sandbox, monkeypatch, tmp_path):
     from PySide6.QtCore import QEventLoop, QTimer
 
-    from roundtable_souls.platform import common
+    from roundtable_souls.platform import paths as common
 
     monkeypatch.setattr(common, "start_log", lambda *a, **k: None)
     monkeypatch.setattr(common, "log", lambda *a, **k: None)
