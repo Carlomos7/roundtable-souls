@@ -12,9 +12,9 @@ from dataclasses import dataclass, field
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
-from roundtable_souls import signing
 from roundtable_souls.config import identity
 from roundtable_souls.updates import apply as updates
+from roundtable_souls.updates import signing
 
 PACK = identity.get().pack_id
 

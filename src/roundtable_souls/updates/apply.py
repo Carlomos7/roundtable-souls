@@ -43,7 +43,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from roundtable_souls import __version__, folders, signing
+from roundtable_souls import __version__, folders
 from roundtable_souls.config import identity
 from roundtable_souls.config.settings import (
     appimage,
@@ -56,6 +56,7 @@ from roundtable_souls.config.settings import (
 )
 from roundtable_souls.platform import instance
 from roundtable_souls.resources import DATA_DIR
+from roundtable_souls.updates import signing
 
 ID = identity.get()
 RELEASES_URL = ID.releases_page
