@@ -8,7 +8,7 @@ import pytest
 from test_mod_merge import TALK, World
 
 from roundtable_souls.mods import conflicts as overview
-from roundtable_souls.mods import manage as M
+from roundtable_souls.mods import profile_edit as M
 from roundtable_souls.mods import rebuild as merge
 from roundtable_souls.mods import undo
 from roundtable_souls.platform import trash

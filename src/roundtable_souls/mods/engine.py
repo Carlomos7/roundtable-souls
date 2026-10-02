@@ -123,7 +123,7 @@ def match(setup: Path | None) -> tuple[dict | None, str | None, str | None]:
 def layers(profile: Path, target_folder: Path) -> list[Path]:
     """The enabled packages before the target, in the order its own installer merges them: file order, each moved
     after what it loads after (and before what it loads before), taking the first that can go next."""
-    from roundtable_souls.mods import manage as mod_manage
+    from roundtable_souls.mods import profile_edit as mod_manage
 
     rows = [
         e
@@ -158,7 +158,7 @@ def layers(profile: Path, target_folder: Path) -> list[Path]:
 
 
 def _seamless(profile: Path) -> Path | None:
-    from roundtable_souls.mods import manage as mod_manage
+    from roundtable_souls.mods import profile_edit as mod_manage
 
     for e in mod_manage.entries(profile):
         if e["kind"] == "native" and e.get("enabled", True) and Path(e.get("path") or "").name.lower() == "ersc.dll":

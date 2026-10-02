@@ -28,7 +28,7 @@ from pathlib import Path
 
 from roundtable_souls.game import catalog as games
 from roundtable_souls.mods import backends
-from roundtable_souls.mods import manage as mod_manage
+from roundtable_souls.mods import profile_edit as mod_manage
 
 REGULATION = "regulation.bin"
 TALK = "script/talk/m00_00_00_00.talkesdbnd.dcx"

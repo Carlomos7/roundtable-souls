@@ -180,7 +180,7 @@ def _add_mod(prof, name: str, change: dict) -> None:
 
 
 def test_removing_a_mod_and_rebuilding_equals_building_without_it(prof, tmp_path, monkeypatch):
-    from roundtable_souls.mods import manage
+    from roundtable_souls.mods import profile_edit as manage
 
     _add_mod(prof, "map", {"SB_Map.layout": b"big map"})
     merge.rebuild(prof, lambda s: None)

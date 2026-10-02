@@ -10,8 +10,8 @@ from pathlib import Path
 import pytest
 from test_mod_merge import World, _pack_source
 
-from roundtable_souls.mods import manage as M
 from roundtable_souls.mods import profile as profile_tools
+from roundtable_souls.mods import profile_edit as M
 from roundtable_souls.mods import profile_settings, stay_last
 from roundtable_souls.mods import rebuild as merge
 

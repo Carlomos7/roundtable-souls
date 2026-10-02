@@ -21,8 +21,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from roundtable_souls.mods import manage as mod_manage
 from roundtable_souls.mods import profile as profile_tools
+from roundtable_souls.mods import profile_edit as mod_manage
 from roundtable_souls.mods import rebuild as merge
 from roundtable_souls.mods.backends import builtin, local_path
 

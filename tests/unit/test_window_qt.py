@@ -308,7 +308,7 @@ def test_saves_page_names_the_file_play_uses_and_lists_the_library(sandbox, monk
 
 
 def test_folder_of_mods_entry_shows_as_its_folder_and_can_be_removed(sandbox, monkeypatch):
-    from roundtable_souls.mods import manage
+    from roundtable_souls.mods import profile_edit as manage
 
     w = sandbox
     prof = w.profiles / "sandbox.me3"
@@ -338,7 +338,7 @@ def test_folder_of_mods_entry_shows_as_its_folder_and_can_be_removed(sandbox, mo
 
 
 def test_mod_actions_follow_the_file_when_it_changed_outside_the_window(sandbox, monkeypatch):
-    from roundtable_souls.mods import manage
+    from roundtable_souls.mods import profile_edit as manage
 
     w = sandbox
     prof = w.profiles / "sandbox.me3"
@@ -428,7 +428,7 @@ def _drag(target, paths, kind="enter"):
 def test_dropping_mods_on_the_mods_page_installs_each_in_turn(sandbox, monkeypatch, tmp_path):
     from PySide6.QtCore import QEventLoop, QTimer
 
-    from roundtable_souls.mods import manage
+    from roundtable_souls.mods import profile_edit as manage
     from roundtable_souls.platform import logging as run_logging
     from roundtable_souls.platform import paths as common
 
@@ -475,7 +475,7 @@ def test_install_dialog_offers_a_rebuild_only_before_the_merger(app, tmp_path, m
     from PySide6.QtWidgets import QWidget
     from test_mod_merge import World, _pack_source
 
-    from roundtable_souls.mods import manage
+    from roundtable_souls.mods import profile_edit as manage
 
     world = World(tmp_path, monkeypatch)
     plan = manage.plan_install(world.profile, _pack_source(tmp_path / "dl"))
@@ -633,7 +633,7 @@ def test_install_dialog_names_a_combine_when_there_is_no_tool(app, tmp_path, mon
     from PySide6.QtWidgets import QWidget
     from test_mod_merge import World, _pack_source
 
-    from roundtable_souls.mods import manage
+    from roundtable_souls.mods import profile_edit as manage
 
     world = World(tmp_path, monkeypatch)
     (world.base / "Merger" / "installation.json").unlink()
@@ -854,7 +854,7 @@ def test_versions_lists_earlier_copies_and_restores_one(sandbox, monkeypatch):
 
 
 def test_removing_a_mod_is_a_job_that_activity_can_restore(sandbox, monkeypatch):
-    from roundtable_souls.mods import manage
+    from roundtable_souls.mods import profile_edit as manage
 
     w = sandbox
     prof = w.profiles / "sandbox.me3"
@@ -954,7 +954,7 @@ def test_install_dialog_places_a_mod_before_the_one_that_must_stay_last(app, tmp
     from PySide6.QtWidgets import QWidget
     from test_mod_merge import World, _pack_source
 
-    from roundtable_souls.mods import manage
+    from roundtable_souls.mods import profile_edit as manage
 
     world = World(tmp_path, monkeypatch)
     plan = manage.plan_install(world.profile, _pack_source(tmp_path / "dl"))

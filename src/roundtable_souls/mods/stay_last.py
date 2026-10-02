@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from roundtable_souls.mods import manage as mod_manage
+from roundtable_souls.mods import profile_edit as mod_manage
 from roundtable_souls.mods.profile_settings import Unreadable  # noqa: F401  (keep_after raises it)
 
 

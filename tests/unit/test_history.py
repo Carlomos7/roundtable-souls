@@ -5,7 +5,7 @@ import time
 import pytest
 
 from roundtable_souls.mods import history, service
-from roundtable_souls.mods import manage as M
+from roundtable_souls.mods import profile_edit as M
 
 SF_VOICE = """profileVersion = "v1"
 

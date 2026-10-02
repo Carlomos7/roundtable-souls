@@ -12,7 +12,7 @@ import re
 import tomllib
 from pathlib import Path
 
-from roundtable_souls.mods.manage import ACCEPTABLE_FOLDERS, NOT_GAME_FOLDERS
+from roundtable_souls.mods.profile_edit import ACCEPTABLE_FOLDERS, NOT_GAME_FOLDERS
 
 SETTING_KEYS = ("savefile", "start_online", "disable_arxan", "mem_patch", "mem_patch_heap_size")
 SETTING_TEXT = {

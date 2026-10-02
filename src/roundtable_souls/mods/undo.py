@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from roundtable_souls.mods import manage as mod_manage
+from roundtable_souls.mods import profile_edit as mod_manage
 
 LABEL = {"remove": "Restore", "rebuild": "Undo rebuild"}
 
