@@ -10,6 +10,7 @@ from roundtable_souls import models
 from roundtable_souls.config.settings import load_settings, save_settings
 from roundtable_souls.coop.ini import _profile_rows, _read
 from roundtable_souls.files import atomic_write
+from roundtable_souls.mods import install, remove
 from roundtable_souls.mods import profile as profile_tools
 from roundtable_souls.mods import profile_edit as mod_manage
 from roundtable_souls.platform import logging as run_logging
@@ -200,26 +201,26 @@ def profile_entries(profile) -> list:
 
 
 def plan_mod_install(profile, source, name=None, pkg_id=None, variant=None) -> dict:
-    plan = mod_manage.plan_install(Path(profile), Path(source), name, pkg_id, variant)
+    plan = install.plan_install(Path(profile), Path(source), name, pkg_id, variant)
     models.ModPlan.model_validate(plan)
     return plan
 
 
 def replan_mod_install(profile, plan, name=None, pkg_id=None, variant=None) -> dict:
     """The same unpacked mod with another folder name, id or variant (nothing is unpacked again)."""
-    new = mod_manage.replan(Path(profile), plan, name, pkg_id, variant)
+    new = install.replan(Path(profile), plan, name, pkg_id, variant)
     models.ModPlan.model_validate(new)
     return new
 
 
 def install_mod(profile, plan, overwrite=False) -> dict:
-    out = mod_manage.install(Path(profile), plan, overwrite=overwrite)
+    out = install.install(Path(profile), plan, overwrite=overwrite)
     run_logging.log(f"installed {plan['kind']} {plan['name']} -> {out['dest']}")
     return out
 
 
 def uninstall_mod(profile, index: int, delete_folder=True) -> dict:
-    out = mod_manage.uninstall(Path(profile), index, delete_folder=delete_folder)
+    out = remove.uninstall(Path(profile), index, delete_folder=delete_folder)
     run_logging.log(
         f"removed {out['kind']} {out['path']}"
         + (

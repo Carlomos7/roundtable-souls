@@ -10,6 +10,7 @@ from roundtable_souls import formats
 from roundtable_souls.merging.rules import param as pm
 from roundtable_souls.mods import profile_edit as M
 from roundtable_souls.mods import rebuild as merge
+from roundtable_souls.mods import remove
 from roundtable_souls.mods.backends import builtin
 from roundtable_souls.platform import paths as common
 
@@ -272,13 +273,13 @@ def test_a_game_update_or_a_removed_pack_makes_the_combine_stale(prof):
     assert any("game update" in r for r in merge.health(prof)["reasons"])
     merge.rebuild(prof, lambda s: None)
     idx = next(e["index"] for e in M.entries(prof) if e["name"] == "balance")
-    M.uninstall(prof, idx)
+    remove.uninstall(prof, idx)
     assert any("balance was combined but is no longer loaded" in r for r in merge.health(prof)["reasons"])
 
 
 def test_one_pack_alone_is_not_combined_unless_asked(prof):
     idx = next(e["index"] for e in M.entries(prof) if e["name"] == "balance")
-    M.uninstall(prof, idx)
+    remove.uninstall(prof, idx)
     assert merge.health(prof)["state"] == "single"
     with pytest.raises(merge.MergeError, match="nothing to combine"):
         merge.rebuild(prof, lambda s: None)

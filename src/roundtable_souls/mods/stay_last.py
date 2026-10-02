@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from roundtable_souls.mods import checks
 from roundtable_souls.mods import profile_edit as mod_manage
 from roundtable_souls.mods.profile_settings import Unreadable  # noqa: F401  (keep_after raises it)
 
@@ -47,7 +48,7 @@ def target(profile: Path) -> dict | None:
         pk_root, nt_root = mod_manage.roots(profile, text)
         parent = folder.parent
         common = (profile.parent, pk_root, nt_root)
-        if not any(mod_manage.same_folder(parent, c) for c in common):
+        if not any(checks.same_folder(parent, c) for c in common):
             own = [parent]  # NightreignRevive/mod: its DLLs sit in NightreignRevive
     return {"folder": folder, "own": own, "name": layer["name"]}
 
@@ -91,7 +92,7 @@ def _roles(profile: Path, items: list[dict], tgt: dict) -> tuple[dict | None, li
             for e in items
             if e["kind"] == "package"
             and e["path"]
-            and mod_manage.same_folder(mod_manage.resolve(profile, e["path"]), tgt["folder"])
+            and checks.same_folder(mod_manage.resolve(profile, e["path"]), tgt["folder"])
         ),
         None,
     )
@@ -100,7 +101,7 @@ def _roles(profile: Path, items: list[dict], tgt: dict) -> tuple[dict | None, li
         for e in items
         if e["kind"] == "native"
         and e["path"]
-        and any(mod_manage._within(mod_manage.resolve(profile, e["path"]), o) for o in tgt["own"])
+        and any(checks._within(mod_manage.resolve(profile, e["path"]), o) for o in tgt["own"])
     ]
     return pkg, [e for e in mine if not e.get("load_early")], mine
 
@@ -148,7 +149,7 @@ def _same_list(a: list[dict], b: list[dict]) -> bool:
 
 def _loops(profile: Path, text: str) -> set[str]:
     items = _items(profile, text)
-    found = mod_manage.entry_problems(profile, items)
+    found = checks.entry_problems(profile, items)
     return {p for ps in found.values() for p in ps if p.startswith("Load order loops")}
 
 

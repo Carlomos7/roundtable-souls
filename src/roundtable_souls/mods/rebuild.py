@@ -27,7 +27,7 @@ import time
 from pathlib import Path
 
 from roundtable_souls.game import catalog as games
-from roundtable_souls.mods import backends
+from roundtable_souls.mods import backends, checks
 from roundtable_souls.mods import profile_edit as mod_manage
 
 REGULATION = "regulation.bin"
@@ -122,13 +122,13 @@ def layers(profile: Path) -> list[dict]:
 
 
 def _within(inner: Path, outer: Path) -> bool:
-    a, b = mod_manage._canon(inner), mod_manage._canon(outer)
+    a, b = checks._canon(inner), checks._canon(outer)
     return a == b or b in a.parents
 
 
 def _rel_in(path: Path, folder: Path) -> str | None:
     try:
-        return mod_manage._canon(path).relative_to(mod_manage._canon(folder)).as_posix()
+        return checks._canon(path).relative_to(checks._canon(folder)).as_posix()
     except ValueError:
         return None
 
@@ -255,7 +255,7 @@ def overlay(profile: Path, all_layers: list[dict] | None = None) -> tuple[dict |
     all_layers = layers(profile) if all_layers is None else all_layers
     mark = overlay_mark(profile)
     if mark is not None:
-        layer = next((l for l in all_layers if mod_manage.same_folder(l["folder"], mark["package"])), None)
+        layer = next((l for l in all_layers if checks.same_folder(l["folder"], mark["package"])), None)
         if layer is not None:
             return layer, backends.detect_for(profile, layer, mark["rebuild"]), True
     packs = [l for l in all_layers if (l["folder"] / REGULATION).is_file()]
@@ -456,7 +456,7 @@ def stale_reasons(profile: Path, all_layers: list[dict], packs: list[dict], back
         ]
         if expected is not None:
             want = expected["folder"] / rel
-            hit = next(((p, h) for p, h in layer_used if mod_manage.same_folder(p, want)), None)
+            hit = next(((p, h) for p, h in layer_used if checks.same_folder(p, want)), None)
             if hit is None:
                 reasons.append(f"{rel}: {expected['name']} ships it now, but the last rebuild did not use it")
             elif sha256(want) != hit[1]:
@@ -799,7 +799,7 @@ def _shape(profile: Path, text: str, own: list[Path]) -> tuple:
         o = mod_manage.block_options(text, b["index"])
         if not o["path"]:
             continue
-        where = mod_manage._canon(mod_manage.resolve(profile, o["path"]))
+        where = checks._canon(mod_manage.resolve(profile, o["path"]))
         mine = any(_within(where, f) for f in own)
         deps = () if mine else (tuple((d["id"].lower(), d["optional"]) for d in o["load_after"] + o["load_before"]))
         if o["kind"] == "package":
@@ -817,7 +817,7 @@ def keep_profile_text(profile: Path, original: str, backend) -> str:
     now = mod_manage.read_text(profile)
     if now == original:
         return "the profile was not changed"
-    own = [mod_manage._canon(f) for f in backend.own_folders()]
+    own = [checks._canon(f) for f in backend.own_folders()]
     if _shape(profile, now, own) != _shape(profile, original, own):
         return f"{backend.label} changed what the profile loads, so its version is kept; yours is in {profile.name}.bak"
     text = mod_manage.to_blocks(original) if mod_manage.is_array_form(original) else original
@@ -825,12 +825,12 @@ def keep_profile_text(profile: Path, original: str, backend) -> str:
     lists = {}
     for b in mod_manage.blocks(fresh):
         o = mod_manage.block_options(fresh, b["index"])
-        where = mod_manage._canon(mod_manage.resolve(profile, o["path"])) if o["path"] else None
+        where = checks._canon(mod_manage.resolve(profile, o["path"])) if o["path"] else None
         if where is not None and any(_within(where, f) for f in own):
             lists[str(where)] = {"load_after": o["load_after"], "load_before": o["load_before"]}
     for b in mod_manage.blocks(text):
         o = mod_manage.block_options(text, b["index"])
-        where = str(mod_manage._canon(mod_manage.resolve(profile, o["path"]))) if o["path"] else ""
+        where = str(checks._canon(mod_manage.resolve(profile, o["path"]))) if o["path"] else ""
         if where in lists:
             text = mod_manage.set_block_options(text, b["index"], lists[where])
     _put(profile, text)

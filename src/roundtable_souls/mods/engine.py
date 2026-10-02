@@ -123,6 +123,7 @@ def match(setup: Path | None) -> tuple[dict | None, str | None, str | None]:
 def layers(profile: Path, target_folder: Path) -> list[Path]:
     """The enabled packages before the target, in the order its own installer merges them: file order, each moved
     after what it loads after (and before what it loads before), taking the first that can go next."""
+    from roundtable_souls.mods import checks
     from roundtable_souls.mods import profile_edit as mod_manage
 
     rows = [
@@ -131,7 +132,7 @@ def layers(profile: Path, target_folder: Path) -> list[Path]:
         if e["kind"] == "package"
         and e.get("enabled", True)
         and e.get("path")
-        and not mod_manage.same_folder(mod_manage.resolve(profile, e["path"]), target_folder)
+        and not checks.same_folder(mod_manage.resolve(profile, e["path"]), target_folder)
     ]
     ids = [(e.get("id") or Path(e["path"]).name) for e in rows]
     if len(set(ids)) != len(ids):

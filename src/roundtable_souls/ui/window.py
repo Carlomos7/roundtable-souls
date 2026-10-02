@@ -148,7 +148,10 @@ from roundtable_souls.core import (
     write_profile_setting,
 )
 from roundtable_souls.game import catalog as games
+from roundtable_souls.mods import checks as mod_checks
 from roundtable_souls.mods import configs as mod_configs
+from roundtable_souls.mods import extract as mod_extract
+from roundtable_souls.mods import install as mod_install
 from roundtable_souls.platform import desktop, instance
 from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.resources import ASSETS_DIR
@@ -1095,11 +1098,7 @@ class Launcher(FluentWindow):
         return f"load order worked out as me3 {order.ME3_ORDER_VERSIONS[0]} and later do; not checked for me3 {version}"
 
     def _fill_conflicts(self, r):
-        if (
-            self.setup
-            and r.get("profile")
-            and not core.mod_manage.same_folder(Path(r["profile"]), Path(self.setup.profile))
-        ):
+        if self.setup and r.get("profile") and not mod_checks.same_folder(Path(r["profile"]), Path(self.setup.profile)):
             return  # an answer for a profile no longer shown
         self._conf_result = r
         if r.get("health") is not None:
@@ -1299,10 +1298,10 @@ class Launcher(FluentWindow):
         self._offer_tool_approval(Path(s.profile))
         self.mods_note.setToolTip(s.profile)
         try:
-            self._pack_tree = core.mod_manage.package_tree(Path(s.profile), mods)
-            self._mod_problems = core.mod_manage.entry_problems(Path(s.profile), mods)
+            self._pack_tree = mod_checks.package_tree(Path(s.profile), mods)
+            self._mod_problems = mod_checks.entry_problems(Path(s.profile), mods)
             self._mod_roots = core.mod_manage.roots(Path(s.profile), core.mod_manage.read_text(Path(s.profile)))
-            folders = core.mod_manage.folder_overview(Path(s.profile), mods, self._pack_tree)
+            folders = mod_checks.folder_overview(Path(s.profile), mods, self._pack_tree)
         except OSError:
             self._pack_tree, self._mod_roots, self._mod_problems = {}, (None, None), {}
             folders = {"packages": None, "natives": None}
@@ -1459,7 +1458,7 @@ class Launcher(FluentWindow):
         at_root = [
             e
             for e in holders
-            if root is not None and core.mod_manage.same_folder(core.mod_manage.resolve(prof, e["path"]), root)
+            if root is not None and mod_checks.same_folder(core.mod_manage.resolve(prof, e["path"]), root)
         ]
         elsewhere = [e for e in holders if e not in at_root]
         n = len(unlisted)
@@ -1575,7 +1574,7 @@ class Launcher(FluentWindow):
         if not picked:
             return
         try:
-            out = core.mod_manage.add_existing(Path(self.setup.profile), picked, kind=kind)
+            out = mod_install.add_existing(Path(self.setup.profile), picked, kind=kind)
         except Exception as e:
             self._toast("Could not add", str(e), error=True)
             return
@@ -1724,7 +1723,7 @@ class Launcher(FluentWindow):
         return ""
 
     def _on_merge(self, h):
-        if not self.setup or not core.mod_manage.same_folder(Path(h["profile"]), Path(self.setup.profile)):
+        if not self.setup or not mod_checks.same_folder(Path(h["profile"]), Path(self.setup.profile)):
             return  # an answer for a profile no longer shown
         before = getattr(self, "_merge_health", None)
         self._merge_health = h
@@ -1776,7 +1775,7 @@ class Launcher(FluentWindow):
     def _warn_merge(self):
         """Play does not merge; it only says when the parameters in use are not what the packages ask for."""
         h = getattr(self, "_merge_health", None)
-        if not h or not self.setup or not core.mod_manage.same_folder(Path(h["profile"]), Path(self.setup.profile)):
+        if not h or not self.setup or not mod_checks.same_folder(Path(h["profile"]), Path(self.setup.profile)):
             return
         if h.get("state") == "stacked":
             notice(
@@ -1886,7 +1885,7 @@ class Launcher(FluentWindow):
             if (
                 e["kind"] == entry["kind"]
                 and (e.get("id") or "") == (entry.get("id") or "")
-                and core.mod_manage.same_folder(core.mod_manage.resolve(prof, e.get("path") or ""), want)
+                and mod_checks.same_folder(core.mod_manage.resolve(prof, e.get("path") or ""), want)
             ):
                 return e
         self._toast(
@@ -1928,7 +1927,7 @@ class Launcher(FluentWindow):
         overlay = None
         rebuild_file = ""
         if entry["kind"] == "package" and folder is not None and core.mod_merge.is_elden_ring(prof):
-            overlay = mark is not None and core.mod_manage.same_folder(mark["package"], folder)
+            overlay = mark is not None and mod_checks.same_folder(mark["package"], folder)
             rebuild_file = str(mark["rebuild"]) if overlay and mark["rebuild"] else ""
         dlg = ModOptionsDialog(entry, others, self, overlay=overlay, rebuild_file=rebuild_file)
         if not dlg.exec():
@@ -2068,7 +2067,7 @@ class Launcher(FluentWindow):
         if entry.get("kind") != "package" or not core.mod_merge.is_elden_ring(prof):
             return []
         ov = self._conf_result
-        if not ov or ov.get("error") or not core.mod_manage.same_folder(Path(ov.get("profile") or ""), prof):
+        if not ov or ov.get("error") or not mod_checks.same_folder(Path(ov.get("profile") or ""), prof):
             ov = None
         try:
             return core.mod_overview.merged_from(prof, entry["name"], ov)
@@ -2242,7 +2241,7 @@ class Launcher(FluentWindow):
     @staticmethod
     def _drop_accepts(paths):
         """(installable, skipped): folders, .zip / .7z / .rar archives and DLL mods can be installed."""
-        kinds = (*core.mod_manage.ARCHIVE_EXTENSIONS, ".dll")
+        kinds = (*mod_extract.ARCHIVE_EXTENSIONS, ".dll")
         usable = [x for x in paths if x.is_dir() or x.suffix.lower() in kinds]
         return usable, [x for x in paths if x not in usable]
 

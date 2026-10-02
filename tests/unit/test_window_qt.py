@@ -475,10 +475,10 @@ def test_install_dialog_offers_a_rebuild_only_before_the_merger(app, tmp_path, m
     from PySide6.QtWidgets import QWidget
     from test_mod_merge import World, _pack_source
 
-    from roundtable_souls.mods import profile_edit as manage
+    from roundtable_souls.mods import install
 
     world = World(tmp_path, monkeypatch)
-    plan = manage.plan_install(world.profile, _pack_source(tmp_path / "dl"))
+    plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"))
     parent = QWidget()
     parent.resize(1000, 800)
     dlg = window.InstallDialog(parent, plan, lambda *a: plan, world.profile)
@@ -633,12 +633,12 @@ def test_install_dialog_names_a_combine_when_there_is_no_tool(app, tmp_path, mon
     from PySide6.QtWidgets import QWidget
     from test_mod_merge import World, _pack_source
 
-    from roundtable_souls.mods import profile_edit as manage
+    from roundtable_souls.mods import install
 
     world = World(tmp_path, monkeypatch)
     (world.base / "Merger" / "installation.json").unlink()
     world.pack("a")
-    plan = manage.plan_install(world.profile, _pack_source(tmp_path / "dl"))
+    plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"))
     parent = QWidget()
     parent.resize(1000, 800)
     dlg = window.InstallDialog(parent, plan, lambda *a: plan, world.profile)
@@ -954,10 +954,10 @@ def test_install_dialog_places_a_mod_before_the_one_that_must_stay_last(app, tmp
     from PySide6.QtWidgets import QWidget
     from test_mod_merge import World, _pack_source
 
-    from roundtable_souls.mods import profile_edit as manage
+    from roundtable_souls.mods import install
 
     world = World(tmp_path, monkeypatch)
-    plan = manage.plan_install(world.profile, _pack_source(tmp_path / "dl"))
+    plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"))
     parent = QWidget()
     parent.resize(1000, 800)
     dlg = window.InstallDialog(parent, plan, lambda *a: plan, world.profile)

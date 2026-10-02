@@ -10,9 +10,9 @@ from pathlib import Path
 import pytest
 from test_mod_merge import World, _pack_source
 
+from roundtable_souls.mods import install, profile_settings, remove, stay_last
 from roundtable_souls.mods import profile as profile_tools
 from roundtable_souls.mods import profile_edit as M
-from roundtable_souls.mods import profile_settings, stay_last
 from roundtable_souls.mods import rebuild as merge
 
 PROFILE = """profileVersion = "v1"
@@ -115,9 +115,9 @@ def test_switching_a_mod_on_or_off_changes_only_that_line(world):
 
 
 def test_a_new_package_goes_before_it_and_is_listed(world, tmp_path):
-    plan = M.plan_install(world.profile, _pack_source(tmp_path / "dl"))
+    plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"))
     assert plan["stay_last"] == "last"
-    M.install(world.profile, {**plan, "insert_before": None})
+    install.install(world.profile, {**plan, "insert_before": None})
     text = world.profile.read_text(encoding="utf-8")
     assert text.index(f'id = "{plan["id"]}"') < text.index('id = "last"')
     assert (plan["id"], True) in _after(text, "package", "last")
@@ -129,16 +129,16 @@ def test_a_new_dll_goes_before_its_dlls_and_is_listed(world, tmp_path):
     src = tmp_path / "dl" / "Cool"
     src.mkdir(parents=True)
     (src / "cool.dll").write_bytes(b"x")
-    plan = M.plan_install(world.profile, src)
-    M.install(world.profile, plan)
+    plan = install.plan_install(world.profile, src)
+    install.install(world.profile, plan)
     text = world.profile.read_text(encoding="utf-8")
     assert text.index("cool.dll") < text.index("Merger/Boot.dll")
     assert ("cool.dll", True) in _after(text, "native", "Last.dll")
 
 
 def test_kept_after_on_purpose_when_installed_that_way(world, tmp_path):
-    plan = M.plan_install(world.profile, _pack_source(tmp_path / "dl"))
-    M.install(world.profile, {**plan, "after_overlay": True, "insert_before": None})
+    plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"))
+    install.install(world.profile, {**plan, "after_overlay": True, "insert_before": None})
     text = world.profile.read_text(encoding="utf-8")
     assert text.index(f'id = "{plan["id"]}"') > text.index('id = "last"')
     assert plan["id"] not in [i for i, _ in _after(text, "package", "last")]
@@ -150,7 +150,7 @@ def test_kept_after_on_purpose_when_installed_that_way(world, tmp_path):
 def test_removing_a_mod_drops_it_from_the_list(world):
     stay_last.fix(world.profile)
     parts = next(e for e in M.entries(world.profile) if e.get("id") == "parts")
-    M.uninstall(world.profile, parts["index"], delete_folder=False)
+    remove.uninstall(world.profile, parts["index"], delete_folder=False)
     assert _after(world.profile.read_text(encoding="utf-8"), "package", "last") == [("off", True)]
 
 
@@ -164,7 +164,7 @@ def test_a_renamed_id_is_followed_where_it_was(world):
 def test_adding_an_existing_folder_puts_it_before_it(world):
     extra = world.base / "mod" / "extra"
     extra.mkdir()
-    M.add_existing(world.profile, [extra])
+    install.add_existing(world.profile, [extra])
     text = world.profile.read_text(encoding="utf-8")
     assert text.index('id = "extra"') < text.index('id = "last"') and ("extra", True) in _after(text, "package", "last")
 
@@ -222,7 +222,7 @@ def test_without_a_mod_that_must_stay_last_nothing_is_touched(tmp_path):
     assert stay_last.target(prof) is None and stay_last.status(prof) is None
     assert stay_last.reconcile(prof, text) == (text, None)
     (base / "mod" / "c").mkdir()
-    M.add_existing(prof, [base / "mod" / "c"])
+    install.add_existing(prof, [base / "mod" / "c"])
     assert prof.read_text(encoding="utf-8").startswith(text)  # appended, nothing else changed
 
 

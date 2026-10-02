@@ -21,6 +21,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from roundtable_souls.mods import checks
 from roundtable_souls.mods import profile as profile_tools
 from roundtable_souls.mods import profile_edit as mod_manage
 from roundtable_souls.mods import rebuild as merge
@@ -135,7 +136,7 @@ def row_conflicts(profile: Path) -> list[str]:
 def problems(profile: Path) -> list[dict]:
     """Entries me3 would refuse or skip: [{name, kind, problems}]."""
     items = mod_manage.entries(Path(profile))
-    found = mod_manage.entry_problems(Path(profile), items)
+    found = checks.entry_problems(Path(profile), items)
     by_index = {e["index"]: e for e in items}
     return [
         {"name": by_index[i]["name"], "kind": by_index[i]["kind"], "problems": list(p)}

@@ -181,12 +181,13 @@ def _add_mod(prof, name: str, change: dict) -> None:
 
 def test_removing_a_mod_and_rebuilding_equals_building_without_it(prof, tmp_path, monkeypatch):
     from roundtable_souls.mods import profile_edit as manage
+    from roundtable_souls.mods import remove
 
     _add_mod(prof, "map", {"SB_Map.layout": b"big map"})
     merge.rebuild(prof, lambda s: None)
     assert _merged(prof)["SB_Marker.layout"] == b"blue marker"
     idx = next(e["index"] for e in manage.entries(prof) if e["name"] == "marker")
-    manage.uninstall(prof, idx)
+    remove.uninstall(prof, idx)
     merge.rebuild(prof, lambda s: None)
     after_removal = (prof.parent / "mod" / "combined-parameters" / REL).read_bytes()
     assert files_of(after_removal) == {**GAME, "SB_KG.layout": b"ps5 buttons", "SB_Map.layout": b"big map"}
