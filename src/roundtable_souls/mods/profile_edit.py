@@ -585,16 +585,16 @@ def create_profile(folder: Path, name: str, game: str = "eldenring", copy_from: 
 
 
 def delete_profile(path: Path) -> Path:
-    """Move the .me3 into the launcher's deleted profiles (folders.deleted_profiles), with a note of where it
+    """Move the .me3 into the launcher's deleted profiles (data_folder.deleted_profiles), with a note of where it
     lived. Mod folders are never touched; its .bak goes along, its offline copy is regenerated when needed."""
     import json
 
-    from roundtable_souls.saves import backups as folders
+    from roundtable_souls.platform import data_folder
 
     path = Path(path)
     if not path.is_file():
         raise ModError(f"{path} is not a file")
-    trash = folders.deleted_profiles(path.parent)
+    trash = data_folder.deleted_profiles(path.parent)
     trash.mkdir(parents=True, exist_ok=True)
     dest = trash / f"{path.stem}.{time.strftime('%Y%m%d-%H%M%S')}.me3"
     shutil.move(str(path), str(dest))

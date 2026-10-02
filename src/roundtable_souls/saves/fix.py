@@ -3,7 +3,7 @@
 Every write:
   1. builds the new bytes in memory,
   2. re-parses them and checks the MD5 of every touched slot,
-  3. copies the original into the launcher's backups (folders.backups, with a JSON note saying why), then
+  3. copies the original into the launcher's backups (save_backups.backups, with a JSON note saying why), then
      replaces it.
 
 Nothing is written when there is nothing to do. Callers refuse while the game runs.
@@ -17,7 +17,7 @@ import shutil
 import time
 from pathlib import Path
 
-from roundtable_souls.saves import backups as folders
+from roundtable_souls.saves import backups as save_backups
 from roundtable_souls.saves import layout as L
 
 SLOT_STRIDE = 0x10 + L.SLOT_SIZE
@@ -35,10 +35,10 @@ def plan_checksum_fixes(parsed: dict) -> dict:
 
 
 def backup(save: Path, manifest: dict | None = None) -> Path:
-    """Copy the save into its account's backups folder (folders.backups). A note (what it was taken before, when,
+    """Copy the save into its account's backups folder (save_backups.backups). A note (what it was taken before, when,
     which save, what changed) is written beside it as <backup>.json, then older backups of that save are pruned."""
     save = Path(save)
-    folder = folders.backups(save.parent)
+    folder = save_backups.backups(save.parent)
     folder.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%d-%H%M%S")
     dest = folder / f"{save.name}.{stamp}.bak"
@@ -48,7 +48,7 @@ def backup(save: Path, manifest: dict | None = None) -> Path:
         dest = folder / f"{save.name}.{stamp}-{n}.bak"
     shutil.copy2(save, dest)
     write_manifest(dest, manifest or {"action": "Before a change"}, save)
-    folders.prune(folder, save.name)
+    save_backups.prune(folder, save.name)
     return dest
 
 

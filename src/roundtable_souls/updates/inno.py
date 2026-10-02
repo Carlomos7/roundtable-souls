@@ -23,8 +23,7 @@ from pathlib import Path
 
 from roundtable_souls.config import identity
 from roundtable_souls.config.settings import identity_matches, is_installed, launch_target, load_settings, save_settings
-from roundtable_souls.platform import steam_shortcuts
-from roundtable_souls.saves import backups as folders
+from roundtable_souls.platform import data_folder, steam_shortcuts
 
 
 def _windows() -> bool:
@@ -151,7 +150,7 @@ def retarget_steam(old_exes: list[Path], new_exe: Path, running: bool | None = N
         steam_root(),
         lambda s: any(steam_shortcuts._same_path(s.exe, o) for o in olds),
         new_exe,
-        folders.data_root() / "backups" / "steam-shortcuts",
+        data_folder.data_root() / "backups" / "steam-shortcuts",
         steam_running() if running is None else running,
     )
 
@@ -243,7 +242,7 @@ def point_play_shortcuts_here(
         steam_root(),
         lambda s: "--play" in s.options and steam_shortcuts.is_launcher(s.exe, names),
         target,
-        folders.data_root() / "backups" / "steam-shortcuts",
+        data_folder.data_root() / "backups" / "steam-shortcuts",
         steam_running() if running is None else running,
     )
 

@@ -116,10 +116,10 @@ def history_root(profile: Path) -> Path:
     import hashlib
     import os
 
-    from roundtable_souls.saves import backups as folders
+    from roundtable_souls.platform import data_folder
 
     key = hashlib.sha1(os.path.normcase(os.path.abspath(profile)).encode()).hexdigest()[:8]
-    return folders.data_root() / "mods" / "combined-history" / f"{Path(profile).stem}-{key}"
+    return data_folder.data_root() / "mods" / "combined-history" / f"{Path(profile).stem}-{key}"
 
 
 class CombineTool:

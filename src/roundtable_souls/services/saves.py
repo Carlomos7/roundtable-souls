@@ -12,7 +12,7 @@ from roundtable_souls.game import catalog as games
 from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.platform import paths as common
 from roundtable_souls.saves import analyze as save_analyze
-from roundtable_souls.saves import backups as folders
+from roundtable_souls.saves import backups as save_backups
 from roundtable_souls.saves import container as save_container
 from roundtable_souls.saves import fix as save_fix
 from roundtable_souls.saves import layout as save_layout_check
@@ -427,7 +427,7 @@ def backup_folders(save: Path | None = None) -> list[Path]:
     paths = [Path(save)] if save else list(common.save_files())
     seen: list[Path] = []
     for p in paths:
-        d = folders.backups(p.parent)
+        d = save_backups.backups(p.parent)
         if d not in seen:
             seen.append(d)
     return seen
@@ -444,7 +444,7 @@ def list_backups(save: Path | None = None) -> list:
                 save and not f.name.lower().startswith(Path(save).name.lower() + ".")
             ):
                 continue
-            m = folders.note_of(f)
+            m = save_backups.note_of(f)
             try:
                 st = f.stat()
             except OSError:
@@ -454,7 +454,7 @@ def list_backups(save: Path | None = None) -> list:
             out.append(
                 {
                     "path": f,
-                    "save_name": folders._saved_name(f.name),
+                    "save_name": save_backups._saved_name(f.name),
                     "save": m.get("save") or "",
                     "when": when,
                     "action": _OLD_ACTIONS.get(action, action),
@@ -470,17 +470,17 @@ def list_backups(save: Path | None = None) -> list:
 
 def keep_backup(bak: Path, keep: bool = True) -> None:
     """Keep a backup whatever its age (pruning skips it), or let it age out again."""
-    folders.set_keep(Path(bak), keep)
+    save_backups.set_keep(Path(bak), keep)
 
 
 def save_for_backup(bak: Path) -> Path:
     """The live save a backup belongs to: the one its note names; else the same account and file name under the
     game's save folder."""
     bak = Path(bak)
-    saved = folders.note_of(bak).get("save")
+    saved = save_backups.note_of(bak).get("save")
     if saved:
         return Path(saved)
-    name = folders._saved_name(bak.name)
+    name = save_backups._saved_name(bak.name)
     account = bak.parent.parent.name  # …/saves/<game>/<account>/backups/<file>
     game = games.BY_KEY.get(bak.parent.parent.parent.name) or games.for_save(name) or common.GAME
     roots = common.save_roots(game)
@@ -514,7 +514,7 @@ def restore_backup(bak: Path, save: Path | None = None) -> Path | None:
             save,
             {
                 "action": "Before restoring a backup",
-                "changes": [f"restored the copy from {folders.note_of(bak).get('when') or bak.name}"],
+                "changes": [f"restored the copy from {save_backups.note_of(bak).get('when') or bak.name}"],
             },
         )
     tmp = save.with_name(save.name + ".roundtable.tmp")
@@ -704,4 +704,4 @@ def dead_shells_count() -> int:
 
 def backups_folder(path: Path) -> Path:
     """The backups folder for a save's account."""
-    return folders.backups(Path(path).parent)
+    return save_backups.backups(Path(path).parent)

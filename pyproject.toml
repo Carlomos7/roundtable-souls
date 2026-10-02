@@ -107,17 +107,8 @@ ignore_imports = [
     "roundtable_souls.platform.paths -> roundtable_souls.game.catalog",
     "roundtable_souls.platform.paths -> roundtable_souls.config.settings",
     "roundtable_souls.platform.instance -> roundtable_souls.config.settings",
-    "roundtable_souls.platform.logging -> roundtable_souls.saves.backups",
+    "roundtable_souls.platform.data_folder -> roundtable_souls.config.settings",
     "roundtable_souls.platform.instance -> roundtable_souls.config.identity",
-    # until data_root leaves saves.backups (the next commit)
-    "roundtable_souls.game.archives -> roundtable_souls.saves.backups",
-    "roundtable_souls.updates.inno -> roundtable_souls.saves.backups",
-    "roundtable_souls.updates.apply -> roundtable_souls.saves.backups",
-    "roundtable_souls.mods.rebuild -> roundtable_souls.saves.backups",
-    "roundtable_souls.mods.history -> roundtable_souls.saves.backups",
-    "roundtable_souls.mods.backends.builtin -> roundtable_souls.saves.backups",
-    "roundtable_souls.mods.install -> roundtable_souls.saves.backups",
-    "roundtable_souls.mods.profile_edit -> roundtable_souls.saves.backups",
 ]
 
 [[tool.importlinter.contracts]]

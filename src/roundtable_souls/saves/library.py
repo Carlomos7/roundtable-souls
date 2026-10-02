@@ -1,6 +1,6 @@
 """The save library: named copies of whole save files kept beside the live ones, and the swaps between them.
 
-Each Steam account's saves get a library folder in the launcher's data folder (folders.library) with the copies
+Each Steam account's saves get a library folder in the launcher's data folder (save_backups.library) with the copies
 and a `library.json` that tracks them:
 
   entries  one per copy: its name, the file it came from, when, the game, the save format, a summary of its
@@ -24,7 +24,7 @@ from pathlib import Path
 
 from roundtable_souls.game import catalog as games
 from roundtable_souls.platform.files import atomic_write
-from roundtable_souls.saves import backups as folders
+from roundtable_souls.saves import backups as save_backups
 from roundtable_souls.saves import container as save_container
 from roundtable_souls.saves import fix as save_fix
 from roundtable_souls.saves import layout as L
@@ -105,7 +105,7 @@ def check_whole(data: bytes, game: games.Game) -> None:
 # ----------------------------------------------------------------------------- the manifest
 def folder_for(save_dir: Path) -> Path:
     """The library for one account's saves (save_dir: the folder holding ER0000.sl2)."""
-    return folders.library(save_dir)
+    return save_backups.library(save_dir)
 
 
 def load(save_dir: Path) -> dict:
@@ -253,7 +253,7 @@ def remove(save_dir: Path, entry_id: str) -> Path | None:
     src = entry_path(save_dir, entry)
     moved = None
     if src.is_file():
-        trash = folder_for(save_dir) / folders.LIBRARY_REMOVED
+        trash = folder_for(save_dir) / save_backups.LIBRARY_REMOVED
         trash.mkdir(parents=True, exist_ok=True)
         moved = trash / f"{entry['file']}"
         shutil.move(str(src), str(moved))

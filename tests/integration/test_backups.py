@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from roundtable_souls.saves import backups as folders
+from roundtable_souls.platform import data_folder
+from roundtable_souls.saves import backups as save_backups
 from roundtable_souls.saves import layout as save_layout_check
 from roundtable_souls.services import play as g
 from roundtable_souls.services import saves as saves_service
@@ -21,8 +22,8 @@ A = g.save_analyze
 def test_backup_writes_manifest_and_list_reads_it(tmp_path):
     copy = _copy(tmp_path)
     bak = F.backup(copy, {"action": "Fix loading", "changes": ["Tarnished: Torrent stuck at 0 HP"]})
-    assert bak.parent == folders.backups(copy.parent) and bak.read_bytes() == copy.read_bytes()
-    beside = [p for p in copy.parent.iterdir() if p.is_dir() and p != folders.data_root()]  # tests keep it here
+    assert bak.parent == save_backups.backups(copy.parent) and bak.read_bytes() == copy.read_bytes()
+    beside = [p for p in copy.parent.iterdir() if p.is_dir() and p != data_folder.data_root()]  # tests keep it here
     assert beside == []  # nothing of the launcher's beside the save
     m = json.loads(Path(str(bak) + ".json").read_text(encoding="utf-8"))
     assert (

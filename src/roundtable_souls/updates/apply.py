@@ -53,9 +53,8 @@ from roundtable_souls.config.settings import (
     save_settings,
     velopack_root,
 )
-from roundtable_souls.platform import instance
+from roundtable_souls.platform import data_folder, instance
 from roundtable_souls.resources import DATA_DIR
-from roundtable_souls.saves import backups as folders
 from roundtable_souls.updates import signing
 from roundtable_souls.updates.feed import (
     USER_AGENT,
@@ -93,7 +92,7 @@ def child_environment(env: dict[str, str] | None = None) -> dict[str, str]:
 
 
 def updates_dir() -> Path:
-    return folders.data_root() / "updates"
+    return data_folder.data_root() / "updates"
 
 
 def state_dir() -> Path:

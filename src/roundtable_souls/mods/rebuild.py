@@ -47,9 +47,9 @@ _HASHES_LOADED = False
 
 
 def _hash_file() -> Path:
-    from roundtable_souls.saves import backups as folders
+    from roundtable_souls.platform import data_folder
 
-    return folders.data_root() / "cache" / "hashes.json"
+    return data_folder.data_root() / "cache" / "hashes.json"
 
 
 def sha256(path: Path) -> str | None:
@@ -300,9 +300,9 @@ def setup_problem(profile: Path, all_layers: list[dict] | None = None, found: tu
 
 # ----------------------------------------------------------------------------- last runs
 def _runs_file() -> Path:
-    from roundtable_souls.saves import backups as folders
+    from roundtable_souls.platform import data_folder
 
-    return folders.data_root() / "merges.json"
+    return data_folder.data_root() / "merges.json"
 
 
 def _runs() -> dict:

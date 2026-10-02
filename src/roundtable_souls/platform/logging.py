@@ -68,9 +68,9 @@ def log_dir() -> Path:
     """The logs folder in the launcher's data folder (worked out on each call)."""
     if _dir_override is not None:
         return _dir_override
-    from roundtable_souls.saves import backups as folders
+    from roundtable_souls.platform import data_folder
 
-    return folders.data_root() / "logs"
+    return data_folder.data_root() / "logs"
 
 
 def get_logger(module: str | None = None) -> logging.Logger:

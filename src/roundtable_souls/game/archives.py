@@ -67,9 +67,9 @@ def _entries(index: bytes) -> dict[int, tuple]:
 
 
 def _cache_dir() -> Path:
-    from roundtable_souls.saves import backups as folders
+    from roundtable_souls.platform import data_folder
 
-    return folders.data_root() / "cache" / "archives"
+    return data_folder.data_root() / "cache" / "archives"
 
 
 def _index(game_dir: Path, name: str) -> tuple[dict[int, tuple], bytes] | None:

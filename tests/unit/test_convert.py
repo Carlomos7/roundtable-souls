@@ -2,7 +2,7 @@
 
 import pytest
 
-from roundtable_souls.saves import backups as folders
+from roundtable_souls.saves import backups as save_backups
 from roundtable_souls.services import play as g
 from roundtable_souls.services import saves as saves_service
 
@@ -16,7 +16,7 @@ def test_sl2_to_co2_copies_and_backs_up(tmp_path, monkeypatch):
     out.write_bytes(b"older coop")
     saves_service.convert_sl2_to_co2(src)
     assert out.read_bytes() == b"standard"
-    backups = [p for p in folders.backups(tmp_path).iterdir() if p.suffix == ".bak"]
+    backups = [p for p in save_backups.backups(tmp_path).iterdir() if p.suffix == ".bak"]
     assert [p.read_bytes() for p in backups] == [b"older coop"]  # only the file that was replaced
     assert saves_service.list_backups(out)[0]["action"] == "Before copying the standard save over it"
 

@@ -24,12 +24,12 @@ from __future__ import annotations
 import datetime
 import json
 import re
-import shutil
 import time
 from pathlib import Path
 
-from roundtable_souls.config.settings import data_dir
 from roundtable_souls.game import catalog as games
+from roundtable_souls.platform import data_folder
+from roundtable_souls.platform.files import move_into
 
 BACKUPS = "backups"
 LIBRARY = "library"
@@ -52,10 +52,6 @@ _LEGACY_SOURCE = {
 _adopted: set[str] = set()
 
 
-def data_root() -> Path:
-    return data_dir()
-
-
 # ----------------------------------------------------------------------------- saves
 def game_for_save_dir(save_dir: Path) -> games.Game:
     """The game an account folder belongs to, from its parent (…/EldenRing/<account>), else Elden Ring."""
@@ -65,7 +61,7 @@ def game_for_save_dir(save_dir: Path) -> games.Game:
 
 def account_dir(save_dir: Path, game: games.Game | None = None) -> Path:
     game = game or game_for_save_dir(save_dir)
-    return data_root() / "saves" / game.key / Path(save_dir).name
+    return data_folder.data_root() / "saves" / game.key / Path(save_dir).name
 
 
 def backups(save_dir: Path, game: games.Game | None = None) -> Path:
@@ -77,42 +73,6 @@ def backups(save_dir: Path, game: games.Game | None = None) -> Path:
 def library(save_dir: Path, game: games.Game | None = None) -> Path:
     adopt_legacy_save_folders(save_dir, game)
     return account_dir(save_dir, game) / LIBRARY
-
-
-def _move_into(src_dir: Path, dest_dir: Path) -> None:
-    """Move everything in src_dir into dest_dir (a rename on the same drive), renaming on a clash; drop src_dir
-    when it ends up empty. A file in use stays for the next time."""
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    for item in sorted(src_dir.iterdir()):
-        if item.name.endswith((".bak.json", ".src.json")):
-            continue  # moves with its backup, below
-        target = dest_dir / item.name
-        n = 2
-        while target.exists():  # a clash keeps the extension, so the file still lists: x.20260924-140632-2.bak
-            target = dest_dir / f"{item.stem}-{n}{item.suffix}"
-            n += 1
-        try:
-            shutil.move(str(item), str(target))
-        except OSError:
-            continue
-        note = Path(str(item) + ".json")
-        if note.is_file():
-            try:
-                shutil.move(str(note), str(target) + ".json")
-            except OSError:
-                pass
-    for stray in list(src_dir.iterdir()):  # a note whose backup is gone
-        if stray.name.endswith(".json"):
-            target = dest_dir / stray.name
-            if not target.exists():
-                try:
-                    shutil.move(str(stray), str(target))
-                except OSError:
-                    pass
-    try:
-        src_dir.rmdir()
-    except OSError:
-        pass
 
 
 _STAMP = re.compile(r"\.\d{8}-\d{6}(-\d+)?\.(bak|src)$", re.I)
@@ -164,12 +124,12 @@ def adopt_legacy_save_folders(save_dir: Path, game: games.Game | None = None, ag
         old = save_dir / legacy
         if old.is_dir():
             _note_backups(old, save_dir, legacy)
-            _move_into(old, dest / BACKUPS)
+            move_into(old, dest / BACKUPS)
     old_lib = save_dir / "roundtable-saves"
     if old_lib.is_dir():
         if (old_lib / "deleted").is_dir():
-            _move_into(old_lib / "deleted", dest / LIBRARY / LIBRARY_REMOVED)
-        _move_into(old_lib, dest / LIBRARY)
+            move_into(old_lib / "deleted", dest / LIBRARY / LIBRARY_REMOVED)
+        move_into(old_lib, dest / LIBRARY)
 
 
 # ----------------------------------------------------------------------------- backup notes and retention
@@ -214,43 +174,3 @@ def prune(folder: Path, save_name: str, now: float | None = None) -> list[Path]:
                 pass
         removed.append(f)
     return removed
-
-
-# ----------------------------------------------------------------------------- profiles and temporary files
-def deleted_profiles(profile_dir: Path) -> Path:
-    adopt_legacy_profile_folders(profile_dir)
-    return data_root() / "profiles" / "deleted" / Path(profile_dir).name
-
-
-def adopt_legacy_profile_folders(profile_dir: Path) -> None:
-    profile_dir = Path(profile_dir)
-    old = profile_dir / "deleted-profiles"
-    if old.is_dir():
-        _move_into(old, data_root() / "profiles" / "deleted" / profile_dir.name)
-    staging = profile_dir / ".roundtable-staging"
-    if staging.is_dir():
-        shutil.rmtree(staging, ignore_errors=True)  # unpacks from installs that never finished
-
-
-def temp(name: str) -> Path:
-    p = data_root() / "temp" / name
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
-
-def clear_temp(older_than: float = 3600) -> None:
-    """Remove temporary files left by a crash. Anything younger may belong to another running copy."""
-    root = data_root() / "temp"
-    if not root.is_dir():
-        return
-    for d in (d for d in root.iterdir() if d.is_dir()):
-        for item in d.iterdir():
-            try:
-                if time.time() - item.stat().st_mtime <= older_than:
-                    continue
-                if item.is_dir():
-                    shutil.rmtree(item, ignore_errors=True)
-                else:
-                    item.unlink()
-            except OSError:
-                pass

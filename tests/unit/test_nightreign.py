@@ -94,9 +94,9 @@ def test_healthy_save_repair_does_not_write(tmp_path, monkeypatch):
     before = p.read_bytes()
     assert nr.repair(p, log=lambda *_: None) is False
     assert p.read_bytes() == before
-    from roundtable_souls.saves import backups as folders
+    from roundtable_souls.saves import backups as save_backups
 
-    assert not folders.backups(tmp_path).exists()
+    assert not save_backups.backups(tmp_path).exists()
 
 
 def test_save_info_flags_stale_checksum(tmp_path):

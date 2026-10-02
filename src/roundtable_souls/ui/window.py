@@ -79,10 +79,10 @@ from roundtable_souls.mods import history as mod_history
 from roundtable_souls.mods import install as mod_install
 from roundtable_souls.mods import stay_last as mod_stay_last
 from roundtable_souls.mods import undo as mod_undo
-from roundtable_souls.platform import desktop, instance, trash
+from roundtable_souls.platform import data_folder, desktop, instance, trash
 from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.resources import ASSETS_DIR
-from roundtable_souls.saves import backups as folders
+from roundtable_souls.saves import backups as save_backups
 from roundtable_souls.saves import library as save_library
 from roundtable_souls.saves import transfer as save_transfer
 from roundtable_souls.services import play as core
@@ -248,7 +248,7 @@ ROW_ACTION_W = 156  # the action button on each Mods row
 class Launcher(FluentWindow):
     def __init__(self):
         super().__init__()
-        folders.clear_temp()  # unpacks left by an install that crashed
+        data_folder.clear_temp()  # unpacks left by an install that crashed
         self.settings = load_settings()
         self.game = use_game(core.STARTUP_GAME or games.get(self.settings.get("game")), self.settings)
         self.bus = Bus()
@@ -2541,8 +2541,8 @@ class Launcher(FluentWindow):
         self.backups_card, bl = card("Backups", FI.HISTORY)
         bl.addWidget(
             hint(
-                f"A backup is taken before every change to a save. The newest {folders.KEEP_NEWEST} of each save "
-                f"and everything from the last {folders.KEEP_DAYS} days are kept; Keep holds on to one for good. "
+                f"A backup is taken before every change to a save. The newest {save_backups.KEEP_NEWEST} of each save "
+                f"and everything from the last {save_backups.KEEP_DAYS} days are kept; Keep holds on to one for good. "
                 "Restore puts a backup back, and backs up the save as it is then, so a restore can be undone."
             )
         )
@@ -3467,7 +3467,7 @@ class Launcher(FluentWindow):
         def work():
             files = core.common.save_files(game)
             for d in {p.parent for p in files}:  # older tools may still drop backup folders beside the saves
-                folders.adopt_legacy_save_folders(d, game, again=True)
+                save_backups.adopt_legacy_save_folders(d, game, again=True)
             infos = [save_info(p, game) for p in files]
             libs = {str(f): save_library.load(f) for f in sorted({p.parent for p in files})}
             self.bus.saves.emit({"token": token, "infos": infos, "libs": libs})

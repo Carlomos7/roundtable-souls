@@ -8,31 +8,32 @@ import pytest
 
 from roundtable_souls.config import settings
 from roundtable_souls.game import catalog as games
+from roundtable_souls.platform import data_folder
 from roundtable_souls.platform import paths as common
-from roundtable_souls.saves import backups as folders
+from roundtable_souls.saves import backups as save_backups
 from roundtable_souls.saves import item_names
 
 
 @pytest.fixture(autouse=True)
 def isolated_settings(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "settings_path", lambda: tmp_path / "launcher_settings.json")
-    monkeypatch.setattr(folders, "data_root", lambda: tmp_path / "launcher-data")
+    monkeypatch.setattr(data_folder, "data_root", lambda: tmp_path / "launcher-data")
     # Moving older folders into the data folder only ever happens inside this test's own folder: a test that builds
     # the real window sees the developer's real saves and profiles, and must never move anything out of them.
-    for name in ("adopt_legacy_save_folders", "adopt_legacy_profile_folders"):
-        real = getattr(folders, name)
+    for module, name in ((save_backups, "adopt_legacy_save_folders"), (data_folder, "adopt_legacy_profile_folders")):
+        real = getattr(module, name)
 
         def guarded(folder, *args, _real=real, **kwargs):
             if tmp_path.resolve() in Path(folder).resolve().parents:
                 return _real(folder, *args, **kwargs)
             return None
 
-        monkeypatch.setattr(folders, name, guarded)
-    folders._adopted.clear()
+        monkeypatch.setattr(module, name, guarded)
+    save_backups._adopted.clear()
     settings.get_settings.cache_clear()
     yield
     settings.get_settings.cache_clear()
-    folders._adopted.clear()
+    save_backups._adopted.clear()
 
 
 @pytest.fixture(autouse=True)
