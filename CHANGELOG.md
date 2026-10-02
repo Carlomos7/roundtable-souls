@@ -4,13 +4,15 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
 
 ## [Unreleased]
 
+## [3.15.0] - 2026-10-02
+
 - Load order: the launcher now works out the order exactly as me3 does (the same steps, checked against me3's own code on more than 100,000 profiles), so the file a mod wins or loses is shown right. Before, a mod placed with load_after could be shown in the wrong place. Mods named in another mod's Load after list load in that list's order. Switched-off mods take part in the order as in me3, mods whose folder is missing are left out, and a profile me3 would refuse (a loop, or a required mod that is missing, missing its folder or named with different capital letters) is shown as such on the Load order card.
 - Load order: when the installed me3 is older than 0.11.0, the Load order card says the order shown was not checked for that version.
 - Files the launcher writes with ZSTD compression all use the frame the game reads (a 64 KB window), as regulation.bin already did.
 - Without the game's Oodle library (Linux), menu text, player animations and effects are written as DFLT, which the game loads, instead of stopping. Reading the game's own Oodle-compressed files there still needs Oodle.
 - Combine: the combined-parameters package is added to the Load after list of the mod that must stay last, so me3 loads it before that mod.
 - Combine: a rebuild is written beside the combined-parameters folder, every file is read back, and only then put in place; a rebuild cut off part way (a crash, a power cut) is undone the next time, so the previous result stands. It is not put in place while the game runs, and it does not start when the drive lacks room for it.
-- Combine: grace menus and other talk scripts that several mods change are merged: each mod's menu options, new states and new menus are kept (a state number two mods both use is given to the later one anew), and parts only one mod changed come from that mod. Where mods change the same part differently, or add the same menu option, the later mod's script is used whole, as before, and the record says why. Checked in game with Map for Goblins and Nightreign Revive's grace menus. A combined package that merged files with an earlier version is rebuilt once.
+- Combine: grace menus and other talk scripts that several mods change are merged: each mod's menu options, new states and new menus are kept (a state number two mods both use is given to the later one anew), and parts only one mod changed come from that mod. Where mods change the same part differently, or add the same menu option, the later mod's script is used whole, as before, and the record says why. Checked in game with two mods that each add grace menu options. A combined package that merged files with an earlier version is rebuilt once.
 - Combine: the record lists, file by file, inner files a mod's copy leaves out (they are left out of the result, as before), and says which merging rules, load order model, game data and me3 version made it; a change in the rules makes it out of date. Two inner files whose names differ only in capital letters stop the merge with the reason.
 
 ## [3.14.0] - 2026-10-01
