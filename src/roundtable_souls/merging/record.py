@@ -21,8 +21,9 @@ import hashlib
 from roundtable_souls.game import config as game_config
 
 # Raised whenever what merging produces from the same inputs changes. 2: removals listed, colliding inner names refused,
-# stored sizes from the data, ZSTD frames with a 64 KB window (2026-10-01).
-MERGER_REVISION = 2
+# stored sizes from the data, ZSTD frames with a 64 KB window (2026-10-01). 3: talk scripts (ESD) merged state by
+# state (2026-10-02).
+MERGER_REVISION = 3
 ORDERING = "me3 sort_dependencies, me3 9b1e080 (me3 0.11.0 to 0.13.0)"
 # How an inner file that a mod's copy leaves out is treated. Until a policy is chosen (see docs/decisions), the rule
 # the launcher has always used: it is removed. Every such removal is listed in the record, file by file.
@@ -42,10 +43,11 @@ def facts(game: str = "eldenring", me3_version: str | None = None) -> dict:
 
 
 def reasons(record: dict, game: str = "eldenring") -> list[str]:
-    """Why a build made under other rules is out of date (empty for a record without these fields: older launchers
-    wrote none, and their inputs are still checked)."""
+    """Why a build made under other rules is out of date. A record without these fields was written by a launcher
+    up to 3.14.0: out of date when it merged files, since merging changed after it."""
     if "merger_revision" not in record:
-        return []
+        built = any(isinstance(f, dict) and f.get("output") for f in (record.get("files") or {}).values())
+        return ["made by an earlier version of the launcher, which merged differently"] if built else []
     now = facts(game)
     out = []
     if record.get("merger_revision") != now["merger_revision"]:

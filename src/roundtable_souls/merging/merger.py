@@ -22,9 +22,9 @@ from roundtable_souls.merging.rules import bnd4 as bnd4_rule
 from roundtable_souls.merging.rules import esd as esd_rule
 from roundtable_souls.merging.rules import fmg as fmg_rule
 
-# Talk scripts (ESD) are merged by merging.rules.esd only once a merged script has been checked in game; until then
-# they are handled as any other file (the later mod's copy, a clash when several changed it).
-ESD_MERGING = False
+# Talk scripts (ESD) are merged by merging.rules.esd (on since a merged grace menu was checked in game, 2026-10-02).
+# False: they are handled as any other file (the later mod's copy, a clash when several changed it).
+ESD_MERGING = True
 
 
 def mergeable(body: bytes) -> bool:

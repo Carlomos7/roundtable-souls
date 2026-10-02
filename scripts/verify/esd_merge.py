@@ -2,8 +2,7 @@
 
 The inputs are talk archives (script/talk/m00_00_00_00.talkesdbnd.dcx) in load order: each --input NAME=PATH (an
 archive, or a mod folder that has one), or, without --input, the enabled packages of --profile that ship one. They are
-merged against the game's own archive as Combine would with ESD merging switched on (it is off in the launcher until
-a merged menu has been checked in game). Nothing given is changed: the result goes to the output folder.
+merged against the game's own archive as Combine does. Nothing given is changed: the result goes to the output folder.
 
     uv run python scripts/verify/esd_merge.py --input map=DIR --input revive=FILE [--compare FILE] [--package]
 
@@ -74,7 +73,7 @@ def main() -> int:
     if vanilla is None:
         sys.exit(f"the game's archives have no {TALK}")
     layers = [(name, path.read_bytes()) for name, path in inputs]
-    merger.ESD_MERGING = True  # this run only: the launcher keeps it off
+    merger.ESD_MERGING = True  # as in the launcher (in case it has been switched off there)
     result = merger.merge(vanilla, layers, dec, comp)
     merged_body = formats.dcx.unpack(result.data, dec)[0]
     scripts = {e.name: e.data for e in formats.bnd4.read_bnd4(merged_body).entries if e.name}

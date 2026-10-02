@@ -137,7 +137,9 @@ def test_the_record_says_how_the_build_was_made_and_other_rules_make_it_out_of_d
     reordered = {**rec, "ordering": "an earlier model"}
     assert record.reasons(reordered) == ["the launcher's load order model changed since this was built"]
     assert record.reasons({**rec, "me3_version": "0.12.0"}) == []  # the ordering model decides, not the version
-    assert record.reasons({"files": {}}) == []  # a record from before these fields: its inputs are still checked
+    assert record.reasons({"files": {}}) == []  # a record from before these fields that merged nothing
+    old = {"files": {REL.lower(): {"rel": REL, "output": True}}}  # one that merged files: merging changed since
+    assert record.reasons(old) == ["made by an earlier version of the launcher, which merged differently"]
 
 
 def test_an_interrupted_rebuild_leaves_the_previous_result_and_the_next_one_finishes(prof, monkeypatch):

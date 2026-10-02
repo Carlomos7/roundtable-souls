@@ -179,14 +179,14 @@ def test_a_copy_no_mod_changed_is_the_games():
     assert r.merged and r.data == GAME and not r.changed
 
 
-def test_in_an_archive_scripts_are_merged_only_once_switched_on(monkeypatch):
+def test_in_an_archive_scripts_are_merged_and_switched_off_the_later_mods_is_used(monkeypatch):
     a = write_esd(with_option(game_script(), 10, 1000, 4, 120))
     b = write_esd(with_option(game_script(), 20, 2000, 4, 130))
     game = dcx(bnd({"t000001000.esd": GAME, "other.esd": GAME}))
     layers = [(name, dcx(bnd({"t000001000.esd": x, "other.esd": GAME}))) for name, x in (("a", a), ("b", b))]
-    off = merger.merge(game, layers)
-    assert off.clashes and files_of(off.data)["t000001000.esd"] == b  # today: the later mod's script
-    monkeypatch.setattr(merger, "ESD_MERGING", True)
     on = merger.merge(game, layers)
+    monkeypatch.setattr(merger, "ESD_MERGING", False)
+    off = merger.merge(game, layers)
+    assert off.clashes and files_of(off.data)["t000001000.esd"] == b  # as before ESD merging: the later mod's script
     assert not on.clashes and options(files_of(on.data)["t000001000.esd"]) == [(1, 2), (2, 3), (10, 4), (20, 5)]
     assert files_of(on.data)["other.esd"] == GAME
