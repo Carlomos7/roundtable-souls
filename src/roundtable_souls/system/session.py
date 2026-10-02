@@ -12,8 +12,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from roundtable_souls.saves import nightreign as repair_nightreign
-from roundtable_souls.saves import regulation as repair
+from roundtable_souls.saves.repair import repair_all
 from roundtable_souls.system import common
 from roundtable_souls.system import processes as clear_dead_game_shells
 from roundtable_souls.system.common import fail, log
@@ -168,58 +167,6 @@ def wait_for_game(appear_timeout, quiet=False):
         time.sleep(3)
     log("game closed")
     return True
-
-
-def wait_for_save_flush(saves, timeout=30):
-    """The game writes its save on the way out. Wait until every save file can
-    be opened for writing, which fails while the game still holds it."""
-    deadline = time.time() + timeout
-    busy = []
-    while time.time() < deadline:
-        busy = []
-        for save in saves:
-            try:
-                with open(save, "r+b"):
-                    pass
-            except OSError:
-                busy.append(save)
-        if not busy:
-            return True
-        time.sleep(1)
-    log(f"warning: still locked after {timeout}s: {', '.join(str(b) for b in busy)}")
-    return False
-
-
-def repair_all():
-    if not common.GAME.regulation_repair:
-        log(f"{common.GAME.name}: no save repair after play")
-        return
-    saves = common.save_files()
-    if not saves:
-        log(f"no {common.GAME.name} saves found on this PC")
-        return
-    if common.game_running():
-        fail("the game is still running, not touching the saves", code=2)
-    wait_for_save_flush(saves)
-    if common.GAME.save_reader == "nightreign":
-        fixed = 0
-        for save in saves:
-            log(str(save))
-            fixed += repair_nightreign.repair(save, log=log)
-        log(f"done: {fixed} repaired")
-        return
-    source = common.regulation_bin()
-    if not source:
-        fail("could not find the game's regulation.bin through Steam")
-    reg, header = repair.load_regulation(source)
-    if not repair.plausible_regulation(reg):
-        fail(f"{source}: regulation length {len(reg):#x} does not look right")
-    log(f"regulation: {source}")
-    fixed = 0
-    for save in saves:
-        log(str(save))
-        fixed += repair.repair(save, reg, header)
-    log(f"done: {fixed} repaired")
 
 
 def main():

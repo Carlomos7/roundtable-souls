@@ -93,6 +93,7 @@ from roundtable_souls.saves import layout as save_layout_check
 from roundtable_souls.saves import library as save_library
 from roundtable_souls.saves import loading as save_loading
 from roundtable_souls.saves import regulation as repair_regulation
+from roundtable_souls.saves import repair as save_repair
 from roundtable_souls.saves import service as saves_service
 from roundtable_souls.saves import transfer as save_transfer
 from roundtable_souls.saves import vanilla as save_vanilla
@@ -458,7 +459,7 @@ def _after_play(opts):
     if not common.GAME.regulation_repair:
         pass  # this game has no regulation block me3 leaves dirty
     elif opts["play_repair_after"]:
-        me3_session.repair_all()
+        save_repair.repair_all()
     else:
         common.log("repair after quitting is off (Tools > Play session)")
     if opts["play_clear_after"]:
@@ -620,7 +621,7 @@ def job_play_offline(setup, strip_revive=False, start_steam=True):
 
 def job_repair(setup):
     common.start_log("launcher: repair")
-    me3_session.repair_all()
+    save_repair.repair_all()
 
 
 def job_clear(setup):
