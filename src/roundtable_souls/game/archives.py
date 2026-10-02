@@ -67,7 +67,7 @@ def _entries(index: bytes) -> dict[int, tuple]:
 
 
 def _cache_dir() -> Path:
-    from roundtable_souls import folders
+    from roundtable_souls.saves import backups as folders
 
     return folders.data_root() / "cache" / "archives"
 

@@ -17,7 +17,7 @@ import shutil
 import time
 from pathlib import Path
 
-from roundtable_souls import folders
+from roundtable_souls.saves import backups as folders
 from roundtable_souls.saves import layout as L
 
 SLOT_STRIDE = 0x10 + L.SLOT_SIZE

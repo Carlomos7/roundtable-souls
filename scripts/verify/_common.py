@@ -97,7 +97,7 @@ def sandbox_launcher(out: Path, game: Path) -> None:
     data.mkdir(parents=True, exist_ok=True)
     settings.data_dir = lambda: data
     settings.get_settings.cache_clear()
-    from roundtable_souls import folders
+    from roundtable_souls.saves import backups as folders
 
     folders.data_root = lambda: data
     from roundtable_souls.platform import paths as common

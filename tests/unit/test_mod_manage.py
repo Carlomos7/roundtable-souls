@@ -353,7 +353,7 @@ def test_create_and_delete_profile(tmp_path):
     c = M.create_profile(tmp_path / "profiles", "copy.me3", copy_from=src)
     assert c.name == "copy.me3" and "flora" in c.read_text(encoding="utf-8")
     gone = M.delete_profile(c)
-    from roundtable_souls import folders
+    from roundtable_souls.saves import backups as folders
 
     assert not c.exists() and gone.parent == folders.deleted_profiles(c.parent) and gone.suffix == ".me3"
     assert '"from"' in Path(str(gone) + ".json").read_text(encoding="utf-8")  # a note of where it lived

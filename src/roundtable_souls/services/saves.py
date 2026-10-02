@@ -7,11 +7,12 @@ import shutil
 import time
 from pathlib import Path
 
-from roundtable_souls import folders, models
+from roundtable_souls import models
 from roundtable_souls.game import catalog as games
 from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.platform import paths as common
 from roundtable_souls.saves import analyze as save_analyze
+from roundtable_souls.saves import backups as folders
 from roundtable_souls.saves import container as save_container
 from roundtable_souls.saves import fix as save_fix
 from roundtable_souls.saves import layout as save_layout_check

@@ -21,10 +21,10 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from roundtable_souls import folders
 from roundtable_souls.config import identity
 from roundtable_souls.config.settings import identity_matches, is_installed, launch_target, load_settings, save_settings
 from roundtable_souls.platform import steam_shortcuts
+from roundtable_souls.saves import backups as folders
 
 
 def _windows() -> bool:

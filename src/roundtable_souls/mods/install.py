@@ -248,7 +248,7 @@ def plan_install(
     """Unpack (archives, into the launcher's temp folder) and describe what install() would do. The unpacked copy is
     kept in the plan ('unpacked'), so replan() can change the folder name, id or variant without unpacking again."""
     profile = Path(profile)
-    from roundtable_souls import folders
+    from roundtable_souls.saves import backups as folders
 
     folders.adopt_legacy_profile_folders(profile.parent)
     staging_root = folders.temp("installing")

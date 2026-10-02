@@ -2,7 +2,7 @@
 
 import pytest
 
-from roundtable_souls import folders
+from roundtable_souls.saves import backups as folders
 from roundtable_souls.services import play as g
 from roundtable_souls.services import saves as saves_service
 

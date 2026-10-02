@@ -22,9 +22,9 @@ import struct
 import uuid
 from pathlib import Path
 
-from roundtable_souls import folders
 from roundtable_souls.files import atomic_write
 from roundtable_souls.game import catalog as games
+from roundtable_souls.saves import backups as folders
 from roundtable_souls.saves import container as save_container
 from roundtable_souls.saves import fix as save_fix
 from roundtable_souls.saves import layout as L

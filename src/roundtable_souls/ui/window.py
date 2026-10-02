@@ -69,7 +69,6 @@ from qfluentwidgets import (
 )
 from qfluentwidgets import FluentIcon as FI
 
-from roundtable_souls import folders
 from roundtable_souls.config.settings import FROZEN, appimage, is_installed, is_portable
 from roundtable_souls.game import catalog as games
 from roundtable_souls.mods import checks as mod_checks
@@ -83,6 +82,7 @@ from roundtable_souls.mods import undo as mod_undo
 from roundtable_souls.platform import desktop, instance, trash
 from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.resources import ASSETS_DIR
+from roundtable_souls.saves import backups as folders
 from roundtable_souls.saves import library as save_library
 from roundtable_souls.saves import transfer as save_transfer
 from roundtable_souls.services import play as core

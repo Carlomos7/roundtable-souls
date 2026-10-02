@@ -22,7 +22,7 @@ _NAME = re.compile(r"^(\d{8}-\d{6}-\d{3})_(.*)\.me3$")
 def folder(profile: Path) -> Path:
     """The history folder for one profile: its file name plus a short hash of its full path, so two profiles with
     the same name (one per game, say) never share it."""
-    from roundtable_souls import folders
+    from roundtable_souls.saves import backups as folders
 
     profile = Path(profile)
     key = hashlib.sha1(os.path.normcase(os.path.abspath(profile)).encode()).hexdigest()[:8]

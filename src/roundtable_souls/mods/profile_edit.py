@@ -589,7 +589,7 @@ def delete_profile(path: Path) -> Path:
     lived. Mod folders are never touched; its .bak goes along, its offline copy is regenerated when needed."""
     import json
 
-    from roundtable_souls import folders
+    from roundtable_souls.saves import backups as folders
 
     path = Path(path)
     if not path.is_file():
