@@ -159,7 +159,7 @@ def _engine(profile: Path, layer: dict, setup: Path | None):
     from roundtable_souls.mods import engine
     from roundtable_souls.platform import paths as common
 
-    if setup is None or not load_settings().get("build_merges", False):
+    if setup is None or not load_settings().build_merges:
         return None
     recipe, version, _why = engine.match(setup)
     if recipe is None:

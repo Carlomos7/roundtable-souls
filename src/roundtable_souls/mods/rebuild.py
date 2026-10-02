@@ -150,13 +150,13 @@ def _legacy_mark(profile: Path):
     """What launchers before 3.10 kept in their own settings (per PC), or None."""
     from roundtable_souls.config.settings import load_settings
 
-    return (load_settings().get("parameter_overlays") or {}).get(_key(profile))  # read fresh: Options just set it
+    return load_settings().parameter_overlays.get(_key(profile))  # read fresh: Options just set it
 
 
 def _set_legacy_mark(profile: Path, value) -> None:
     from roundtable_souls.config.settings import load_settings, save_settings
 
-    marks = dict(load_settings().get("parameter_overlays") or {})
+    marks = dict(load_settings().parameter_overlays)
     if value is None:
         marks.pop(_key(profile), None)
     else:
@@ -235,13 +235,13 @@ def approved(tool) -> bool:
 
     if getattr(tool, "builtin", False):
         return True
-    return tool.approval_key() in (load_settings().get("rebuild_approved") or [])
+    return tool.approval_key() in load_settings().rebuild_approved
 
 
 def approve(tool) -> None:
     from roundtable_souls.config.settings import load_settings, save_settings
 
-    keys = list(load_settings().get("rebuild_approved") or [])
+    keys = list(load_settings().rebuild_approved)
     if tool.approval_key() not in keys:
         save_settings(rebuild_approved=[*keys, tool.approval_key()][-50:])
 

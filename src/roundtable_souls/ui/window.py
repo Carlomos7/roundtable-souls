@@ -120,7 +120,6 @@ from roundtable_souls.services.mods import (
 )
 from roundtable_souls.services.play import (
     LOGS,
-    PLAY_DEFAULTS,
     TITLE,
     VERSION,
     discover,
@@ -250,7 +249,7 @@ class Launcher(FluentWindow):
         super().__init__()
         data_folder.clear_temp()  # unpacks left by an install that crashed
         self.settings = load_settings()
-        self.game = use_game(core.STARTUP_GAME or games.get(self.settings.get("game")), self.settings)
+        self.game = use_game(core.STARTUP_GAME or games.get(self.settings.game), self.settings)
         self.bus = Bus()
         self.busy = False
         self.game_running = False
@@ -1683,7 +1682,7 @@ class Launcher(FluentWindow):
 
         def store(ties):
             save_settings(native_configs=ties)
-            self.settings["native_configs"] = ties
+            self.settings.native_configs = ties
             return mod_configs.files_for(self.settings, dll, skip=skip)
 
         dlg = ConfigFilesDialog(
@@ -1766,7 +1765,7 @@ class Launcher(FluentWindow):
             text = h["text"] + f" ({h['backend']})."
         else:
             text = h["text"] + "."
-            auto = play_options(self.settings).get("play_update_merge", True) and h.get("backend")
+            auto = play_options(self.settings)["play_update_merge"] and h.get("backend")
             if state in ("stale", "failed") and auto and self.game is games.ELDEN_RING:
                 text += " Play updates them first, or Rebuild now."
         self.merge_text.setText(text)
@@ -2590,7 +2589,7 @@ class Launcher(FluentWindow):
         sw = SwitchButton()
         sw.setOnText("On")
         sw.setOffText("Off")
-        sw.setChecked(bool(self.settings.get("check_launcher_updates", True)))
+        sw.setChecked(bool(self.settings.check_launcher_updates))
         sw.checkedChanged.connect(lambda checked: self._remember_play("check_launcher_updates", checked))
         self.play_sw = {"check_launcher_updates": sw}
         cl.addWidget(
@@ -2606,7 +2605,7 @@ class Launcher(FluentWindow):
         self.channel_box.addItems(["Stable", "Beta"])
         self.channel_box.setMinimumWidth(140)
         self.channel_box.blockSignals(True)
-        self.channel_box.setCurrentIndex(1 if self.settings.get("launcher_channel") == "beta" else 0)
+        self.channel_box.setCurrentIndex(1 if self.settings.launcher_channel == "beta" else 0)
         self.channel_box.blockSignals(False)
         self.channel_box.currentIndexChanged.connect(self._on_channel)
         cl.addWidget(
@@ -2658,7 +2657,7 @@ class Launcher(FluentWindow):
         self.theme_sw = SwitchButton()
         self.theme_sw.setOnText("Dark")
         self.theme_sw.setOffText("Light")
-        self.theme_sw.setChecked(self.settings.get("theme", "dark") == "dark")
+        self.theme_sw.setChecked(self.settings.theme == "dark")
         self.theme_sw.checkedChanged.connect(self._on_theme)
         row.addWidget(BodyLabel("Theme"))
         row.addWidget(self.theme_sw)
@@ -2672,7 +2671,7 @@ class Launcher(FluentWindow):
         self.logo_box = ComboBox()
         self.logo_box.addItems(["Follow theme", "Dark", "Light"])
         self.logo_box.setMinimumWidth(140)
-        mode = self.settings.get("logo", "auto")
+        mode = self.settings.logo
         self.logo_box.blockSignals(True)
         self.logo_box.setCurrentIndex({"auto": 0, "dark": 1, "light": 2}.get(mode, 0))
         self.logo_box.blockSignals(False)
@@ -2782,7 +2781,7 @@ class Launcher(FluentWindow):
             sw = SwitchButton()
             sw.setOnText("On")
             sw.setOffText("Off")
-            sw.setChecked(bool(self.settings.get(key, PLAY_DEFAULTS[key])))
+            sw.setChecked(bool(getattr(self.settings, key)))
             sw.checkedChanged.connect(lambda checked, k=key: self._remember_play(k, checked))
             self.play_sw[key] = sw
             self.play_rows[key] = SettingRow(title, blurb, sw, help_text)
@@ -2851,7 +2850,7 @@ class Launcher(FluentWindow):
         sw = SwitchButton()
         sw.setOnText("On")
         sw.setOffText("Off")
-        sw.setChecked(bool(self.settings.get("check_me3_updates", True)))
+        sw.setChecked(bool(self.settings.check_me3_updates))
         sw.checkedChanged.connect(lambda checked: self._remember_play("check_me3_updates", checked))
         self.play_sw["check_me3_updates"] = sw
         cl.addWidget(
@@ -2876,15 +2875,15 @@ class Launcher(FluentWindow):
         self.off_revive = SwitchButton()
         self.off_revive.setOnText("On")
         self.off_revive.setOffText("Off")
-        self.off_revive.setChecked(bool(self.settings.get("offline_strip_revive", False)))
+        self.off_revive.setChecked(bool(self.settings.offline_strip_revive))
         self.off_steam = SwitchButton()
         self.off_steam.setOnText("On")
         self.off_steam.setOffText("Off")
-        self.off_steam.setChecked(bool(self.settings.get("offline_start_steam", True)))
+        self.off_steam.setChecked(bool(self.settings.offline_start_steam))
         self.off_quiet = SwitchButton()
         self.off_quiet.setOnText("On")
         self.off_quiet.setOffText("Off")
-        self.off_quiet.setChecked(bool(self.settings.get("offline_skip_confirm", False)))
+        self.off_quiet.setChecked(bool(self.settings.offline_skip_confirm))
         self.off_revive_row = SettingRow(
             "Skip Revive too",
             "Leave Nightreign Revive (an Elden Ring mod) off for this launch.",
@@ -3722,7 +3721,7 @@ class Launcher(FluentWindow):
         """A Locations value; the game executable is the active game's own."""
         if key == "game_exe":
             return str(game_setting(self.settings, self.game.key, "game_exe") or "")
-        return str(self.settings.get(key) or "")
+        return str(getattr(self.settings, key) or "")
 
     def _pick_location(self, key, is_dir, filt):
         if is_dir:
@@ -3788,7 +3787,7 @@ class Launcher(FluentWindow):
     def _on_channel(self, index):
         channel = "beta" if index == 1 else "stable"
         save_settings(launcher_channel=channel)
-        self.settings["launcher_channel"] = channel
+        self.settings.launcher_channel = channel
         self._offered = None
         self._check_launcher_update(force=True)
 
@@ -3796,7 +3795,7 @@ class Launcher(FluentWindow):
         """The Settings line: version, kind of copy, and what the last check found (never 'up to date' after a check
         that failed)."""
         parts = [f"{TITLE} {VERSION}", self._install_kind()]
-        if self.settings.get("launcher_channel") == "beta":
+        if self.settings.launcher_channel == "beta":
             parts.append("beta channel")
         tone = "muted"
         if check.offer:
@@ -4031,7 +4030,7 @@ class Launcher(FluentWindow):
     def _point_steam_shortcuts(self):
         def work():
             try:
-                record = load_settings().get("inno_migration") or {}
+                record = load_settings().inno_migration or {}
                 if record.get("steam_pending") or (record.get("old_exe") and not record.get("steam_done")):
                     changed = migration.finish_steam_step()
                 else:
@@ -4129,7 +4128,7 @@ class Launcher(FluentWindow):
         def work():
             outcome = confirmed or updates.update_outcome()
             self.bus.update_outcome.emit(outcome or {})
-            pending = (load_settings().get("update_pending") or {}).get("version")
+            pending = (load_settings().update_pending or {}).get("version")
             try:
                 updates.clean_downloads(keep=pending)
             except Exception:
@@ -4170,7 +4169,7 @@ class Launcher(FluentWindow):
 
     def _remember_play(self, key, checked):
         save_settings(**{key: bool(checked)})
-        self.settings[key] = bool(checked)
+        setattr(self.settings, key, bool(checked))
         if key == "warn_dead_shells":
             self._on_shells(dead_shells_count())
 
@@ -5339,7 +5338,7 @@ class Launcher(FluentWindow):
 
     def _update_activity_badge(self):
         """A red count on the Activity item for jobs that failed since the page was last looked at."""
-        seen = float(load_settings().get("activity_seen") or 0.0)
+        seen = float(load_settings().activity_seen or 0.0)
         count = len(core.run_logging.unseen_failures(seen))
         if self._activity_badge is not None:
             try:
@@ -5456,7 +5455,7 @@ class Launcher(FluentWindow):
             return self._ask_play_stale(
                 resume, reason, "The last rebuild with these mods failed; its log is on Activity."
             )
-        if not play_options(self.settings).get("play_update_merge", True) and not self._ask_rebuild(resume, reason):
+        if not play_options(self.settings)["play_update_merge"] and not self._ask_rebuild(resume, reason):
             return True
         if not self._tool_ready(prof):
             return self._ask_play_stale(resume, reason, "The rebuild tool did not run (not allowed, or it cannot run).")
@@ -5744,7 +5743,7 @@ class Launcher(FluentWindow):
 
     def _on_shells(self, n):
         """Dead copies of the game's exe make Steam and Discord think the game is still open."""
-        show = n > 0 and not self.game_running and not self.busy and bool(self.settings.get("warn_dead_shells", True))
+        show = n > 0 and not self.game_running and not self.busy and bool(self.settings.warn_dead_shells)
         if show and self.shells_bar is None:
             exe = core.common.game_exe_name()
             msg = f"{n} leftover {exe} process{'es' if n != 1 else ''} with no game window. Steam may refuse to launch."
@@ -5763,7 +5762,8 @@ class Launcher(FluentWindow):
         steam = self.off_steam.isChecked()
         quiet = self.off_quiet.isChecked()
         save_settings(offline_strip_revive=strip, offline_start_steam=steam, offline_skip_confirm=quiet)
-        self.settings.update(offline_strip_revive=strip, offline_start_steam=steam, offline_skip_confirm=quiet)
+        self.settings.offline_strip_revive, self.settings.offline_start_steam = strip, steam
+        self.settings.offline_skip_confirm = quiet
 
     def launch_offline(self):
         if self.busy or not self.setup:
@@ -5808,7 +5808,7 @@ class Launcher(FluentWindow):
 
     def _on_theme(self, dark):
         save_settings(theme="dark" if dark else "light")
-        self.settings["theme"] = "dark" if dark else "light"
+        self.settings.theme = "dark" if dark else "light"
         setTheme(Theme.DARK if dark else Theme.LIGHT)
         setThemeColor(ACCENT if dark else ACCENT_LIGHT)
         self._restyle()
@@ -5816,11 +5816,11 @@ class Launcher(FluentWindow):
     def _on_logo(self, index):
         mode = ("auto", "dark", "light")[index] if 0 <= index < 3 else "auto"
         save_settings(logo=mode)
-        self.settings["logo"] = mode
+        self.settings.logo = mode
         self._apply_logo()
 
     def _apply_logo(self):
-        mode = self.settings.get("logo", "auto")
+        mode = self.settings.logo
         path = logo_path(isDarkTheme(), mode)
         ico = ASSETS_DIR / "icon.ico"
         if core.logo_kind(isDarkTheme(), mode) == "dark" and ico.is_file():
@@ -5953,7 +5953,7 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName(TITLE)
     use_theme_text()
-    dark = load_settings().get("theme", "dark") == "dark"
+    dark = load_settings().theme == "dark"
     setTheme(Theme.DARK if dark else Theme.LIGHT)
     setThemeColor(ACCENT if dark else ACCENT_LIGHT)
     hold = None

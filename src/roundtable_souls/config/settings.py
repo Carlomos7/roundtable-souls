@@ -201,40 +201,59 @@ class LauncherSettings(BaseModel):
     launcher_advisory_checked: float = 0.0
     update_pending: dict[str, Any] | None = None  # an update handed to the setup or a new exe, until it is confirmed
     update_result: dict[str, Any] | None = None  # how the last update went, shown once on the next start
+    # Written only once a build sets them (WRITTEN_WHEN_SET), so a file without them stays without them:
+    update_blocked: list[str] = Field(default_factory=list)  # versions that failed to start here and were undone
+    inno_migration: dict[str, Any] | None = None  # the move from the Inno Setup install, step by step (updates.inno)
+
+    @classmethod
+    def from_raw(cls, raw: Any) -> LauncherSettings:
+        """Settings from what the file held: anything but an object gives the defaults, and a value of the wrong
+        type (a null, a typo) gives that key's default while every other key is kept."""
+        if not isinstance(raw, dict):
+            raw = {}
+        try:
+            return cls.model_validate(raw)
+        except ValidationError as e:
+            bad = {err["loc"][0] for err in e.errors() if err["loc"]}
+            return cls.model_validate({k: v for k, v in raw.items() if k not in bad})
+
+    def to_file(self) -> dict[str, Any]:
+        """What the file holds: every key, unknown ones (an older or newer build's) included, except the keys in
+        WRITTEN_WHEN_SET while nothing has set them."""
+        out = self.model_dump()
+        for key in WRITTEN_WHEN_SET:
+            if key not in self.model_fields_set:
+                out.pop(key, None)
+        return out
+
+
+WRITTEN_WHEN_SET = ("update_blocked", "inno_migration")
 
 
 def settings_path() -> Path:
     return data_dir() / "launcher_settings.json"
 
 
-def load_settings() -> dict[str, Any]:
-    """The settings as a plain dict (validated, defaults filled). A broken file yields the defaults."""
+def load_settings() -> LauncherSettings:
+    """The settings, read now (validated, defaults filled). A broken file yields the defaults."""
     try:
         raw = json.loads(settings_path().read_text(encoding="utf-8"))
-        if not isinstance(raw, dict):
-            raw = {}
     except OSError, ValueError:
         raw = {}
-    try:
-        return LauncherSettings.model_validate(raw).model_dump()
-    except ValidationError as e:
-        bad = {err["loc"][0] for err in e.errors() if err["loc"]}
-        clean = {k: v for k, v in raw.items() if k not in bad}
-        return LauncherSettings.model_validate(clean).model_dump()
+    return LauncherSettings.from_raw(raw)
 
 
 _WRITE_LOCK = threading.RLock()  # threads of this process; the lock file covers other processes
 _tmp_count = 0
 
 
-def _write(values: dict[str, Any]) -> None:
+def _write(model: LauncherSettings) -> None:
     global _tmp_count
-    model = LauncherSettings.model_validate(values)
     path = settings_path()
     _tmp_count += 1
     tmp = path.with_name(f"{path.name}.{os.getpid()}-{_tmp_count}.tmp")  # never shared with another writer
     try:
-        tmp.write_text(json.dumps(model.model_dump(), indent=1), encoding="utf-8")
+        tmp.write_text(json.dumps(model.to_file(), indent=1), encoding="utf-8")
         tmp.replace(path)
     except OSError:
         try:
@@ -243,15 +262,15 @@ def _write(values: dict[str, Any]) -> None:
             pass
 
 
-def change_settings(change: Callable[[dict[str, Any]], dict[str, Any]]) -> dict[str, Any]:
+def change_settings(change: Callable[[LauncherSettings], dict[str, Any]]) -> LauncherSettings:
     """Read, change and write the file as one step: change(current) returns the keys to set. No other thread or
     launcher process writes in between, so a value computed from the current one (a counter) is never lost.
     Returns the settings as written."""
     with _WRITE_LOCK, filelock.locked(settings_path()):
         current = load_settings()
-        current.update(change(dict(current)))
-        _write(current)
-        return current
+        new = LauncherSettings.model_validate({**current.to_file(), **change(current)})
+        _write(new)
+        return new
 
 
 def save_settings(**changes: Any) -> None:
@@ -262,13 +281,13 @@ def save_settings(**changes: Any) -> None:
 GAME_KEYS = ("setup", "game_exe")  # values each game keeps for itself
 
 
-def game_setting(settings: dict[str, Any], game: str, key: str, default: Any = None) -> Any:
+def game_setting(settings: LauncherSettings, game: str, key: str, default: Any = None) -> Any:
     """One per-game value. Elden Ring's live at the top level, where builds before multi-game support kept them, so
     an older build still finds them; every other game keeps its own under `games`."""
     if game == "eldenring":
-        value = settings.get(key)
+        value = getattr(settings, key, None)
     else:
-        value = ((settings.get("games") or {}).get(game) or {}).get(key)
+        value = (settings.games.get(game) or {}).get(key)
     return default if value is None else value
 
 
@@ -277,7 +296,6 @@ def save_game_settings(game: str, **changes: Any) -> None:
     if game == "eldenring":
         save_settings(**changes)
         return
-    current = load_settings()
-    games = dict(current.get("games") or {})
+    games = dict(load_settings().games)
     games[game] = {**(games.get(game) or {}), **changes}
     save_settings(games=games)

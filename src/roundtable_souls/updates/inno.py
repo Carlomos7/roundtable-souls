@@ -170,7 +170,7 @@ def migrate_from_inno(
     is nothing to do. Only an installed Velopack copy does this (never a portable copy or a build run from source)."""
     if not _windows() or not is_installed() or not identity_matches():
         return None
-    record = dict(load_settings().get("inno_migration") or {})
+    record = dict(load_settings().inno_migration or {})
     if record.get("done"):
         return None
     target = target or launch_target()
@@ -221,7 +221,7 @@ def migrate_from_inno(
 
 def finish_steam_step(target: Path | None = None) -> list[steam_shortcuts.Shortcut]:
     """The pending Steam step (Settings, once Steam is closed)."""
-    record = dict(load_settings().get("inno_migration") or {})
+    record = dict(load_settings().inno_migration or {})
     changed = retarget_steam([Path(record["old_exe"])], target or launch_target()) if record.get("old_exe") else []
     if record:
         record.update(steam_done=True, done=True, status="done", steam_changed=[s.name for s in changed])

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from roundtable_souls.config.settings import LauncherSettings
 from roundtable_souls.platform import data_folder
 from roundtable_souls.saves import backups as save_backups
 from roundtable_souls.saves import layout as save_layout_check
@@ -91,10 +92,17 @@ def test_restore_backup_round_trip_with_safety_copy(tmp_path, monkeypatch):
 
 
 def test_play_options_defaults_and_backup_before_play(tmp_path, monkeypatch):
-    assert g.play_options({}) == g.PLAY_DEFAULTS
-    assert g.play_options({"play_repair_after": False, "play_backup_before": 1})["play_repair_after"] is False
-    assert g.play_options({"play_backup_before": 1})["play_backup_before"] is True
-    assert g.play_options({"play_boot_boost": None})["play_boot_boost"] is True  # null in the file = default
+    assert g.play_options(LauncherSettings.from_raw({})) == g.PLAY_DEFAULTS
+    assert (
+        g.play_options(LauncherSettings.from_raw({"play_repair_after": False, "play_backup_before": 1}))[
+            "play_repair_after"
+        ]
+        is False
+    )
+    assert g.play_options(LauncherSettings.from_raw({"play_backup_before": 1}))["play_backup_before"] is True
+    assert (
+        g.play_options(LauncherSettings.from_raw({"play_boot_boost": None}))["play_boot_boost"] is True
+    )  # null in the file = default
     copy = _copy(tmp_path)
     monkeypatch.setattr(g.common, "save_files", lambda: [copy])
     made = g.backup_saves_before_play()

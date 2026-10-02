@@ -6,6 +6,7 @@ import json
 import pytest
 from test_mod_merge import World
 
+from roundtable_souls.config.settings import LauncherSettings
 from roundtable_souls.mods import rebuild as merge
 from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.services import play as core
@@ -146,5 +147,5 @@ def test_headless_play_does_not_launch_when_it_must_not(monkeypatch):
 
 
 def test_automatic_rebuilds_are_on_by_default():
-    assert core.play_options({})["play_update_merge"] is True
+    assert core.play_options(LauncherSettings.from_raw({}))["play_update_merge"] is True
     assert json.dumps(core.PLAY_DEFAULTS)  # plain values, as the settings page reads them

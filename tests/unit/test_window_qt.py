@@ -1103,7 +1103,7 @@ def test_with_automatic_rebuilds_off_play_asks_and_never_starts_silently(sandbox
     w = sandbox
     _fresh_play(w)
     ran = _stale_merge(monkeypatch)
-    w.settings["play_update_merge"] = False
+    w.settings.play_update_merge = False
     assert not w.play_rows["play_update_merge"].isHidden() or w.game is not window.games.ELDEN_RING
     asked = _answer(monkeypatch, None)  # closed: nothing happens
     resumed = []
@@ -1246,7 +1246,7 @@ def test_update_outcomes_are_reported_once_at_start(sandbox):
     bar = next(b for b in _bars(w) if "did not finish" in b.title)
     labels = [b.text() for b in bar.findChildren(QPushButton)]
     assert "Try again" in labels and "Releases" in labels and "did not finish installing" in bar.content
-    assert window.load_settings()["update_result"] is None  # shown once
+    assert window.load_settings().update_result is None  # shown once
     w._on_update_outcome({"status": "rolled_back", "version": "9.9.8", "error": "it did not finish starting"})
     QTest.qWait(200)
     bar = next(b for b in _bars(w) if "was put back" in b.title)

@@ -16,6 +16,7 @@ from typing import Any
 from roundtable_souls import __version__
 from roundtable_souls.config.settings import (
     FROZEN,
+    LauncherSettings,
     data_dir,
     exe_dir,
     game_setting,
@@ -215,7 +216,7 @@ def discover(remembered: str | None, game: games.Game | None = None):
     return found
 
 
-def remembered_setup(settings: dict | None = None, game: games.Game | None = None) -> str | None:
+def remembered_setup(settings: LauncherSettings | None = None, game: games.Game | None = None) -> str | None:
     """The setup Play last used for the game."""
     s = load_settings() if settings is None else settings
     return game_setting(s, (game or common.GAME).key, "setup")
@@ -264,24 +265,25 @@ def note_setup_saves(setup: Setup | None) -> dict:
     return names
 
 
-def use_game(key: str | games.Game, settings: dict | None = None) -> games.Game:
+def use_game(key: str | games.Game, settings: LauncherSettings | None = None) -> games.Game:
     """Switch every lookup (Steam folder, saves, me3 profiles, running-game checks) to this game."""
     return common.set_game(key, settings)
 
 
-PLAY_DEFAULTS = {
-    "play_update_merge": True,
-    "build_merges": False,
-    "play_backup_before": False,
-    "play_repair_after": True,
-    "play_clear_before": True,
-    "play_clear_after": True,
-    "warn_dead_shells": True,
-    "play_boot_boost": True,
-    "play_show_logos": False,
-    "play_diagnostics": False,
-    "check_me3_updates": True,
-}
+PLAY_KEYS = (
+    "play_update_merge",
+    "build_merges",
+    "play_backup_before",
+    "play_repair_after",
+    "play_clear_before",
+    "play_clear_after",
+    "warn_dead_shells",
+    "play_boot_boost",
+    "play_show_logos",
+    "play_diagnostics",
+    "check_me3_updates",
+)
+PLAY_DEFAULTS = {k: LauncherSettings.model_fields[k].default for k in PLAY_KEYS}  # the settings' own defaults
 
 
 FLAGS_SINCE = (0, 13, 0)  # --no-boot-boost / --show-logos / --diagnostics as used here exist from me3 0.13
@@ -306,11 +308,9 @@ def launch_extra_args(opts: dict, version: str | None = None) -> list:
     return args
 
 
-def play_options(settings: dict | None = None) -> dict:
+def play_options(settings: LauncherSettings | None = None) -> dict:
     s = load_settings() if settings is None else settings
-    return {
-        k: bool(v if s.get(k) is None else s.get(k)) for k, v in PLAY_DEFAULTS.items()
-    }  # a null in the file means default
+    return {k: bool(getattr(s, k)) for k in PLAY_DEFAULTS}  # a null in the file is the default (LauncherSettings)
 
 
 def backup_saves_before_play() -> list:
@@ -574,7 +574,7 @@ def play_command(game: games.Game | None = None) -> tuple[str, str]:
     return sys.executable, f"-m roundtable_souls {opts}"
 
 
-def game_from_args(argv: list[str], settings: dict | None = None) -> games.Game | None:
+def game_from_args(argv: list[str], settings: LauncherSettings | None = None) -> games.Game | None:
     """The game `--game <name>` (or `--game=<name>`) asks for; without the flag, the tab the window last showed.
     None when the name is unknown."""
     value = None
@@ -585,7 +585,7 @@ def game_from_args(argv: list[str], settings: dict | None = None) -> games.Game 
             value = arg.split("=", 1)[1]
     if value is None:
         s = load_settings() if settings is None else settings
-        return games.get(s.get("game"))
+        return games.get(s.game)
     return games.resolve(value)
 
 
@@ -595,7 +595,7 @@ def play_headless(game: games.Game | None = None, notice: Callable[[games.Game, 
     and exits. For Steam shortcuts and Gaming Mode. notice(game, why) tells the player when the game was not
     started (the command line passes one that shows a small window)."""
     settings = load_settings()
-    game = use_game(game or games.get(settings.get("game")), settings)
+    game = use_game(game or games.get(settings.game), settings)
     if not game.ready:
         common.start_log("launcher: play (no window)")
         run_logging.log(f"error: Roundtable Souls cannot launch {game.name} yet")
@@ -673,7 +673,7 @@ def check(game: games.Game | None = None):
 
     lines = [f"{TITLE} {VERSION}"]
     settings = load_settings()
-    game = use_game(game or games.get(settings.get("game")), settings)
+    game = use_game(game or games.get(settings.game), settings)
     installed = [g.name for g in games.GAMES if common.installed_dir(g)]
     lines.append(f"game: {game.name}{'' if game.ready else ' (not supported yet)'}")
     lines.append(f"installed games: {', '.join(installed) or 'none found'}")

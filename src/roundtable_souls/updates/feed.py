@@ -17,6 +17,7 @@ from typing import Any
 from roundtable_souls import __version__
 from roundtable_souls.config import identity
 from roundtable_souls.config.settings import (
+    LauncherSettings,
     change_settings,
     load_settings,
     save_settings,
@@ -205,7 +206,7 @@ def _backoff(failures: int, rand: Callable[[], float]) -> float:
 
 
 def check_launcher_update(
-    settings: dict | None = None,
+    settings: LauncherSettings | None = None,
     fetch: Callable[..., Fetched] = fetch_release,
     now: Callable[[], float] = time.time,
     force: bool = False,
@@ -218,21 +219,21 @@ def check_launcher_update(
     that failed to start here stays blocked either way.
     """
     s = load_settings() if settings is None else settings
-    if not force and not bool(s.get("check_launcher_updates", True)):
+    if not force and not bool(s.check_launcher_updates):
         return UpdateCheck("off")
-    channel = "beta" if s.get("launcher_channel") == "beta" else "stable"
-    cached = s.get("launcher_latest")
+    channel = "beta" if s.launcher_channel == "beta" else "stable"
+    cached = s.launcher_latest
     if not isinstance(cached, dict) or cached.get("channel") != channel:
         cached = None  # another channel's answer says nothing about this one
-    checked = float(s.get("launcher_latest_checked") or 0) if cached else 0.0
+    checked = float(s.launcher_latest_checked or 0) if cached else 0.0
     status, reason, retry_at = "cached", "", 0.0
     due = force or cached is None or now() - checked > CHECK_EVERY
-    if due and not force and now() < float(s.get("launcher_next_check") or 0):
+    if due and not force and now() < float(s.launcher_next_check or 0):
         due, status = False, "waiting"
-        reason = str(s.get("launcher_check_error") or "")
-        retry_at = float(s.get("launcher_next_check") or 0)
+        reason = str(s.launcher_check_error or "")
+        retry_at = float(s.launcher_next_check or 0)
     if due:
-        got = fetch(channel=channel, etag=str(s.get("launcher_latest_etag") or "") if cached else "")
+        got = fetch(channel=channel, etag=str(s.launcher_latest_etag or "") if cached else "")
         when = now()
         if got.status in ("ok", "not_modified"):
             if got.status == "ok":
@@ -248,8 +249,8 @@ def check_launcher_update(
             status, checked = "fresh", when
         else:
 
-            def failed(cur: dict) -> dict:
-                failures = int(cur.get("launcher_check_failures") or 0) + 1
+            def failed(cur: LauncherSettings) -> dict:
+                failures = int(cur.launcher_check_failures or 0) + 1
                 wait = max(got.retry_at - when, 60.0) if got.retry_at else _backoff(failures, rand)
                 return {
                     "launcher_check_failures": failures,
@@ -258,13 +259,13 @@ def check_launcher_update(
                 }
 
             wrote = change_settings(failed)
-            status, reason, retry_at = got.status, got.reason, float(wrote["launcher_next_check"])
+            status, reason, retry_at = got.status, got.reason, float(wrote.launcher_next_check)
     offer, blocked = None, ""
     if cached and is_newer(cached.get("version"), current):
         version = str(cached.get("version"))
-        if any(same_version(version, b) for b in s.get("update_blocked") or []):
+        if any(same_version(version, b) for b in s.update_blocked or []):
             blocked = version
-        elif force or str(s.get("launcher_update_skipped") or "") != version:
+        elif force or str(s.launcher_update_skipped or "") != version:
             offer = {k: v for k, v in cached.items() if k != "channel"}
             offer["url"] = offer.get("url") or RELEASES_URL
             offer["assets"] = offer.get("assets") or {}
@@ -290,7 +291,7 @@ def fetch_advisory(etag: str = "", opener: Opener = urllib.request.urlopen, now=
 
 
 def check_advisory(
-    settings: dict | None = None,
+    settings: LauncherSettings | None = None,
     fetch: Callable[..., Fetched] = fetch_advisory,
     now: Callable[[], float] = time.time,
     force: bool = False,
@@ -300,11 +301,11 @@ def check_advisory(
     update check (from raw.githubusercontent.com, which does not use GitHub's API limit). It only warns: nothing is
     installed because of it."""
     s = load_settings() if settings is None else settings
-    if not force and not bool(s.get("check_launcher_updates", True)):
+    if not force and not bool(s.check_launcher_updates):
         return None
-    cached = s.get("launcher_advisory") if isinstance(s.get("launcher_advisory"), dict) else None
-    if force or cached is None or now() - float(s.get("launcher_advisory_checked") or 0) > CHECK_EVERY:
-        got = fetch(etag=str(s.get("launcher_advisory_etag") or "") if cached else "")
+    cached = s.launcher_advisory if isinstance(s.launcher_advisory, dict) else None
+    if force or cached is None or now() - float(s.launcher_advisory_checked or 0) > CHECK_EVERY:
+        got = fetch(etag=str(s.launcher_advisory_etag or "") if cached else "")
         if got.status == "ok":
             cached = got.data
             save_settings(launcher_advisory=cached, launcher_advisory_etag=got.etag, launcher_advisory_checked=now())

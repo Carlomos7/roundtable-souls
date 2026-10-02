@@ -55,7 +55,7 @@ def test_a_mark_from_before_3_10_moves_into_roundtable_json(tmp_path, monkeypatc
     assert stored == {"package": "Merger/mod", "rebuild": None}  # relative: it travels with the folder
     merge.set_overlay_override(w.profile, None)
     assert profile_settings.load(w.profile)["overlay"] is None and merge.overlay_mark(w.profile) is None
-    assert merge._key(w.profile) not in (settings.load_settings().get("parameter_overlays") or {})
+    assert merge._key(w.profile) not in (settings.load_settings().parameter_overlays or {})
 
 
 def test_a_copied_profile_folder_resolves_the_same_way(tmp_path, monkeypatch):

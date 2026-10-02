@@ -2,6 +2,7 @@
 
 import pytest
 
+from roundtable_souls.config.settings import LauncherSettings
 from roundtable_souls.mods import configs as C
 
 
@@ -38,15 +39,15 @@ def test_in_a_shared_folder_only_files_named_after_the_dll_count(tmp_path):
 def test_ties_are_remembered_by_dll_and_the_coop_ini_is_left_to_its_page(tmp_path):
     d = _files(tmp_path / "natives", "SkeletonMan.dll", "other.dll", "skeleton_mods.txt")
     dll, txt = d / "SkeletonMan.dll", d / "skeleton_mods.txt"
-    settings = {}
+    settings = LauncherSettings()
     assert C.files_for(settings, dll) == []
-    settings["native_configs"] = C.with_tie(settings, dll, txt)
-    settings["native_configs"] = C.with_tie(settings, dll, txt)  # tying twice keeps one
+    settings.native_configs = C.with_tie(settings, dll, txt)
+    settings.native_configs = C.with_tie(settings, dll, txt)  # tying twice keeps one
     rows = C.files_for(settings, dll)
     assert [(r["path"].name, r["how"], r["exists"]) for r in rows] == [("skeleton_mods.txt", "tied", True)]
     assert C.files_for(settings, dll, skip={C.key_for(txt)}) == []
-    settings["native_configs"] = C.without_tie(settings, dll, txt)
-    assert settings["native_configs"] == {} and C.files_for(settings, dll) == []
+    settings.native_configs = C.without_tie(settings, dll, txt)
+    assert settings.native_configs == {} and C.files_for(settings, dll) == []
 
 
 @pytest.mark.parametrize(

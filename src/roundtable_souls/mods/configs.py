@@ -15,6 +15,8 @@ import os
 import re
 from pathlib import Path
 
+from roundtable_souls.config.settings import LauncherSettings
+
 CONFIG_SUFFIXES = {".ini", ".txt", ".toml", ".json", ".cfg", ".conf", ".yaml", ".yml", ".xml"}
 NOT_SETTINGS = re.compile(
     r"^(readme|read_me|license|licence|copying|notice|third[_-]?party|changelog|changes|credits|install|"
@@ -74,11 +76,11 @@ def found(dll: Path) -> list[Path]:
     return sorted(out, key=lambda k: (k.stem.lower() != stem, k.name.lower()))
 
 
-def tied(settings: dict, dll: Path) -> list[Path]:
-    return [Path(p) for p in (settings.get("native_configs") or {}).get(key_for(dll), [])]
+def tied(settings: LauncherSettings, dll: Path) -> list[Path]:
+    return [Path(p) for p in settings.native_configs.get(key_for(dll), [])]
 
 
-def files_for(settings: dict, dll: Path, skip: set[str] = frozenset()) -> list[dict]:
+def files_for(settings: LauncherSettings, dll: Path, skip: set[str] = frozenset()) -> list[dict]:
     """Everything to offer for a DLL: {path, how ('found' / 'tied'), exists}. skip: paths another page owns (the
     Seamless Co-op ini is edited on the Co-op page)."""
     seen, out = set(), []
@@ -92,17 +94,17 @@ def files_for(settings: dict, dll: Path, skip: set[str] = frozenset()) -> list[d
     return out
 
 
-def with_tie(settings: dict, dll: Path, file: Path) -> dict:
+def with_tie(settings: LauncherSettings, dll: Path, file: Path) -> dict:
     """The native_configs value with file tied to dll (returned for save_settings)."""
-    ties = {k: list(v) for k, v in (settings.get("native_configs") or {}).items()}
+    ties = {k: list(v) for k, v in settings.native_configs.items()}
     lst = ties.setdefault(key_for(dll), [])
     if str(Path(file)) not in lst and key_for(file) not in {key_for(Path(x)) for x in lst}:
         lst.append(str(Path(file)))
     return ties
 
 
-def without_tie(settings: dict, dll: Path, file: Path) -> dict:
-    ties = {k: list(v) for k, v in (settings.get("native_configs") or {}).items()}
+def without_tie(settings: LauncherSettings, dll: Path, file: Path) -> dict:
+    ties = {k: list(v) for k, v in settings.native_configs.items()}
     k = key_for(dll)
     ties[k] = [x for x in ties.get(k, []) if key_for(Path(x)) != key_for(file)]
     if not ties[k]:

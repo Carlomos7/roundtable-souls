@@ -45,6 +45,7 @@ from typing import Any
 from roundtable_souls import __version__
 from roundtable_souls.config import identity
 from roundtable_souls.config.settings import (
+    LauncherSettings,
     appimage,
     change_settings,
     identity_matches,
@@ -304,7 +305,7 @@ def download_update(
     version = parse_version(str(info.get("version") or ""))
     if not version or not is_newer(version, current):
         raise UpdateError(f"{info.get('version')} is not newer than this copy ({current}); nothing was changed.")
-    if any(same_version(version, b) for b in load_settings().get("update_blocked") or []):
+    if any(same_version(version, b) for b in load_settings().update_blocked or []):
         raise UpdateError(f"{version} failed to start here before and was undone; it is not installed again.")
     feed = verified_feed(info, fetch=fetch, key=key)
     use_delta = base_available(feed, current)
@@ -479,7 +480,7 @@ def mark_ready(how: str = "window", current: str = __version__, now=time.time) -
     state = state_dir()
     state.mkdir(parents=True, exist_ok=True)
     (state / f"ready-{current}").write_text(f"{how} {now():.0f}", encoding="utf-8")
-    pending = load_settings().get("update_pending") or {}
+    pending = load_settings().update_pending or {}
     if not pending or not same_version(pending.get("version"), current):
         return None
     result = {"status": "ok", "version": current, "from": pending.get("from", ""), "when": now(), "how": how}
@@ -499,18 +500,18 @@ def update_outcome(current: str = __version__, now=time.time) -> dict | None:
             data = json.loads(record.read_text(encoding="utf-8-sig"))
         except OSError, ValueError:
             data = {}
-        version = str(data.get("version") or (load_settings().get("update_pending") or {}).get("version") or "")
+        version = str(data.get("version") or (load_settings().update_pending or {}).get("version") or "")
         result = {"status": "rolled_back", "version": version, "error": str(data.get("reason") or "")}
 
-        def block(cur: dict) -> dict:
-            blocked = [b for b in cur.get("update_blocked") or [] if not same_version(b, version)]
+        def block(cur: LauncherSettings) -> dict:
+            blocked = [b for b in cur.update_blocked or [] if not same_version(b, version)]
             return {"update_blocked": [*blocked, version] if version else blocked, "update_pending": None,
                     "update_result": result}  # fmt: skip
 
         change_settings(block)
         record.unlink(missing_ok=True)
         return result
-    pending = load_settings().get("update_pending") or {}
+    pending = load_settings().update_pending or {}
     if pending and not same_version(pending.get("version"), current):
         if now() - float(pending.get("started") or 0) > WATCHDOG_APPLY + WATCHDOG_READY + 60:
             result = {"status": "failed", "version": pending.get("version", ""),
@@ -518,7 +519,7 @@ def update_outcome(current: str = __version__, now=time.time) -> dict | None:
             save_settings(update_pending=None, update_result=result)
             return result
         return None  # still being applied
-    return load_settings().get("update_result") or None
+    return load_settings().update_result or None
 
 
 def clear_outcome() -> None:
@@ -527,9 +528,7 @@ def clear_outcome() -> None:
 
 
 def unblock(version: str) -> None:
-    save_settings(
-        update_blocked=[b for b in load_settings().get("update_blocked") or [] if not same_version(b, version)]
-    )
+    save_settings(update_blocked=[b for b in load_settings().update_blocked or [] if not same_version(b, version)])
 
 
 def clean_downloads(

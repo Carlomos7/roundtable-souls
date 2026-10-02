@@ -98,7 +98,7 @@ def test_steam_step_waits_for_steam_to_close_then_finishes(tmp_path, installed, 
     assert record["status"] == "steam_pending" and not record["done"] and not inno.registered
     monkeypatch.setattr(migration, "retarget_steam", lambda olds, new: [])
     migration.finish_steam_step(target=tmp_path / "Roundtable Souls.exe")
-    assert settings.load_settings()["inno_migration"]["done"]
+    assert settings.load_settings().inno_migration["done"]
 
 
 def test_no_migration_outside_an_installed_copy(tmp_path, monkeypatch):

@@ -2,6 +2,7 @@
 
 import pytest
 
+from roundtable_souls.config.settings import LauncherSettings
 from roundtable_souls.services import play as g
 
 P = g.profile_tools
@@ -181,4 +182,7 @@ def test_me3_facts_parse_without_a_binary():
     assert g.launch_extra_args({"play_diagnostics": True}, "0.13.0") == ["--diagnostics"]
     assert g.launch_extra_args({"play_diagnostics": True}, None) == ["--diagnostics"]
     assert M.parse_version("me3 0.14.0-rc.1") == "0.14.0" and M.parse_info("") == {}
-    assert g.play_options({})["play_boot_boost"] is True and g.play_options({})["play_show_logos"] is False
+    assert (
+        g.play_options(LauncherSettings.from_raw({}))["play_boot_boost"] is True
+        and g.play_options(LauncherSettings.from_raw({}))["play_show_logos"] is False
+    )

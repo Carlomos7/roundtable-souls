@@ -12,7 +12,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from roundtable_souls.config.settings import data_dir, game_setting, load_settings
+from roundtable_souls.config.settings import LauncherSettings, data_dir, game_setting, load_settings
 from roundtable_souls.game import catalog as games
 from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.platform import proc, steam
@@ -47,17 +47,14 @@ PROFILE_DIR_OVERRIDE = None
 PATH_SETTINGS = ("me3_path", "game_exe", "me3_profile_dir")  # Settings > Locations; blank = detect
 
 
-def apply_overrides(settings: dict | None = None) -> dict:
+def apply_overrides(settings: LauncherSettings | None = None) -> dict:
     """Push the location settings into the tools layer. The profile folder falls back to what `me3 info` last
     reported (cached in settings), then to me3's default. Returns what is in effect."""
     global ME3_OVERRIDE, GAME_EXE_OVERRIDE, PROFILE_DIR_OVERRIDE
     s = load_settings() if settings is None else settings
-    me3 = str(s.get("me3_path") or "").strip()
+    me3 = s.me3_path.strip()
     game = str(game_setting(s, GAME.key, "game_exe") or "").strip()
-    prof = (
-        str(s.get("me3_profile_dir") or "").strip()
-        or str((s.get("me3_info_cache") or {}).get("profile_dir") or "").strip()
-    )
+    prof = s.me3_profile_dir.strip() or str(s.me3_info_cache.get("profile_dir") or "").strip()
     ME3_OVERRIDE = me3 or None
     GAME_EXE_OVERRIDE = game or None
     PROFILE_DIR_OVERRIDE = prof or None
@@ -83,7 +80,7 @@ def clear_detection_cache() -> None:
     steam.clear_cache()
 
 
-def set_game(game: games.Game | str, settings: dict | None = None) -> games.Game:
+def set_game(game: games.Game | str, settings: LauncherSettings | None = None) -> games.Game:
     """Make `game` the one every lookup answers for, and load its own location overrides."""
     global GAME
     GAME = game if isinstance(game, games.Game) else games.get(game)

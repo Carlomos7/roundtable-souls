@@ -66,7 +66,7 @@ def test_newer_release_is_offered_and_cached_for_an_hour():
     clock = [1000.0]
     out = feed.check_launcher_update(fetch=fetch, now=lambda: clock[0])
     assert out.status == "fresh" and out.offer["version"] == newer and out.checked == 1000.0
-    assert settings.load_settings()["launcher_latest"]["version"] == newer
+    assert settings.load_settings().launcher_latest["version"] == newer
     clock[0] += 1800
     again = feed.check_launcher_update(fetch=fetch, now=lambda: clock[0])
     assert again.status == "cached" and again.offer["version"] == newer and len(fetch.calls) == 1
@@ -96,7 +96,7 @@ def test_a_failed_check_is_reported_never_up_to_date():
         settings.save_settings(launcher_latest=None, launcher_next_check=0.0, launcher_check_failures=0)
         out = feed.check_launcher_update(fetch=_fetcher(feed.Fetched(status, reason="why")), force=True)
         assert out.failed and out.status == status and out.reason == "why" and out.offer is None
-        assert settings.load_settings()["launcher_check_error"] == "why"
+        assert settings.load_settings().launcher_check_error == "why"
 
 
 def test_failures_back_off_and_a_success_resets():
@@ -114,7 +114,7 @@ def test_failures_back_off_and_a_success_resets():
     assert len(down.calls) == 7
     up = feed.check_launcher_update(fetch=_fetcher(feed.Fetched("ok", data=_rel(__version__))), now=lambda: clock[0])
     s = settings.load_settings()
-    assert up.status == "fresh" and s["launcher_check_failures"] == 0 and s["launcher_check_error"] == ""
+    assert up.status == "fresh" and s.launcher_check_failures == 0 and s.launcher_check_error == ""
 
 
 def test_github_limit_waits_until_its_reset():
@@ -526,7 +526,7 @@ def test_apply_hands_velopack_the_verified_folder_and_starts_the_watchdog(tmp_pa
     assert (
         updates.state_dir() / ("update-watchdog.ps1" if updates.OS_CHANNEL == "win" else "update-watchdog.sh")
     ).is_file()
-    pending = settings.load_settings()["update_pending"]
+    pending = settings.load_settings().update_pending
     assert pending["version"] == "99.0.0" and pending["rollback"] == str(prepared.rollback)
 
 
@@ -539,7 +539,7 @@ def test_apply_refuses_without_a_rollback_copy_or_with_another_target(tmp_path, 
     prepared.rollback.write_bytes(b"previous")
     with pytest.raises(feed.UpdateError, match="did not match"):
         updates.apply_update(prepared, velopack_module=_FakeVelopack(target="98.5.0"), popen=lambda *a, **k: None)
-    assert settings.load_settings()["update_pending"] is None
+    assert settings.load_settings().update_pending is None
 
 
 def test_ready_finishes_a_pending_update(tmp_path):
@@ -547,7 +547,7 @@ def test_ready_finishes_a_pending_update(tmp_path):
     assert (updates.state_dir() / "ready-99.0.0").is_file()
     settings.save_settings(update_pending={"version": "99.0.0", "from": "98.0.0", "started": 1.0})
     result = updates.mark_ready("play", current="99.0.0")
-    assert result["status"] == "ok" and result["how"] == "play" and settings.load_settings()["update_pending"] is None
+    assert result["status"] == "ok" and result["how"] == "play" and settings.load_settings().update_pending is None
 
 
 def test_a_rollback_is_reported_once_and_blocks_that_version():
@@ -560,7 +560,7 @@ def test_a_rollback_is_reported_once_and_blocks_that_version():
     result = updates.update_outcome(current="98.0.0")
     assert result["status"] == "rolled_back" and result["version"] == "99.0.0" and "90 seconds" in result["error"]
     s = settings.load_settings()
-    assert s["update_blocked"] == ["99.0.0"] and s["update_pending"] is None and not (state / "rollback.json").exists()
+    assert s.update_blocked == ["99.0.0"] and s.update_pending is None and not (state / "rollback.json").exists()
     fetch = _fetcher(feed.Fetched("ok", data=_rel("99.0.0")))
     check = feed.check_launcher_update(fetch=fetch, force=True, current="98.0.0")
     assert check.offer is None and check.blocked == "99.0.0"  # not even Check for updates offers it
@@ -577,7 +577,7 @@ def test_an_update_that_never_applied_is_reported_after_the_watchdogs_time():
     assert updates.update_outcome(current="98.0.0", now=lambda: 1000.0 + 60) is None  # still being applied
     late = 1000.0 + updates.WATCHDOG_APPLY + updates.WATCHDOG_READY + 61
     result = updates.update_outcome(current="98.0.0", now=lambda: late)
-    assert result["status"] == "failed" and settings.load_settings()["update_pending"] is None
+    assert result["status"] == "failed" and settings.load_settings().update_pending is None
 
 
 def test_busy_reason_names_a_shortcut_play(monkeypatch):
@@ -618,7 +618,7 @@ def test_settings_writes_from_many_threads_lose_nothing():
 
     def bump():
         for _ in range(20):
-            settings.change_settings(lambda cur: {"launcher_check_failures": cur["launcher_check_failures"] + 1})
+            settings.change_settings(lambda cur: {"launcher_check_failures": cur.launcher_check_failures + 1})
 
     def other(i):
         for j in range(20):
@@ -632,7 +632,7 @@ def test_settings_writes_from_many_threads_lose_nothing():
     for t in threads:
         t.join()
     s = settings.load_settings()
-    assert s["launcher_check_failures"] == 80 and all(s[f"probe_{i}"] == 19 for i in range(4))
+    assert s.launcher_check_failures == 80 and all(getattr(s, f"probe_{i}") == 19 for i in range(4))
     assert not list(settings.settings_path().parent.glob("*.tmp"))
 
 

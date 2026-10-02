@@ -6,6 +6,7 @@ import struct
 import pytest
 
 from roundtable_souls.config import settings
+from roundtable_souls.config.settings import LauncherSettings
 from roundtable_souls.game import catalog as games
 from roundtable_souls.platform import paths as common
 from roundtable_souls.platform import steam
@@ -39,8 +40,10 @@ def test_game_from_args(monkeypatch):
     assert core.game_from_args(["x", "--game", "nr", "--play"]) is NR
     assert core.game_from_args(["x", "--game=ds3"]) is games.DARK_SOULS_3
     assert core.game_from_args(["x", "--game", "nope"]) is None
-    assert core.game_from_args(["x", "--play"], {"game": "nightreign"}) is NR  # no flag: the last tab used
-    assert core.game_from_args(["x"], {"game": "eldenring"}) is ER
+    assert (
+        core.game_from_args(["x", "--play"], LauncherSettings.from_raw({"game": "nightreign"})) is NR
+    )  # no flag: the last tab used
+    assert core.game_from_args(["x"], LauncherSettings.from_raw({"game": "eldenring"})) is ER
 
 
 def test_each_game_finds_its_own_install_and_saves(tmp_path, monkeypatch):
@@ -88,7 +91,7 @@ def test_settings_are_kept_per_game():
     settings.save_game_settings("eldenring", setup="er.me3", game_exe="C:/er/eldenring.exe")
     settings.save_game_settings("nightreign", setup="nr.me3")
     s = settings.load_settings()
-    assert s["setup"] == "er.me3"  # Elden Ring stays where older builds read it
+    assert s.setup == "er.me3"  # Elden Ring stays where older builds read it
     assert settings.game_setting(s, "nightreign", "setup") == "nr.me3"
     assert settings.game_setting(s, "nightreign", "game_exe", "") == ""
     assert core.remembered_setup(s, NR) == "nr.me3" and core.remembered_setup(s, ER) == "er.me3"

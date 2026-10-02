@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from roundtable_souls.config.settings import LauncherSettings
 from roundtable_souls.services import coop as coop_service
 from roundtable_souls.services import mods as mods_service
 from roundtable_souls.services import play as g
@@ -183,19 +184,23 @@ def test_location_overrides_reach_the_tools_layer(tmp_path, monkeypatch):
     prof = tmp_path / "profiles"
     prof.mkdir()
     (prof / "a.me3").write_text('profileVersion = "v1"\n')
-    g.apply_overrides({"me3_path": str(me3), "game_exe": str(game), "me3_profile_dir": str(prof)})
+    g.apply_overrides(
+        LauncherSettings.from_raw({"me3_path": str(me3), "game_exe": str(game), "me3_profile_dir": str(prof)})
+    )
     try:
         assert g.common.me3_exe() == me3 and g.common.game_dir() == game.parent and g.common.me3_profiles_dir() == prof
         assert [p.name for p in g.common.me3_profiles()] == ["a.me3"] and g.common.game_exe_name() == "eldenring.exe"
         s = g.Setup("me3", prof / "a.me3")
         assert s.launch_exe() == str(game) and not s.problems()
-        assert g.apply_overrides({"me3_info_cache": {"profile_dir": str(prof)}})["profile_dir"] == str(prof)
+        assert g.apply_overrides(LauncherSettings.from_raw({"me3_info_cache": {"profile_dir": str(prof)}}))[
+            "profile_dir"
+        ] == str(prof)
         assert (
-            g.apply_overrides({"me3_path": str(tmp_path / "missing.exe")})["me3"]
+            g.apply_overrides(LauncherSettings.from_raw({"me3_path": str(tmp_path / "missing.exe")}))["me3"]
             and g.common.me3_exe() != tmp_path / "missing.exe"
         )
     finally:
-        g.apply_overrides({})
+        g.apply_overrides(LauncherSettings.from_raw({}))
     assert g.common.ME3_OVERRIDE is None and g.common.GAME_EXE_OVERRIDE is None
 
 

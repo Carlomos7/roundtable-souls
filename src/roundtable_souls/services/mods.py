@@ -148,13 +148,13 @@ def me3_facts(setup) -> dict:
     s = load_settings()
     if facts["info"].get("profile_dir") or facts["info"].get("logs_dir"):
         cache = {k: facts["info"].get(k, "") for k in ("profile_dir", "logs_dir", "install_prefix")}
-        if cache != s.get("me3_info_cache"):
+        if cache != s.me3_info_cache:
             save_settings(me3_info_cache=cache)
-            s["me3_info_cache"] = cache
+            s.me3_info_cache = cache
         apply_overrides(s)
-    if bool(s.get("check_me3_updates", True)):
-        cached = s.get("me3_latest")
-        when = float(s.get("me3_latest_checked") or 0)
+    if s.check_me3_updates:
+        cached = s.me3_latest
+        when = float(s.me3_latest_checked or 0)
         if not cached or time.time() - when > 86400:
             rel = me3_info.latest_release()
             if rel:
