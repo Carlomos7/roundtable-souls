@@ -98,7 +98,7 @@ exhaustive = false
 layers = [
     "roundtable_souls.cli",
     "roundtable_souls.ui",
-    "roundtable_souls.core",
+    "roundtable_souls.core : roundtable_souls.services",
     "roundtable_souls.mods | roundtable_souls.saves | roundtable_souls.coop | roundtable_souls.updates",
     "roundtable_souls.merging",
     "roundtable_souls.formats | roundtable_souls.game",
@@ -112,8 +112,6 @@ ignore_imports = [
     "roundtable_souls.platform.instance -> roundtable_souls.config.settings",
     "roundtable_souls.platform.logging -> roundtable_souls.folders",
     "roundtable_souls.folders -> roundtable_souls.game.catalog",
-    # S3 (one profile parser in mods; mods.service stops borrowing coop's private helpers)
-    "roundtable_souls.mods.service -> roundtable_souls.coop.ini",
 ]
 
 [[tool.importlinter.contracts]]

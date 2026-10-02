@@ -83,25 +83,8 @@ from roundtable_souls.mods import history as mod_history
 from roundtable_souls.mods import profile as profile_tools
 from roundtable_souls.mods import profile_edit as mod_manage
 from roundtable_souls.mods import rebuild as mod_merge
-from roundtable_souls.mods import service as mods_service
 from roundtable_souls.mods import stay_last as mod_stay_last
 from roundtable_souls.mods import undo as mod_undo
-from roundtable_souls.mods.service import (
-    create_profile,
-    delete_profile,
-    install_mod,
-    me3_facts,
-    plan_mod_install,
-    profile_entries,
-    read_profile_mods,
-    read_profile_settings,
-    replan_mod_install,
-    scan_profile_conflicts,
-    set_mod_options,
-    set_profile_mod_enabled,
-    uninstall_mod,
-    write_profile_setting,
-)
 from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.platform import me3_info, steam, trash
 from roundtable_souls.platform import paths as common
@@ -147,6 +130,23 @@ from roundtable_souls.saves.service import (
     save_summary,
     saves_needing_attention,
     torrent_text,
+)
+from roundtable_souls.services import mods as mods_service
+from roundtable_souls.services.mods import (
+    create_profile,
+    delete_profile,
+    install_mod,
+    me3_facts,
+    plan_mod_install,
+    profile_entries,
+    read_profile_mods,
+    read_profile_settings,
+    replan_mod_install,
+    scan_profile_conflicts,
+    set_mod_options,
+    set_profile_mod_enabled,
+    uninstall_mod,
+    write_profile_setting,
 )
 from roundtable_souls.updates.feed import RELEASES_URL
 
