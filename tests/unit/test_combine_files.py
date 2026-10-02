@@ -150,10 +150,10 @@ def test_an_interrupted_rebuild_leaves_the_previous_result_and_the_next_one_fini
             raise OSError("power cut")
         return real(src, dst, *a, **k)
 
-    monkeypatch.setattr(B.os, "replace", crash)
-    with pytest.raises(Exception):  # noqa: B017  (whatever the interruption raises)
-        merge.rebuild(prof, lambda s: None)
-    monkeypatch.undo()
+    with monkeypatch.context() as m:  # only this patch: the fixture's sandbox stays
+        m.setattr(B.os, "replace", crash)
+        with pytest.raises(Exception):  # noqa: B017  (whatever the interruption raises)
+            merge.rebuild(prof, lambda s: None)
     assert (folder / B.JOURNAL).exists()  # interrupted while being put in place
     merge.health(prof)  # looking at it undoes the interrupted rebuild
     assert not (folder / B.JOURNAL).exists()
@@ -161,3 +161,37 @@ def test_an_interrupted_rebuild_leaves_the_previous_result_and_the_next_one_fini
     assert after == before
     merge.rebuild(prof, lambda s: None)
     assert merge.health(prof)["state"] in ("current", "single")
+
+
+def _add_mod(prof, name: str, change: dict) -> None:
+    (prof.parent / "mod" / name / "menu/hi").mkdir(parents=True)
+    (prof.parent / "mod" / name / REL).write_bytes(dcx(bnd({**GAME, **change})))
+    text = prof.read_text(encoding="utf-8")
+    at = text.index('[[packages]]\nid = "other"')
+    prof.write_text(text[:at] + f"[[packages]]\nid = \"{name}\"\npath = 'mod/{name}'\n\n" + text[at:], encoding="utf-8")
+
+
+def test_removing_a_mod_and_rebuilding_equals_building_without_it(prof, tmp_path, monkeypatch):
+    from roundtable_souls.mods import manage
+
+    _add_mod(prof, "map", {"SB_Map.layout": b"big map"})
+    merge.rebuild(prof, lambda s: None)
+    assert _merged(prof)["SB_Marker.layout"] == b"blue marker"
+    idx = next(e["index"] for e in manage.entries(prof) if e["name"] == "marker")
+    manage.uninstall(prof, idx)
+    merge.rebuild(prof, lambda s: None)
+    after_removal = (prof.parent / "mod" / "combined-parameters" / REL).read_bytes()
+    assert files_of(after_removal) == {**GAME, "SB_KG.layout": b"ps5 buttons", "SB_Map.layout": b"big map"}
+    # the same mods built from scratch in another profile: byte for byte the same file
+    fresh = tmp_path / "fresh"
+    (fresh / "mod").mkdir(parents=True)
+    for name in ("buttons", "map"):
+        os.replace(prof.parent / "mod" / name, fresh / "mod" / name)
+    (fresh / "mod" / "other").mkdir()
+    (fresh / "p.me3").write_text(
+        "[[packages]]\nid = \"buttons\"\npath = 'mod/buttons'\n\n[[packages]]\nid = \"map\"\npath = 'mod/map'\n\n"
+        "[[packages]]\nid = \"other\"\npath = 'mod/other'\n",
+        encoding="utf-8",
+    )
+    merge.rebuild(fresh / "p.me3", lambda s: None)
+    assert (fresh / "mod" / "combined-parameters" / REL).read_bytes() == after_removal

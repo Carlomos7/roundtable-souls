@@ -30,6 +30,7 @@ Without either, the game is found through Steam, as the launcher finds it.
 | `bnd4_roundtrip.py` | The shared BND4 code writes the game's own archives and regulation binder back byte for byte; every regulation table keeps its rows (IDs and their order, duplicates, bytes, names) and metadata. `--compare A B` compares two regulation.bin files' binders. |
 | `esd_roundtrip.py [--file TALKESDBND]` | The ESD code reads every talk script in the game's talk archives (and any given) and writes it back: the same structure (machines, states, conditions in order with their targets inside their own machine, nested conditions, commands, every test and argument byte for byte), and the game's own scripts byte for byte. With Soulstruct installed it is also compared with Soulstruct's reading. |
 | `ingame_esd_package.py [--mod DIR]` | Builds a package to play: a mod's grace and menu talk scripts (or the game's own) written back by the ESD code with nothing changed, a me3 profile on a separate save, `launch.cmd` and `CHECK.txt` (the menus have to behave exactly as with the original file). |
+| `clash_corpus.py [--profile ME3]` | Merges every game file that two or more enabled packages of a profile ship, in me3's load order, without touching the profile or the mods: parts each mod changed, where changes met (the later mod wins), what a mod's copy leaves out, and files that cannot be merged. Writes the merged files and `result.json`. |
 
 Independent readers are optional and not dependencies of the launcher. With Soulstruct (GPL-3.0):
 
