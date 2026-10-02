@@ -174,11 +174,11 @@ class JobDetails(QWidget):
         QApplication.clipboard().setText(text)
 
     def _open(self):
-        from roundtable_souls.platform import paths as common
+        from roundtable_souls.platform import desktop
 
         path = run_logging.job_file(self._source)
         if path is not None and path.is_file():
-            common.open_path(str(path))
+            desktop.open_path(str(path))
 
 
 class JobRow(GlassCard):

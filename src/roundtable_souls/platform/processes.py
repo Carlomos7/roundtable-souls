@@ -19,7 +19,8 @@ import subprocess
 import sys
 
 from roundtable_souls.platform import paths as common
-from roundtable_souls.platform.paths import log
+from roundtable_souls.platform import proc
+from roundtable_souls.platform.logging import log
 
 PS = ["powershell", "-NoProfile", "-NonInteractive", "-Command"]
 
@@ -35,7 +36,7 @@ def dead_shells():
     )
     try:
         out = subprocess.run(
-            PS + [script], capture_output=True, text=True, timeout=30, creationflags=common.NO_WINDOW
+            PS + [script], capture_output=True, text=True, timeout=30, creationflags=proc.NO_WINDOW
         ).stdout
     except OSError, subprocess.TimeoutExpired:
         return []
@@ -52,7 +53,7 @@ def kill_elevated(pids):
         f'"{inner}" -Verb RunAs -Wait -PassThru; exit $p.ExitCode'
     )
     try:
-        subprocess.run(PS + [launcher], capture_output=True, text=True, timeout=120, creationflags=common.NO_WINDOW)
+        subprocess.run(PS + [launcher], capture_output=True, text=True, timeout=120, creationflags=proc.NO_WINDOW)
     except (OSError, subprocess.TimeoutExpired) as err:
         log(f"could not run the elevated kill: {err}")
     return [p for p in dead_shells() if p in pids]

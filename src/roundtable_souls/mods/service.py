@@ -11,6 +11,7 @@ from roundtable_souls.coop import _profile_rows, _read
 from roundtable_souls.files import atomic_write
 from roundtable_souls.mods import manage as mod_manage
 from roundtable_souls.mods import profile as profile_tools
+from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.platform import me3_info
 from roundtable_souls.platform import paths as common
 from roundtable_souls.platform.paths import apply_overrides
@@ -213,13 +214,13 @@ def replan_mod_install(profile, plan, name=None, pkg_id=None, variant=None) -> d
 
 def install_mod(profile, plan, overwrite=False) -> dict:
     out = mod_manage.install(Path(profile), plan, overwrite=overwrite)
-    common.log(f"installed {plan['kind']} {plan['name']} -> {out['dest']}")
+    run_logging.log(f"installed {plan['kind']} {plan['name']} -> {out['dest']}")
     return out
 
 
 def uninstall_mod(profile, index: int, delete_folder=True) -> dict:
     out = mod_manage.uninstall(Path(profile), index, delete_folder=delete_folder)
-    common.log(
+    run_logging.log(
         f"removed {out['kind']} {out['path']}"
         + (
             ""

@@ -127,7 +127,7 @@ class Tool:
         return f"{shown}\nin {self.recipe.cwd}"
 
     def run(self, log) -> None:
-        from roundtable_souls.platform import paths as common
+        from roundtable_souls.platform.proc import NO_WINDOW
 
         r = self.recipe
         if r.problem:
@@ -152,7 +152,7 @@ class Tool:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                creationflags=common.NO_WINDOW,
+                creationflags=NO_WINDOW,
             )
         except OSError as e:
             raise BackendError(f"{self.label} could not start: {e}") from e

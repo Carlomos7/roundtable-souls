@@ -429,10 +429,11 @@ def test_dropping_mods_on_the_mods_page_installs_each_in_turn(sandbox, monkeypat
     from PySide6.QtCore import QEventLoop, QTimer
 
     from roundtable_souls.mods import manage
+    from roundtable_souls.platform import logging as run_logging
     from roundtable_souls.platform import paths as common
 
     monkeypatch.setattr(common, "start_log", lambda *a, **k: None)  # the job's log stays out of the real logs folder
-    monkeypatch.setattr(common, "log", lambda *a, **k: None)
+    monkeypatch.setattr(run_logging, "log", lambda *a, **k: None)
     asked = []
 
     def answer(dlg):
@@ -545,10 +546,11 @@ def test_merge_health_is_a_pill_and_prompts_when_it_goes_stale(sandbox, monkeypa
 def test_an_install_that_asked_for_it_rebuilds_afterwards(sandbox, monkeypatch, tmp_path):
     from PySide6.QtCore import QEventLoop, QTimer
 
+    from roundtable_souls.platform import logging as run_logging
     from roundtable_souls.platform import paths as common
 
     monkeypatch.setattr(common, "start_log", lambda *a, **k: None)
-    monkeypatch.setattr(common, "log", lambda *a, **k: None)
+    monkeypatch.setattr(run_logging, "log", lambda *a, **k: None)
     rebuilt = []
     tool = type("T", (), {"label": "a tool", "package": {"name": "last"}, "problem": lambda self: None})()
     monkeypatch.setattr(window.core.mod_merge, "find_backend", lambda p: tool)
@@ -651,7 +653,7 @@ def test_install_dialog_names_a_combine_when_there_is_no_tool(app, tmp_path, mon
 def test_the_log_pane_wraps_its_buttons_and_opens_the_logs_folder(sandbox, monkeypatch):
     w = sandbox
     opened = []
-    monkeypatch.setattr(window.core.common, "open_path", lambda p: opened.append(p))
+    monkeypatch.setattr(window.desktop, "open_path", lambda p: opened.append(p))
     w.switchTo(w.play_page) if hasattr(w, "play_page") else None
     w.log_exp.setExpand(True)
     pane = w.log_pane
@@ -673,8 +675,8 @@ def test_a_jobs_lines_reach_the_pane_with_their_level(sandbox, monkeypatch):
     monkeypatch.setattr(w.log_pane, "add", lambda msg, kind=None: (seen.append((msg, kind)), real_add(msg, kind)))
 
     def job(_setup):
-        window.core.common.log("working")
-        window.core.common.log("warning: something to know")
+        window.run_logging.log("working")
+        window.run_logging.log("warning: something to know")
 
     w.start(job, "Testing...", need_setup=False)
     loop = QEventLoop()
@@ -720,7 +722,7 @@ def test_a_failed_job_shows_on_activity_with_a_badge_until_looked_at(sandbox, mo
     monkeypatch.setattr(window, "notice", spy)
 
     def job(_setup):
-        window.core.common.log("error: the save is locked")
+        window.run_logging.log("error: the save is locked")
         raise SystemExit(1)
 
     w.switchTo(w.play_page)
@@ -741,7 +743,7 @@ def test_activity_entries_fit_a_narrow_window(sandbox):
     from roundtable_souls.platform import logging as rl
 
     job = rl.begin_job("install mod a very long mod name that would never fit on a narrow window at all")
-    window.core.common.log("done: " + "installed and combined with several other packs " * 3)
+    window.run_logging.log("done: " + "installed and combined with several other packs " * 3)
     rl.end_job(job)
     w = sandbox
     w.switchTo(w.activity_page)

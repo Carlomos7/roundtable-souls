@@ -228,6 +228,18 @@ def log_line(text: object = "", module: str | None = None, level: int | None = N
     get_logger(module).log(level if level is not None else level_of(msg), "%s", msg)
 
 
+def log(msg=""):
+    """One line for the current job's log (and the window), under the calling module's logger. Its level follows
+    its wording: 'error: ...' is an error, 'warning: ...' a warning, anything else information."""
+    caller = sys._getframe(1).f_globals.get("__name__", "")
+    log_line(msg, caller or None)
+
+
+def fail(msg, code=1):
+    log_line(f"error: {msg}", sys._getframe(1).f_globals.get("__name__", "") or None)
+    sys.exit(code)
+
+
 # ----------------------------------------------------------------------------- jobs
 @dataclass
 class Job:

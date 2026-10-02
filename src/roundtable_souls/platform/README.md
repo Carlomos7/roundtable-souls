@@ -1,10 +1,13 @@
-# system
+# platform
 
 Facts about this machine and the play session.
 
 | Module | Role |
 | --- | --- |
-| `common.py` | Where Steam, the game, the saves and me3 are on Windows (registry) and Linux (Steam folders, Proton prefix, XDG paths), what is running (tasklist or /proc), opening folders, and the Settings > Locations overrides. Every game-specific answer is for the active game (`GAME`, set with `set_game`); the per-game facts come from `games.py`. |
+| `paths.py` | Where the game, the saves and me3 are on Windows and Linux (Steam libraries, Proton prefix, XDG paths), whether the game runs, and the Settings > Locations overrides. Every game-specific answer is for the active game (`GAME`, set with `set_game`); the per-game facts come from `games.py`. |
+| `steam.py` | Steam: where it is installed (registry on Windows; the usual folders, Flatpak included, on Linux), its libraries, whether it runs and is signed in, how to start it. |
+| `proc.py` | Processes running under a name (tasklist, or /proc where Wine and Proton processes are matched by their exe), and the flag that keeps child consoles hidden. |
+| `desktop.py` | Opening a folder, file or URL with the desktop's default handler. |
 | `session.py` | Start Steam if needed, launch through me3, wait for the game to exit, clear leftovers. |
 | `processes.py` | Dead shells of the active game's exe (zero threads) that keep overlays thinking the game runs; removed with one elevation prompt. Windows only. |
 | `me3_info.py` | `me3 --version`, `me3 info` directories and the latest GitHub release. |

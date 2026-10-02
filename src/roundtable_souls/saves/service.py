@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 from roundtable_souls import folders, games, models
+from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.platform import paths as common
 from roundtable_souls.saves import analyze as save_analyze
 from roundtable_souls.saves import container as save_container
@@ -517,7 +518,7 @@ def restore_backup(bak: Path, save: Path | None = None) -> Path | None:
     tmp = save.with_name(save.name + ".roundtable.tmp")
     tmp.write_bytes(data)
     tmp.replace(save)
-    common.log(f"restored {bak.name} over {save.name}" + (f" (safety copy: {safety.name})" if safety else ""))
+    run_logging.log(f"restored {bak.name} over {save.name}" + (f" (safety copy: {safety.name})" if safety else ""))
     return safety
 
 
@@ -536,7 +537,7 @@ def repair_save(path: Path) -> bool:
     assert_writable(path)
     game = games.for_save(path) or common.GAME
     if game.save_reader == "nightreign":
-        return bool(repair_nightreign.repair(path, log=common.log))
+        return bool(repair_nightreign.repair(path, log=run_logging.log))
     source = common.regulation_bin()
     if not source:
         raise RuntimeError("Could not find the game's regulation.bin through Steam.")
@@ -566,7 +567,7 @@ def fix_checksums(path: Path) -> dict:
     """Recompute stale character / profile-summary checksums. Backs up first and verifies before replacing."""
     path = Path(path)
     assert_writable(path)
-    return save_fix.repair_checksums(path, log=common.log)
+    return save_fix.repair_checksums(path, log=run_logging.log)
 
 
 def dlc_owned() -> bool | None:
@@ -582,7 +583,9 @@ def fix_loading(path: Path, slots: list | None = None, selection: dict | None = 
     """Apply the loading-screen fixes (Torrent, position, DLC flags, weather). Backs up, re-signs, verifies."""
     path = Path(path)
     assert_writable(path)
-    return save_loading.apply_loading_fixes(path, slots, dlc_owned=dlc_owned(), log=common.log, selection=selection)
+    return save_loading.apply_loading_fixes(
+        path, slots, dlc_owned=dlc_owned(), log=run_logging.log, selection=selection
+    )
 
 
 def restore_vanilla(path: Path, slots: list | None = None, selection: dict | None = None) -> dict:
@@ -590,7 +593,7 @@ def restore_vanilla(path: Path, slots: list | None = None, selection: dict | Non
     Backs up first, re-signs, verifies before replacing. Returns save_vanilla's result."""
     path = Path(path)
     assert_writable(path)
-    return save_vanilla.apply_restore(path, slots, log=common.log, selection=selection)
+    return save_vanilla.apply_restore(path, slots, log=run_logging.log, selection=selection)
 
 
 remove_mod_items = restore_vanilla  # the button is called Remove mod items; the backend keeps its name

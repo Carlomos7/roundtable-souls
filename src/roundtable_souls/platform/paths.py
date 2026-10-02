@@ -1,4 +1,5 @@
-"""Where things are on this machine (Steam, the game, the saves, me3) and what is running, on Windows and Linux.
+"""Where things are on this machine (the game, the saves, me3), on Windows and Linux. Steam is in steam.py, the
+process list in proc.py.
 
 Every game-specific answer is for the active game (GAME, set with set_game): Elden Ring unless the window's game tabs
 or `--game` picked another. On Linux (desktop or Steam Deck) the game runs through Proton, so its saves live inside
@@ -7,14 +8,13 @@ here writes to disk except the run log.
 """
 
 import os
-import re
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 
 from roundtable_souls import games
 from roundtable_souls.platform import logging as run_logging
+from roundtable_souls.platform import proc, steam
 from roundtable_souls.settings import data_dir, game_setting, load_settings
 
 IS_WINDOWS = sys.platform == "win32"
@@ -27,18 +27,6 @@ LOGS_DIR = data_dir() / "logs"  # for opening the folder; code that writes asks 
 # A real game instance uses gigabytes. Failed launches leave dead game exe shells behind that sit
 # under 1 MB with no threads; Steam counts those as "running", these tools do not.
 REAL_GAME_MIN_KB = 100_000
-# Child consoles must never pop up (the window has no console of its own).
-NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-
-
-# ----------------------------------------------------------------- logging
-
-
-def log(msg=""):
-    """One line for the current job's log (and the window), under the calling module's logger. Its level follows
-    its wording: 'error: ...' is an error, 'warning: ...' a warning, anything else information."""
-    caller = sys._getframe(1).f_globals.get("__name__", "")
-    run_logging.log_line(msg, caller or None)
 
 
 def start_log(title):
@@ -49,74 +37,6 @@ def start_log(title):
         run_logging.rename_job(title)
     else:
         run_logging.start_standalone(title, game=GAME.key)
-
-
-def fail(msg, code=1):
-    run_logging.log_line(f"error: {msg}", sys._getframe(1).f_globals.get("__name__", "") or None)
-    sys.exit(code)
-
-
-def open_path(target) -> None:
-    """Open a folder, file or URL with the desktop's default handler."""
-    target = str(target)
-    if IS_WINDOWS:
-        os.startfile(target)
-    elif sys.platform == "darwin":
-        subprocess.Popen(["open", target])
-    else:
-        subprocess.Popen(["xdg-open", target], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-
-# --------------------------------------------------------------- processes
-
-
-def _windows_processes(name):
-    try:
-        out = subprocess.run(
-            ["tasklist", "/FI", f"IMAGENAME eq {name}", "/FO", "CSV"],
-            capture_output=True,
-            text=True,
-            creationflags=NO_WINDOW,
-        ).stdout
-    except OSError:
-        return []
-    found = []
-    for line in out.splitlines()[1:]:
-        cols = [c.strip('"') for c in line.split('","')]
-        if len(cols) >= 5 and cols[0].lower() == name.lower():
-            digits = "".join(ch for ch in cols[4] if ch.isdigit())
-            found.append((int(cols[1]), int(digits) if digits else 0))
-    return found
-
-
-def _linux_processes(name, proc_root=Path("/proc")):
-    """Match the program name, or for Wine / Proton processes the Windows exe named in the command line."""
-    wanted = name.lower()
-    found = []
-    for entry in proc_root.iterdir() if proc_root.is_dir() else ():
-        if not entry.name.isdigit():
-            continue
-        try:
-            argv = (entry / "cmdline").read_bytes().split(b"\0")
-            comm = (entry / "comm").read_text(errors="ignore").strip()
-            status = (entry / "status").read_text(errors="ignore")
-        except OSError:
-            continue
-        first = argv[0].decode(errors="ignore").replace("\\", "/").rsplit("/", 1)[-1].lower() if argv else ""
-        if wanted not in (first, comm.lower()):
-            continue
-        rss = re.search(r"^VmRSS:\s+(\d+)\s+kB", status, re.M)
-        found.append((int(entry.name), int(rss.group(1)) if rss else 0))
-    return found
-
-
-def processes(name):
-    """(pid, resident memory in KB) for every process with this program name."""
-    if IS_WINDOWS:
-        return _windows_processes(name)
-    if IS_LINUX:
-        return _linux_processes(name)
-    return []
 
 
 # Optional overrides the launcher sets from its settings (blank = detect): a custom me3, a custom game exe
@@ -142,6 +62,7 @@ def apply_overrides(settings: dict | None = None) -> dict:
     GAME_EXE_OVERRIDE = game or None
     PROFILE_DIR_OVERRIDE = prof or None
     _DETECT_CACHE.clear()  # Steam/me3/game folders may now resolve differently
+    steam.clear_cache()
     return {"me3": me3, "game_exe": game, "profile_dir": prof}
 
 
@@ -159,6 +80,7 @@ def _detected(key, compute):
 
 def clear_detection_cache() -> None:
     _DETECT_CACHE.clear()
+    steam.clear_cache()
 
 
 def set_game(game: games.Game | str, settings: dict | None = None) -> games.Game:
@@ -174,125 +96,14 @@ def game_exe_name():
 
 
 def game_running():
-    return any(kb >= REAL_GAME_MIN_KB for _, kb in processes(game_exe_name()))
+    return any(kb >= REAL_GAME_MIN_KB for _, kb in proc.processes(game_exe_name()))
 
 
 def dead_game_shells():
     """Leftover zero-memory copies of the game. A Windows problem; Proton cleans up after itself."""
     if not IS_WINDOWS:
         return []
-    return [pid for pid, kb in processes(game_exe_name()) if kb < REAL_GAME_MIN_KB]
-
-
-# ------------------------------------------------------------------- steam
-
-
-def _reg_value(subkey, name):
-    if not IS_WINDOWS:
-        return None
-    try:
-        import winreg
-
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, subkey) as key:
-            return winreg.QueryValueEx(key, name)[0]
-    except OSError:
-        return None
-
-
-def _linux_steam_roots():
-    home = Path.home()
-    data = Path(os.environ.get("XDG_DATA_HOME") or home / ".local" / "share")
-    return [
-        data / "Steam",
-        home / ".steam" / "steam",
-        home / ".steam" / "root",
-        home / ".var" / "app" / "com.valvesoftware.Steam" / ".local" / "share" / "Steam",  # Flatpak
-    ]
-
-
-def _flatpak_steam() -> bool:
-    return (Path.home() / ".var" / "app" / "com.valvesoftware.Steam").is_dir() and shutil.which("steam") is None
-
-
-def steam_exe():
-    if IS_WINDOWS:
-        value = _reg_value(r"Software\Valve\Steam", "SteamExe")
-        return Path(value) if value else None
-    found = shutil.which("steam")
-    return Path(found) if found else None
-
-
-def steam_launch_command() -> list[str] | None:
-    """How to start the Steam client, or None when it cannot be found."""
-    if IS_LINUX and _flatpak_steam() and shutil.which("flatpak"):
-        return ["flatpak", "run", "com.valvesoftware.Steam"]
-    exe = steam_exe()
-    return [str(exe)] if exe and exe.exists() else None
-
-
-def steam_process_name() -> str:
-    return "steam.exe" if IS_WINDOWS else "steam"
-
-
-def steam_running() -> bool:
-    return bool(processes(steam_process_name()))
-
-
-def steam_root():
-    if IS_WINDOWS:
-        value = _reg_value(r"Software\Valve\Steam", "SteamPath")
-        if value:
-            return Path(value)
-        exe = steam_exe()
-        return exe.parent if exe else None
-    return next((r.resolve() for r in _linux_steam_roots() if (r / "steamapps").is_dir()), None)
-
-
-def _linux_active_user():
-    """Steam on Linux mirrors its registry into ~/.steam/registry.vdf; ActiveUser is 0 while signed out."""
-    for vdf in (Path.home() / ".steam" / "registry.vdf", Path.home() / ".steam" / "steam" / "registry.vdf"):
-        try:
-            m = re.search(r'"ActiveUser"\s+"(\d+)"', vdf.read_text(errors="ignore"))
-        except OSError:
-            continue
-        if m:
-            return int(m.group(1))
-    return None
-
-
-def steam_logged_in():
-    if IS_WINDOWS:
-        # Steam keeps the signed-in account id here; 0 while logged out or still starting up.
-        return bool(_reg_value(r"Software\Valve\Steam\ActiveProcess", "ActiveUser"))
-    return bool(_linux_active_user())
-
-
-def steam_libraries():
-    """Every Steam library root on this machine, the install itself first (cached for the session)."""
-    return _detected("steam_libraries", _steam_libraries)
-
-
-def _steam_libraries():
-    roots = []
-    root = steam_root()
-    if root:
-        roots.append(root)
-        vdf = root / "steamapps" / "libraryfolders.vdf"
-        if vdf.exists():
-            for line in vdf.read_text(errors="ignore").splitlines():
-                line = line.strip()
-                if line.startswith('"path"'):
-                    value = line[len('"path"') :].strip().strip('"')
-                    roots.append(Path(value.replace("\\\\", "\\") if IS_WINDOWS else value))
-    guesses = (r"C:\Program Files (x86)\Steam", r"C:\Program Files\Steam") if IS_WINDOWS else _linux_steam_roots()
-    roots.extend(Path(g) for g in guesses)
-    seen, unique = set(), []
-    for r in roots:
-        key = str(r).lower() if IS_WINDOWS else str(r)
-        if key not in seen:
-            seen.add(key)
-            unique.append(r)
-    return unique
+    return [pid for pid, kb in proc.processes(game_exe_name()) if kb < REAL_GAME_MIN_KB]
 
 
 def game_dir():
@@ -305,7 +116,7 @@ def installed_dir(game: games.Game):
     """The folder with this game's exe in any Steam library, or None (cached per game for the session)."""
 
     def find():
-        for root in steam_libraries():
+        for root in steam.steam_libraries():
             candidate = root / "steamapps" / "common" / Path(game.install_dir)
             if (candidate / game.exe).exists():
                 return candidate
@@ -333,7 +144,7 @@ def save_roots(game: games.Game | None = None) -> list[Path]:
         return [Path(appdata) / game.save_dir] if appdata else []
     roaming = Path("pfx") / "drive_c" / "users" / "steamuser" / "AppData" / "Roaming" / game.save_dir
     roots: list[Path] = []
-    for lib in steam_libraries():
+    for lib in steam.steam_libraries():
         candidate = lib / "steamapps" / "compatdata" / game.app_id / roaming
         if candidate.is_dir() and candidate.resolve() not in [r.resolve() for r in roots]:
             roots.append(candidate)

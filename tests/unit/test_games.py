@@ -7,6 +7,7 @@ import pytest
 
 from roundtable_souls import core, games, settings
 from roundtable_souls.platform import paths as common
+from roundtable_souls.platform import steam
 from roundtable_souls.saves import container
 from roundtable_souls.saves import nightreign as nr
 from roundtable_souls.saves import service as saves
@@ -51,7 +52,7 @@ def test_each_game_finds_its_own_install_and_saves(tmp_path, monkeypatch):
         acct.mkdir(parents=True)
         for name in g.save_names:
             (acct / name).write_bytes(b"x")
-    monkeypatch.setattr(common, "steam_libraries", lambda: [lib])
+    monkeypatch.setattr(steam, "steam_libraries", lambda: [lib])
     monkeypatch.setattr(common, "IS_WINDOWS", True)
     monkeypatch.setenv("APPDATA", str(appdata))
     common.set_game(NR)

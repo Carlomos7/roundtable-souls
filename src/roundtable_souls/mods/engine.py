@@ -169,7 +169,7 @@ def _seamless(profile: Path) -> Path | None:
 # ----------------------------------------------------------------------------- the tool
 def run_tool(exe: Path, args: list[str], env: dict, timeout: int, cwd: Path) -> tuple[int, str]:
     """Run the mod's tool once: (exit code, its output)."""
-    from roundtable_souls.platform import paths as common
+    from roundtable_souls.platform import proc
 
     try:
         p = subprocess.run(
@@ -181,7 +181,7 @@ def run_tool(exe: Path, args: list[str], env: dict, timeout: int, cwd: Path) -> 
             encoding="utf-8",
             errors="replace",
             timeout=timeout,
-            creationflags=common.NO_WINDOW,
+            creationflags=proc.NO_WINDOW,
         )
     except subprocess.TimeoutExpired as e:
         raise EngineError(f"{Path(exe).name} took longer than {timeout // 60} minutes and was stopped.") from e

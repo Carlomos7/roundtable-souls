@@ -12,6 +12,7 @@ import pytest
 
 from roundtable_souls import core
 from roundtable_souls.platform import logging as rl
+from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.platform import paths as common
 
 
@@ -82,7 +83,7 @@ def test_an_unwritable_logs_folder_never_breaks_anything(tmp_path, monkeypatch):
     got = []
     rl.attach_sink(lambda m, lvl: got.append((m, lvl)))
     job = rl.begin_job("Play")
-    common.log("steam: running")
+    run_logging.log("steam: running")
     rl.attachment("me3")
     rl.end_job(job)
     rl.shutdown()
@@ -101,10 +102,10 @@ def test_old_style_prefixes_become_real_levels():
 
 def test_common_log_uses_the_callers_module_and_accepts_anything(logs):
     job = rl.begin_job("Check")
-    common.log(12345)
-    common.log(None)
-    common.log("multi\nline\ntext")
-    common.log("日本語のパス C:\\Users\\テスト\\file.me3")
+    run_logging.log(12345)
+    run_logging.log(None)
+    run_logging.log("multi\nline\ntext")
+    run_logging.log("日本語のパス C:\\Users\\テスト\\file.me3")
     rl.end_job(job)
     text = job_text(job)
     assert "test_logging  12345" in text and "multi\nline\ntext" in text and "日本語のパス" in text
@@ -113,8 +114,8 @@ def test_common_log_uses_the_callers_module_and_accepts_anything(logs):
 # ----------------------------------------------------------------------------- jobs
 def test_a_job_has_its_own_file_header_footer_and_index_record(logs):
     job = rl.begin_job("launcher: install mod goblins", game="eldenring", profile="C:/p.me3")
-    common.log("copied 12 files")
-    common.log("warning: readme left out")
+    run_logging.log("copied 12 files")
+    run_logging.log("warning: readme left out")
     rl.end_job(job)
     text = job_text(job)
     assert text.splitlines()[0].endswith("=== install mod goblins ===")
@@ -136,10 +137,10 @@ def test_a_job_has_its_own_file_header_footer_and_index_record(logs):
 
 def test_lines_from_other_threads_stay_out_of_a_job(logs):
     job = rl.begin_job("Play")
-    other = threading.Thread(target=lambda: common.log("update check: nothing new"))
+    other = threading.Thread(target=lambda: run_logging.log("update check: nothing new"))
     other.start()
     other.join()
-    common.log("launching me3")
+    run_logging.log("launching me3")
     rl.end_job(job)
     text = job_text(job)
     assert "launching me3" in text and "update check" not in text
@@ -148,11 +149,11 @@ def test_lines_from_other_threads_stay_out_of_a_job(logs):
 def test_the_window_gets_the_jobs_lines_and_warnings_from_anywhere(logs):
     got = []
     rl.attach_sink(lambda m, lvl: got.append((m, lvl)))
-    common.log("background detail")  # no job: not for the pane
-    common.log("warning: Steam is offline")  # a warning from anywhere is
+    run_logging.log("background detail")  # no job: not for the pane
+    run_logging.log("warning: Steam is offline")  # a warning from anywhere is
     job = rl.begin_job("Repair")
-    common.log("repaired 2 saves")
-    common.log("error: one save is locked")
+    run_logging.log("repaired 2 saves")
+    run_logging.log("error: one save is locked")
     rl.end_job(job)
     assert ("background detail", "info") not in got
     assert ("warning: Steam is offline", "warning") in got
@@ -162,7 +163,7 @@ def test_the_window_gets_the_jobs_lines_and_warnings_from_anywhere(logs):
 def test_a_broken_sink_never_stops_a_job(logs):
     rl.attach_sink(lambda m, lvl: 1 / 0)
     job = rl.begin_job("Play")
-    common.log("still fine")
+    run_logging.log("still fine")
     rl.end_job(job)
     assert "still fine" in job_text(job)
 
@@ -170,7 +171,7 @@ def test_a_broken_sink_never_stops_a_job(logs):
 def test_a_job_named_inside_run_job_is_renamed_not_restarted(logs):
     job = rl.begin_job("Installing goblins...")
     common.start_log("launcher: install mod goblins")
-    common.log("inside")
+    run_logging.log("inside")
     rl.end_job(job)
     recs = rl.read_jobs()
     assert len(recs) == 1 and recs[0]["title"] == "install mod goblins" and recs[0]["kind"] == "install"
@@ -179,7 +180,7 @@ def test_a_job_named_inside_run_job_is_renamed_not_restarted(logs):
 
 def test_the_command_line_gets_a_job_that_ends_at_the_next_one_and_at_exit(logs):
     common.start_log("launcher: check")
-    common.log("first")
+    run_logging.log("first")
     first = rl.current_job()
     common.start_log("launcher: play (no window)")
     second = rl._standalone
@@ -202,7 +203,7 @@ def test_attachments_belong_to_the_job(logs):
 
 def test_job_files_close_so_they_can_be_deleted(logs):
     job = rl.begin_job("Play")
-    common.log("x")
+    run_logging.log("x")
     rl.end_job(job)
     job.path.unlink()  # Windows refuses while a handle is open
     assert not job.path.exists()
@@ -224,10 +225,10 @@ def test_run_job_records_how_each_job_ended(logs):
         results.append((ok, status))
 
     def fine(setup):
-        common.log("did it")
+        run_logging.log("did it")
 
     def failing(setup):
-        common.log("error: could not write the save")
+        run_logging.log("error: could not write the save")
         raise SystemExit(1)
 
     def interrupted(setup):
@@ -358,7 +359,7 @@ def test_redact_masks_the_user_and_steam_ids(monkeypatch):
 def test_copy_logs_writes_a_redacted_copy(logs, tmp_path, monkeypatch):
     monkeypatch.setenv("USERNAME", "player1")
     job = rl.begin_job("Play")
-    common.log(r"profile C:\Users\player1\p.me3 for 76561190000000001")
+    run_logging.log(r"profile C:\Users\player1\p.me3 for 76561190000000001")
     rl.end_job(job)
     out = rl.copy_logs(tmp_path / "share")
     text = (out / rl.JOBS_DIR / job.path.name).read_text(encoding="utf-8")

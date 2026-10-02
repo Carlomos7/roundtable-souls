@@ -8,28 +8,30 @@ from pathlib import Path
 
 from roundtable_souls.platform import paths as common
 from roundtable_souls.platform import processes as clear_dead_game_shells
-from roundtable_souls.platform.paths import fail, log
+from roundtable_souls.platform import steam
+from roundtable_souls.platform.logging import fail, log
+from roundtable_souls.platform.proc import NO_WINDOW
 
 
 def _start_steam():
-    cmd = common.steam_launch_command()
+    cmd = steam.steam_launch_command()
     if not cmd:
         fail("steam is not running and could not be found; start Steam and try again")
     log(f"steam: starting {' '.join(cmd)}")
-    subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=common.NO_WINDOW)
+    subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=NO_WINDOW)
 
 
 def ensure_steam(timeout):
-    if common.steam_running() and common.steam_logged_in():
+    if steam.steam_running() and steam.steam_logged_in():
         log("steam: running and signed in")
         return
-    if not common.steam_running():
+    if not steam.steam_running():
         _start_steam()
     else:
         log("steam: running, waiting for sign-in")
     deadline = time.time() + timeout
     while time.time() < deadline:
-        if common.steam_running() and common.steam_logged_in():
+        if steam.steam_running() and steam.steam_logged_in():
             time.sleep(5)  # let the client finish loading before me3 pokes it
             log("steam: signed in")
             return
@@ -39,17 +41,17 @@ def ensure_steam(timeout):
 
 def ensure_steam_running(timeout=60):
     """Offline play: Steam must be running (in Offline Mode), but we do not wait for a sign-in."""
-    if not common.steam_running():
+    if not steam.steam_running():
         _start_steam()
         deadline = time.time() + timeout
-        while time.time() < deadline and not common.steam_running():
+        while time.time() < deadline and not steam.steam_running():
             time.sleep(2)
     time.sleep(5)
     log(
         "steam: running"
         + (
             " and signed in"
-            if common.steam_logged_in()
+            if steam.steam_logged_in()
             else ", NOT signed in (offline play: choose 'Start in Offline Mode' in Steam if it asks)"
         )
     )
@@ -102,7 +104,7 @@ def launch(game, profile, me3=None, exe=None, extra_args=()):
 
     seen_running = False
     with open(me3_log, "w", encoding="utf-8", errors="backslashreplace") as out:
-        proc = subprocess.Popen(cmd, stdout=out, stderr=subprocess.STDOUT, creationflags=common.NO_WINDOW)
+        proc = subprocess.Popen(cmd, stdout=out, stderr=subprocess.STDOUT, creationflags=NO_WINDOW)
         try:
             while proc.poll() is None:
                 if not seen_running and common.game_running():

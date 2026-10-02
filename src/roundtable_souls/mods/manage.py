@@ -372,9 +372,9 @@ def extract_7z(archive: Path, dest: Path) -> Path:
 
 def _no_window():
     try:
-        from roundtable_souls.platform import paths as common
+        from roundtable_souls.platform import proc
 
-        return common.NO_WINDOW
+        return proc.NO_WINDOW
     except Exception:
         return 0
 

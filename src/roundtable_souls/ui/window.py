@@ -147,7 +147,8 @@ from roundtable_souls.core import (
     write_profile_setting,
 )
 from roundtable_souls.mods import configs as mod_configs
-from roundtable_souls.platform import instance
+from roundtable_souls.platform import desktop, instance
+from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.resources import ASSETS_DIR
 from roundtable_souls.settings import FROZEN, appimage, is_installed, is_portable
 from roundtable_souls.ui.activity import ActivityView
@@ -493,10 +494,10 @@ class Launcher(FluentWindow):
         cl.addLayout(self.ph_rows)
         row_w, row = action_row()
         self.ph_game_btn = ghost_btn("Game folder", FI.GAME)
-        self.ph_game_btn.clicked.connect(lambda: core.common.open_path(self.ph_game_btn.toolTip()))
+        self.ph_game_btn.clicked.connect(lambda: desktop.open_path(self.ph_game_btn.toolTip()))
         row.addWidget(self.ph_game_btn)
         self.ph_saves_btn = ghost_btn("Saves folder", FI.FOLDER)
-        self.ph_saves_btn.clicked.connect(lambda: core.common.open_path(self.ph_saves_btn.toolTip()))
+        self.ph_saves_btn.clicked.connect(lambda: desktop.open_path(self.ph_saves_btn.toolTip()))
         row.addWidget(self.ph_saves_btn)
         cl.addWidget(row_w)
         lay.addWidget(c)
@@ -1516,7 +1517,7 @@ class Launcher(FluentWindow):
         h.addWidget(self._slot(switch))
         if folder is not None:
             b = icon_btn(FI.FOLDER, f"Open {folder}")
-            b.clicked.connect(lambda _=False, f=folder: core.common.open_path(str(f)))
+            b.clicked.connect(lambda _=False, f=folder: desktop.open_path(str(f)))
         else:
             b = self._slot(icon_btn(FI.FOLDER, ""))
         h.addWidget(b)
@@ -1809,11 +1810,11 @@ class Launcher(FluentWindow):
             common = core.common
             common.start_log("launcher: rebuild combined parameters")
             try:
-                out = core.mod_merge.rebuild(prof, common.log, combine=combine)
+                out = core.mod_merge.rebuild(prof, run_logging.log, combine=combine)
                 core.run_logging.set_undo(out.get("undo"))
-                common.log(f"done: combined parameters rebuilt by {out['backend']}; {out['profile_note']}")
+                run_logging.log(f"done: combined parameters rebuilt by {out['backend']}; {out['profile_note']}")
             except core.mod_merge.MergeError as e:
-                common.log(f"error: {e}")
+                run_logging.log(f"error: {e}")
                 raise SystemExit(1) from e
 
         self.start(
@@ -2015,7 +2016,7 @@ class Launcher(FluentWindow):
                 }
             )
             gone = out.get("trash") and out["trash"].get("kind") == "gone"
-            common.log(
+            run_logging.log(
                 f"done: removed {name}"
                 + (
                     ""
@@ -2026,9 +2027,9 @@ class Launcher(FluentWindow):
                 )
             )
             if delete and not out["removed_folder"] and not users:
-                common.log("warning: the folder was kept (the Recycle Bin did not take it)")
+                run_logging.log("warning: the folder was kept (the Recycle Bin did not take it)")
             if merged:
-                common.log(
+                run_logging.log(
                     f"note: the merged mods still hold {name}'s files; Play rebuilds them before the game starts"
                 )
 
@@ -2191,15 +2192,15 @@ class Launcher(FluentWindow):
                 else f"launcher: restore {name}"
             )
             try:
-                said = core.mod_undo.run(u, common.log)
+                said = core.mod_undo.run(u, run_logging.log)
             except (core.mod_undo.UndoError, OSError) as e:
-                common.log(f"error: {e}")
+                run_logging.log(f"error: {e}")
                 raise SystemExit(1) from e
             if job_id:
                 core.run_logging.mark_undone(job_id)
             if u.get("type") == "rebuild":  # the same swap, the other way
                 core.run_logging.set_undo({**u, "redo": not u.get("redo")})
-            common.log(f"done: {said}")
+            run_logging.log(f"done: {said}")
 
         self.start(
             job,
@@ -2307,9 +2308,9 @@ class Launcher(FluentWindow):
             common.start_log(f"launcher: install mod {plan['name']}")
             try:
                 install_mod(prof, plan, overwrite=bool(plan.get("exists")))
-                common.log(f"done: installed {plan['name']}")
+                run_logging.log(f"done: installed {plan['name']}")
             except Exception as e:
-                common.log(f"error: {e}")
+                run_logging.log(f"error: {e}")
                 raise SystemExit(1) from e
 
         self.start(job, f"Installing {plan['name']}...", need_setup=False)
@@ -2564,11 +2565,11 @@ class Launcher(FluentWindow):
         row.addWidget(b)
         b = ghost_btn("Releases", FI.LINK)
         b.setToolTip("Every version of this launcher, with notes and downloads.")
-        b.clicked.connect(lambda: core.common.open_path(RELEASES_URL))
+        b.clicked.connect(lambda: desktop.open_path(RELEASES_URL))
         row.addWidget(b)
         b = ghost_btn("Logs", FI.DOCUMENT)
         b.setToolTip("This launcher's own logs, for when something goes wrong.")
-        b.clicked.connect(lambda: (LOGS.mkdir(parents=True, exist_ok=True), core.common.open_path(str(LOGS))))
+        b.clicked.connect(lambda: (LOGS.mkdir(parents=True, exist_ok=True), desktop.open_path(str(LOGS))))
         row.addWidget(b)
         cl.addWidget(row_w)
         sw = SwitchButton()
@@ -2813,19 +2814,19 @@ class Launcher(FluentWindow):
         row_w, row = action_row()
         self.me3_dir_btn = ghost_btn("me3 folder", FI.FOLDER)
         self.me3_dir_btn.setEnabled(False)
-        self.me3_dir_btn.clicked.connect(lambda: core.common.open_path(self.me3_dir_btn.toolTip()))
+        self.me3_dir_btn.clicked.connect(lambda: desktop.open_path(self.me3_dir_btn.toolTip()))
         row.addWidget(self.me3_dir_btn)
         self.me3_logs_btn = ghost_btn("me3 logs", FI.DOCUMENT)
         self.me3_logs_btn.setEnabled(False)
-        self.me3_logs_btn.clicked.connect(lambda: core.common.open_path(self.me3_logs_btn.toolTip()))
+        self.me3_logs_btn.clicked.connect(lambda: desktop.open_path(self.me3_logs_btn.toolTip()))
         row.addWidget(self.me3_logs_btn)
         self.me3_prof_btn = ghost_btn("Profile folder", FI.FOLDER)
         self.me3_prof_btn.setEnabled(False)
-        self.me3_prof_btn.clicked.connect(lambda: core.common.open_path(self.me3_prof_btn.toolTip()))
+        self.me3_prof_btn.clicked.connect(lambda: desktop.open_path(self.me3_prof_btn.toolTip()))
         row.addWidget(self.me3_prof_btn)
         b = ghost_btn("me3 releases", FI.LINK)
         b.setToolTip("me3's own releases page on GitHub.")
-        b.clicked.connect(lambda: core.common.open_path("https://github.com/garyttierney/me3/releases"))
+        b.clicked.connect(lambda: desktop.open_path("https://github.com/garyttierney/me3/releases"))
         row.addWidget(b)
         b = ghost_btn("Refresh", FI.SYNC)
         b.setToolTip("Read the installed me3 again.")
@@ -2924,11 +2925,11 @@ class Launcher(FluentWindow):
         )
         b = ghost_btn("Logs", FI.DOCUMENT)
         b.setToolTip("The launcher's own logs.")
-        b.clicked.connect(lambda: (LOGS.mkdir(parents=True, exist_ok=True), core.common.open_path(str(LOGS))))
+        b.clicked.connect(lambda: (LOGS.mkdir(parents=True, exist_ok=True), desktop.open_path(str(LOGS))))
         row.addWidget(b)
         b = ghost_btn("Settings folder", FI.FOLDER)
         b.setToolTip("Roundtable Souls's settings file.")
-        b.clicked.connect(lambda: core.common.open_path(str(core.DATA_DIR)))
+        b.clicked.connect(lambda: desktop.open_path(str(core.DATA_DIR)))
         row.addWidget(b)
         bl.addLayout(row)
         where = updates.data_location_text()
@@ -3694,7 +3695,7 @@ class Launcher(FluentWindow):
             }.get(key, "Unknown folder.")
             self._toast(f"No {label.lower()} folder", why, error=True)
             return
-        core.common.open_path(str(p))
+        desktop.open_path(str(p))
 
     def _folder_btn(self, key, label, icon=FI.FOLDER, tip=""):
         b = ghost_btn(label, icon)
@@ -3833,7 +3834,7 @@ class Launcher(FluentWindow):
         msg = advisory.get("message") or "This version has a known problem."
         target = f" Update to {offer['version']}." if offer else " Update to the newest release."
         go = ghost_btn("Details", FI.LINK)
-        go.clicked.connect(lambda: core.common.open_path(advisory.get("url") or RELEASES_URL))
+        go.clicked.connect(lambda: desktop.open_path(advisory.get("url") or RELEASES_URL))
         notice(self, "warning", f"{TITLE} {VERSION} should be updated", msg + target, actions=(go,))
 
     def _offer_update(self, info):
@@ -3854,7 +3855,7 @@ class Launcher(FluentWindow):
             )
         notes = ghost_btn("Notes")
         notes.setToolTip("The full release notes, on GitHub.")
-        notes.clicked.connect(lambda: core.common.open_path(info.get("url") or RELEASES_URL))
+        notes.clicked.connect(lambda: desktop.open_path(info.get("url") or RELEASES_URL))
         skip = ghost_btn("Skip this version")
         skip.setToolTip("Do not mention this version again; the next one will show.")
         summary = updates.release_notes(info.get("notes", ""), lines=4)
@@ -3874,7 +3875,7 @@ class Launcher(FluentWindow):
         if can_apply:
             go.clicked.connect(lambda: self._start_update(info, bar))
         else:
-            go.clicked.connect(lambda: core.common.open_path(info.get("url") or RELEASES_URL))
+            go.clicked.connect(lambda: desktop.open_path(info.get("url") or RELEASES_URL))
         skip.clicked.connect(lambda: (updates.skip_update(version), bar.close()))
 
     def _cannot_update(self) -> str:
@@ -3973,7 +3974,7 @@ class Launcher(FluentWindow):
             return
         self._offered = None
         releases = ghost_btn("Releases", FI.LINK)
-        releases.clicked.connect(lambda: core.common.open_path(RELEASES_URL))
+        releases.clicked.connect(lambda: desktop.open_path(RELEASES_URL))
         actions = [releases]
         if status == "rolled_back":
             title = f"{TITLE} {version} did not start; this version was put back"
@@ -4240,7 +4241,7 @@ class Launcher(FluentWindow):
             self._toast("No saves yet", f"Play {self.game.name} once so it creates its save folder.", info=True)
             return
         folders[0].mkdir(parents=True, exist_ok=True)
-        core.common.open_path(str(folders[0]))
+        desktop.open_path(str(folders[0]))
 
     def _restore_backup(self, b):
         if self.busy or self.game_running:
@@ -4268,9 +4269,9 @@ class Launcher(FluentWindow):
             try:
                 safety = restore_backup(b["path"], save)
                 self._undo = (save, safety) if safety else None
-                common.log(f"done: restored {b['path'].name} over {save.name}")
+                run_logging.log(f"done: restored {b['path'].name} over {save.name}")
             except Exception as e:
-                common.log(f"error: {e}")
+                run_logging.log(f"error: {e}")
                 raise SystemExit(1) from e
 
         self.start(job, f"Restoring {save.name}...", need_setup=False)
@@ -4425,9 +4426,9 @@ class Launcher(FluentWindow):
             try:
                 core.saves_service.assert_writable(path)
                 e = core.save_library.add(path.parent, path, name, game, action="stash")
-                common.log(f"done: '{e['name']}' ({e['file']}) added from {path.name}")
+                run_logging.log(f"done: '{e['name']}' ({e['file']}) added from {path.name}")
             except Exception as ex:
-                common.log(f"error: {ex}")
+                run_logging.log(f"error: {ex}")
                 raise SystemExit(1) from ex
 
         self.start(job, f"Adding {path.name} to the library...", need_setup=False)
@@ -4462,10 +4463,10 @@ class Launcher(FluentWindow):
                 if out["backup"]:
                     self._undo = (target, out["backup"])
                 if out["outgoing"]:
-                    common.log(f"kept the replaced save as '{out['outgoing']['name']}'")
-                common.log(f"done: '{entry['name']}' is now {target.name}")
+                    run_logging.log(f"kept the replaced save as '{out['outgoing']['name']}'")
+                run_logging.log(f"done: '{entry['name']}' is now {target.name}")
             except Exception as ex:
-                common.log(f"error: {ex}")
+                run_logging.log(f"error: {ex}")
                 raise SystemExit(1) from ex
 
         self.start(job, f"Swapping '{entry['name']}' in...", need_setup=False)
@@ -4506,15 +4507,15 @@ class Launcher(FluentWindow):
                     if out["backup"]:
                         self._undo = (target, out["backup"])
                     if out["kept"]:
-                        common.log(f"kept the replaced save as '{out['kept']['name']}'")
-                    common.log(f"done: {target.name} now holds {path.name}'s characters")
+                        run_logging.log(f"kept the replaced save as '{out['kept']['name']}'")
+                    run_logging.log(f"done: {target.name} now holds {path.name}'s characters")
                 else:
                     common.start_log(f"launcher: add {path.name} to the library")
                     core.saves_service.assert_writable(path)
                     e = core.save_library.add(path.parent, path, name, game, action="copy")
-                    common.log(f"done: '{e['name']}' added from {path.name}")
+                    run_logging.log(f"done: '{e['name']}' added from {path.name}")
             except Exception as ex:
-                common.log(f"error: {ex}")
+                run_logging.log(f"error: {ex}")
                 raise SystemExit(1) from ex
 
         self.start(job, f"Copying {path.name}...", need_setup=False)
@@ -4539,9 +4540,9 @@ class Launcher(FluentWindow):
                 out = core.save_transfer.copy_character(path, src_slot, target, dst_slot)
                 self._undo = (target, out["backup"])
                 who = out["character"] or {}
-                common.log(f"done: {who.get('name', '?')} is in slot {dst_slot} of {target.name}")
+                run_logging.log(f"done: {who.get('name', '?')} is in slot {dst_slot} of {target.name}")
             except Exception as ex:
-                common.log(f"error: {ex}")
+                run_logging.log(f"error: {ex}")
                 raise SystemExit(1) from ex
 
         self.start(job, f"Copying a character into {target.name}...", need_setup=False)
@@ -4606,9 +4607,9 @@ class Launcher(FluentWindow):
             common.start_log(f"launcher: import {src} into the library")
             try:
                 e = core.save_library.add(folder, Path(src), name, game, action="import")
-                common.log(f"done: '{e['name']}' imported")
+                run_logging.log(f"done: '{e['name']}' imported")
             except Exception as ex:
-                common.log(f"error: {ex}")
+                run_logging.log(f"error: {ex}")
                 raise SystemExit(1) from ex
 
         self.start(job, f"Adding {Path(src).name} to the library...", need_setup=False)
@@ -4620,7 +4621,7 @@ class Launcher(FluentWindow):
             return
         lib = core.save_library.folder_for(folder)
         lib.mkdir(exist_ok=True)
-        core.common.open_path(str(lib))
+        desktop.open_path(str(lib))
 
     def _undo_last(self, undo):
         save, bak = undo
@@ -4647,9 +4648,9 @@ class Launcher(FluentWindow):
             try:
                 safety = restore_backup(bak, save)
                 self._undo = (save, safety) if safety else None
-                common.log(f"done: {save.name} is back as it was")
+                run_logging.log(f"done: {save.name} is back as it was")
             except Exception as e:
-                common.log(f"error: {e}")
+                run_logging.log(f"error: {e}")
                 raise SystemExit(1) from e
 
         self.start(job, f"Undoing in {save.name}...", need_setup=False)
@@ -5258,9 +5259,9 @@ class Launcher(FluentWindow):
                     repair_save(path)
                 first = next((b for b in backups if b), None)
                 self._undo = (path, first) if first else None
-                common.log(f"done: applied {len(keys)} change(s) to {path.name}")
+                run_logging.log(f"done: applied {len(keys)} change(s) to {path.name}")
             except Exception as e:
-                common.log(f"error: {e}")
+                run_logging.log(f"error: {e}")
                 raise SystemExit(1) from e
 
         self.start(job, f"Applying changes to {path.name}...", need_setup=False)
@@ -5365,7 +5366,7 @@ class Launcher(FluentWindow):
         d = core.run_logging.log_dir()
         try:
             d.mkdir(parents=True, exist_ok=True)
-            core.common.open_path(str(d))
+            desktop.open_path(str(d))
         except OSError as e:
             self._toast("Could not open the logs folder", str(e), error=True)
 
@@ -5462,14 +5463,14 @@ class Launcher(FluentWindow):
             common = core.common
             common.start_log("launcher: update merged mods before Play")
             try:
-                out = core.mod_merge.update_before_play(prof, common.log)
+                out = core.mod_merge.update_before_play(prof, run_logging.log)
                 if out is not None:
                     core.run_logging.set_undo(out.get("undo"))
-                    common.log(f"done: merged mods updated by {out['backend']}; {out['profile_note']}")
+                    run_logging.log(f"done: merged mods updated by {out['backend']}; {out['profile_note']}")
                 else:
-                    common.log("done: the merged mods were already up to date")
+                    run_logging.log("done: the merged mods were already up to date")
             except core.mod_merge.MergeError as e:
-                common.log(f"error: {e}")
+                run_logging.log(f"error: {e}")
                 raise SystemExit(1) from e
 
         self.start(job, self.UPDATE_LABEL, need_setup=False)

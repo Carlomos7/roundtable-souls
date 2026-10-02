@@ -8,7 +8,7 @@ from test_mod_merge import World
 
 from roundtable_souls import core
 from roundtable_souls.mods import merge
-from roundtable_souls.platform import paths as common
+from roundtable_souls.platform import logging as run_logging
 
 
 @pytest.fixture
@@ -87,7 +87,7 @@ def test_play_without_the_window_updates_first_when_the_tool_is_allowed(world, m
     world.pack("params")
     setup = type("S", (), {"profile": str(world.profile)})()
     lines = []
-    monkeypatch.setattr(common, "log", lines.append)
+    monkeypatch.setattr(run_logging, "log", lines.append)
     assert core.update_merge_headless(setup) is None  # updated: the game may start
     assert merge.health(world.profile)["state"] == "current"
     assert any(l.startswith("done: merged mods updated") for l in lines)
@@ -98,7 +98,7 @@ def test_play_without_the_window_never_runs_a_tool_it_was_not_allowed_to(world, 
     runs = world.runs
     monkeypatch.setattr(merge, "approved", lambda tool: False)
     lines = []
-    monkeypatch.setattr(common, "log", lines.append)
+    monkeypatch.setattr(run_logging, "log", lines.append)
     why = core.update_merge_headless(type("S", (), {"profile": str(world.profile)})())
     assert world.runs == runs and "has not been allowed" in why  # and so the game must not start
 
@@ -107,7 +107,7 @@ def test_play_without_the_window_does_not_start_when_the_update_fails(world, mon
     world.pack("params")
     monkeypatch.setattr("roundtable_souls.mods.backends.Tool.run", lambda b, log: world.fake_run(b, fail=True))
     lines = []
-    monkeypatch.setattr(common, "log", lines.append)
+    monkeypatch.setattr(run_logging, "log", lines.append)
     why = core.update_merge_headless(type("S", (), {"profile": str(world.profile)})())
     assert why and why.startswith("The merged mods could not be updated")
     assert any(l.startswith("error: the merged mods could not be updated") for l in lines)
@@ -116,7 +116,7 @@ def test_play_without_the_window_does_not_start_when_the_update_fails(world, mon
 def test_play_without_the_window_asks_nothing_and_starts_nothing_when_automatic_rebuilds_are_off(world, monkeypatch):
     world.pack("params")
     runs = world.runs
-    monkeypatch.setattr(common, "log", lambda s: None)
+    monkeypatch.setattr(run_logging, "log", lambda s: None)
     why = core.update_merge_headless(type("S", (), {"profile": str(world.profile)})(), automatic=False)
     assert world.runs == runs and "turned off" in why
 
@@ -124,7 +124,7 @@ def test_play_without_the_window_asks_nothing_and_starts_nothing_when_automatic_
 def test_play_without_the_window_does_not_start_when_the_merge_cannot_be_rebuilt(world, monkeypatch):
     world.pack("params")
     monkeypatch.setattr(merge, "setup_problem", lambda *a, **k: "the package that must stay last is missing")
-    monkeypatch.setattr(common, "log", lambda s: None)
+    monkeypatch.setattr(run_logging, "log", lambda s: None)
     assert merge.needs_update(world.profile) is None  # nothing to rebuild ...
     assert merge.play_check(world.profile)["blocked"]  # ... yet it is out of date
     why = core.update_merge_headless(type("S", (), {"profile": str(world.profile)})())
@@ -138,7 +138,7 @@ def test_headless_play_does_not_launch_when_it_must_not(monkeypatch):
     monkeypatch.setattr(core, "update_merge_headless", lambda s, automatic=True: "out of date")
     played, shown = [], []
     monkeypatch.setattr(core, "job_play", played.append)
-    monkeypatch.setattr(common, "log", lambda s: None)
+    monkeypatch.setattr(run_logging, "log", lambda s: None)
     assert core.play_headless(core.games.ELDEN_RING, notice=lambda game, why: shown.append(why)) == 1
     assert played == [] and shown == ["out of date"]
     monkeypatch.setattr(core, "update_merge_headless", lambda s, automatic=True: None)

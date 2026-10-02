@@ -30,7 +30,7 @@ import hashlib
 from pathlib import Path
 
 from roundtable_souls.platform import paths as common
-from roundtable_souls.platform.paths import fail, log
+from roundtable_souls.platform.logging import fail, log
 
 UD11_OFF = 0x19603B0
 UD11_SIZE = 0x240020

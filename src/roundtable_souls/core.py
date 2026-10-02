@@ -87,7 +87,7 @@ from roundtable_souls.mods.service import (
     write_profile_setting,
 )
 from roundtable_souls.platform import logging as run_logging
-from roundtable_souls.platform import me3_info, trash
+from roundtable_souls.platform import me3_info, steam, trash
 from roundtable_souls.platform import paths as common
 from roundtable_souls.platform import processes as clear_dead_game_shells
 from roundtable_souls.platform import session as me3_session
@@ -389,7 +389,7 @@ def launch_extra_args(opts: dict, version: str | None = None) -> list:
         args.append("--diagnostics")
     v = me3_info.version_tuple(version)
     if args and v and v < FLAGS_SINCE:
-        common.log(
+        run_logging.log(
             f"me3 {version} is older than {'.'.join(map(str, FLAGS_SINCE))}: launch flags {' '.join(args)} skipped"
         )
         return []
@@ -409,9 +409,9 @@ def backup_saves_before_play() -> list:
     for p in common.save_files():
         try:
             made.append(save_fix.backup(p, {"action": "Before playing", "changes": []}))
-            common.log(f"backup: {made[-1]}")
+            run_logging.log(f"backup: {made[-1]}")
         except OSError as e:
-            common.log(f"backup failed for {p.name}: {e}")
+            run_logging.log(f"backup failed for {p.name}: {e}")
     return made
 
 
@@ -462,11 +462,11 @@ def _after_play(opts):
     elif opts["play_repair_after"]:
         save_repair.repair_all()
     else:
-        common.log("repair after quitting is off (Tools > Play session)")
+        run_logging.log("repair after quitting is off (Tools > Play session)")
     if opts["play_clear_after"]:
         me3_session.clear_dead_shells("after exit")
     else:
-        common.log("clearing leftover processes after quitting is off (Tools > Play session)")
+        run_logging.log("clearing leftover processes after quitting is off (Tools > Play session)")
 
 
 def job_play(setup: Setup):
@@ -589,11 +589,11 @@ def offline_profile_for(profile: str, strip_revive: bool = False, coop_dll: str 
 def steam_state():
     """(running, signed_in) from the process list and Steam's own registry flag."""
     try:
-        running = common.steam_running()
+        running = steam.steam_running()
     except Exception:
         running = False
     try:
-        signed = bool(common.steam_logged_in())
+        signed = bool(steam.steam_logged_in())
     except Exception:
         signed = False
     return running, signed
@@ -688,21 +688,21 @@ def play_headless(game: games.Game | None = None, notice: Callable[[games.Game, 
     game = use_game(game or games.get(settings.get("game")), settings)
     if not game.ready:
         common.start_log("launcher: play (no window)")
-        common.log(f"error: Roundtable Souls cannot launch {game.name} yet")
+        run_logging.log(f"error: Roundtable Souls cannot launch {game.name} yet")
         return 1
     remembered = remembered_setup(settings, game)
     setups = [s for s in discover(remembered, game) if not s.problems()]
     setup = next((s for s in setups if same_source(s.source, remembered)), setups[0] if setups else None)
     if setup is None:
         common.start_log("launcher: play (no window)")
-        common.log(
+        run_logging.log(
             f"error: no working {game.name} setup found; open Roundtable Souls once, pick the {game.name} tab, "
             "and choose one on the Play page"
         )
         return 1
     why = update_merge_headless(setup, automatic=play_options(settings)["play_update_merge"])
     if why:
-        common.log(f"error: the game was not started: {why}")
+        run_logging.log(f"error: the game was not started: {why}")
         if notice is not None:
             notice(game, why)
         return 1
@@ -728,30 +728,30 @@ def update_merge_headless(setup, automatic: bool = True) -> str | None:
     common.start_log("launcher: update merged mods before Play (no window)")
     reason = (h.get("reasons") or [h.get("text") or "the merged mods are out of date"])[0]
     if h["blocked"]:
-        common.log(f"error: the merged mods are out of date ({reason}) and cannot be rebuilt: {h['blocked']}")
+        run_logging.log(f"error: the merged mods are out of date ({reason}) and cannot be rebuilt: {h['blocked']}")
         return f"The merged mods are out of date and cannot be rebuilt: {h['blocked']}"
     if not automatic:
-        common.log(f"error: the merged mods are out of date ({reason}); automatic rebuilds are off")
+        run_logging.log(f"error: the merged mods are out of date ({reason}); automatic rebuilds are off")
         return (
             f"The merged mods are out of date ({reason}), and rebuilding them automatically before Play is "
             "turned off. Open Roundtable Souls to rebuild them."
         )
     tool: Any = mod_merge.find_backend(prof)  # a rebuild tool (mods.backends), or None
     if tool is not None and tool.problem():
-        common.log(f"error: {tool.label} cannot run: {tool.problem()}")
+        run_logging.log(f"error: {tool.label} cannot run: {tool.problem()}")
         return f"The merged mods are out of date and {tool.label} cannot run: {tool.problem()}"
     if tool is not None and not mod_merge.approved(tool):
-        common.log(f"error: {tool.label} has not been allowed to run yet; open Roundtable Souls and allow it")
+        run_logging.log(f"error: {tool.label} has not been allowed to run yet; open Roundtable Souls and allow it")
         return (
             f"The merged mods are out of date ({reason}), and {tool.label} has not been allowed to run yet. "
             "Open Roundtable Souls to allow it."
         )
     try:
-        mod_merge.update_before_play(prof, common.log)
-        common.log("done: merged mods updated")
+        mod_merge.update_before_play(prof, run_logging.log)
+        run_logging.log("done: merged mods updated")
         return None
     except mod_merge.MergeError as e:
-        common.log(f"error: the merged mods could not be updated: {e}")
+        run_logging.log(f"error: the merged mods could not be updated: {e}")
         return f"The merged mods could not be updated: {e}"
 
 
@@ -787,7 +787,7 @@ def check(game: games.Game | None = None):
         if probs:
             lines.append("      PROBLEMS: " + "; ".join(probs))
     lines.append(f"remembered: {remembered}")
-    lines.append(f"steam: {common.steam_exe()}")
+    lines.append(f"steam: {steam.steam_exe()}")
     lines.append(f"game folder: {common.game_dir()}")
     if game is games.ELDEN_RING:
         game_ids = save_analyze.game_item_ids()
@@ -812,4 +812,4 @@ def check(game: games.Game | None = None):
     common.start_log("launcher: check")
     for line in lines:
         print(line)
-        common.log(line)
+        run_logging.log(line)

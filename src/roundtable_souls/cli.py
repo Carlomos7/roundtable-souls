@@ -56,12 +56,12 @@ def play_from_shortcut(game) -> int:
     updates.mark_ready("play")  # this version starts and runs: an update's watchdog can stand down
     if instance.held(instance.WINDOW) and instance.send(f"play {game.key}"):
         core.common.start_log("launcher: play (no window)")
-        core.common.log("Roundtable Souls is open: Play was handed to its window")
+        core.run_logging.log("Roundtable Souls is open: Play was handed to its window")
         return 0
     hold = instance.acquire(instance.PLAY)
     if hold is None:
         core.common.start_log("launcher: play (no window)")
-        core.common.log("error: a Play from a Steam shortcut is already running")
+        core.run_logging.log("error: a Play from a Steam shortcut is already running")
         return 1
     try:
         return core.play_headless(game, notice=not_started_notice)
@@ -96,4 +96,4 @@ def not_started_notice(game: Game, why: str) -> None:
             command = [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-m", "roundtable_souls"]
             subprocess.Popen([*command, "--game", game.key], close_fds=True)
     except Exception as e:  # no display (a console, a test): the log says it
-        core.common.log(f"the notice could not be shown: {e}")
+        core.run_logging.log(f"the notice could not be shown: {e}")
