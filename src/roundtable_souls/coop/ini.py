@@ -6,11 +6,8 @@ Nightreign's has no password and scales with three values instead of six. Scalin
 
 from __future__ import annotations
 
-import datetime
-import json
 import re
 import tomllib
-from dataclasses import dataclass
 from pathlib import Path
 
 from roundtable_souls.files import atomic_write
@@ -109,61 +106,6 @@ def write_password(ini: Path, value: str):
         _write(ini, new)
 
 
-SCALING_KEYS = (
-    "enemy_health_scaling",
-    "enemy_damage_scaling",
-    "enemy_posture_scaling",
-    "boss_health_scaling",
-    "boss_damage_scaling",
-    "boss_posture_scaling",
-)
-SCALING_LABELS = ("Enemy HP", "Enemy damage", "Enemy posture", "Boss HP", "Boss damage", "Boss posture")
-SCALING_PRESETS = {  # % per extra player (Seamless applies each value once per player beyond the host)
-    "Seamless default": (35, 0, 15, 100, 0, 20),
-    # Nightreign's own rule, from datamined values: enemy and boss HP scale linearly with the party (a Nightlord has
-    # 3x its solo HP with three players, so +100 % per extra player, mobs the same), damage does NOT change with
-    # player count, and poise goes from 80 solo to 130 with three (about +30 % per extra player).
-    "Party of 3 (Nightreign rule)": (100, 0, 30, 100, 0, 30),
-    # Larger parties: Seamless keeps adding the per-player value for every extra player, so with these numbers a full
-    # party of 4 or 5 lands on the same total as Nightreign's trio (3x HP, ~1.6x poise) instead of 4x or 5x HP.
-    "Party of 4": (67, 0, 20, 67, 0, 20),
-    "Party of 5": (50, 0, 15, 50, 0, 15),
-    "Party of 6": (40, 0, 12, 40, 0, 12),
-}
-CUSTOM = "Custom"
-
-
-@dataclass(frozen=True)
-class ScalingSpec:
-    """The difficulty keys one Seamless Co-op flavour uses, their labels, and the presets offered for them."""
-
-    keys: tuple[str, ...]
-    labels: tuple[str, ...]
-    presets: dict
-    hint: str
-
-
-ELDEN_RING_SCALING = ScalingSpec(
-    SCALING_KEYS, SCALING_LABELS, SCALING_PRESETS, "Percent per extra player. Only the host's numbers count."
-)
-NIGHTREIGN_SCALING = ScalingSpec(
-    ("health_scaling", "damage_scaling", "posture_scaling"),
-    ("Enemy HP", "Enemy damage", "Enemy posture"),
-    {},
-    "Percent, as Seamless Co-op for Nightreign reads them. Only the host's numbers count.",
-)
-SCALING_SPECS = (ELDEN_RING_SCALING, NIGHTREIGN_SCALING)
-
-
-def scaling_spec(ini: Path) -> ScalingSpec | None:
-    """Which set of difficulty keys this ini has, or None when it has neither complete set."""
-    text = _read(ini)
-    for spec in SCALING_SPECS:
-        if all(_key_re(k).search(text) for k in spec.keys):
-            return spec
-    return None
-
-
 def _key_re(key):
     return re.compile(r"^([ \t]*" + re.escape(key) + r"[ \t]*=[ \t]*)(.*?)([ \t]*)(?=\r?$)", re.M | re.I)
 
@@ -191,23 +133,6 @@ def write_keys(ini: Path, values: dict):
             missing.append(k)
     _write(ini, text)
     return missing
-
-
-def read_scaling(ini: Path, spec: ScalingSpec | None = None):
-    """The difficulty values in key order, or None when the ini has no complete set (or a value is not a number)."""
-    spec = spec or scaling_spec(ini)
-    if spec is None:
-        return None
-    vals = read_keys(ini, spec.keys)
-    try:
-        return tuple(int(vals[k]) for k in spec.keys)
-    except KeyError, ValueError:
-        return None
-
-
-def preset_of(values, spec: ScalingSpec | None = None):
-    presets = (spec or ELDEN_RING_SCALING).presets
-    return next((n for n, v in presets.items() if tuple(v) == tuple(values)), CUSTOM)
 
 
 SECTION_TITLES = {
@@ -385,125 +310,5 @@ def nearest_volume_stop(n: int) -> int:
     return min(VOLUME_STOPS, key=lambda p: abs(p[0] - n))[0]
 
 
-JSON_FORMAT = "seamless-coop-settings"
 LINE_RE = re.compile(r"^[ \t]*([A-Za-z0-9_]+)[ \t]*=[ \t]*(.*?)[ \t]*$")
 SECTION_RE = re.compile(r"^[ \t]*\[([^\]]+)\][ \t]*$")
-
-
-def read_all_settings(ini: Path) -> dict:
-    """{section: {key: value}} for every `key = value` line (comments and blank lines skipped)."""
-    out, section = {}, ""
-    for raw in _read(ini).splitlines():
-        line = raw.rstrip("\r")
-        if not line.strip() or line.lstrip().startswith((";", "#")):
-            continue
-        m = SECTION_RE.match(line)
-        if m:
-            section = m.group(1)
-            out.setdefault(section, {})
-            continue
-        m = LINE_RE.match(line)
-        if m:
-            out.setdefault(section, {})[m.group(1)] = m.group(2)
-    return out
-
-
-def export_settings(ini: Path, out: Path):
-    doc = {
-        "format": JSON_FORMAT,
-        "version": 1,
-        "exported": datetime.datetime.now().isoformat(timespec="seconds"),
-        "source": ini.name,
-        "settings": read_all_settings(ini),
-    }
-    out.write_text(json.dumps(doc, indent=2), encoding="utf-8")
-    return sum(len(v) for v in doc["settings"].values())
-
-
-def export_text(ini: Path) -> str:
-    doc = {
-        "format": JSON_FORMAT,
-        "version": 1,
-        "exported": datetime.datetime.now().isoformat(timespec="seconds"),
-        "source": ini.name,
-        "settings": read_all_settings(ini),
-    }
-    return json.dumps(doc, indent=2)
-
-
-COMMENT_PREFIX = {"toml": "#", "json": "//", "ini": ";", "text": "#"}
-
-
-def strip_json_comments(text: str) -> str:
-    """Drops whole lines that start with // (what Ctrl+/ writes in the share box); JSON itself has no comments."""
-    return "\n".join(l for l in text.splitlines() if not l.lstrip().startswith("//"))
-
-
-def toggle_comment(lines: list, prefix: str) -> list:
-    """Ctrl+/ on a block: if every non-blank line is already commented, uncomment; otherwise comment each non-blank
-    line at the block's shallowest indent. Blank lines are left alone. One space follows the marker."""
-    mark = prefix + " "
-    content = [l for l in lines if l.strip()]
-    if not content:
-        return list(lines)
-    if all(l.lstrip().startswith(prefix) for l in content):
-        out = []
-        for l in lines:
-            if not l.strip():
-                out.append(l)
-                continue
-            indent = len(l) - len(l.lstrip())
-            rest = l[indent:]
-            rest = rest[len(mark) :] if rest.startswith(mark) else rest[len(prefix) :]
-            out.append(l[:indent] + rest)
-        return out
-    col = min(len(l) - len(l.lstrip()) for l in content)
-    return [(l[:col] + mark + l[col:]) if l.strip() else l for l in lines]
-
-
-def indent_lines(lines: list, outdent: bool = False, width: int = 2) -> list:
-    """Tab / Shift+Tab on a selection: shift every non-blank line by `width` spaces (me3 profiles use two)."""
-    if outdent:
-        out = []
-        for l in lines:
-            n = 0
-            while n < width and n < len(l) and l[n] == " ":
-                n += 1
-            if n == 0 and l.startswith("\t"):
-                n = 1
-            out.append(l[n:])
-        return out
-    return [(" " * width + l) if l.strip() else l for l in lines]
-
-
-def parse_settings_json(text: str) -> dict:
-    """{key: value} flattened from exported JSON text. Accepts the full export, or a bare {section: {key: value}}
-    / {key: value} object someone typed by hand. Lines starting with // are ignored. Raises ValueError on anything else."""
-    doc = json.loads(strip_json_comments(text))
-    if not isinstance(doc, dict):
-        raise ValueError("expected a JSON object")
-    body = doc.get("settings") if doc.get("format") == JSON_FORMAT else doc
-    if not isinstance(body, dict):
-        raise ValueError("not a Seamless Co-op settings export")
-    flat = {}
-    for k, v in body.items():
-        if isinstance(v, dict):
-            for k2, v2 in v.items():
-                flat[str(k2)] = str(v2)
-        elif k not in ("format", "version", "exported", "source"):
-            flat[str(k)] = str(v)
-    if not flat:
-        raise ValueError("no settings in that text")
-    return flat
-
-
-def load_settings_json(path: Path) -> dict:
-    return parse_settings_json(Path(path).read_text(encoding="utf-8"))
-
-
-def plan_import(ini: Path, incoming: dict):
-    """(changes {key: (old, new)}, unknown keys) against the current file; keys not in the file are never added."""
-    current = {k: v for sec in read_all_settings(ini).values() for k, v in sec.items()}
-    changes = {k: (current[k], v) for k, v in incoming.items() if k in current and current[k] != v}
-    unknown = sorted(k for k in incoming if k not in current)
-    return changes, unknown
