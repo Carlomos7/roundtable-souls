@@ -1051,7 +1051,7 @@ def _plan(profile: Path, folder: Path, temp: bool, default_name: str, name, pkg_
         plan["profiles_inside"] = [str(m.relative_to(folder)) for m in folder.rglob("*.me3")]
     if d["kind"] == "package" and (d["root"] / "regulation.bin").is_file():
         plan.update(regulation_order(profile, skip=plan.get("dest")))
-        from roundtable_souls.mods import merge
+        from roundtable_souls.mods import rebuild as merge
 
         plan.update(merge.offer(profile, d["root"], plan["regulation_packages"]))
     return plan

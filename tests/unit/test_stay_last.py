@@ -11,8 +11,9 @@ import pytest
 from test_mod_merge import World, _pack_source
 
 from roundtable_souls.mods import manage as M
-from roundtable_souls.mods import merge, profile_settings, stay_last
 from roundtable_souls.mods import profile as profile_tools
+from roundtable_souls.mods import profile_settings, stay_last
+from roundtable_souls.mods import rebuild as merge
 
 PROFILE = """profileVersion = "v1"
 

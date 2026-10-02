@@ -7,7 +7,7 @@ import pytest
 from test_mod_merge import World
 
 from roundtable_souls import core
-from roundtable_souls.mods import merge
+from roundtable_souls.mods import rebuild as merge
 from roundtable_souls.platform import logging as run_logging
 
 

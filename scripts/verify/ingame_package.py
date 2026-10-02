@@ -62,7 +62,7 @@ def main() -> int:
 
     from roundtable_souls.game import archives as gamearchive
     from roundtable_souls.game.oodle import find_oodle
-    from roundtable_souls.mods import merge
+    from roundtable_souls.mods import rebuild as merge
     from roundtable_souls.mods.backends import builtin
     from roundtable_souls.platform import paths as common
 

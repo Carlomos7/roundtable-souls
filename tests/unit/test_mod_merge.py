@@ -8,8 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from roundtable_souls.mods import backends, merge
+from roundtable_souls.mods import backends
 from roundtable_souls.mods import manage as M
+from roundtable_souls.mods import rebuild as merge
 from roundtable_souls.platform import paths as common
 
 TALK = "script/talk/m00_00_00_00.talkesdbnd.dcx"

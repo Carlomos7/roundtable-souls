@@ -80,9 +80,9 @@ from roundtable_souls.files import (
 from roundtable_souls.game import catalog as games
 from roundtable_souls.mods import history as mod_history
 from roundtable_souls.mods import manage as mod_manage
-from roundtable_souls.mods import merge as mod_merge
 from roundtable_souls.mods import overview as mod_overview
 from roundtable_souls.mods import profile as profile_tools
+from roundtable_souls.mods import rebuild as mod_merge
 from roundtable_souls.mods import service as mods_service
 from roundtable_souls.mods import stay_last as mod_stay_last
 from roundtable_souls.mods import undo as mod_undo

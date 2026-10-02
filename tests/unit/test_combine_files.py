@@ -8,7 +8,8 @@ import pytest
 from fakegame import bnd, dcx, files_of
 from test_param_merge import vanilla
 
-from roundtable_souls.mods import merge, overview, undo
+from roundtable_souls.mods import overview, undo
+from roundtable_souls.mods import rebuild as merge
 from roundtable_souls.mods.backends import builtin
 from roundtable_souls.platform import paths as common
 

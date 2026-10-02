@@ -28,7 +28,7 @@ REGULATION = "regulation.bin"
 
 
 def _sha(p: Path) -> str:
-    from roundtable_souls.mods import merge
+    from roundtable_souls.mods import rebuild as merge
 
     return merge.sha256(p) or ""
 
@@ -275,7 +275,7 @@ class CombineTool:
     def run(self, log, all_layers: list[dict] | None = None, until: dict | None = None) -> dict:
         from roundtable_souls import __version__
         from roundtable_souls.merging.rules import param as param_merge
-        from roundtable_souls.mods import merge
+        from roundtable_souls.mods import rebuild as merge
         from roundtable_souls.platform import paths as common
 
         layers = merge.layers(self.profile) if all_layers is None else all_layers

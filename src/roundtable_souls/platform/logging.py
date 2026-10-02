@@ -85,7 +85,7 @@ logging.getLogger(LOGGER_NAME).setLevel(logging.DEBUG)
 
 
 class _Short(logging.Filter):
-    """record.short: the logger name without the package prefix (mods.merge, not roundtable_souls.mods.merge)."""
+    """record.short: the logger name without the package prefix (mods.rebuild, not roundtable_souls.mods.rebuild)."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         name = record.name

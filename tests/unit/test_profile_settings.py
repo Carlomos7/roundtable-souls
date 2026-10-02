@@ -6,7 +6,8 @@ import shutil
 from test_mod_merge import World
 
 from roundtable_souls.config import settings
-from roundtable_souls.mods import merge, profile_settings
+from roundtable_souls.mods import profile_settings
+from roundtable_souls.mods import rebuild as merge
 
 
 def test_settings_round_trip_and_keep_what_this_version_does_not_know(tmp_path):

@@ -9,7 +9,7 @@ import pytest
 from roundtable_souls import formats
 from roundtable_souls.merging.rules import param as pm
 from roundtable_souls.mods import manage as M
-from roundtable_souls.mods import merge
+from roundtable_souls.mods import rebuild as merge
 from roundtable_souls.mods.backends import builtin
 from roundtable_souls.platform import paths as common
 

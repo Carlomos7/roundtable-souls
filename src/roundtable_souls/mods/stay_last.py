@@ -27,7 +27,7 @@ def target(profile: Path) -> dict | None:
     """The mod that must stay last, as the profile on disk has it: {folder, own, name}, own being the folders its
     DLLs live in (its rebuild tool's own folders, or the folder holding its package when no tool was found). None
     when the profile has none (then nothing is ever touched)."""
-    from roundtable_souls.mods import merge
+    from roundtable_souls.mods import rebuild as merge
 
     profile = Path(profile)
     try:

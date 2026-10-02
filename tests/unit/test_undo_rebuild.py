@@ -9,7 +9,8 @@ import time
 from test_mod_merge import World
 from test_param_merge import pack, set_word, vanilla
 
-from roundtable_souls.mods import merge, undo
+from roundtable_souls.mods import rebuild as merge
+from roundtable_souls.mods import undo
 from roundtable_souls.mods.backends import builtin
 from roundtable_souls.platform import logging as rl
 

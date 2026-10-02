@@ -597,7 +597,7 @@ def test_options_offer_the_parameter_overlay_switch_for_packages_only(app):
 def test_a_rebuild_tool_runs_only_after_it_is_allowed_once(sandbox, monkeypatch, tmp_path):
     from test_mod_merge import _declared
 
-    from roundtable_souls.mods import merge
+    from roundtable_souls.mods import rebuild as merge
 
     prof = _declared(tmp_path, monkeypatch)
     asked, started = [], []
