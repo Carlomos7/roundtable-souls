@@ -11,6 +11,7 @@ from roundtable_souls.saves import library as Lib
 from roundtable_souls.saves import regulation
 from roundtable_souls.services import play as core
 from roundtable_souls.services import saves as saves_service
+from support import er
 
 ER = games.ELDEN_RING
 
@@ -80,10 +81,10 @@ def test_setup_saves_follow_me3_savefile_and_the_seamless_extension(tmp_path):
     prof.write_text('profileVersion = "v1"\nsavefile = "run2.sl2"\n', encoding="utf-8")
     ini = tmp_path / "ersc_settings.ini"
     ini.write_text("[SAVE]\nsave_file_extension = co3\n", encoding="utf-8")
-    names = core.setup_saves(core.Setup("me3", prof, ini=ini, game=ER))
+    names = core.setup_saves(core.Setup("me3", prof, ini=ini, loc=er()))
     assert names["standard"] == "run2.sl2" and names["coop"] == "run2.co3" and names["active"] == "run2.co3"
     assert "save_file_extension" in names["why"]["coop"] and "savefile" in names["why"]["standard"]
-    plain = core.setup_saves(core.Setup("me3", tmp_path / "missing.me3", game=ER))
+    plain = core.setup_saves(core.Setup("me3", tmp_path / "missing.me3", loc=er()))
     assert (plain["standard"], plain["coop"], plain["active"]) == ("ER0000.sl2", None, "ER0000.sl2")
 
 
@@ -92,12 +93,8 @@ def test_save_files_include_the_names_the_setup_uses(tmp_path, monkeypatch):
     acct.mkdir(parents=True)
     for n in ("ER0000.sl2", "run2.co3", "unrelated.sl2"):
         (acct / n).write_bytes(b"x")
-    monkeypatch.setattr(common, "save_roots", lambda game=None: [tmp_path / "EldenRing"])
-    common.set_setup_save_names(ER, {})
-    try:
-        assert [p.name for p in common.save_files(ER)] == ["ER0000.sl2"]
-        common.set_setup_save_names(ER, {"standard": "ER0000.sl2", "coop": "run2.co3"})
-        assert [p.name for p in common.save_files(ER)] == ["ER0000.sl2", "run2.co3"]
-        assert saves_service.save_kind(acct / "run2.co3", ER) == "Seamless Co-op"
-    finally:
-        common.set_setup_save_names(ER, {})
+    monkeypatch.setattr(common, "save_roots_for", lambda save_dir, app_id: [tmp_path / "EldenRing"])
+    assert [p.name for p in er().save_files()] == ["ER0000.sl2"]
+    loc = er().with_setup_save_names({"standard": "ER0000.sl2", "coop": "run2.co3"})
+    assert [p.name for p in loc.save_files()] == ["ER0000.sl2", "run2.co3"]
+    assert saves_service.save_kind(acct / "run2.co3", loc=loc) == "Seamless Co-op"

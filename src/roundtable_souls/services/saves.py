@@ -8,8 +8,8 @@ import time
 from pathlib import Path
 
 from roundtable_souls.game import catalog as games
+from roundtable_souls.game.locate import Locations
 from roundtable_souls.platform import logging as run_logging
-from roundtable_souls.platform import paths as common
 from roundtable_souls.saves import analyze as save_analyze
 from roundtable_souls.saves import backups as save_backups
 from roundtable_souls.saves import container as save_container
@@ -22,22 +22,23 @@ from roundtable_souls.saves import regulation as repair_regulation
 from roundtable_souls.saves import vanilla as save_vanilla
 
 
-def save_kind(path: Path, game: games.Game | None = None) -> str:
-    """Seamless Co-op for a .co2 or the co-op name the current setup configures, else Standard."""
+def save_kind(path: Path, *, loc: Locations) -> str:
+    """Seamless Co-op for a .co2 or the co-op name the setup in use configures, else Standard."""
     path = Path(path)
-    coop = common.setup_save_names(game).get("coop") or ""
+    coop = loc.setup_save_names.get("coop") or ""
     return "Seamless Co-op" if path.suffix.lower() == ".co2" or path.name.lower() == coop.lower() else "Standard"
 
 
-def _save_info(path: Path, game: games.Game | None = None, kind: str | None = None) -> dict:
+def _save_info(path: Path, game: games.Game | None = None, kind: str | None = None, *, loc: Locations) -> dict:
     """One save file: type, modified time, findings, and its active characters. game and kind default to what the
     file name says (a custom name counts for the active game)."""
     path = Path(path)
-    game = game or games.for_save(path) or common.GAME
+    game = game or games.for_save(path) or loc.game
+    items = save_analyze.GameItems.for_locations(loc)
     info = dict(
         path=path,
         name=path.name,
-        kind=kind or save_kind(path, game),
+        kind=kind or save_kind(path, loc=loc),
         modified="?",
         characters=[],
         block="?",
@@ -179,14 +180,14 @@ def _save_info(path: Path, game: games.Game | None = None, kind: str | None = No
                     ),
                 )
             )
-        dlc = dlc_owned()
+        dlc = dlc_owned(loc=loc)
         info["tarnished_flag"] = save_analyze.tarnished_flag(r)
         info["dlc_owned"] = dlc
-        findings.extend(save_analyze.analyze_parsed(r, dlc_owned=dlc, raw=data))
+        findings.extend(save_analyze.analyze_parsed(r, items, dlc_owned=dlc, raw=data))
         # read-only plans: what each repair would do
         info["loading_plan"] = save_loading.plan_loading_fixes(r, dlc)
         info["checksum_fixes"] = save_fix.plan_checksum_fixes(r)
-        info["vanilla_plan"] = save_vanilla.plan_restore(r)
+        info["vanilla_plan"] = save_vanilla.plan_restore(r, items)
     except save_layout_check.ParseError as e:
         findings.append({"level": "error", "code": "layout", "title": "Save layout failed", "detail": str(e)})
         info["error"] = str(e)[:120]
@@ -315,9 +316,9 @@ def _container_info(info: dict, data: bytes, game: games.Game) -> dict:
     return info
 
 
-def save_info(path: Path, game: games.Game | None = None, kind: str | None = None) -> dict:
+def save_info(path: Path, game: games.Game | None = None, kind: str | None = None, *, loc: Locations) -> dict:
     """One save file: type, modified time, findings, and its active characters (shape: models.SaveInfo)."""
-    info = _save_info(path, game, kind)
+    info = _save_info(path, game, kind, loc=loc)
     models.SaveInfo.model_validate(info)
     return info
 
@@ -380,25 +381,25 @@ def character_detail(info: dict, slot_index: int) -> dict:
     return {**ch, "mods": mods, "loading": loading}
 
 
-def save_findings(path: Path) -> list:
+def save_findings(path: Path, *, loc: Locations) -> list:
     """Read-only findings for one save. Never writes."""
-    return save_info(path)["findings"]
+    return save_info(path, loc=loc)["findings"]
 
 
-def health_report(path: Path | None = None, info: dict | None = None) -> str:
+def health_report(path: Path | None = None, info: dict | None = None, *, loc: Locations | None = None) -> str:
     """Copyable plain-text health report for one save (or pass a save_info dict)."""
     if info is None:
-        if path is None:
-            raise ValueError("path or info required")
-        info = save_info(path)
+        if path is None or loc is None:
+            raise ValueError("path and loc, or info, required")
+        info = save_info(path, loc=loc)
     return save_analyze.format_health_report(info)
 
 
-def saves_needing_attention(infos: list | None = None) -> list:
+def saves_needing_attention(infos: list | None = None, *, loc: Locations) -> list:
     """Saves with repair needed or warn/error findings. Used for the Play pre-glance."""
     if infos is None:
         try:
-            infos = [save_info(p) for p in common.save_files()]
+            infos = [save_info(p, loc=loc) for p in loc.save_files()]
         except Exception:
             return []
     out = []
@@ -422,9 +423,9 @@ _OLD_ACTIONS = {
 }
 
 
-def backup_folders(save: Path | None = None) -> list[Path]:
+def backup_folders(save: Path | None = None, *, loc: Locations) -> list[Path]:
     """The backups folder of every account with saves (or of one save)."""
-    paths = [Path(save)] if save else list(common.save_files())
+    paths = [Path(save)] if save else list(loc.save_files())
     seen: list[Path] = []
     for p in paths:
         d = save_backups.backups(p.parent)
@@ -433,10 +434,10 @@ def backup_folders(save: Path | None = None) -> list[Path]:
     return seen
 
 
-def list_backups(save: Path | None = None) -> list:
+def list_backups(save: Path | None = None, *, loc: Locations) -> list:
     """Every backup of the save(s), newest first: {path, save_name, save, when, action, changes, size, keep, mtime}."""
     out = []
-    for d in backup_folders(save):
+    for d in backup_folders(save, loc=loc):
         if not d.is_dir():
             continue
         for f in d.iterdir():
@@ -473,7 +474,7 @@ def keep_backup(bak: Path, keep: bool = True) -> None:
     save_backups.set_keep(Path(bak), keep)
 
 
-def save_for_backup(bak: Path) -> Path:
+def save_for_backup(bak: Path, *, loc: Locations) -> Path:
     """The live save a backup belongs to: the one its note names; else the same account and file name under the
     game's save folder."""
     bak = Path(bak)
@@ -482,20 +483,20 @@ def save_for_backup(bak: Path) -> Path:
         return Path(saved)
     name = save_backups._saved_name(bak.name)
     account = bak.parent.parent.name  # …/saves/<game>/<account>/backups/<file>
-    game = games.BY_KEY.get(bak.parent.parent.parent.name) or games.for_save(name) or common.GAME
-    roots = common.save_roots(game)
+    game = games.BY_KEY.get(bak.parent.parent.parent.name) or games.for_save(name) or loc.game
+    roots = loc.save_roots(game)
     for root in roots:
         if (root / account / name).exists():
             return root / account / name
     return (roots[0] if roots else bak.parent) / account / name
 
 
-def restore_backup(bak: Path, save: Path | None = None) -> Path | None:
+def restore_backup(bak: Path, save: Path | None = None, *, loc: Locations) -> Path | None:
     """Put a backup back over the live save. The current file is backed up first (so a restore can be undone).
     Returns the path of that safety copy."""
     bak = Path(bak)
-    save = Path(save) if save else save_for_backup(bak)
-    assert_writable(save)
+    save = Path(save) if save else save_for_backup(bak, loc=loc)
+    assert_writable(save, loc=loc)
     if not bak.is_file():
         raise RuntimeError(f"Backup not found: {bak}")
     data = bak.read_bytes()
@@ -533,14 +534,14 @@ def delete_backup(bak: Path) -> None:
             pass
 
 
-def repair_save(path: Path) -> bool:
+def repair_save(path: Path, *, loc: Locations) -> bool:
     """Repair one save's regulation block. Returns True if rewritten."""
     path = Path(path)
-    assert_writable(path)
-    game = games.for_save(path) or common.GAME
+    assert_writable(path, loc=loc)
+    game = games.for_save(path) or loc.game
     if game.save_reader == "nightreign":
         return bool(repair_nightreign.repair(path, log=run_logging.log))
-    source = common.regulation_bin()
+    source = loc.regulation_bin()
     if not source:
         raise RuntimeError("Could not find the game's regulation.bin through Steam.")
     reg, header = repair_regulation.load_regulation(source)
@@ -549,11 +550,11 @@ def repair_save(path: Path) -> bool:
     return bool(repair_regulation.repair(path, reg, header))
 
 
-def assert_writable(path: Path, settle_seconds: float = 4.0) -> None:
+def assert_writable(path: Path, settle_seconds: float = 4.0, *, loc: Locations) -> None:
     """The lock every write goes through: the game must be closed, and the file must not have changed in the
     last few seconds (the game flushes saves for a moment after quitting)."""
-    if common.game_running():
-        raise RuntimeError(f"{common.GAME.name} is running. Close it before changing saves.")
+    if loc.game_running():
+        raise RuntimeError(f"{loc.game.name} is running. Close it before changing saves.")
     path = Path(path)
     try:
         age = time.time() - path.stat().st_mtime
@@ -561,41 +562,43 @@ def assert_writable(path: Path, settle_seconds: float = 4.0) -> None:
         return
     if age < settle_seconds:
         time.sleep(settle_seconds - age)
-        if common.game_running():
-            raise RuntimeError(f"{common.GAME.name} started while waiting. Close it before changing saves.")
+        if loc.game_running():
+            raise RuntimeError(f"{loc.game.name} started while waiting. Close it before changing saves.")
 
 
-def fix_checksums(path: Path) -> dict:
+def fix_checksums(path: Path, *, loc: Locations) -> dict:
     """Recompute stale character / profile-summary checksums. Backs up first and verifies before replacing."""
     path = Path(path)
-    assert_writable(path)
+    assert_writable(path, loc=loc)
     return save_fix.repair_checksums(path, log=run_logging.log)
 
 
-def dlc_owned() -> bool | None:
+def dlc_owned(*, loc: Locations) -> bool | None:
     """Shadow of the Erdtree installed on this PC: DLC.bdt next to the game. None when the game folder is unknown
     (treated as installed)."""
     try:
-        return save_loading.dlc_installed(common.game_dir())
+        return save_loading.dlc_installed(loc.game_dir())
     except Exception:
         return None
 
 
-def fix_loading(path: Path, slots: list | None = None, selection: dict | None = None) -> dict:
+def fix_loading(path: Path, slots: list | None = None, selection: dict | None = None, *, loc: Locations) -> dict:
     """Apply the loading-screen fixes (Torrent, position, DLC flags, weather). Backs up, re-signs, verifies."""
     path = Path(path)
-    assert_writable(path)
+    assert_writable(path, loc=loc)
     return save_loading.apply_loading_fixes(
-        path, slots, dlc_owned=dlc_owned(), log=run_logging.log, selection=selection
+        path, slots, dlc_owned=dlc_owned(loc=loc), log=run_logging.log, selection=selection
     )
 
 
-def restore_vanilla(path: Path, slots: list | None = None, selection: dict | None = None) -> dict:
+def restore_vanilla(path: Path, slots: list | None = None, selection: dict | None = None, *, loc: Locations) -> dict:
     """Take items the game does not define off the given (or every active) character and clear leftover rows.
     Backs up first, re-signs, verifies before replacing. Returns save_vanilla's result."""
     path = Path(path)
-    assert_writable(path)
-    return save_vanilla.apply_restore(path, slots, log=run_logging.log, selection=selection)
+    assert_writable(path, loc=loc)
+    return save_vanilla.apply_restore(
+        path, slots, log=run_logging.log, selection=selection, items=save_analyze.GameItems.for_locations(loc)
+    )
 
 
 remove_mod_items = restore_vanilla  # the button is called Remove mod items; the backend keeps its name
@@ -662,15 +665,15 @@ def save_summary(info: dict) -> list:
     return chips
 
 
-def convert_co2_to_sl2(path: Path, dest: Path | None = None, *, force: bool = False) -> Path:
+def convert_co2_to_sl2(path: Path, dest: Path | None = None, *, force: bool = False, loc: Locations) -> Path:
     """Copy a .co2 over the .sl2 only when its findings are clean (or force=True after an explicit confirm). The
     standard save it replaces is backed up first."""
     path = Path(path)
     if path.suffix.lower() != ".co2":
         raise RuntimeError("Only Seamless Co-op .co2 files can be converted this way.")
-    if common.game_running():
-        raise RuntimeError(f"{common.GAME.name} is running. Close it before converting saves.")
-    info = save_info(path)
+    if loc.game_running():
+        raise RuntimeError(f"{loc.game.name} is running. Close it before converting saves.")
+    info = save_info(path, loc=loc)
     if not force and not save_analyze.findings_are_clean(info["findings"]):
         raise RuntimeError("Findings are not clean. Repair or clear warnings first, or use force after confirming.")
     dest = Path(dest) if dest else path.with_suffix(".sl2")
@@ -680,14 +683,14 @@ def convert_co2_to_sl2(path: Path, dest: Path | None = None, *, force: bool = Fa
     return dest
 
 
-def convert_sl2_to_co2(path: Path, dest: Path | None = None) -> Path:
+def convert_sl2_to_co2(path: Path, dest: Path | None = None, *, loc: Locations) -> Path:
     """Copy a standard .sl2 over the .co2 Seamless Co-op reads (same format). The co-op save it replaces is backed
     up first."""
     path = Path(path)
     if path.suffix.lower() != ".sl2":
         raise RuntimeError("Only standard .sl2 files can be copied this way.")
-    if common.game_running():
-        raise RuntimeError(f"{common.GAME.name} is running. Close it before converting saves.")
+    if loc.game_running():
+        raise RuntimeError(f"{loc.game.name} is running. Close it before converting saves.")
     dest = Path(dest) if dest else path.with_suffix(".co2")
     if dest.exists():
         save_fix.backup(dest, {"action": "Before copying the standard save over it", "changes": [path.name]})
@@ -695,9 +698,9 @@ def convert_sl2_to_co2(path: Path, dest: Path | None = None) -> Path:
     return dest
 
 
-def dead_shells_count() -> int:
+def dead_shells_count(*, loc: Locations) -> int:
     try:
-        return len(common.dead_game_shells())
+        return len(loc.dead_game_shells())
     except Exception:
         return 0
 

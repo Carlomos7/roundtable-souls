@@ -6,10 +6,13 @@ from pathlib import Path
 import pytest
 
 from roundtable_souls.config.settings import LauncherSettings
+from roundtable_souls.game.locate import Locations, Overrides
+from roundtable_souls.platform import paths
 from roundtable_souls.services import coop as coop_service
 from roundtable_souls.services import mods as mods_service
 from roundtable_souls.services import play as g
 from roundtable_souls.services import saves as saves_service
+from support import er
 
 INI = (
     "[GAMEPLAY]\r\n; Invaders join uninvited.  0=FALSE  1=TRUE\r\nallow_invaders = 1\r\n\r\n"
@@ -93,17 +96,17 @@ def test_logo_follows_theme_unless_locked():
 
 def test_save_findings_on_unreadable(tmp_path):
     missing = tmp_path / "nope.sl2"
-    findings = saves_service.save_findings(missing)
+    findings = saves_service.save_findings(missing, loc=er())
     assert findings and findings[0]["code"] == "read" and findings[0]["level"] == "error"
     junk = tmp_path / "junk.sl2"
     junk.write_bytes(b"not a save")
-    info = g.save_info(junk)
+    info = g.save_info(junk, loc=er())
     assert info["findings"][0]["code"] == "layout" and info["error"]
 
 
 def test_health_report_and_clean_gate(tmp_path):
     missing = tmp_path / "nope.co2"
-    text = saves_service.health_report(missing)
+    text = saves_service.health_report(missing, loc=er())
     assert "Roundtable Souls save report" in text and "ERROR" in text
     assert not g.save_analyze.findings_are_clean([{"level": "warn", "code": "x", "title": "t", "detail": ""}])
     assert g.save_analyze.findings_are_clean(
@@ -124,14 +127,14 @@ def test_known_item_ids_bundled():
 def test_convert_co2_refuses_dirty(tmp_path, monkeypatch):
     p = tmp_path / "ER0000.co2"
     p.write_bytes(b"not a save")
-    monkeypatch.setattr(g.common, "game_running", lambda: False)
+    monkeypatch.setattr(paths, "exe_running", lambda _exe: False)
     with pytest.raises(RuntimeError) as exc:
-        saves_service.convert_co2_to_sl2(p)
+        saves_service.convert_co2_to_sl2(p, loc=er())
     assert "clean" in str(exc.value).lower() or "Findings" in str(exc.value)
 
 
 def test_dead_shells_count_is_int():
-    assert isinstance(saves_service.dead_shells_count(), int) and saves_service.dead_shells_count() >= 0
+    assert isinstance(saves_service.dead_shells_count(loc=er()), int) and saves_service.dead_shells_count(loc=er()) >= 0
 
 
 def test_atomic_write_replaces_and_backs_up(tmp_path):
@@ -159,19 +162,21 @@ def test_ersc_ini_found_relative_to_profile(tmp_path):
 def test_setup_label_is_the_profile_name(tmp_path):
     p = tmp_path / "any.me3"
     p.write_text("")
-    assert g.Setup("me3", p).label == "any.me3"
-    assert g.Setup("revive", p, source=tmp_path / "installation.json").label == "any.me3  ·  installation.json"
+    assert g.Setup("me3", p, loc=er()).label == "any.me3"
+    assert (
+        g.Setup("revive", p, source=tmp_path / "installation.json", loc=er()).label == "any.me3  ·  installation.json"
+    )
 
 
 def test_places_are_folders_or_none(tmp_path):
-    pl = g.places(None)
+    pl = g.places(None, er())
     assert set(pl) == {"me3", "game", "saves", "profile", "mods"} and pl["profile"] is None and pl["mods"] is None
     for k in ("me3", "game", "saves"):
         assert pl[k] is None or Path(pl[k]).is_dir()
     prof = tmp_path / "p.me3"
     prof.write_text('profileVersion = "v1"\n[[packages]]\npath = "mod/x"\n', encoding="utf-8")
     (tmp_path / "mod" / "x").mkdir(parents=True)
-    pl = g.places(g.Setup("me3", prof))
+    pl = g.places(g.Setup("me3", prof, loc=er()), er())
     assert pl["profile"] == tmp_path and pl["mods"] == tmp_path / "mod"
 
 
@@ -184,24 +189,19 @@ def test_location_overrides_reach_the_tools_layer(tmp_path, monkeypatch):
     prof = tmp_path / "profiles"
     prof.mkdir()
     (prof / "a.me3").write_text('profileVersion = "v1"\n')
-    g.apply_overrides(
-        LauncherSettings.from_raw({"me3_path": str(me3), "game_exe": str(game), "me3_profile_dir": str(prof)})
+    ER = g.games.ELDEN_RING
+    loc = Locations.from_settings(
+        LauncherSettings.from_raw({"me3_path": str(me3), "game_exe": str(game), "me3_profile_dir": str(prof)}), ER
     )
-    try:
-        assert g.common.me3_exe() == me3 and g.common.game_dir() == game.parent and g.common.me3_profiles_dir() == prof
-        assert [p.name for p in g.common.me3_profiles()] == ["a.me3"] and g.common.game_exe_name() == "eldenring.exe"
-        s = g.Setup("me3", prof / "a.me3")
-        assert s.launch_exe() == str(game) and not s.problems()
-        assert g.apply_overrides(LauncherSettings.from_raw({"me3_info_cache": {"profile_dir": str(prof)}}))[
-            "profile_dir"
-        ] == str(prof)
-        assert (
-            g.apply_overrides(LauncherSettings.from_raw({"me3_path": str(tmp_path / "missing.exe")}))["me3"]
-            and g.common.me3_exe() != tmp_path / "missing.exe"
-        )
-    finally:
-        g.apply_overrides(LauncherSettings.from_raw({}))
-    assert g.common.ME3_OVERRIDE is None and g.common.GAME_EXE_OVERRIDE is None
+    assert loc.me3_exe() == me3 and loc.game_dir() == game.parent and loc.me3_profiles_dir() == prof
+    assert [p.name for p in loc.me3_profiles()] == ["a.me3"] and loc.game_exe_name() == "eldenring.exe"
+    s = g.Setup("me3", prof / "a.me3", loc=loc)
+    assert s.launch_exe() == str(game) and not s.problems()
+    cached = Locations.from_settings(LauncherSettings.from_raw({"me3_info_cache": {"profile_dir": str(prof)}}), ER)
+    assert cached.overrides.in_effect()["profile_dir"] == str(prof)
+    missing = Locations.from_settings(LauncherSettings.from_raw({"me3_path": str(tmp_path / "missing.exe")}), ER)
+    assert missing.overrides.in_effect()["me3"] and missing.me3_exe() != tmp_path / "missing.exe"
+    assert Locations.from_settings(LauncherSettings.from_raw({}), ER).overrides == Overrides()
 
 
 def test_setup_from_installation_json(tmp_path):
@@ -216,10 +216,10 @@ def test_setup_from_installation_json(tmp_path):
             }
         )
     )
-    s = g.setup_from_path(str(inst))
+    s = g.setup_from_path(str(inst), er())
     assert s and s.kind == "revive" and s.exe.endswith("eldenring.exe")
     assert any("missing" in x for x in s.problems())  # nothing exists in tmp, so it must say so
-    assert g.setup_from_path(str(tmp_path / "nothing.txt")) is None
+    assert g.setup_from_path(str(tmp_path / "nothing.txt"), er()) is None
 
 
 def test_settings_meta_types_from_comments(tmp_path):

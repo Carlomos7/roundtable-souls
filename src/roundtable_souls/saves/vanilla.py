@@ -72,10 +72,10 @@ def _neutral_row(item_id: int) -> bytes:
 
 
 # ----------------------------------------------------------------------------- plan (read-only)
-def plan_restore(parsed: dict) -> list[dict]:
+def plan_restore(parsed: dict, items: A.GameItems) -> list[dict]:
     """Per active character: what Remove mod items would take off, clear, and what it refuses."""
     plan = []
-    catalog = A.Catalog.for_save(parsed)
+    catalog = A.Catalog.for_save(parsed, items)
     for i, slot in L.active_slots(parsed):
         scan = A.scan_mod_items(slot, catalog)
         rows = slot.get("ga_items") or []
@@ -101,7 +101,9 @@ def plan_restore(parsed: dict) -> list[dict]:
                 and g.get("aow") in mod_aow_rows
                 and catalog.is_game_item(g["item_id"])
             ):
-                name, src = A.item_label(next(r["item_id"] for r in rows if r["gaitem_handle"] == g["aow"]))
+                name, src = A.item_label(
+                    next(r["item_id"] for r in rows if r["gaitem_handle"] == g["aow"]), catalog.names
+                )
                 blocked.append(
                     {"item_id": g["item_id"], "name": f"{name} on a game weapon", "source": src, "why": "ash"}
                 )
@@ -180,6 +182,8 @@ def apply_restore(
     slots: list[int] | None = None,
     log=None,
     selection: dict | None = None,
+    *,
+    items: A.GameItems,
 ) -> dict:
     """Run the plan (or the selected part of it) on the given (or every active) character.
     Returns {'done': [...], 'blocked': [...], 'backup': Path|None}."""
@@ -187,7 +191,7 @@ def apply_restore(
     say = log or (lambda *_: None)
     data = bytearray(save.read_bytes())
     r = L.parse(str(save))
-    plan = [p for p in plan_restore(r) if slots is None or p["slot"] in slots]
+    plan = [p for p in plan_restore(r, items) if slots is None or p["slot"] in slots]
     plan = select_plan(plan, selection)
     work = [p for p in plan if p["strip"] or p["orphans"]]
     if not work:
@@ -265,7 +269,7 @@ def apply_restore(
     tmp.write_bytes(data)
     try:
         r2 = L.parse(str(tmp))
-        catalog = A.Catalog.for_save(r2)
+        catalog = A.Catalog.for_save(r2, items)
         for p in work:
             s2 = r2["slots"][p["slot"]]
             for e in p["strip"]:

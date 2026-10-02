@@ -213,7 +213,7 @@ def prof(tmp_path, monkeypatch):
     game.mkdir()
     (game / "regulation.bin").write_bytes(vanilla())
     monkeypatch.setattr(common, "game_dir", lambda: game)
-    monkeypatch.setattr(common, "game_running", lambda: False)
+    monkeypatch.setattr(common, "exe_running", lambda _exe: False)
     base = tmp_path / "profiles" / "er"
     text = "# mine\n"
     for name, raw in (

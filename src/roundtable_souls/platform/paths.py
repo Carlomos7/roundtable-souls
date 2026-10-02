@@ -30,13 +30,7 @@ REAL_GAME_MIN_KB = 100_000
 
 
 def start_log(title):
-    """Name the job that is running (the window starts each job as one), or, outside the window (--play, --check),
-    start a job of its own that ends at exit."""
-    job = run_logging.current_job()
-    if job is not None and not run_logging.is_standalone(job):
-        run_logging.rename_job(title)
-    else:
-        run_logging.start_standalone(title, game=GAME.key)
+    run_logging.start_log(title, GAME.key)
 
 
 # Optional overrides the launcher sets from its settings (blank = detect): a custom me3, a custom game exe
@@ -93,14 +87,23 @@ def game_exe_name():
 
 
 def game_running():
-    return any(kb >= REAL_GAME_MIN_KB for _, kb in proc.processes(game_exe_name()))
+    return exe_running(game_exe_name())
 
 
 def dead_game_shells():
+    return dead_exe_shells(game_exe_name())
+
+
+def exe_running(exe_name: str) -> bool:
+    """A real copy of the game whose exe is exe_name runs (one using gigabytes, not a dead shell)."""
+    return any(kb >= REAL_GAME_MIN_KB for _, kb in proc.processes(exe_name))
+
+
+def dead_exe_shells(exe_name: str) -> list[int]:
     """Leftover zero-memory copies of the game. A Windows problem; Proton cleans up after itself."""
     if not IS_WINDOWS:
         return []
-    return [pid for pid, kb in proc.processes(game_exe_name()) if kb < REAL_GAME_MIN_KB]
+    return [pid for pid, kb in proc.processes(exe_name) if kb < REAL_GAME_MIN_KB]
 
 
 def game_dir():

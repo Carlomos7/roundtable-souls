@@ -132,14 +132,13 @@ def fake_mods(tmp_path, monkeypatch, seamless=True):
             json.dumps({"MODGOODSNAME_HOSTINGITEM": "Tiny Great Pot", "MODGOODSNAME_DRIEDFINGERITEM": "Dried Fingers"}),
             encoding="utf-8",
         )
-    monkeypatch.setattr(N.common, "game_dir", lambda: game)
-    monkeypatch.setattr(N.common, "me3_profiles_dir", lambda: profiles)
     monkeypatch.setattr(N, "_CACHE", None)
+    return game, profiles
 
 
 def test_names_come_from_the_installed_mods(tmp_path, monkeypatch):
-    fake_mods(tmp_path, monkeypatch)
-    names = N.item_names(refresh=True)
+    game, profiles = fake_mods(tmp_path, monkeypatch)
+    names = N.item_names(game, profiles, refresh=True)
     assert names.get(0x40000000 | 8380001) == ("Tiny Great Pot", "Seamless Co-op")
     assert names.get(0x40000000 | 8380012) == ("Dried Fingers", "Seamless Co-op")
     assert names.get(0x10000000 | 742000) == ("Cool Helm", "CoolArmour")
@@ -148,6 +147,6 @@ def test_names_come_from_the_installed_mods(tmp_path, monkeypatch):
 
 
 def test_seamless_ids_are_named_even_without_the_mod(tmp_path, monkeypatch):
-    fake_mods(tmp_path, monkeypatch, seamless=False)
-    names = N.item_names(refresh=True)
+    game, profiles = fake_mods(tmp_path, monkeypatch, seamless=False)
+    names = N.item_names(game, profiles, refresh=True)
     assert names.get(0x40000000 | 8380003) == ("Seamless Co-op item 8380003", "Seamless Co-op")

@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pytest
 
+from roundtable_souls.game import catalog as games
+from roundtable_souls.game.locate import Locations
 from roundtable_souls.platform import logging as rl
 from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.platform import paths as common
@@ -224,17 +226,17 @@ def test_run_job_records_how_each_job_ended(logs):
     def done(ok, status):
         results.append((ok, status))
 
-    def fine(setup):
+    def fine(setup, loc):
         run_logging.log("did it")
 
-    def failing(setup):
+    def failing(setup, loc):
         run_logging.log("error: could not write the save")
         raise SystemExit(1)
 
-    def interrupted(setup):
+    def interrupted(setup, loc):
         raise SystemExit(130)
 
-    def crashing(setup):
+    def crashing(setup, loc):
         raise ValueError("boom")
 
     for fn, title in (
@@ -243,7 +245,7 @@ def test_run_job_records_how_each_job_ended(logs):
         (interrupted, "Starting..."),
         (crashing, "Installing x..."),
     ):
-        core.run_job(fn, None, lambda m, lvl="": None, done, title)
+        core.run_job(fn, None, Locations(games.ELDEN_RING), lambda m, lvl="": None, done, title)
     outcomes = [r["outcome"] for r in reversed(rl.read_jobs())]
     assert outcomes == ["done", "failed", "stopped", "failed"]
     assert [r[0] for r in results] == [True, False, False, False]
@@ -256,10 +258,8 @@ def test_run_job_names_the_game_and_profile(logs):
     class Setup:
         profile = "C:/profiles/er/p.me3"
 
-        class game:
-            key = "nightreign"
-
-    core.run_job(lambda s: None, Setup(), lambda m, lvl="": None, lambda ok, st: None, "Starting...")
+    loc = Locations(games.NIGHTREIGN)
+    core.run_job(lambda s, loc: None, Setup(), loc, lambda m, lvl="": None, lambda ok, st: None, "Starting...")
     r = rl.read_jobs()[0]
     assert r["game"] == "nightreign" and r["profile"].endswith("p.me3") and r["title"] == "Starting"
 

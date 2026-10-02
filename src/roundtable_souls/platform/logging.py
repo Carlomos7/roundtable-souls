@@ -701,6 +701,16 @@ def start_standalone(title: str, game: str = "") -> Job:
     return _standalone
 
 
+def start_log(title: str, game: str) -> None:
+    """Name the job that is running (the window starts each job as one), or, outside the window (--play, --check),
+    start a job of its own for game (its key) that ends at exit."""
+    job = current_job()
+    if job is not None and not is_standalone(job):
+        rename_job(title)
+    else:
+        start_standalone(title, game=game)
+
+
 # ----------------------------------------------------------------------------- the window
 class _SinkHandler(logging.Handler):
     """Lines for the window: the current job's, and warnings and errors from anywhere."""

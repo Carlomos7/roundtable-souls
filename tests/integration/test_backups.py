@@ -8,12 +8,14 @@ from pathlib import Path
 import pytest
 
 from roundtable_souls.config.settings import LauncherSettings
-from roundtable_souls.platform import data_folder
+from roundtable_souls.game.locate import Locations
+from roundtable_souls.platform import data_folder, paths
 from roundtable_souls.saves import backups as save_backups
 from roundtable_souls.saves import layout as save_layout_check
 from roundtable_souls.services import play as g
 from roundtable_souls.services import saves as saves_service
 from support import copy_live_save as _copy
+from support import er
 
 F = g.save_fix
 L = save_layout_check
@@ -34,22 +36,24 @@ def test_backup_writes_manifest_and_list_reads_it(tmp_path):
     )
     bak2 = F.backup(copy)  # same second: still a distinct file
     assert bak2 != bak and F.read_manifest(bak2)["action"] == "Before a change"
-    rows = saves_service.list_backups(copy)
+    rows = saves_service.list_backups(copy, loc=er())
     assert [r["path"] for r in rows][:2] == sorted([bak, bak2], key=lambda p: p.stat().st_mtime, reverse=True) or len(
         rows
     ) == 2
     assert {r["action"] for r in rows} == {"Before fixing loading", "Before a change"} and all(
         r["save_name"] == "ER0000.co2" for r in rows
     )
-    assert saves_service.save_for_backup(bak) == copy
+    assert saves_service.save_for_backup(bak, loc=er()) == copy
     # a backup without a note still lists, and still finds its save through the folder it sits in
     Path(str(bak2) + ".json").unlink()
-    assert any(r["path"] == bak2 and r["action"] == "Before a change" for r in saves_service.list_backups(copy))
+    assert any(
+        r["path"] == bak2 and r["action"] == "Before a change" for r in saves_service.list_backups(copy, loc=er())
+    )
 
 
 def test_fix_writes_a_manifest_that_names_the_change(tmp_path, monkeypatch):
     copy = _copy(tmp_path)
-    monkeypatch.setattr(g.common, "game_running", lambda: False)
+    monkeypatch.setattr(paths, "exe_running", lambda _exe: False)
     data = bytearray(copy.read_bytes())
     r = L.parse(str(copy))
     i = next(k for k, a in enumerate(r["ud10"]["active"]) if a)
@@ -58,14 +62,14 @@ def test_fix_writes_a_manifest_that_names_the_change(tmp_path, monkeypatch):
     struct.pack_into("<I", data, s["horse_pos"] + 36, 13)
     F._sign_slot(data, i)
     copy.write_bytes(bytes(data))
-    out = saves_service.fix_loading(copy)
+    out = saves_service.fix_loading(copy, loc=er())
     m = F.read_manifest(out["backup"])
     assert m["action"] == "Before fixing loading" and any("Torrent" in c for c in m["changes"])
 
 
 def test_restore_backup_round_trip_with_safety_copy(tmp_path, monkeypatch):
     copy = _copy(tmp_path)
-    monkeypatch.setattr(g.common, "game_running", lambda: False)
+    monkeypatch.setattr(paths, "exe_running", lambda _exe: False)
     original = copy.read_bytes()
     bak = F.backup(copy, {"action": "Fix loading", "changes": ["x"]})
     data = bytearray(original)
@@ -73,22 +77,22 @@ def test_restore_backup_round_trip_with_safety_copy(tmp_path, monkeypatch):
     copy.write_bytes(bytes(data))  # the live file moves on
     changed = copy.read_bytes()
     assert changed != original
-    safety = saves_service.restore_backup(bak)
+    safety = saves_service.restore_backup(bak, loc=er())
     assert copy.read_bytes() == original
     assert (
         safety and safety.read_bytes() == changed and F.read_manifest(safety)["action"] == "Before restoring a backup"
     )
-    saves_service.restore_backup(safety, copy)  # undo the restore
+    saves_service.restore_backup(safety, copy, loc=er())  # undo the restore
     assert copy.read_bytes() == changed
     saves_service.delete_backup(bak)
     assert not bak.exists() and not Path(str(bak) + ".json").exists()
     junk = tmp_path / "ER0000.co2.junk.bak"
     junk.write_bytes(b"nope")
     with pytest.raises(RuntimeError):
-        saves_service.restore_backup(junk, copy)
-    monkeypatch.setattr(g.common, "game_running", lambda: True)
+        saves_service.restore_backup(junk, copy, loc=er())
+    monkeypatch.setattr(paths, "exe_running", lambda _exe: True)
     with pytest.raises(RuntimeError):
-        saves_service.restore_backup(safety, copy)
+        saves_service.restore_backup(safety, copy, loc=er())
 
 
 def test_play_options_defaults_and_backup_before_play(tmp_path, monkeypatch):
@@ -104,8 +108,8 @@ def test_play_options_defaults_and_backup_before_play(tmp_path, monkeypatch):
         g.play_options(LauncherSettings.from_raw({"play_boot_boost": None}))["play_boot_boost"] is True
     )  # null in the file = default
     copy = _copy(tmp_path)
-    monkeypatch.setattr(g.common, "save_files", lambda: [copy])
-    made = g.backup_saves_before_play()
+    monkeypatch.setattr(Locations, "save_files", lambda self: [copy])
+    made = g.backup_saves_before_play(er())
     assert (
         len(made) == 1
         and F.read_manifest(made[0])["action"] == "Before playing"
@@ -115,7 +119,7 @@ def test_play_options_defaults_and_backup_before_play(tmp_path, monkeypatch):
 
 def test_character_detail_and_place_names(tmp_path):
     copy = _copy(tmp_path)
-    info = g.save_info(copy)
+    info = g.save_info(copy, loc=er())
     ch = info["characters"][0]
     assert ch["where"] and ch["torrent"] and "vig" in ch["stats"]
     d = saves_service.character_detail(info, ch["slot"] - 1)

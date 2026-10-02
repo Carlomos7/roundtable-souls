@@ -77,7 +77,7 @@ def test_play_from_a_shortcut_hands_off_or_holds_the_play_name(monkeypatch):
 
     played, sent = [], []
     monkeypatch.setattr(
-        core, "play_headless", lambda game, notice=None: played.append(instance.held(instance.PLAY)) or 0
+        core, "play_headless", lambda settings, loc, notice=None: played.append(instance.held(instance.PLAY)) or 0
     )
     monkeypatch.setattr(instance, "WINDOW", f"RoundtableSouls.Test.{uuid.uuid4().hex}")
     monkeypatch.setattr(instance, "PLAY", f"RoundtableSouls.Test.{uuid.uuid4().hex}")

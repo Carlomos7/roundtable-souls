@@ -89,7 +89,7 @@ def clean_logging():
 def no_installed_mod_names(request, monkeypatch):
     if request.module.__name__.endswith("test_gamefiles"):
         return
-    monkeypatch.setattr(item_names, "item_names", lambda refresh=False: item_names.ItemNames({}))
+    monkeypatch.setattr(item_names, "item_names", lambda *a, **k: item_names.ItemNames({}))
 
 
 @pytest.fixture(autouse=True)

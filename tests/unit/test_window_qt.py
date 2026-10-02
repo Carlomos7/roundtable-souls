@@ -11,10 +11,11 @@ QtTest = pytest.importorskip("PySide6.QtTest")
 from PySide6.QtCore import Qt  # noqa: E402
 from PySide6.QtWidgets import QApplication, QPushButton  # noqa: E402
 
-from roundtable_souls.platform import paths as _common  # noqa: E402
+from roundtable_souls.app import create_app  # noqa: E402
+from roundtable_souls.game.locate import Locations  # noqa: E402
 from roundtable_souls.ui import window  # noqa: E402
 
-REAL_SAVE_FILES = _common.save_files
+REAL_SAVE_FILES = Locations.save_files
 REAL_LAUNCH = window.Launcher.launch
 
 QTest = QtTest.QTest
@@ -30,10 +31,10 @@ def launcher(app, monkeypatch):
     launched = []
     monkeypatch.setattr(window.feed, "check_launcher_update", lambda *a, **k: window.feed.UpdateCheck("off"))
     monkeypatch.setattr(window.feed, "check_advisory", lambda *a, **k: None)
-    monkeypatch.setattr(window, "me3_facts", lambda setup: {"version": None, "info": {}, "latest": None})
+    monkeypatch.setattr(window, "me3_facts", lambda setup, loc: {"version": None, "info": {}, "latest": None})
     monkeypatch.setattr(window.Launcher, "launch", lambda self: launched.append("play"))
     monkeypatch.setattr(window.Launcher, "launch_offline", lambda self: launched.append("offline"))
-    w = window.Launcher()
+    w = window.Launcher(create_app())
     w.resize(1080, 760)
     w.show()
     for _ in range(20):
@@ -82,14 +83,13 @@ def test_pages_fit_a_narrow_window(launcher, app):
 
 def test_game_tabs_switch_every_page(launcher, app):
     from roundtable_souls.game import catalog as games
-    from roundtable_souls.platform import paths as common
 
     assert list(launcher._game_actions) == [g.key for g in games.GAMES]
     assert launcher.game_btn.text() == "Elden Ring"
     launcher._on_game_tab("nightreign")
     for _ in range(10):
         app.processEvents()
-    assert launcher.game is games.NIGHTREIGN and common.GAME is games.NIGHTREIGN
+    assert launcher.game is games.NIGHTREIGN and launcher.ctx.locations.game is games.NIGHTREIGN
     assert launcher.game_btn.text() == "Nightreign"
     assert launcher.windowTitle().endswith("Nightreign")
     assert launcher.shortcut_fields["Launch options"].text().endswith("--game nightreign --play")
@@ -201,14 +201,14 @@ def sandbox(app, monkeypatch, tmp_path):
     (seamless / "ersc.dll").write_bytes(b"d")
     (seamless / "ersc_settings.ini").write_text(SANDBOX_INI, encoding="utf-8")
     (profiles / "sandbox.me3").write_text(SANDBOX_PROFILE, encoding="utf-8")
-    monkeypatch.setattr(common, "me3_profiles_dir", lambda: profiles)
-    monkeypatch.setattr(common, "save_files", lambda game=None: [])
+    monkeypatch.setattr(common, "me3_profiles_dir", lambda override=None: profiles)
+    monkeypatch.setattr(Locations, "save_files", lambda self: [])
     monkeypatch.setattr(window.feed, "check_launcher_update", lambda *a, **k: window.feed.UpdateCheck("off"))
     monkeypatch.setattr(window.feed, "check_advisory", lambda *a, **k: None)
-    monkeypatch.setattr(window, "me3_facts", lambda setup: {"version": None, "info": {}, "latest": None})
+    monkeypatch.setattr(window, "me3_facts", lambda setup, loc: {"version": None, "info": {}, "latest": None})
     monkeypatch.setattr(window.Launcher, "launch", lambda self: None)
     monkeypatch.setattr(window.Launcher, "_watch_game", lambda self: None)
-    w = window.Launcher()
+    w = window.Launcher(create_app())
     w.resize(1080, 760)
     w.show()
     QTest.qWait(300)
@@ -287,8 +287,8 @@ def test_saves_page_names_the_file_play_uses_and_lists_the_library(sandbox, monk
     data = bytearray(regulation.FILE_SIZE)
     data[:4] = b"BND4"
     (acct / "ER0000.sl2").write_bytes(bytes(data))
-    monkeypatch.setattr(common, "save_roots", lambda game=None: [tmp_path / "EldenRing"])
-    monkeypatch.setattr(common, "save_files", REAL_SAVE_FILES)  # the sandbox hides saves; this test brings its own
+    monkeypatch.setattr(common, "save_roots_for", lambda save_dir, app_id: [tmp_path / "EldenRing"])
+    monkeypatch.setattr(Locations, "save_files", REAL_SAVE_FILES)  # the sandbox hides saves; this test brings its own
     library.add(acct, acct / "ER0000.sl2", "first run", games.ELDEN_RING)
     w = sandbox
     w._on_setup()  # the sandbox setup loads Seamless Co-op, so Play uses the co-op save
@@ -430,9 +430,10 @@ def test_dropping_mods_on_the_mods_page_installs_each_in_turn(sandbox, monkeypat
 
     from roundtable_souls.mods import profile_edit as manage
     from roundtable_souls.platform import logging as run_logging
-    from roundtable_souls.platform import paths as common
 
-    monkeypatch.setattr(common, "start_log", lambda *a, **k: None)  # the job's log stays out of the real logs folder
+    monkeypatch.setattr(
+        run_logging, "start_log", lambda *a, **k: None
+    )  # the job's log stays out of the real logs folder
     monkeypatch.setattr(run_logging, "log", lambda *a, **k: None)
     asked = []
 
@@ -547,9 +548,8 @@ def test_an_install_that_asked_for_it_rebuilds_afterwards(sandbox, monkeypatch, 
     from PySide6.QtCore import QEventLoop, QTimer
 
     from roundtable_souls.platform import logging as run_logging
-    from roundtable_souls.platform import paths as common
 
-    monkeypatch.setattr(common, "start_log", lambda *a, **k: None)
+    monkeypatch.setattr(run_logging, "start_log", lambda *a, **k: None)
     monkeypatch.setattr(run_logging, "log", lambda *a, **k: None)
     rebuilt = []
     tool = type("T", (), {"label": "a tool", "package": {"name": "last"}, "problem": lambda self: None})()
@@ -674,7 +674,7 @@ def test_a_jobs_lines_reach_the_pane_with_their_level(sandbox, monkeypatch):
     real_add = w.log_pane.add
     monkeypatch.setattr(w.log_pane, "add", lambda msg, kind=None: (seen.append((msg, kind)), real_add(msg, kind)))
 
-    def job(_setup):
+    def job(_setup, _loc):
         window.run_logging.log("working")
         window.run_logging.log("warning: something to know")
 
@@ -721,7 +721,7 @@ def test_a_failed_job_shows_on_activity_with_a_badge_until_looked_at(sandbox, mo
 
     monkeypatch.setattr(window, "notice", spy)
 
-    def job(_setup):
+    def job(_setup, _loc):
         window.run_logging.log("error: the save is locked")
         raise SystemExit(1)
 

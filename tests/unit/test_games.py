@@ -8,6 +8,7 @@ import pytest
 from roundtable_souls.config import settings
 from roundtable_souls.config.settings import LauncherSettings
 from roundtable_souls.game import catalog as games
+from roundtable_souls.game.locate import Locations, Overrides
 from roundtable_souls.platform import paths as common
 from roundtable_souls.platform import steam
 from roundtable_souls.saves import container
@@ -77,13 +78,12 @@ def test_profiles_are_listed_for_the_game_they_support(tmp_path, monkeypatch):
     (root / "nr.me3").write_text('profileVersion = "v1"\n[[supports]]\ngame = "nightreign"\n', encoding="utf-8")
     (root / "old.me3").write_text('profileVersion = "v1"\n', encoding="utf-8")  # names no game: Elden Ring's
     (root / "nightreign-default.me3").write_text('[[supports]]\ngame = "nightreign"\n', encoding="utf-8")
-    monkeypatch.setattr(common, "me3_profiles_dir", lambda: root)
-    assert [p.name for p in common.me3_profiles(ER)] == ["er.me3", "old.me3"]
-    assert [p.name for p in common.me3_profiles(NR)] == ["nr.me3"]
-    common.set_game(NR)
-    setups = core.discover(None)
+    loc = Locations(NR, Overrides(profiles_dir=str(root)))
+    assert [p.name for p in loc.me3_profiles(ER)] == ["er.me3", "old.me3"]
+    assert [p.name for p in loc.me3_profiles()] == ["nr.me3"]
+    setups = core.discover(None, loc)
     assert [s.label for s in setups] == ["nr.me3"] and setups[0].game is NR
-    wrong = core.Setup("me3", root / "er.me3", game=NR)
+    wrong = core.Setup("me3", root / "er.me3", loc=loc)
     assert any("for Elden Ring, not Nightreign" in p for p in wrong.problems())
 
 
@@ -95,10 +95,8 @@ def test_settings_are_kept_per_game():
     assert settings.game_setting(s, "nightreign", "setup") == "nr.me3"
     assert settings.game_setting(s, "nightreign", "game_exe", "") == ""
     assert core.remembered_setup(s, NR) == "nr.me3" and core.remembered_setup(s, ER) == "er.me3"
-    common.set_game(NR, s)
-    assert common.GAME_EXE_OVERRIDE is None  # Elden Ring's custom exe is not Nightreign's
-    common.set_game(ER, s)
-    assert common.GAME_EXE_OVERRIDE == "C:/er/eldenring.exe"
+    assert Locations.from_settings(s, NR).overrides.game_exe == ""  # Elden Ring's custom exe is not Nightreign's
+    assert Locations.from_settings(s, ER).overrides.game_exe == "C:/er/eldenring.exe"
 
 
 def test_forget_setup_only_touches_its_own_game():
@@ -119,7 +117,7 @@ def test_same_source_matches_remembered_paths_loosely():
 def test_setup_reads_its_coop_ini_once_and_only_on_use(tmp_path, monkeypatch):
     calls = []
     monkeypatch.setattr(core, "coop_ini_for", lambda *a: calls.append(a))
-    s = core.Setup("me3", tmp_path / "a.me3", game=ER)
+    s = core.Setup("me3", tmp_path / "a.me3", loc=Locations(ER))
     assert calls == []  # discover() builds a Setup per profile on disk; none reads its file until picked
     assert s.ini is None and s.ini is None
     assert len(calls) == 1  # looked once, remembered the answer, even "this profile has none"
@@ -208,7 +206,7 @@ def test_container_check():
 
 
 def test_nightreign_save_info_checks_checksums_and_regulation(tmp_path):
-    info = saves.save_info(nr_save(tmp_path))
+    info = saves.save_info(nr_save(tmp_path), loc=Locations(NR))
     assert info["kind"] == "Seamless Co-op" and info["error"] is None and info["characters"] == []
     assert [f["code"] for f in info["findings"]] == ["layout", "checksum", "regulation"]
     assert all(f["level"] == "ok" for f in info["findings"])
@@ -218,24 +216,24 @@ def test_nightreign_save_info_checks_checksums_and_regulation(tmp_path):
         ("Section checksums match", "success"),
         ("Regulation OK", "success"),
     ]
-    broken = saves.save_info(nr_save(tmp_path, "NR0000.sl2", truncate=40))
+    broken = saves.save_info(nr_save(tmp_path, "NR0000.sl2", truncate=40), loc=Locations(NR))
     assert broken["error"] and broken["findings"][0]["title"] == "Damaged save file"
 
 
 def test_nightreign_copies_and_restore(tmp_path, monkeypatch):
-    monkeypatch.setattr(common, "game_running", lambda: False)
-    common.set_game(NR)
+    monkeypatch.setattr(common, "exe_running", lambda _exe: False)
     co2 = nr_save(tmp_path)
     os.utime(co2, (1_700_000_000, 1_700_000_000))  # settled long ago: the write lock does not wait
-    sl2 = saves.convert_co2_to_sl2(co2, co2.with_suffix(".sl2"))
+    sl2 = saves.convert_co2_to_sl2(co2, co2.with_suffix(".sl2"), loc=Locations(NR))
     assert sl2.read_bytes() == co2.read_bytes()
     junk = tmp_path / "elsewhere" / "NR0000.co2.20260101-000000.bak"
     junk.parent.mkdir()
     junk.write_bytes(b"BND4 but not really")
     with pytest.raises(RuntimeError, match="not a whole Nightreign save"):
-        saves.restore_backup(junk, co2)
+        saves.restore_backup(junk, co2, loc=Locations(NR))
 
 
 def test_placeholder_games_cannot_play():
-    assert core.play_headless(games.DARK_SOULS_3) == 1
-    assert core.play_headless(games.SEKIRO) == 1
+    s = LauncherSettings.from_raw({})
+    assert core.play_headless(s, Locations(games.DARK_SOULS_3)) == 1
+    assert core.play_headless(s, Locations(games.SEKIRO)) == 1

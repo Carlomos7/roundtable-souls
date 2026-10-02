@@ -31,6 +31,7 @@ def main() -> int:
         from roundtable_souls.updates import headless
 
         return headless.update_headless([a for a in sys.argv[1:] if a != "--update"])
+    game = None  # --game without --play/--check: the tab the window opens on, this run only
     if "--play" in sys.argv or "--check" in sys.argv or any(a.startswith("--game") for a in sys.argv):
         from roundtable_souls.game import catalog as games
         from roundtable_souls.services import play as core
@@ -42,33 +43,39 @@ def main() -> int:
         if "--play" in sys.argv:
             return play_from_shortcut(game)
         if "--check" in sys.argv:
-            core.check(game)
+            from roundtable_souls.app import create_app
+
+            ctx = create_app(game)
+            core.check(ctx.settings, ctx.locations, ctx.data_dir)
             return 0
-        core.STARTUP_GAME = game  # the window opens on this tab, this run only
+    from roundtable_souls.app import create_app
     from roundtable_souls.ui.window import main as window_main
 
-    return int(window_main() or 0)
+    return int(window_main(create_app(game)) or 0)
 
 
 def play_from_shortcut(game) -> int:
     """--play: when the window is open, it runs Play itself (one launcher manages the session); otherwise Play runs
     here, holding the PLAY name so a second shortcut start, or a silent update, waits for it to end."""
+    from roundtable_souls.app import create_app
     from roundtable_souls.platform import instance
+    from roundtable_souls.platform import logging as run_logging
     from roundtable_souls.services import play as core
     from roundtable_souls.updates import apply as updates
 
     updates.mark_ready("play")  # this version starts and runs: an update's watchdog can stand down
     if instance.held(instance.WINDOW) and instance.send(f"play {game.key}"):
-        core.common.start_log("launcher: play (no window)")
-        core.run_logging.log("Roundtable Souls is open: Play was handed to its window")
+        run_logging.start_log("launcher: play (no window)", game.key)
+        run_logging.log("Roundtable Souls is open: Play was handed to its window")
         return 0
     hold = instance.acquire(instance.PLAY)
     if hold is None:
-        core.common.start_log("launcher: play (no window)")
-        core.run_logging.log("error: a Play from a Steam shortcut is already running")
+        run_logging.start_log("launcher: play (no window)", game.key)
+        run_logging.log("error: a Play from a Steam shortcut is already running")
         return 1
     try:
-        return core.play_headless(game, notice=not_started_notice)
+        ctx = create_app(game)
+        return core.play_headless(ctx.settings, ctx.locations, notice=not_started_notice)
     finally:
         hold.release()
 

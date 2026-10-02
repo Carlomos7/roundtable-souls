@@ -84,7 +84,7 @@ def test_the_combine_keeps_its_earlier_outputs_and_undo_puts_one_back(tmp_path, 
     game.mkdir()
     (game / "regulation.bin").write_bytes(vanilla())
     monkeypatch.setattr(common, "game_dir", lambda: game)
-    monkeypatch.setattr(common, "game_running", lambda: False)
+    monkeypatch.setattr(common, "exe_running", lambda _exe: False)
     monkeypatch.setattr(builtin, "HISTORY_KEEP", 2)
     base = tmp_path / "p"
     for name in ("a", "b"):

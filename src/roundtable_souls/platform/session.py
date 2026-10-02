@@ -6,9 +6,8 @@ import subprocess
 import time
 from pathlib import Path
 
-from roundtable_souls.platform import paths as common
+from roundtable_souls.platform import paths, steam
 from roundtable_souls.platform import processes as clear_dead_game_shells
-from roundtable_souls.platform import steam
 from roundtable_souls.platform.logging import fail, log
 from roundtable_souls.platform.proc import NO_WINDOW
 
@@ -57,11 +56,11 @@ def ensure_steam_running(timeout=60):
     )
 
 
-def clear_dead_shells(when):
-    """The game leaves a dead copy of itself behind on exit, which makes
+def clear_dead_shells(exe_name, when):
+    """The game (exe_name) leaves a dead copy of itself behind on exit, which makes
     name-based checks report it as still running. Clearing needs admin, so
     this raises one UAC prompt only when there is something to clear."""
-    found, remaining = clear_dead_game_shells.clear()
+    found, remaining = clear_dead_game_shells.clear(exe_name)
     if remaining:
         log(
             f"{when}: {len(remaining)} dead shell(s) could not be removed; Discord/overlays may still show the game as running"
@@ -75,10 +74,10 @@ def me3_log_path():
     return run_logging.attachment("me3") or run_logging.log_dir() / "me3-launch.log"
 
 
-def launch(game, profile, me3=None, exe=None, extra_args=()):
+def launch(game, profile, me3, exe_name, exe=None, extra_args=()):
     """Run me3 and return once both me3 and the game are gone.
 
-    me3: path of the me3.exe to use (default: the one on PATH / in its default folder).
+    me3: path of the me3.exe to use (None: not found). exe_name: the game process to watch (eldenring.exe).
     exe: path of eldenring.exe to launch with `--exe` instead of `--game` (Nightreign Revive's
     Launch.cmd does this with the me3 runtime it bundles, for setups without a me3 install).
 
@@ -88,7 +87,6 @@ def launch(game, profile, me3=None, exe=None, extra_args=()):
     the process list as well: whichever happens, this returns only when no
     real eldenring.exe is left. Returns True if the game was seen running.
     """
-    me3 = Path(me3) if me3 else common.me3_exe()
     if not me3 or not Path(me3).exists():
         fail("me3 was not found on PATH or in its default install folder; install it or use --no-launch")
     cmd = (
@@ -107,7 +105,7 @@ def launch(game, profile, me3=None, exe=None, extra_args=()):
         proc = subprocess.Popen(cmd, stdout=out, stderr=subprocess.STDOUT, creationflags=NO_WINDOW)
         try:
             while proc.poll() is None:
-                if not seen_running and common.game_running():
+                if not seen_running and paths.exe_running(exe_name):
                     seen_running = True
                     log("game running, waiting for it to close (this window can stay minimised)")
                 time.sleep(2)
@@ -119,27 +117,27 @@ def launch(game, profile, me3=None, exe=None, extra_args=()):
     if not seen_running:
         # me3 returned without the game ever showing up. Give it a short
         # grace period in case it launched asynchronously, then move on.
-        seen_running = wait_for_game(appear_timeout=20, quiet=True)
+        seen_running = wait_for_game(exe_name, appear_timeout=20, quiet=True)
         if not seen_running:
             log("warning: the game never appeared; me3's own output (in this job's log files) says why")
             return False
-    while common.game_running():
+    while paths.exe_running(exe_name):
         time.sleep(3)
     log("game closed")
     return True
 
 
-def wait_for_game(appear_timeout, quiet=False):
-    """Wait for a real game process to appear, then to go away."""
+def wait_for_game(exe_name, appear_timeout, quiet=False):
+    """Wait for a real game process (exe_name) to appear, then to go away."""
     deadline = time.time() + appear_timeout
-    while not common.game_running():
+    while not paths.exe_running(exe_name):
         if time.time() > deadline:
             if not quiet:
                 log("game never appeared; nothing to wait for")
             return False
         time.sleep(2)
     log("game running, waiting for it to close")
-    while common.game_running():
+    while paths.exe_running(exe_name):
         time.sleep(3)
     log("game closed")
     return True

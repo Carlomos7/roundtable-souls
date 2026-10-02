@@ -69,8 +69,9 @@ from qfluentwidgets import (
 )
 from qfluentwidgets import FluentIcon as FI
 
-from roundtable_souls.config.settings import FROZEN, appimage, is_installed, is_portable
+from roundtable_souls.config.settings import FROZEN, appimage, exe_dir, is_installed, is_portable
 from roundtable_souls.game import catalog as games
+from roundtable_souls.game.locate import Locations, installed_dir
 from roundtable_souls.mods import checks as mod_checks
 from roundtable_souls.mods import configs as mod_configs
 from roundtable_souls.mods import conflicts as mod_overview
@@ -119,7 +120,6 @@ from roundtable_souls.services.mods import (
     write_profile_setting,
 )
 from roundtable_souls.services.play import (
-    LOGS,
     TITLE,
     VERSION,
     discover,
@@ -146,7 +146,6 @@ from roundtable_souls.services.play import (
     scaling_spec,
     setup_from_path,
     steam_state,
-    use_game,
 )
 from roundtable_souls.services.saves import (
     character_detail,
@@ -163,7 +162,6 @@ from roundtable_souls.services.saves import (
     save_summary,
 )
 from roundtable_souls.services.settings import (
-    apply_overrides,
     game_setting,
     load_settings,
     save_game_settings,
@@ -245,11 +243,13 @@ ROW_ACTION_W = 156  # the action button on each Mods row
 
 # ----------------------------------------------------------------------------- window
 class Launcher(FluentWindow):
-    def __init__(self):
+    def __init__(self, ctx):
+        """ctx: the app context (app.create_app); the window shows its game and is handed its locations."""
         super().__init__()
         data_folder.clear_temp()  # unpacks left by an install that crashed
-        self.settings = load_settings()
-        self.game = use_game(core.STARTUP_GAME or games.get(self.settings.game), self.settings)
+        self.ctx = ctx
+        self.settings = self.ctx.settings
+        self.game = self.ctx.game
         self.bus = Bus()
         self.busy = False
         self.game_running = False
@@ -261,7 +261,9 @@ class Launcher(FluentWindow):
         self.saves_badge = None
         self._undo = None
         self._backups_all = False
-        self.setups = discover(remembered_setup(self.settings)) if self.game.ready else []
+        self.setups = (
+            discover(remembered_setup(self.settings, self.game), self.ctx.locations) if self.game.ready else []
+        )
         self.setup = None
         self.ini = None
         self.pw_file = None
@@ -394,7 +396,7 @@ class Launcher(FluentWindow):
     def _game_status(self, g) -> str:
         if not g.ready:
             return "coming soon"
-        if core.common.installed_dir(g):
+        if installed_dir(g):
             return "installed"
         return "not installed"
 
@@ -437,8 +439,8 @@ class Launcher(FluentWindow):
         on_settings = self.stackedWidget.currentWidget() is self.tools_page
         if remember:
             save_settings(game=g.key)
-        self.settings = load_settings()
-        self.game = use_game(g, self.settings)
+        self.ctx.select_game(g)
+        self.settings, self.game = self.ctx.settings, self.ctx.game
         self._sync_game_btn()
         self.game_running = False
         for bar_name in ("shells_bar",):
@@ -455,10 +457,11 @@ class Launcher(FluentWindow):
             want = self._game_last_page.get(g.key)
             target = {p.objectName(): p for p in game_pages}.get(want, self.play_page)
             self.switchTo(target)
-        self.setups = discover(remembered_setup(self.settings)) if g.ready else []
+        self.setups = discover(remembered_setup(self.settings, g), self.ctx.locations) if g.ready else []
         self._fill_setups()
         self._apply_game_ui()
-        threading.Thread(target=lambda: self.bus.running.emit(core.common.game_running()), daemon=True).start()
+        loc = self.ctx.locations
+        threading.Thread(target=lambda: self.bus.running.emit(loc.game_running()), daemon=True).start()
         if g.ready:
             self.refresh_saves()
         else:
@@ -527,16 +530,16 @@ class Launcher(FluentWindow):
         self.stackedWidget.addWidget(self.placeholder_page)
 
     def _fill_placeholder(self, g):
-        common = core.common
+        loc = Locations.from_settings(self.settings, g)
         self.ph_title.setText(g.name)
         self.ph_intro.setText(
             f"Support for {g.name} is coming. Play, co-op, mods and saves stay off on this tab until then, so "
             "nothing here can change its files. Pick Elden Ring or Nightreign at the top to use the launcher."
         )
         clear_layout(self.ph_rows)
-        game_dir = common.installed_dir(g)
-        saves = common.save_files(g)
-        profiles = common.me3_profiles(g)
+        game_dir = installed_dir(g)
+        saves = loc.save_files()
+        profiles = loc.me3_profiles()
         rows = (
             ("Game", str(game_dir) if game_dir else "Not found in any Steam library."),
             ("Saves", f"{count_label(len(saves), 'save file')} in {saves[0].parent}" if saves else "None found."),
@@ -1820,9 +1823,8 @@ class Launcher(FluentWindow):
         if not self._tool_ready(prof):
             return
 
-        def job(_setup):
-            common = core.common
-            common.start_log("launcher: rebuild combined parameters")
+        def job(_setup, loc):
+            run_logging.start_log("launcher: rebuild combined parameters", loc.game.key)
             try:
                 out = core.mod_merge.rebuild(prof, run_logging.log, combine=combine)
                 core.run_logging.set_undo(out.get("undo"))
@@ -2013,9 +2015,8 @@ class Launcher(FluentWindow):
             return
         index, name, delete = fresh["index"], entry["name"], dlg.option_on()
 
-        def job(_setup):
-            common = core.common
-            common.start_log(f"launcher: remove {name}")
+        def job(_setup, loc):
+            run_logging.start_log(f"launcher: remove {name}", loc.game.key)
             out = uninstall_mod(prof, index, delete_folder=delete)
             core.run_logging.set_undo(
                 {
@@ -2198,12 +2199,12 @@ class Launcher(FluentWindow):
                 return
         job_id = rec.get("id")
 
-        def job(_setup):
-            common = core.common
-            common.start_log(
+        def job(_setup, loc):
+            run_logging.start_log(
                 f"launcher: {'redo' if u.get('redo') else 'undo'} the rebuild"
                 if u.get("type") == "rebuild"
-                else f"launcher: restore {name}"
+                else f"launcher: restore {name}",
+                loc.game.key,
             )
             try:
                 said = mod_undo.run(u, run_logging.log)
@@ -2317,9 +2318,8 @@ class Launcher(FluentWindow):
         plan = dlg.plan
         self._merge_after = Path(prof) if plan.get("merge") else None
 
-        def job(_setup):
-            common = core.common
-            common.start_log(f"launcher: install mod {plan['name']}")
+        def job(_setup, loc):
+            run_logging.start_log(f"launcher: install mod {plan['name']}", loc.game.key)
             try:
                 install_mod(prof, plan, overwrite=bool(plan.get("exists")))
                 run_logging.log(f"done: installed {plan['name']}")
@@ -2365,13 +2365,15 @@ class Launcher(FluentWindow):
             return
         try:
             p = create_profile(
-                dlg.edit.text().strip(), copy_from=cur if (dlg.option is not None and dlg.option.isChecked()) else None
+                dlg.edit.text().strip(),
+                copy_from=cur if (dlg.option is not None and dlg.option.isChecked()) else None,
+                loc=self.ctx.locations,
             )
         except Exception as e:
             self._toast("Could not create the profile", str(e), error=True)
             return
         self._log(f"profile: created {p}")
-        self.setups = discover(str(p))
+        self.setups = discover(str(p), self.ctx.locations)
         remember_setup(str(p), self.game)
         self.settings = load_settings()
         self._fill_setups(select=str(p))
@@ -2405,7 +2407,7 @@ class Launcher(FluentWindow):
         self._log(f"profile: moved {p.name} to {gone}")
         forget_setup(self.game)  # per game: save_settings(setup=None) would wipe Elden Ring's from any tab
         self.settings = load_settings()
-        self.setups = discover(None)
+        self.setups = discover(None, self.ctx.locations)
         self._fill_setups()
         self._toast("Profile deleted", f"Moved to {gone.parent.name}.")
 
@@ -2583,7 +2585,7 @@ class Launcher(FluentWindow):
         row.addWidget(b)
         b = ghost_btn("Logs", FI.DOCUMENT)
         b.setToolTip("This launcher's own logs, for when something goes wrong.")
-        b.clicked.connect(lambda: (LOGS.mkdir(parents=True, exist_ok=True), desktop.open_path(str(LOGS))))
+        b.clicked.connect(lambda: self._open_logs_folder())
         row.addWidget(b)
         cl.addWidget(row_w)
         sw = SwitchButton()
@@ -2622,7 +2624,7 @@ class Launcher(FluentWindow):
         self.shortcut_hint = hint("")
         cl.addWidget(self.shortcut_hint)
         self.shortcut_fields = {}
-        target, options = play_command()
+        target, options = play_command(self.game)
         for label, value in (("Target", target), ("Launch options", options)):
             row_w, row = action_row()
             field = LineEdit()
@@ -2939,16 +2941,16 @@ class Launcher(FluentWindow):
         )
         b = ghost_btn("Logs", FI.DOCUMENT)
         b.setToolTip("The launcher's own logs.")
-        b.clicked.connect(lambda: (LOGS.mkdir(parents=True, exist_ok=True), desktop.open_path(str(LOGS))))
+        b.clicked.connect(lambda: self._open_logs_folder())
         row.addWidget(b)
         b = ghost_btn("Settings folder", FI.FOLDER)
         b.setToolTip("Roundtable Souls's settings file.")
-        b.clicked.connect(lambda: desktop.open_path(str(core.DATA_DIR)))
+        b.clicked.connect(lambda: desktop.open_path(str(self.ctx.data_dir)))
         row.addWidget(b)
         bl.addLayout(row)
         where = updates.data_location_text()
         p = hint(where)
-        p.setToolTip(str(core.DATA_DIR))
+        p.setToolTip(str(self.ctx.data_dir))
         bl.addWidget(p)
         files.addGroupWidget(body)
         lay.addWidget(files)
@@ -2964,7 +2966,7 @@ class Launcher(FluentWindow):
             if labels.count(label) > 1:  # same file name in two folders: say which folder each one is in
                 label = f"{label}  ·  {Path(s.source).parent.name}"
             self.setup_box.addItem(label)
-        pick = select or remembered_setup(self.settings)
+        pick = select or remembered_setup(self.settings, self.game)
         idx = next((i for i, s in enumerate(self.setups) if same_source(s.source, pick)), 0)
         if self.setups:
             self.setup_box.setCurrentIndex(idx)
@@ -3013,7 +3015,7 @@ class Launcher(FluentWindow):
         self._schedule_page_fill()
         if getattr(self, "me3_line", None) is not None:
             self._refresh_me3()
-        if not same_source(remembered_setup(self.settings), s.source):
+        if not same_source(remembered_setup(self.settings, self.game), s.source):
             remember_setup(s.source, s.game)
             self.settings = load_settings()
 
@@ -3062,12 +3064,12 @@ class Launcher(FluentWindow):
         p, _ = QFileDialog.getOpenFileName(
             self,
             "Pick a me3 profile",
-            str(core.common.me3_profiles_dir() or core.HERE),
+            str(self.ctx.locations.me3_profiles_dir() or exe_dir()),
             "me3 profile or installation.json (*.me3 *.json);;All files (*.*)",
         )
         if not p:
             return
-        s = setup_from_path(p)
+        s = setup_from_path(p, self.ctx.locations)
         if not s:
             self._toast(
                 "Not a setup",
@@ -3461,13 +3463,13 @@ class Launcher(FluentWindow):
         # A game-tab switch and the running-game watcher can both ask at once; a token lets a stale read's result be
         # dropped in _fill_saves instead of reading and rebuilding the cards twice.
         self._saves_token = getattr(self, "_saves_token", 0) + 1
-        token, game = self._saves_token, self.game
+        token, game, loc = self._saves_token, self.game, self.ctx.locations
 
         def work():
-            files = core.common.save_files(game)
+            files = loc.save_files()
             for d in {p.parent for p in files}:  # older tools may still drop backup folders beside the saves
                 save_backups.adopt_legacy_save_folders(d, game, again=True)
-            infos = [save_info(p, game) for p in files]
+            infos = [save_info(p, game, loc=loc) for p in files]
             libs = {str(f): save_library.load(f) for f in sorted({p.parent for p in files})}
             self.bus.saves.emit({"token": token, "infos": infos, "libs": libs})
 
@@ -3697,8 +3699,13 @@ class Launcher(FluentWindow):
                 pass
             self.saves_badge = None
 
+    def _open_logs_folder(self):
+        logs = self.ctx.data_dir / "logs"
+        logs.mkdir(parents=True, exist_ok=True)
+        desktop.open_path(str(logs))
+
     def _open_place(self, key, label):
-        p = places(self.setup).get(key)
+        p = places(self.setup, self.ctx.locations).get(key)
         if not p:
             why = {
                 "me3": "me3 was not found on this PC. Set it under Locations, or install it.",
@@ -3738,11 +3745,12 @@ class Launcher(FluentWindow):
             save_game_settings(self.game.key, game_exe=value)
         else:
             save_settings(**{key: value})
-        self.settings = load_settings()
-        apply_overrides(self.settings)
+        self.settings = self.ctx.reload_settings()
         self.loc[key].setText(value or "detected")
         self.loc[key].setToolTip(value)
-        self.setups = discover(remembered_setup(self.settings)) if self.game.ready else []
+        self.setups = (
+            discover(remembered_setup(self.settings, self.game), self.ctx.locations) if self.game.ready else []
+        )
         self._fill_setups()
         self._refresh_me3()
         self._fill_mods()
@@ -3750,11 +3758,11 @@ class Launcher(FluentWindow):
         self._toast("Location updated", "Detecting again." if not value else Path(value).name)
 
     def _refresh_me3(self):
-        setup = self.setup
+        setup, loc = self.setup, self.ctx.locations
 
         def work():
             try:
-                self.bus.me3.emit(me3_facts(setup))
+                self.bus.me3.emit(me3_facts(setup, loc))
             except Exception as e:
                 self.bus.me3.emit({"error": str(e)})
 
@@ -4142,6 +4150,8 @@ class Launcher(FluentWindow):
 
     def _on_me3(self, f):
         self._me3 = f
+        if f.get("reload"):  # me3 reported its folders: its profile folder may be the one to use now
+            self.ctx.reload_settings()
         if getattr(self, "_conf_result", None):  # the Load order card may need the version note
             self._fill_conflicts(self._conf_result)
         if f.get("error"):
@@ -4171,7 +4181,7 @@ class Launcher(FluentWindow):
         save_settings(**{key: bool(checked)})
         setattr(self.settings, key, bool(checked))
         if key == "warn_dead_shells":
-            self._on_shells(dead_shells_count())
+            self._on_shells(dead_shells_count(loc=self.ctx.locations))
 
     # ---------------------------------------------------------------- Backups card (Saves page)
     def _fill_backups(self):
@@ -4179,7 +4189,7 @@ class Launcher(FluentWindow):
             it = self.backups_rows.takeAt(i)
             dispose(it.widget())
         try:
-            rows = list_backups()
+            rows = list_backups(loc=self.ctx.locations)
         except Exception:
             rows = []
         shown = rows if self._backups_all else rows[:6]
@@ -4250,7 +4260,7 @@ class Launcher(FluentWindow):
         self._fill_backups()
 
     def _open_backups_folder(self):
-        folders = saves_service.backup_folders()
+        folders = saves_service.backup_folders(loc=self.ctx.locations)
         if not folders:
             self._toast("No saves yet", f"Play {self.game.name} once so it creates its save folder.", info=True)
             return
@@ -4265,7 +4275,7 @@ class Launcher(FluentWindow):
                 error=True,
             )
             return
-        save = saves_service.save_for_backup(b["path"])
+        save = saves_service.save_for_backup(b["path"], loc=self.ctx.locations)
         if not confirm(
             self,
             f"Restore {save.name} from {b['when'][:16]}",
@@ -4277,11 +4287,10 @@ class Launcher(FluentWindow):
         ):
             return
 
-        def job(_setup):
-            common = core.common
-            common.start_log(f"launcher: restore backup {b['path'].name}")
+        def job(_setup, loc):
+            run_logging.start_log(f"launcher: restore backup {b['path'].name}", loc.game.key)
             try:
-                safety = restore_backup(b["path"], save)
+                safety = restore_backup(b["path"], save, loc=loc)
                 self._undo = (save, safety) if safety else None
                 run_logging.log(f"done: restored {b['path'].name} over {save.name}")
             except Exception as e:
@@ -4308,7 +4317,8 @@ class Launcher(FluentWindow):
 
     # ---------------------------------------------------------------- saves in use, library, copies
     def _note_saves_in_use(self, setup):
-        names = core.note_setup_saves(setup)
+        names = core.setup_saves(setup, self.game)
+        self.ctx.note_setup_saves({k: names[k] for k in ("standard", "coop")})
         if names == getattr(self, "_saves_in_use", None):
             return
         self._saves_in_use = names
@@ -4434,11 +4444,10 @@ class Launcher(FluentWindow):
             return
         name, game = dlg.edit.text().strip(), self.game
 
-        def job(_setup):
-            common = core.common
-            common.start_log(f"launcher: add {path.name} to the library")
+        def job(_setup, loc):
+            run_logging.start_log(f"launcher: add {path.name} to the library", loc.game.key)
             try:
-                saves_service.assert_writable(path)
+                saves_service.assert_writable(path, loc=loc)
                 e = save_library.add(path.parent, path, name, game, action="stash")
                 run_logging.log(f"done: '{e['name']}' ({e['file']}) added from {path.name}")
             except Exception as ex:
@@ -4468,11 +4477,10 @@ class Launcher(FluentWindow):
         ):
             return
 
-        def job(_setup):
-            common = core.common
-            common.start_log(f"launcher: swap '{entry['name']}' into {target.name}")
+        def job(_setup, loc):
+            run_logging.start_log(f"launcher: swap '{entry['name']}' into {target.name}", loc.game.key)
             try:
-                saves_service.assert_writable(target)
+                saves_service.assert_writable(target, loc=loc)
                 out = save_library.swap_in(Path(folder), entry["id"], target, keep_as, game)
                 if out["backup"]:
                     self._undo = (target, out["backup"])
@@ -4511,12 +4519,11 @@ class Launcher(FluentWindow):
             ):
                 return
 
-        def job(_setup):
-            common = core.common
+        def job(_setup, loc):
             try:
                 if mode == "replace":
-                    common.start_log(f"launcher: copy {path.name} over {target.name}")
-                    saves_service.assert_writable(target)
+                    run_logging.start_log(f"launcher: copy {path.name} over {target.name}", loc.game.key)
+                    saves_service.assert_writable(target, loc=loc)
                     out = save_transfer.copy_file(path, target, game, keep_as=name)
                     if out["backup"]:
                         self._undo = (target, out["backup"])
@@ -4524,8 +4531,8 @@ class Launcher(FluentWindow):
                         run_logging.log(f"kept the replaced save as '{out['kept']['name']}'")
                     run_logging.log(f"done: {target.name} now holds {path.name}'s characters")
                 else:
-                    common.start_log(f"launcher: add {path.name} to the library")
-                    saves_service.assert_writable(path)
+                    run_logging.start_log(f"launcher: add {path.name} to the library", loc.game.key)
+                    saves_service.assert_writable(path, loc=loc)
                     e = save_library.add(path.parent, path, name, game, action="copy")
                     run_logging.log(f"done: '{e['name']}' added from {path.name}")
             except Exception as ex:
@@ -4546,11 +4553,12 @@ class Launcher(FluentWindow):
             self._toast("No file to copy into yet", f"{target.name} does not exist. Use Copy to... first.", error=True)
             return
 
-        def job(_setup):
-            common = core.common
-            common.start_log(f"launcher: copy slot {src_slot} of {path.name} into slot {dst_slot} of {target.name}")
+        def job(_setup, loc):
+            run_logging.start_log(
+                f"launcher: copy slot {src_slot} of {path.name} into slot {dst_slot} of {target.name}", loc.game.key
+            )
             try:
-                saves_service.assert_writable(target)
+                saves_service.assert_writable(target, loc=loc)
                 out = save_transfer.copy_character(path, src_slot, target, dst_slot)
                 self._undo = (target, out["backup"])
                 who = out["character"] or {}
@@ -4616,9 +4624,8 @@ class Launcher(FluentWindow):
             return
         name, game = dlg.edit.text().strip(), self.game
 
-        def job(_setup):
-            common = core.common
-            common.start_log(f"launcher: import {src} into the library")
+        def job(_setup, loc):
+            run_logging.start_log(f"launcher: import {src} into the library", loc.game.key)
             try:
                 e = save_library.add(folder, Path(src), name, game, action="import")
                 run_logging.log(f"done: '{e['name']}' imported")
@@ -4656,11 +4663,10 @@ class Launcher(FluentWindow):
         ):
             return
 
-        def job(_setup):
-            common = core.common
-            common.start_log(f"launcher: undo {bak.name}")
+        def job(_setup, loc):
+            run_logging.start_log(f"launcher: undo {bak.name}", loc.game.key)
             try:
-                safety = restore_backup(bak, save)
+                safety = restore_backup(bak, save, loc=loc)
                 self._undo = (save, safety) if safety else None
                 run_logging.log(f"done: {save.name} is back as it was")
             except Exception as e:
@@ -5255,22 +5261,21 @@ class Launcher(FluentWindow):
         ):
             return
 
-        def job(_setup):
-            common = core.common
-            common.start_log(f"launcher: apply {len(keys)} change(s) to {path.name}")
+        def job(_setup, loc):
+            run_logging.start_log(f"launcher: apply {len(keys)} change(s) to {path.name}", loc.game.key)
             backups = []
             try:
                 if loading:
-                    out = fix_loading(path, selection=loading)
+                    out = fix_loading(path, selection=loading, loc=loc)
                     backups.append(out.get("backup"))
                 if vanilla:
-                    out = restore_vanilla(path, selection=vanilla)
+                    out = restore_vanilla(path, selection=vanilla, loc=loc)
                     backups.append(out.get("backup"))
                 if checksums:
-                    out = fix_checksums(path)
+                    out = fix_checksums(path, loc=loc)
                     backups.append(out.get("backup"))
                 if regulation:
-                    repair_save(path)
+                    repair_save(path, loc=loc)
                 first = next((b for b in backups if b), None)
                 self._undo = (path, first) if first else None
                 run_logging.log(f"done: applied {len(keys)} change(s) to {path.name}")
@@ -5473,9 +5478,8 @@ class Launcher(FluentWindow):
         )
         cancel.clicked.connect(self._cancel_update)
 
-        def job(_setup):
-            common = core.common
-            common.start_log("launcher: update merged mods before Play")
+        def job(_setup, loc):
+            run_logging.start_log("launcher: update merged mods before Play", loc.game.key)
             try:
                 out = core.mod_merge.update_before_play(prof, run_logging.log)
                 if out is not None:
@@ -5670,9 +5674,10 @@ class Launcher(FluentWindow):
         self.set_busy(True, status)
         self.log_pane.banner(status)
         route_logs(self._sink)
+        loc = s.locations() if s is not None else self.ctx.locations  # with the saves the setup uses
         threading.Thread(
             target=run_job,
-            args=(job, s, self._sink, lambda ok, st: self.bus.done.emit(ok, st), status),
+            args=(job, s, loc, self._sink, lambda ok, st: self.bus.done.emit(ok, st), status),
             daemon=True,
         ).start()
 
@@ -5691,9 +5696,10 @@ class Launcher(FluentWindow):
         def work():
             while True:
                 try:
-                    self.bus.running.emit(core.common.game_running())
+                    loc = self.ctx.locations
+                    self.bus.running.emit(loc.game_running())
                     self.bus.steam.emit(*steam_state())
-                    self.bus.shells.emit(dead_shells_count())
+                    self.bus.shells.emit(dead_shells_count(loc=loc))
                 except Exception:
                     pass
                 time.sleep(5)
@@ -5745,7 +5751,7 @@ class Launcher(FluentWindow):
         """Dead copies of the game's exe make Steam and Discord think the game is still open."""
         show = n > 0 and not self.game_running and not self.busy and bool(self.settings.warn_dead_shells)
         if show and self.shells_bar is None:
-            exe = core.common.game_exe_name()
+            exe = self.ctx.locations.game_exe_name()
             msg = f"{n} leftover {exe} process{'es' if n != 1 else ''} with no game window. Steam may refuse to launch."
             b = ghost_btn("Clear")
             b.clicked.connect(lambda: self.start(job_clear, "Clearing leftover processes...", need_setup=False))
@@ -5791,8 +5797,8 @@ class Launcher(FluentWindow):
             ):
                 return
 
-        def job(setup):
-            job_play_offline(setup, strip_revive=strip, start_steam=steam)
+        def job(setup, loc):
+            job_play_offline(setup, loc, strip_revive=strip, start_steam=steam)
 
         self.start(job, "Starting offline...")
 
@@ -5945,7 +5951,8 @@ class Launcher(FluentWindow):
             self._save_profile()
 
 
-def main():
+def main(ctx):
+    """The window for ctx (app.create_app; its game is the tab the window opens on)."""
     from roundtable_souls.config import identity
 
     if identity.get().qt_platform:  # an isolated test build (Velopack starts it with the user's own environment)
@@ -5973,7 +5980,7 @@ def main():
                 "it again.",
             )
             return 1
-    w = Launcher()
+    w = Launcher(ctx)
     if "--shots" in sys.argv:
         out = Path(sys.argv[sys.argv.index("--shots") + 1])
         out.mkdir(parents=True, exist_ok=True)

@@ -18,18 +18,19 @@ import argparse
 import subprocess
 import sys
 
-from roundtable_souls.platform import paths as common
-from roundtable_souls.platform import proc
+from roundtable_souls.platform import logging as run_logging
+from roundtable_souls.platform import paths, proc
 from roundtable_souls.platform.logging import log
 
+ELDEN_RING_EXE = "eldenring.exe"  # the command line clears Elden Ring's
 PS = ["powershell", "-NoProfile", "-NonInteractive", "-Command"]
 
 
-def dead_shells():
-    """PIDs of the active game's exe (eldenring.exe for Elden Ring) with zero threads."""
+def dead_shells(exe_name: str):
+    """PIDs of the game's exe (exe_name: eldenring.exe for Elden Ring) with zero threads."""
     if sys.platform != "win32":
         return []
-    name = common.game_exe_name().rsplit(".", 1)[0].replace("'", "")
+    name = exe_name.rsplit(".", 1)[0].replace("'", "")
     script = (
         f"Get-Process -Name '{name}' -ErrorAction SilentlyContinue | "
         "Where-Object { $_.Threads.Count -eq 0 } | ForEach-Object { $_.Id }"
@@ -43,7 +44,7 @@ def dead_shells():
     return [int(x) for x in out.split() if x.isdigit()]
 
 
-def kill_elevated(pids):
+def kill_elevated(pids, exe_name):
     """Stop the given PIDs from an elevated PowerShell. Returns the PIDs still
     present afterwards."""
     ids = ",".join(str(p) for p in pids)
@@ -56,20 +57,20 @@ def kill_elevated(pids):
         subprocess.run(PS + [launcher], capture_output=True, text=True, timeout=120, creationflags=proc.NO_WINDOW)
     except (OSError, subprocess.TimeoutExpired) as err:
         log(f"could not run the elevated kill: {err}")
-    return [p for p in dead_shells() if p in pids]
+    return [p for p in dead_shells(exe_name) if p in pids]
 
 
-def clear(dry_run=False):
+def clear(exe_name: str, dry_run=False):
     """Find and remove dead shells. Returns (found, remaining)."""
-    found = dead_shells()
+    found = dead_shells(exe_name)
     if not found:
-        log(f"no dead {common.game_exe_name()} shells")
+        log(f"no dead {exe_name} shells")
         return [], []
-    log(f"dead {common.game_exe_name()} shell(s): {', '.join(map(str, found))}")
+    log(f"dead {exe_name} shell(s): {', '.join(map(str, found))}")
     if dry_run:
         return found, found
     log("asking for administrator rights to remove them (UAC prompt)")
-    remaining = kill_elevated(found)
+    remaining = kill_elevated(found, exe_name)
     if remaining:
         log(f"still present (UAC declined, or held by a driver): {', '.join(map(str, remaining))}")
     else:
@@ -81,10 +82,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dry-run", action="store_true", help="only report, do not kill")
     a = ap.parse_args()
-    common.start_log("clear_dead_game_shells")
-    if common.game_running():
+    run_logging.start_log("clear_dead_game_shells", "eldenring")
+    if paths.exe_running(ELDEN_RING_EXE):
         log("note: a real game instance is running; it will not be touched")
-    found, remaining = clear(a.dry_run)
+    found, remaining = clear(ELDEN_RING_EXE, a.dry_run)
     sys.exit(1 if remaining and not a.dry_run else 0)
 
 

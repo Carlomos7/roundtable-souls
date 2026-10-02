@@ -17,7 +17,6 @@ from roundtable_souls import __version__
 from roundtable_souls.config.settings import (
     FROZEN,
     LauncherSettings,
-    data_dir,
     exe_dir,
     game_setting,
     launch_target,
@@ -36,17 +35,16 @@ from roundtable_souls.coop.scaling import (
     scaling_spec,
 )
 from roundtable_souls.game import catalog as games
+from roundtable_souls.game.locate import Locations, installed_dir
 from roundtable_souls.mods import profile as profile_tools
 from roundtable_souls.mods import profile_edit as mod_manage
 from roundtable_souls.mods import rebuild as mod_merge
 from roundtable_souls.platform import logging as run_logging
-from roundtable_souls.platform import me3_info, steam
-from roundtable_souls.platform import paths as common
+from roundtable_souls.platform import me3_info, paths, steam
 from roundtable_souls.platform import session as me3_session
 from roundtable_souls.platform.files import (
     atomic_write,
 )
-from roundtable_souls.platform.paths import apply_overrides
 from roundtable_souls.resources import ASSETS_DIR
 from roundtable_souls.saves import analyze as save_analyze
 from roundtable_souls.saves import fix as save_fix
@@ -54,11 +52,6 @@ from roundtable_souls.saves import repair as save_repair
 from roundtable_souls.services.saves import (
     save_info,
 )
-
-HERE = exe_dir()
-DATA_DIR = data_dir()
-SETTINGS = DATA_DIR / "launcher_settings.json"
-LOGS = DATA_DIR / "logs"
 
 
 def report_exception(exc_type, exc, tb, where="launcher"):
@@ -75,7 +68,6 @@ def report_exception(exc_type, exc, tb, where="launcher"):
 TITLE = "Roundtable Souls"
 VERSION = __version__
 EXE_NAME = "RoundtableSouls"
-STARTUP_GAME = None  # `--game` without --play/--check: the tab the window opens on, this run only
 NOTIFY = None  # the window sets this to a function (title, message) that shows an error to the user
 
 
@@ -95,12 +87,21 @@ def logo_path(theme_dark: bool, logo: str = "auto") -> Path:
 
 class Setup:
     """What to launch and how. kind: 'me3' (installed me3, --game) or 'revive' (installation.json, --exe).
-    game: the game it launches (the active game when not given)."""
+    loc: where the game it launches is on this machine (its game is loc.game)."""
 
-    def __init__(self, kind, profile, me3=None, exe=None, source=None, ini=None, game=None):
+    def __init__(self, kind, profile, me3=None, exe=None, source=None, ini=None, *, loc: Locations):
         self.kind, self.profile, self.me3, self.exe, self.source = kind, str(profile), me3, exe, str(source or profile)
-        self.game = game or common.GAME
+        self.loc = loc
         self._ini = ini
+
+    @property
+    def game(self) -> games.Game:
+        return self.loc.game
+
+    def locations(self) -> Locations:
+        """The game's locations with the save files this setup uses (me3's savefile, Seamless Co-op's extension)."""
+        names = setup_saves(self)
+        return self.loc.with_setup_save_names({k: names[k] for k in ("standard", "coop")})
 
     @property
     def ini(self):
@@ -118,7 +119,7 @@ class Setup:
         return name
 
     def me3_path(self):
-        return Path(self.me3) if self.me3 else common.me3_exe()
+        return Path(self.me3) if self.me3 else self.loc.me3_exe()
 
     def summary(self):
         me3 = self.me3_path()
@@ -130,26 +131,27 @@ class Setup:
         if not Path(self.profile).is_file():
             out.append(f"profile missing: {self.profile}")
         elif self.kind == "me3":
-            named = common.profile_games(Path(self.profile))
+            named = paths.profile_games(Path(self.profile))
             if named and self.game.key not in named:
                 other = ", ".join(games.get(k).name if k in games.BY_KEY else k for k in named)
                 out.append(f"this profile is for {other}, not {self.game.name}")
         if self.me3 and not Path(self.me3).is_file():
             out.append(f"me3 missing: {self.me3}")
-        if not self.me3 and not common.me3_exe():
+        if not self.me3 and not self.loc.me3_exe():
             out.append("me3 is not installed on this PC (not on PATH, not in its default folder, not set on Tools)")
         if self.exe and not Path(self.exe).is_file():
             out.append(f"game exe missing: {self.exe}")
-        if common.GAME_EXE_OVERRIDE and not Path(common.GAME_EXE_OVERRIDE).is_file():
-            out.append(f"game exe set on Tools is missing: {common.GAME_EXE_OVERRIDE}")
+        custom = self.loc.overrides.game_exe
+        if custom and not Path(custom).is_file():
+            out.append(f"game exe set on Tools is missing: {custom}")
         return out
 
     def launch_exe(self):
         """What me3 launches with --exe: the installation's own exe, else the custom exe from Tools, else Steam (--game)."""
-        return self.exe or common.GAME_EXE_OVERRIDE
+        return self.exe or self.loc.overrides.game_exe or None
 
 
-def setup_from_installation(path: Path) -> Setup | None:
+def setup_from_installation(path: Path, loc: Locations) -> Setup | None:
     try:
         cfg = json.loads(Path(path).read_text(encoding="utf-8"))
     except Exception:
@@ -161,7 +163,7 @@ def setup_from_installation(path: Path) -> Setup | None:
         cand = Path(cfg["seamless"]).parent / "ersc_settings.ini"
         if cand.is_file():
             ini = cand
-    return Setup("revive", cfg["profile"], cfg.get("me3"), cfg.get("game"), source=path, ini=ini)
+    return Setup("revive", cfg["profile"], cfg.get("me3"), cfg.get("game"), source=path, ini=ini, loc=loc)
 
 
 def same_source(a, b) -> bool:
@@ -170,21 +172,20 @@ def same_source(a, b) -> bool:
     return bool(a) and bool(b) and os.path.normcase(str(a)) == os.path.normcase(str(b))
 
 
-def setup_from_path(p: str | Path, game: games.Game | None = None) -> Setup | None:
+def setup_from_path(p: str | Path, loc: Locations) -> Setup | None:
     """A setup for a picked file: a .me3 profile, or (Elden Ring only) a launcher's installation.json."""
     p = Path(p)
-    game = game or common.GAME
     if p.name.lower() == "installation.json":
-        return setup_from_installation(p) if game is games.ELDEN_RING else None
+        return setup_from_installation(p, loc) if loc.game is games.ELDEN_RING else None
     if p.suffix.lower() == ".me3" and p.is_file():
-        return Setup("me3", p, game=game)
+        return Setup("me3", p, loc=loc)
     return None
 
 
-def discover(remembered: str | None, game: games.Game | None = None):
-    """The active game's me3 profiles (+ the remembered one). For Elden Ring, also every Nightreign Revive
+def discover(remembered: str | None, loc: Locations):
+    """loc's game's me3 profiles (+ the remembered one). For Elden Ring, also every Nightreign Revive
     installation next to them; Revive is an Elden Ring mod despite its name."""
-    game = game or common.GAME
+    game = loc.game
     found, seen = [], set()
 
     def add(s):
@@ -194,52 +195,55 @@ def discover(remembered: str | None, game: games.Game | None = None):
             found.append(s)
 
     if remembered:
-        add(setup_from_path(remembered, game))
-    for prof in common.me3_profiles(game):
+        add(setup_from_path(remembered, loc))
+    for prof in loc.me3_profiles():
         if prof.name.lower().endswith(".offline.me3"):
             continue  # our own generated copies
-        add(Setup("me3", prof, game=game))
+        add(Setup("me3", prof, loc=loc))
         inst = prof.parent / "NightreignRevive" / "installation.json"
         if game is games.ELDEN_RING and inst.is_file():
-            add(setup_from_installation(inst))
+            add(setup_from_installation(inst, loc))
     if game is not games.ELDEN_RING:
         return found
     # Revive's Standalone edition installs into the game folder itself (Launch.cmd next to eldenring.exe)
     try:
-        gd = common.game_dir()
+        gd = loc.game_dir()
     except Exception:
         gd = None
     if gd:
         inst = Path(gd) / "NightreignRevive" / "installation.json"
         if inst.is_file():
-            add(setup_from_installation(inst))
+            add(setup_from_installation(inst, loc))
     return found
 
 
-def remembered_setup(settings: LauncherSettings | None = None, game: games.Game | None = None) -> str | None:
+def remembered_setup(settings: LauncherSettings | None, game: games.Game) -> str | None:
     """The setup Play last used for the game."""
     s = load_settings() if settings is None else settings
-    return game_setting(s, (game or common.GAME).key, "setup")
+    return game_setting(s, game.key, "setup")
 
 
-def remember_setup(source: str, game: games.Game | None = None) -> None:
-    save_game_settings((game or common.GAME).key, setup=source)
+def remember_setup(source: str, game: games.Game) -> None:
+    save_game_settings(game.key, setup=source)
 
 
-def forget_setup(game: games.Game | None = None) -> None:
+def forget_setup(game: games.Game) -> None:
     """Drop the setup Play remembered for the game (its profile was deleted, say)."""
-    save_game_settings((game or common.GAME).key, setup=None)
+    save_game_settings(game.key, setup=None)
 
 
-def setup_saves(setup: Setup | None) -> dict:
+def setup_saves(setup: Setup | None, game: games.Game | None = None) -> dict:
     """The save files a setup plays on, by name in the account's save folder:
 
     standard  what the game writes: me3's per-profile savefile, else ER0000.sl2 (NR0000.sl2, ...).
     coop      what Seamless Co-op writes instead, when the setup loads it: the standard name with Seamless's
               save_file_extension (co2 unless changed in its ini). None without Seamless.
     active    the one Play uses (co-op when Seamless is loaded; Play offline always uses the standard one).
-    why       role -> where the name comes from, for the Saves page."""
-    game = setup.game if setup else common.GAME
+    why       role -> where the name comes from, for the Saves page.
+    game: the game without a setup."""
+    game = setup.game if setup else game
+    if game is None:
+        raise ValueError("setup or game required")
     standard = f"{game.save_stem}.sl2"
     why = {"standard": "the game's default"}
     if setup and Path(setup.profile).is_file():
@@ -256,18 +260,6 @@ def setup_saves(setup: Setup | None) -> dict:
         coop_name = f"{Path(standard).stem}.{ext or 'co2'}"
         why["coop"] = f"save_file_extension in {Path(setup.ini).name}" if ext != "co2" else "Seamless Co-op's default"
     return {"standard": standard, "coop": coop_name, "active": coop_name or standard, "why": why}
-
-
-def note_setup_saves(setup: Setup | None) -> dict:
-    """Make save discovery (the Saves page, repairs after play) include the files this setup uses."""
-    names = setup_saves(setup)
-    common.set_setup_save_names(setup.game if setup else common.GAME, {k: names[k] for k in ("standard", "coop")})
-    return names
-
-
-def use_game(key: str | games.Game, settings: LauncherSettings | None = None) -> games.Game:
-    """Switch every lookup (Steam folder, saves, me3 profiles, running-game checks) to this game."""
-    return common.set_game(key, settings)
 
 
 PLAY_KEYS = (
@@ -313,10 +305,10 @@ def play_options(settings: LauncherSettings | None = None) -> dict:
     return {k: bool(getattr(s, k)) for k in PLAY_DEFAULTS}  # a null in the file is the default (LauncherSettings)
 
 
-def backup_saves_before_play() -> list:
-    """One dated copy of every save of the active game, tagged 'Backup before Play'."""
+def backup_saves_before_play(loc: Locations) -> list:
+    """One dated copy of every save of loc's game, tagged 'Backup before Play'."""
     made = []
-    for p in common.save_files():
+    for p in loc.save_files():
         try:
             made.append(save_fix.backup(p, {"action": "Before playing", "changes": []}))
             run_logging.log(f"backup: {made[-1]}")
@@ -325,27 +317,27 @@ def backup_saves_before_play() -> list:
     return made
 
 
-def places(setup=None) -> dict:
+def places(setup, loc: Locations) -> dict:
     """Folders worth a button: me3, game, saves, this setup's profile and its mod folder. Missing ones are None."""
-    out = {"me3": None, "game": None, "saves": None, "profile": None, "mods": None}
+    out: dict[str, Path | None] = {"me3": None, "game": None, "saves": None, "profile": None, "mods": None}
     try:
-        me3 = setup.me3_path() if setup else common.me3_exe()
+        me3 = setup.me3_path() if setup else loc.me3_exe()
         if me3 and Path(me3).is_file():
             out["me3"] = Path(me3).parent
     except Exception:
         pass
     try:
-        g = common.game_dir()
+        g = loc.game_dir()
         if g and Path(g).is_dir():
             out["game"] = Path(g)
     except Exception:
         pass
     try:
-        saves = common.save_files()
+        saves = loc.save_files()
         if saves:
             out["saves"] = saves[0].parent
         else:
-            roots = [r for r in common.save_roots() if r.is_dir()]
+            roots = [r for r in loc.save_roots() if r.is_dir()]
             if roots:
                 out["saves"] = roots[0]
     except Exception:
@@ -366,37 +358,39 @@ def route_logs(sink):
     run_logging.attach_sink(sink)
 
 
-def _after_play(opts):
-    if not common.GAME.regulation_repair:
+def _after_play(opts, loc: Locations):
+    if not loc.game.regulation_repair:
         pass  # this game has no regulation block me3 leaves dirty
     elif opts["play_repair_after"]:
-        save_repair.repair_all()
+        save_repair.repair_all(loc)
     else:
         run_logging.log("repair after quitting is off (Tools > Play session)")
     if opts["play_clear_after"]:
-        me3_session.clear_dead_shells("after exit")
+        me3_session.clear_dead_shells(loc.game_exe_name(), "after exit")
     else:
         run_logging.log("clearing leftover processes after quitting is off (Tools > Play session)")
 
 
-def job_play(setup: Setup):
-    common.start_log("launcher: play")
-    note_setup_saves(setup)
+def job_play(setup: Setup, loc: Locations | None = None):
+    """Play online. loc: the game's locations (default: the setup's, with the saves it uses)."""
+    loc = loc or setup.locations()
+    run_logging.start_log("launcher: play", loc.game.key)
     opts = play_options()
     if opts["play_backup_before"]:
-        backup_saves_before_play()
+        backup_saves_before_play(loc)
     me3_session.ensure_steam(120)
     if opts["play_clear_before"]:
-        me3_session.clear_dead_shells("before launch")
+        me3_session.clear_dead_shells(loc.game_exe_name(), "before launch")
     me3_session.launch(
         setup.game.key,
         setup.profile,
-        me3=setup.me3,
+        me3=setup.me3_path(),
+        exe_name=loc.game_exe_name(),
         exe=setup.launch_exe(),
         extra_args=launch_extra_args(opts, me3_info.me3_version(setup.me3_path())),
     )
     time.sleep(3)
-    _after_play(opts)
+    _after_play(opts, loc)
 
 
 NATIVE_BLOCK_RE = re.compile(r"(^[ \t]*\[\[natives\]\].*?)(?=^[ \t]*\[\[|\Z)", re.M | re.S)
@@ -509,46 +503,46 @@ def steam_state():
     return running, signed
 
 
-def job_play_offline(setup, strip_revive=False, start_steam=True):
-    common.start_log("launcher: play offline")
-    note_setup_saves(setup)
+def job_play_offline(setup, loc: Locations | None = None, strip_revive=False, start_steam=True):
+    loc = loc or setup.locations()
+    run_logging.start_log("launcher: play offline", loc.game.key)
     opts = play_options()
     if opts["play_backup_before"]:
-        backup_saves_before_play()
+        backup_saves_before_play(loc)
     if start_steam:
         me3_session.ensure_steam_running(60)
     if opts["play_clear_before"]:
-        me3_session.clear_dead_shells("before launch")
+        me3_session.clear_dead_shells(loc.game_exe_name(), "before launch")
     me3_session.launch(
         setup.game.key,
         str(offline_profile_for(setup.profile, strip_revive=strip_revive, coop_dll=setup.game.coop_dll)),
-        me3=setup.me3,
+        me3=setup.me3_path(),
+        exe_name=loc.game_exe_name(),
         exe=setup.launch_exe(),
         extra_args=("--skip-steam-init", "true", *launch_extra_args(opts, me3_info.me3_version(setup.me3_path()))),
     )
     time.sleep(3)
-    _after_play(opts)
+    _after_play(opts, loc)
 
 
-def job_repair(setup):
-    common.start_log("launcher: repair")
-    save_repair.repair_all()
+def job_repair(setup, loc: Locations):
+    run_logging.start_log("launcher: repair", loc.game.key)
+    save_repair.repair_all(loc)
 
 
-def job_clear(setup):
-    common.start_log("launcher: clear dead shells")
-    me3_session.clear_dead_shells("manual")
+def job_clear(setup, loc: Locations):
+    run_logging.start_log("launcher: clear dead shells", loc.game.key)
+    me3_session.clear_dead_shells(loc.game_exe_name(), "manual")
 
 
-def run_job(job, setup, sink, done, title="Job"):
-    """Run one job on this (worker) thread as a logged job of its own: its lines go to its log file and the window,
-    and the jobs index records how it ended."""
-    game = getattr(getattr(setup, "game", None), "key", "") or common.GAME.key
+def run_job(job, setup, loc: Locations, sink, done, title="Job"):
+    """Run job(setup, loc) on this (worker) thread as a logged job of its own: its lines go to its log file and the
+    window, and the jobs index records how it ended."""
     profile = str(getattr(setup, "profile", "") or "")
-    record = run_logging.begin_job(title.rstrip(". "), game=game, profile=profile)
+    record = run_logging.begin_job(title.rstrip(". "), game=loc.game.key, profile=profile)
     log = run_logging.get_logger("job")
     try:
-        job(setup)
+        job(setup, loc)
     except SystemExit as e:
         stopped = e.code == 130
         run_logging.end_job(record, "stopped" if stopped else "failed" if e.code not in (0, None) else None)
@@ -562,12 +556,8 @@ def run_job(job, setup, sink, done, title="Job"):
         done(True, "Finished")
 
 
-apply_overrides()
-
-
-def play_command(game: games.Game | None = None) -> tuple[str, str]:
+def play_command(game: games.Game) -> tuple[str, str]:
     """(target, launch options) for a Steam shortcut that runs Play for one game without the window."""
-    game = game or common.GAME
     opts = f"--game {game.key} --play"
     if FROZEN:
         return str(launch_target()), opts  # the stub or AppImage: its path stays the same across updates
@@ -589,22 +579,23 @@ def game_from_args(argv: list[str], settings: LauncherSettings | None = None) ->
     return games.resolve(value)
 
 
-def play_headless(game: games.Game | None = None, notice: Callable[[games.Game, str], None] | None = None) -> int:
+def play_headless(
+    settings: LauncherSettings, loc: Locations, notice: Callable[[games.Game, str], None] | None = None
+) -> int:
     """`roundtable-souls --game <name> --play`: the Play button without the window, for one game. Uses the setup
     Play last used for that game (or the only one), runs the same session (Steam, me3, wait, save repair, cleanup)
     and exits. For Steam shortcuts and Gaming Mode. notice(game, why) tells the player when the game was not
-    started (the command line passes one that shows a small window)."""
-    settings = load_settings()
-    game = use_game(game or games.get(settings.game), settings)
+    started (the command line passes one that shows a small window). loc: where the game to play is."""
+    game = loc.game
     if not game.ready:
-        common.start_log("launcher: play (no window)")
+        run_logging.start_log("launcher: play (no window)", game.key)
         run_logging.log(f"error: Roundtable Souls cannot launch {game.name} yet")
         return 1
     remembered = remembered_setup(settings, game)
-    setups = [s for s in discover(remembered, game) if not s.problems()]
+    setups = [s for s in discover(remembered, loc) if not s.problems()]
     setup = next((s for s in setups if same_source(s.source, remembered)), setups[0] if setups else None)
     if setup is None:
-        common.start_log("launcher: play (no window)")
+        run_logging.start_log("launcher: play (no window)", game.key)
         run_logging.log(
             f"error: no working {game.name} setup found; open Roundtable Souls once, pick the {game.name} tab, "
             "and choose one on the Play page"
@@ -635,7 +626,7 @@ def update_merge_headless(setup, automatic: bool = True) -> str | None:
     h = mod_merge.play_check(prof)
     if h is None:
         return None
-    common.start_log("launcher: update merged mods before Play (no window)")
+    run_logging.start_log("launcher: update merged mods before Play (no window)", setup.game.key)
     reason = (h.get("reasons") or [h.get("text") or "the merged mods are out of date"])[0]
     if h["blocked"]:
         run_logging.log(f"error: the merged mods are out of date ({reason}) and cannot be rebuilt: {h['blocked']}")
@@ -665,20 +656,19 @@ def update_merge_headless(setup, automatic: bool = True) -> str | None:
         return f"The merged mods could not be updated: {e}"
 
 
-def check(game: games.Game | None = None):
+def check(settings: LauncherSettings, loc: Locations, data: Path):
     """`roundtable-souls [--game <name>] --check`: what the launcher detects for one game, printed and written to
     logs/last_run.log (so the windowed exe, which has no console, can be checked too). The co-op password is never
-    included."""
+    included. data: the data folder in use."""
     from roundtable_souls.saves.item_names import item_names
 
     lines = [f"{TITLE} {VERSION}"]
-    settings = load_settings()
-    game = use_game(game or games.get(settings.game), settings)
-    installed = [g.name for g in games.GAMES if common.installed_dir(g)]
+    game = loc.game
+    installed = [g.name for g in games.GAMES if installed_dir(g)]
     lines.append(f"game: {game.name}{'' if game.ready else ' (not supported yet)'}")
     lines.append(f"installed games: {', '.join(installed) or 'none found'}")
     remembered = remembered_setup(settings, game)
-    setups = discover(remembered, game) if game.ready else []
+    setups = discover(remembered, loc) if game.ready else []
     lines.append(f"setups found: {len(setups)}")
     for s in setups:
         spec = scaling_spec(s.ini) if s.ini else None
@@ -698,16 +688,16 @@ def check(game: games.Game | None = None):
             lines.append("      PROBLEMS: " + "; ".join(probs))
     lines.append(f"remembered: {remembered}")
     lines.append(f"steam: {steam.steam_exe()}")
-    lines.append(f"game folder: {common.game_dir()}")
+    lines.append(f"game folder: {loc.game_dir()}")
     if game is games.ELDEN_RING:
-        game_ids = save_analyze.game_item_ids()
+        game_ids = save_analyze.game_item_ids(loc.regulation_bin())
         lines.append(f"game items from regulation.bin: {len(game_ids) if game_ids else 'not readable'}")
-        names = item_names(refresh=True).names
+        names = item_names(loc.game_dir(), loc.me3_profiles_dir(), refresh=True).names
         sources = sorted({source for _name, source in names.values()})
         lines.append(f"mod item names: {len(names)} from {', '.join(sources) or 'no mods'}")
-    lines.append(f"data folder: {DATA_DIR} ({'next to the program' if DATA_DIR == HERE else 'per-user app data'})")
-    for p in common.save_files():
-        i = save_info(p)
+    lines.append(f"data folder: {data} ({'next to the program' if data == exe_dir() else 'per-user app data'})")
+    for p in loc.save_files():
+        i = save_info(p, loc=loc)
         lines.append(
             f"  save {i['name']}: {i['kind']}, block {i['block']}, modified {i['modified']}"
             + (f", error {i['error']}" if i["error"] else "")
@@ -719,7 +709,7 @@ def check(game: games.Game | None = None):
         if not i["characters"]:
             for f in i["findings"]:
                 lines.append(f"      {f['title']}: {f.get('detail', '')}")
-    common.start_log("launcher: check")
+    run_logging.start_log("launcher: check", game.key)
     for line in lines:
         print(line)
         run_logging.log(line)

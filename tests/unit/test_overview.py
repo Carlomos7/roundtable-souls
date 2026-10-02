@@ -61,7 +61,7 @@ def test_the_combines_overlapping_rows_are_listed(tmp_path, monkeypatch):
     game.mkdir()
     (game / "regulation.bin").write_bytes(vanilla())
     monkeypatch.setattr(common, "game_dir", lambda: game)
-    monkeypatch.setattr(common, "game_running", lambda: False)
+    monkeypatch.setattr(common, "exe_running", lambda _exe: False)
     base = tmp_path / "p"
     text = ""
     for name, value in (("a", 11), ("b", 22)):  # both differ from the game's value (1)
@@ -85,7 +85,7 @@ def test_a_pack_after_the_combined_one_replaces_it(tmp_path, monkeypatch):
     game.mkdir()
     (game / "regulation.bin").write_bytes(vanilla())
     monkeypatch.setattr(common, "game_dir", lambda: game)
-    monkeypatch.setattr(common, "game_running", lambda: False)
+    monkeypatch.setattr(common, "exe_running", lambda _exe: False)
     base = tmp_path / "p"
     for name in ("a", "b"):
         (base / "mod" / name).mkdir(parents=True)

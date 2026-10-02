@@ -8,14 +8,13 @@ from pathlib import Path
 
 from roundtable_souls.config.settings import load_settings, save_settings
 from roundtable_souls.coop.ini import _profile_rows, _read
+from roundtable_souls.game.locate import Locations
 from roundtable_souls.mods import install, models, remove
 from roundtable_souls.mods import profile as profile_tools
 from roundtable_souls.mods import profile_edit as mod_manage
 from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.platform import me3_info
-from roundtable_souls.platform import paths as common
 from roundtable_souls.platform.files import atomic_write
-from roundtable_souls.platform.paths import apply_overrides
 
 _BLOCK_HEADER = re.compile(r"^[ \t]*\[\[(packages|natives)\]\][ \t]*$", re.I)
 _TOML_BODY = re.compile(r"^(?:\[\[|#?\s*[A-Za-z0-9_]+\s*=|\{|\}|\])")
@@ -135,15 +134,18 @@ def set_profile_mod_enabled(profile, index: int, enabled: bool) -> bool:
     return True
 
 
-def me3_facts(setup) -> dict:
-    """Installed version, `me3 info` folders, and (cached daily) the latest release. Never raises."""
-    me3 = setup.me3_path() if setup else common.me3_exe()
+def me3_facts(setup, loc: Locations) -> dict:
+    """Installed version, `me3 info` folders, and (cached daily) the latest release. Never raises. reload: True when
+    me3 reported its folders (cached in settings): the caller reads the settings again, as the profile folder falls
+    back to that cache."""
+    me3 = setup.me3_path() if setup else loc.me3_exe()
     facts = {
         "path": str(me3) if me3 else "",
         "version": me3_info.me3_version(me3),
         "info": me3_info.me3_info(me3),
         "latest": None,
         "update": False,
+        "reload": False,
     }
     s = load_settings()
     if facts["info"].get("profile_dir") or facts["info"].get("logs_dir"):
@@ -151,7 +153,7 @@ def me3_facts(setup) -> dict:
         if cache != s.me3_info_cache:
             save_settings(me3_info_cache=cache)
             s.me3_info_cache = cache
-        apply_overrides(s)
+        facts["reload"] = True
     if s.check_me3_updates:
         cached = s.me3_latest
         when = float(s.me3_latest_checked or 0)
@@ -237,11 +239,12 @@ def set_mod_options(profile, index: int, opts: dict):
     return mod_manage.set_options(Path(profile), index, opts)
 
 
-def create_profile(name: str, copy_from=None) -> Path:
-    folder = common.me3_profiles_dir()
+def create_profile(name: str, copy_from=None, *, loc: Locations) -> Path:
+    """A new profile for loc's game in me3's profile folder."""
+    folder = loc.me3_profiles_dir()
     if not folder:
         raise RuntimeError("me3's profile folder is unknown on this PC (no LOCALAPPDATA).")
-    return mod_manage.create_profile(folder, name, game=common.GAME.key, copy_from=copy_from)
+    return mod_manage.create_profile(folder, name, game=loc.game.key, copy_from=copy_from)
 
 
 def delete_profile(path) -> Path:

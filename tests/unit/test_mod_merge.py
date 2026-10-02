@@ -36,7 +36,7 @@ class World:
         (self.game / "regulation.bin").write_bytes(b"GAME")
         (self.game / "eldenring.exe").write_bytes(b"x")
         monkeypatch.setattr(common, "game_dir", lambda: self.game)
-        monkeypatch.setattr(common, "game_running", lambda: False)
+        monkeypatch.setattr(common, "exe_running", lambda _exe: False)
         (self.base / "mod" / "parts" / "parts").mkdir(parents=True)
         self.winner = self.base / "Merger" / "mod"
         (self.winner / "script" / "talk").mkdir(parents=True)
@@ -232,7 +232,7 @@ def test_a_merger_that_stops_leaves_the_profile_as_it_was(world, monkeypatch):
 
 
 def test_no_rebuild_while_the_game_runs(world, monkeypatch):
-    monkeypatch.setattr(common, "game_running", lambda: True)
+    monkeypatch.setattr(common, "exe_running", lambda _exe: True)
     with pytest.raises(merge.MergeError, match="Close the game"):
         merge.rebuild(world.profile, lambda s: None)
     assert world.runs == 1
@@ -396,7 +396,7 @@ def _declared(tmp_path, monkeypatch):
     import sys
 
     base = tmp_path / "prof"
-    monkeypatch.setattr(common, "game_running", lambda: False)
+    monkeypatch.setattr(common, "exe_running", lambda _exe: False)
     monkeypatch.setattr(common, "game_dir", lambda: tmp_path / "Game")
     for name in ("params", "overhaul"):
         (base / "mod" / name).mkdir(parents=True)

@@ -83,7 +83,7 @@ class Revive:
 
         fakegame.game(monkeypatch, game_files())
         monkeypatch.setattr(common, "game_dir", lambda: self.game)
-        monkeypatch.setattr(common, "game_running", lambda: False)
+        monkeypatch.setattr(common, "exe_running", lambda _exe: False)
         self.setup = self.base / ".nightreign-revive-setup"
         for f in PAYLOAD:
             (self.setup / f).parent.mkdir(parents=True, exist_ok=True)

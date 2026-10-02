@@ -15,7 +15,7 @@ from pathlib import Path
 
 from roundtable_souls.config.settings import LauncherSettings, game_setting
 from roundtable_souls.game import catalog
-from roundtable_souls.platform import paths, proc
+from roundtable_souls.platform import paths
 
 PATH_SETTINGS = ("me3_path", "game_exe", "me3_profile_dir")  # Settings > Locations; blank = detect
 
@@ -68,13 +68,11 @@ class Locations:
         return Path(self.overrides.game_exe).name if self.overrides.game_exe else self.game.exe
 
     def game_running(self) -> bool:
-        return any(kb >= paths.REAL_GAME_MIN_KB for _, kb in proc.processes(self.game_exe_name()))
+        return paths.exe_running(self.game_exe_name())
 
     def dead_game_shells(self) -> list[int]:
         """Leftover zero-memory copies of the game. A Windows problem; Proton cleans up after itself."""
-        if not proc.IS_WINDOWS:
-            return []
-        return [pid for pid, kb in proc.processes(self.game_exe_name()) if kb < paths.REAL_GAME_MIN_KB]
+        return paths.dead_exe_shells(self.game_exe_name())
 
     def game_dir(self) -> Path | None:
         if self.overrides.game_exe and Path(self.overrides.game_exe).is_file():
