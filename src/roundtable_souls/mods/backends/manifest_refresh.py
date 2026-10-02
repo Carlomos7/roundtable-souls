@@ -155,9 +155,9 @@ class _Build:
 def _engine(profile: Path, layer: dict, setup: Path | None):
     """(problem, the build to run, approval key) when the launcher builds this mod itself: the switch on Settings is
     on and a recipe fits its download. None otherwise (its own installer runs)."""
+    from roundtable_souls.config.settings import load_settings
     from roundtable_souls.mods import engine
     from roundtable_souls.platform import paths as common
-    from roundtable_souls.settings import load_settings
 
     if setup is None or not load_settings().get("build_merges", False):
         return None

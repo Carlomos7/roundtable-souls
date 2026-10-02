@@ -44,9 +44,7 @@ from pathlib import Path
 from typing import Any
 
 from roundtable_souls import __version__, folders, identity, signing
-from roundtable_souls.platform import instance
-from roundtable_souls.resources import DATA_DIR
-from roundtable_souls.settings import (
+from roundtable_souls.config.settings import (
     appimage,
     change_settings,
     identity_matches,
@@ -55,6 +53,8 @@ from roundtable_souls.settings import (
     save_settings,
     velopack_root,
 )
+from roundtable_souls.platform import instance
+from roundtable_souls.resources import DATA_DIR
 
 ID = identity.get()
 RELEASES_URL = ID.releases_page

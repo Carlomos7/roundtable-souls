@@ -13,9 +13,9 @@ import sys
 from pathlib import Path
 
 from roundtable_souls import games
+from roundtable_souls.config.settings import data_dir, game_setting, load_settings
 from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.platform import proc, steam
-from roundtable_souls.settings import data_dir, game_setting, load_settings
 
 IS_WINDOWS = sys.platform == "win32"
 IS_LINUX = sys.platform.startswith("linux")

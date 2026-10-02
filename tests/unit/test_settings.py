@@ -2,7 +2,7 @@
 
 import json
 
-from roundtable_souls import settings
+from roundtable_souls.config import settings
 
 
 def test_defaults_when_missing_or_broken(tmp_path):

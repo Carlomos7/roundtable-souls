@@ -40,7 +40,7 @@ def _user_tag() -> str:
 def _scope() -> str:
     """Identifies the data folder these names belong to."""
     from roundtable_souls import identity
-    from roundtable_souls.settings import data_dir
+    from roundtable_souls.config.settings import data_dir
 
     where = str(data_dir()).lower() if sys.platform == "win32" else str(data_dir())
     return f"{identity.get().instance_prefix}.{hashlib.sha256(where.encode('utf-8')).hexdigest()[:12]}"

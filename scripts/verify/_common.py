@@ -91,7 +91,7 @@ def output_dir(given: Path | None, name: str, game: Path | None = None) -> Path:
 def sandbox_launcher(out: Path, game: Path) -> None:
     """Point the launcher's code at a data folder inside `out` and at `game`. Its settings, caches, history and logs
     then live there (run from source, the launcher would otherwise keep them beside the code)."""
-    from roundtable_souls import settings
+    from roundtable_souls.config import settings
 
     data = out / "launcher-data"
     data.mkdir(parents=True, exist_ok=True)

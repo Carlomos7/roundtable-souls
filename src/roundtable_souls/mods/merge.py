@@ -148,13 +148,13 @@ def _key(profile: Path) -> str:
 
 def _legacy_mark(profile: Path):
     """What launchers before 3.10 kept in their own settings (per PC), or None."""
-    from roundtable_souls.settings import load_settings
+    from roundtable_souls.config.settings import load_settings
 
     return (load_settings().get("parameter_overlays") or {}).get(_key(profile))  # read fresh: Options just set it
 
 
 def _set_legacy_mark(profile: Path, value) -> None:
-    from roundtable_souls.settings import get_settings, load_settings, save_settings
+    from roundtable_souls.config.settings import get_settings, load_settings, save_settings
 
     marks = dict(load_settings().get("parameter_overlays") or {})
     if value is None:
@@ -232,7 +232,7 @@ def set_overlay_override(profile: Path, folder: Path | None, rebuild_file: Path 
 def approved(tool) -> bool:
     """Whether the user allowed this rebuild tool (this version of it) to run. The launcher's own combine needs no
     permission."""
-    from roundtable_souls.settings import load_settings
+    from roundtable_souls.config.settings import load_settings
 
     if getattr(tool, "builtin", False):
         return True
@@ -240,7 +240,7 @@ def approved(tool) -> bool:
 
 
 def approve(tool) -> None:
-    from roundtable_souls.settings import get_settings, load_settings, save_settings
+    from roundtable_souls.config.settings import get_settings, load_settings, save_settings
 
     keys = list(load_settings().get("rebuild_approved") or [])
     if tool.approval_key() not in keys:

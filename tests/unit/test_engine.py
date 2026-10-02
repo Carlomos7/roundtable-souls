@@ -10,7 +10,7 @@ import pytest
 from fakegame import bnd, dcx, files_of, fmg, texts_of
 from test_param_merge import pack, rows_of, set_word, vanilla
 
-from roundtable_souls import settings
+from roundtable_souls.config import settings
 from roundtable_souls.mods import backends, engine, merge
 from roundtable_souls.mods.backends import manifest_refresh
 from roundtable_souls.platform import paths as common

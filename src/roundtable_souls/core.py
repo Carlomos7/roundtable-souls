@@ -17,6 +17,16 @@ from pathlib import Path
 from typing import Any
 
 from roundtable_souls import __version__, coop, folders, games
+from roundtable_souls.config.settings import (
+    FROZEN,
+    data_dir,
+    exe_dir,
+    game_setting,
+    launch_target,
+    load_settings,
+    save_game_settings,
+    save_settings,
+)
 from roundtable_souls.coop import (
     COMMENT_PREFIX,
     CUSTOM,
@@ -131,16 +141,6 @@ from roundtable_souls.saves.service import (
     save_summary,
     saves_needing_attention,
     torrent_text,
-)
-from roundtable_souls.settings import (
-    FROZEN,
-    data_dir,
-    exe_dir,
-    game_setting,
-    launch_target,
-    load_settings,
-    save_game_settings,
-    save_settings,
 )
 from roundtable_souls.updates import RELEASES_URL
 

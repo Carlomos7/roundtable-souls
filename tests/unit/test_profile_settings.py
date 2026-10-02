@@ -5,7 +5,7 @@ import shutil
 
 from test_mod_merge import World
 
-from roundtable_souls import settings
+from roundtable_souls.config import settings
 from roundtable_souls.mods import merge, profile_settings
 
 

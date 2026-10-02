@@ -102,14 +102,14 @@ layers = [
     "roundtable_souls.mods | roundtable_souls.saves | roundtable_souls.coop | roundtable_souls.updates | roundtable_souls.migration",
     "roundtable_souls.merging",
     "roundtable_souls.formats | roundtable_souls.game | roundtable_souls.games",
-    "roundtable_souls.settings : roundtable_souls.folders",
+    "roundtable_souls.config.settings : roundtable_souls.folders",
     "roundtable_souls.platform",
 ]
 ignore_imports = [
     # S2 (app.py and AppContext replace the globals and the data-folder lookups the platform layer reads today)
     "roundtable_souls.platform.paths -> roundtable_souls.games",
-    "roundtable_souls.platform.paths -> roundtable_souls.settings",
-    "roundtable_souls.platform.instance -> roundtable_souls.settings",
+    "roundtable_souls.platform.paths -> roundtable_souls.config.settings",
+    "roundtable_souls.platform.instance -> roundtable_souls.config.settings",
     "roundtable_souls.platform.logging -> roundtable_souls.folders",
     "roundtable_souls.folders -> roundtable_souls.games",
     # S3 (one profile parser in mods; mods.service stops borrowing coop's private helpers)
@@ -130,7 +130,7 @@ source_modules = [
     "roundtable_souls.formats",
     "roundtable_souls.game",
     "roundtable_souls.games",
-    "roundtable_souls.settings",
+    "roundtable_souls.config.settings",
     "roundtable_souls.folders",
     "roundtable_souls.platform",
 ]
