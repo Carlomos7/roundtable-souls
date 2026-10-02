@@ -6,10 +6,10 @@ import struct
 import pytest
 
 from roundtable_souls import core, games, settings
+from roundtable_souls.platform import common
 from roundtable_souls.saves import container
 from roundtable_souls.saves import nightreign as nr
 from roundtable_souls.saves import service as saves
-from roundtable_souls.system import common
 
 NR = games.NIGHTREIGN
 ER = games.ELDEN_RING

@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 
 from roundtable_souls import folders, games, settings
+from roundtable_souls.platform import common
 from roundtable_souls.saves import item_names
-from roundtable_souls.system import common
 
 
 @pytest.fixture(autouse=True)
@@ -52,7 +52,7 @@ def run_in_a_temporary_folder(tmp_path, monkeypatch):
 def recycle_bin_left_clean(monkeypatch):
     """Removing a mod sends its folder to the real Recycle Bin: every item a test sends there is purged after it,
     so the bin is left as it was."""
-    from roundtable_souls.system import trash
+    from roundtable_souls.platform import trash
 
     made = []
     real = trash.send
@@ -71,7 +71,7 @@ def recycle_bin_left_clean(monkeypatch):
 @pytest.fixture(autouse=True)
 def clean_logging():
     """No job, sink or standalone run survives a test, so one test's lines never reach another's files."""
-    from roundtable_souls.system import logging as run_logging
+    from roundtable_souls.platform import logging as run_logging
 
     yield
     job = run_logging.current_job()

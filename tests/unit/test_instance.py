@@ -9,7 +9,7 @@ from PySide6.QtCore import QEventLoop, QTimer
 from PySide6.QtNetwork import QLocalServer
 from PySide6.QtWidgets import QApplication
 
-from roundtable_souls.system import filelock, instance
+from roundtable_souls.platform import filelock, instance
 
 
 @pytest.fixture

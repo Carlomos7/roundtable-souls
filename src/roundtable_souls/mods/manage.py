@@ -372,7 +372,7 @@ def extract_7z(archive: Path, dest: Path) -> Path:
 
 def _no_window():
     try:
-        from roundtable_souls.system import common
+        from roundtable_souls.platform import common
 
         return common.NO_WINDOW
     except Exception:
@@ -1198,7 +1198,7 @@ def uninstall(profile: Path, index: int, delete_folder: bool = True, to_trash: b
             for p in still
         )
         if inside and not shared and folder.resolve() != profile.parent.resolve():
-            from roundtable_souls.system import trash as trash_bin
+            from roundtable_souls.platform import trash as trash_bin
 
             if to_trash and trash_bin.available():
                 try:

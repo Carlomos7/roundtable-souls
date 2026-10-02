@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 def main() -> int:
     """Console entry point: the window; or without one --play, --check, --update (see updates.update_headless)."""
-    from roundtable_souls.system import logging as run_logging
+    from roundtable_souls.platform import logging as run_logging
 
     run_logging.setup_logging()
 
@@ -51,7 +51,7 @@ def play_from_shortcut(game) -> int:
     """--play: when the window is open, it runs Play itself (one launcher manages the session); otherwise Play runs
     here, holding the PLAY name so a second shortcut start, or a silent update, waits for it to end."""
     from roundtable_souls import core, updates
-    from roundtable_souls.system import instance
+    from roundtable_souls.platform import instance
 
     updates.mark_ready("play")  # this version starts and runs: an update's watchdog can stand down
     if instance.held(instance.WINDOW) and instance.send(f"play {game.key}"):

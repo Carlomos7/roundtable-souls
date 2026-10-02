@@ -9,7 +9,7 @@ from test_mod_merge import TALK, World
 
 from roundtable_souls.mods import manage as M
 from roundtable_souls.mods import merge, overview, undo
-from roundtable_souls.system import trash
+from roundtable_souls.platform import trash
 
 PROFILE = """profileVersion = "v1"
 

@@ -44,7 +44,7 @@ def settings() -> dict:
 def game_dir(given: Path | None) -> Path:
     game = given or (Path(settings()["game"]) if "game" in settings() else None)
     if game is None:
-        from roundtable_souls.system import common
+        from roundtable_souls.platform import common
 
         game = common.game_dir()
     if game is None or not (Path(game) / "eldenring.exe").is_file():
@@ -101,7 +101,7 @@ def sandbox_launcher(out: Path, game: Path) -> None:
 
     folders.data_root = lambda: data
     from roundtable_souls import core  # noqa: F401  (applies the (empty) sandbox settings on import)
-    from roundtable_souls.system import common
+    from roundtable_souls.platform import common
 
     common.GAME_EXE_OVERRIDE = str(game / "eldenring.exe")
     common._DETECT_CACHE.clear()

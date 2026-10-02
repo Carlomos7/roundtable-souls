@@ -7,10 +7,10 @@ longer RSLT, copies that section from a healthy sibling save. (Moved from system
 
 import time
 
+from roundtable_souls.platform import common
+from roundtable_souls.platform.common import fail, log
 from roundtable_souls.saves import nightreign as repair_nightreign
 from roundtable_souls.saves import regulation as repair
-from roundtable_souls.system import common
-from roundtable_souls.system.common import fail, log
 
 
 def wait_for_save_flush(saves, timeout=30):

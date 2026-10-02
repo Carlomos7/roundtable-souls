@@ -8,7 +8,7 @@ from test_mod_merge import World
 
 from roundtable_souls import core
 from roundtable_souls.mods import merge
-from roundtable_souls.system import common
+from roundtable_souls.platform import common
 
 
 @pytest.fixture
@@ -66,7 +66,7 @@ def test_stacked_packs_without_a_merge_are_left_alone(tmp_path, monkeypatch):
 
 
 def test_only_the_newest_tool_backups_are_kept_after_an_automatic_rebuild(world, monkeypatch):
-    from roundtable_souls.system import trash
+    from roundtable_souls.platform import trash
 
     if not trash.available():
         pytest.skip("no Recycle Bin here")

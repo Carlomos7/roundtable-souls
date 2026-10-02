@@ -25,8 +25,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from roundtable_souls import identity
+from roundtable_souls.platform import filelock
 from roundtable_souls.resources import PACKAGE_DIR
-from roundtable_souls.system import filelock
 
 FROZEN = bool(getattr(sys, "frozen", False))
 APP_DIR_NAME = identity.get().data_dir_name

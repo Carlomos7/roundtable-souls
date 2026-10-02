@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 from roundtable_souls import folders, games, models
+from roundtable_souls.platform import common
 from roundtable_souls.saves import analyze as save_analyze
 from roundtable_souls.saves import container as save_container
 from roundtable_souls.saves import fix as save_fix
@@ -16,7 +17,6 @@ from roundtable_souls.saves import loading as save_loading
 from roundtable_souls.saves import nightreign as repair_nightreign
 from roundtable_souls.saves import regulation as repair_regulation
 from roundtable_souls.saves import vanilla as save_vanilla
-from roundtable_souls.system import common
 
 
 def save_kind(path: Path, game: games.Game | None = None) -> str:

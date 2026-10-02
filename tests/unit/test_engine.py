@@ -13,7 +13,7 @@ from test_param_merge import pack, rows_of, set_word, vanilla
 from roundtable_souls import settings
 from roundtable_souls.mods import backends, engine, merge
 from roundtable_souls.mods.backends import manifest_refresh
-from roundtable_souls.system import common
+from roundtable_souls.platform import common
 
 RECIPE = json.loads((engine.RECIPES_DIR / "nightreign-revive-lite.json").read_text(encoding="utf-8"))
 PROFILE = """profileVersion = "v1"

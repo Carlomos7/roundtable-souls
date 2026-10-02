@@ -1,7 +1,7 @@
 """Linux and Steam Deck detection, exercised on fake home folders so it runs on any OS."""
 
 from roundtable_souls import updates
-from roundtable_souls.system import common
+from roundtable_souls.platform import common
 
 
 def linux(monkeypatch, home):

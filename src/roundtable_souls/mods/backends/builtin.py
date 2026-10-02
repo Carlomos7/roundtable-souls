@@ -35,7 +35,7 @@ def _sha(p: Path) -> str:
 
 def _me3_version() -> str | None:
     """The installed me3's version, for the record (None when it cannot be asked)."""
-    from roundtable_souls.system import common, me3_info
+    from roundtable_souls.platform import common, me3_info
 
     try:
         return me3_info.me3_version(common.me3_exe())
@@ -67,7 +67,7 @@ def find(profile: Path, all_layers: list[dict]) -> CombineTool | None:
 
 
 def game_regulation() -> Path | None:
-    from roundtable_souls.system import common
+    from roundtable_souls.platform import common
 
     d = common.game_dir()
     p = Path(d) / REGULATION if d else None
@@ -210,7 +210,7 @@ class CombineTool:
 
     def file_reasons(self, all_layers: list[dict], until: dict | None) -> list[str]:
         """Why the merged files no longer match today's packages."""
-        from roundtable_souls.system import common
+        from roundtable_souls.platform import common
 
         rec = self.record()
         done = rec.get("files") or {}
@@ -275,7 +275,7 @@ class CombineTool:
         from roundtable_souls import __version__
         from roundtable_souls.merging.rules import param as param_merge
         from roundtable_souls.mods import merge
-        from roundtable_souls.system import common
+        from roundtable_souls.platform import common
 
         layers = merge.layers(self.profile) if all_layers is None else all_layers
         packs = self.inputs(layers, until)
@@ -341,7 +341,7 @@ class CombineTool:
     def _write_record(
         self, files: dict, base, packs, report, version, out: bytes | None = None, build: Build | None = None
     ) -> dict:
-        from roundtable_souls.system import common
+        from roundtable_souls.platform import common
 
         record = {
             "combined": 1,
@@ -388,7 +388,7 @@ class CombineTool:
     def _activate(self, build: Build) -> None:
         """Read every staged output back, then put them in place (refused while the game runs)."""
         from roundtable_souls.game.oodle import find_oodle
-        from roundtable_souls.system import common
+        from roundtable_souls.platform import common
 
         game_dir = common.game_dir()
         dec = find_oodle(Path(game_dir)) if game_dir else None
@@ -413,7 +413,7 @@ class CombineTool:
         from roundtable_souls.game import archives as gamearchive
         from roundtable_souls.game.oodle import find_oodle
         from roundtable_souls.merging import merger
-        from roundtable_souls.system import common
+        from roundtable_souls.platform import common
 
         shared = shared_files(self.file_inputs(layers, until))
         before = self.record().get("files") or {}

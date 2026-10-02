@@ -206,7 +206,7 @@ Updates, failed-start rollback, the Inno migration, portable data and uninstall 
 - [CHANGELOG.md](CHANGELOG.md) - version history
 - [src/roundtable_souls/saves/README.md](src/roundtable_souls/saves/README.md) - save format facts the repairs rely on
 - [src/roundtable_souls/mods/README.md](src/roundtable_souls/mods/README.md) - how profiles are edited
-- [src/roundtable_souls/system/README.md](src/roundtable_souls/system/README.md) - detection and the play session
+- [src/roundtable_souls/platform/README.md](src/roundtable_souls/platform/README.md) - detection and the play session
 
 ## Licensing
 

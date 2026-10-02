@@ -75,7 +75,7 @@ def _merges(setup: Path | None) -> set[str]:
 
 
 def _recipe(profile: Path, layer: dict, manifest: Path, data: dict) -> Recipe:
-    from roundtable_souls.system import common
+    from roundtable_souls.platform import common
 
     setup = _find_setup(profile, data)
     label = f"the rebuild tool of {layer['name']}"
@@ -156,8 +156,8 @@ def _engine(profile: Path, layer: dict, setup: Path | None):
     """(problem, the build to run, approval key) when the launcher builds this mod itself: the switch on Settings is
     on and a recipe fits its download. None otherwise (its own installer runs)."""
     from roundtable_souls.mods import engine
+    from roundtable_souls.platform import common
     from roundtable_souls.settings import load_settings
-    from roundtable_souls.system import common
 
     if setup is None or not load_settings().get("build_merges", False):
         return None

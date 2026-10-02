@@ -6,9 +6,9 @@ import subprocess
 import time
 from pathlib import Path
 
-from roundtable_souls.system import common
-from roundtable_souls.system import processes as clear_dead_game_shells
-from roundtable_souls.system.common import fail, log
+from roundtable_souls.platform import common
+from roundtable_souls.platform import processes as clear_dead_game_shells
+from roundtable_souls.platform.common import fail, log
 
 
 def _start_steam():
@@ -68,7 +68,7 @@ def clear_dead_shells(when):
 
 def me3_log_path():
     """Where me3's own output goes: an attachment of the running job, else logs/me3-launch.log."""
-    from roundtable_souls.system import logging as run_logging
+    from roundtable_souls.platform import logging as run_logging
 
     return run_logging.attachment("me3") or run_logging.log_dir() / "me3-launch.log"
 

@@ -29,8 +29,8 @@ import argparse
 import hashlib
 from pathlib import Path
 
-from roundtable_souls.system import common
-from roundtable_souls.system.common import fail, log
+from roundtable_souls.platform import common
+from roundtable_souls.platform.common import fail, log
 
 UD11_OFF = 0x19603B0
 UD11_SIZE = 0x240020

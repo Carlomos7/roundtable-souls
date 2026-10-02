@@ -146,7 +146,7 @@ def problems(profile: Path) -> list[dict]:
 
 def overview(profile: Path) -> dict:
     """Everything the Mods page's Load order card and its pill show, from one pass (run it off the UI thread)."""
-    from roundtable_souls.system import common
+    from roundtable_souls.platform import common
 
     profile = Path(profile)
     out: dict = {"profile": str(profile)}

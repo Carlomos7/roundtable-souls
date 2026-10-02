@@ -22,8 +22,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from roundtable_souls import folders, identity
+from roundtable_souls.platform import steam_shortcuts
 from roundtable_souls.settings import identity_matches, is_installed, launch_target, load_settings, save_settings
-from roundtable_souls.system import steam_shortcuts
 
 
 def _windows() -> bool:
@@ -126,13 +126,13 @@ def steam_root() -> Path | None:
     override = identity.get().steam_root
     if override:
         return Path(override)
-    from roundtable_souls.system import common
+    from roundtable_souls.platform import common
 
     return common.steam_root()
 
 
 def steam_running() -> bool:
-    from roundtable_souls.system import common
+    from roundtable_souls.platform import common
 
     if identity.get().steam_root:  # a test build's fake Steam is never running
         return False

@@ -11,7 +11,7 @@ from test_param_merge import pack, set_word, vanilla
 
 from roundtable_souls.mods import merge, undo
 from roundtable_souls.mods.backends import builtin
-from roundtable_souls.system import logging as rl
+from roundtable_souls.platform import logging as rl
 
 
 def tool_that_backs_itself_up(w: World):
@@ -77,7 +77,7 @@ def test_a_restore_list_pointing_outside_the_profile_is_not_used(tmp_path, monke
 
 
 def test_the_combine_keeps_its_earlier_outputs_and_undo_puts_one_back(tmp_path, monkeypatch):
-    from roundtable_souls.system import common
+    from roundtable_souls.platform import common
 
     game = tmp_path / "Game"
     game.mkdir()
@@ -107,7 +107,7 @@ def test_the_combine_keeps_its_earlier_outputs_and_undo_puts_one_back(tmp_path, 
 
 
 def test_old_tool_backups_go_to_the_recycle_bin_keeping_the_newest(tmp_path, monkeypatch):
-    from roundtable_souls.system import trash
+    from roundtable_souls.platform import trash
 
     if not trash.available():
         return

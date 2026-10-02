@@ -583,7 +583,7 @@ def test_an_update_that_never_applied_is_reported_after_the_watchdogs_time():
 
 
 def test_busy_reason_names_a_shortcut_play(monkeypatch):
-    from roundtable_souls.system import instance
+    from roundtable_souls.platform import instance
 
     monkeypatch.setattr(instance, "held", lambda name: name == instance.PLAY)
     assert "Steam shortcut" in updates.busy_reason()

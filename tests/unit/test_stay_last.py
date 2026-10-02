@@ -301,7 +301,7 @@ def test_a_package_that_lists_the_others_is_known_to_stay_last_without_its_files
 
 def test_a_profile_without_it_still_combines(tmp_path, monkeypatch):
     """Two packs and nothing that must stay last: a plain combine, no setup is asked for."""
-    from roundtable_souls.system import common
+    from roundtable_souls.platform import common
 
     base = tmp_path / "p"
     for name in ("a", "b"):

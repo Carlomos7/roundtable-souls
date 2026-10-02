@@ -5,7 +5,7 @@ from test_mod_merge import TALK, World
 from test_param_merge import pack, set_word, vanilla
 
 from roundtable_souls.mods import merge, overview
-from roundtable_souls.system import common
+from roundtable_souls.platform import common
 
 
 def outcomes(ov, path):

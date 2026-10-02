@@ -10,7 +10,7 @@ from test_param_merge import vanilla
 
 from roundtable_souls.mods import merge, overview, undo
 from roundtable_souls.mods.backends import builtin
-from roundtable_souls.system import common
+from roundtable_souls.platform import common
 
 REL = "menu/hi/01_common.sblytbnd.dcx"
 GAME = {"SB_KG.layout": b"xbox buttons", "SB_Marker.layout": b"white marker", "SB_Map.layout": b"map"}

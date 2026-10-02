@@ -18,8 +18,8 @@ import argparse
 import subprocess
 import sys
 
-from roundtable_souls.system import common
-from roundtable_souls.system.common import log
+from roundtable_souls.platform import common
+from roundtable_souls.platform.common import log
 
 PS = ["powershell", "-NoProfile", "-NonInteractive", "-Command"]
 

@@ -86,6 +86,11 @@ from roundtable_souls.mods.service import (
     uninstall_mod,
     write_profile_setting,
 )
+from roundtable_souls.platform import common, me3_info, trash
+from roundtable_souls.platform import logging as run_logging
+from roundtable_souls.platform import processes as clear_dead_game_shells
+from roundtable_souls.platform import session as me3_session
+from roundtable_souls.platform.common import PATH_SETTINGS, apply_overrides
 from roundtable_souls.resources import ASSETS_DIR
 from roundtable_souls.saves import analyze as save_analyze
 from roundtable_souls.saves import fix as save_fix
@@ -136,11 +141,6 @@ from roundtable_souls.settings import (
     save_game_settings,
     save_settings,
 )
-from roundtable_souls.system import common, me3_info, trash
-from roundtable_souls.system import logging as run_logging
-from roundtable_souls.system import processes as clear_dead_game_shells
-from roundtable_souls.system import session as me3_session
-from roundtable_souls.system.common import PATH_SETTINGS, apply_overrides
 from roundtable_souls.updates import RELEASES_URL
 
 HERE = exe_dir()

@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 
 from roundtable_souls import core
-from roundtable_souls.system import common
-from roundtable_souls.system import logging as rl
+from roundtable_souls.platform import common
+from roundtable_souls.platform import logging as rl
 
 
 @pytest.fixture

@@ -13,11 +13,11 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 from roundtable_souls import formats
+from roundtable_souls.platform import common
 from roundtable_souls.resources import DATA_DIR
 from roundtable_souls.saves import item_names as mod_item_names  # a module, so tests can stand in for it
 from roundtable_souls.saves import loading as save_loading
 from roundtable_souls.saves.layout import active_slots, character_name
-from roundtable_souls.system import common
 
 WEAPON, ARMOUR, TALISMAN, GOODS, ASH = 0x0, 0x1, 0x2, 0x4, 0x8
 KIND_NAMES = {WEAPON: "Weapon", ARMOUR: "Armour", TALISMAN: "Talisman", GOODS: "Item", ASH: "Ash of War"}

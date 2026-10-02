@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from roundtable_souls import migration, settings
-from roundtable_souls.system import steam_shortcuts
+from roundtable_souls.platform import steam_shortcuts
 
 
 @pytest.fixture

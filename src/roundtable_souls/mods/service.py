@@ -11,9 +11,9 @@ from roundtable_souls.coop import _profile_rows, _read
 from roundtable_souls.files import atomic_write
 from roundtable_souls.mods import manage as mod_manage
 from roundtable_souls.mods import profile as profile_tools
+from roundtable_souls.platform import common, me3_info
+from roundtable_souls.platform.common import apply_overrides
 from roundtable_souls.settings import load_settings, save_settings
-from roundtable_souls.system import common, me3_info
-from roundtable_souls.system.common import apply_overrides
 
 _BLOCK_HEADER = re.compile(r"^[ \t]*\[\[(packages|natives)\]\][ \t]*$", re.I)
 _TOML_BODY = re.compile(r"^(?:\[\[|#?\s*[A-Za-z0-9_]+\s*=|\{|\}|\])")

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from roundtable_souls.system import common
+from roundtable_souls.platform import common
 
 
 def live_save() -> Path | None:
