@@ -74,7 +74,9 @@ def test_play_from_a_shortcut_hands_off_or_holds_the_play_name(monkeypatch):
     from roundtable_souls import cli, core, games
 
     played, sent = [], []
-    monkeypatch.setattr(core, "play_headless", lambda game: played.append(instance.held(instance.PLAY)) or 0)
+    monkeypatch.setattr(
+        core, "play_headless", lambda game, notice=None: played.append(instance.held(instance.PLAY)) or 0
+    )
     monkeypatch.setattr(instance, "WINDOW", f"RoundtableSouls.Test.{uuid.uuid4().hex}")
     monkeypatch.setattr(instance, "PLAY", f"RoundtableSouls.Test.{uuid.uuid4().hex}")
     monkeypatch.setattr(instance, "send", lambda msg, name=None: sent.append(msg) or True)

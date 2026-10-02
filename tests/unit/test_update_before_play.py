@@ -138,9 +138,8 @@ def test_headless_play_does_not_launch_when_it_must_not(monkeypatch):
     monkeypatch.setattr(core, "update_merge_headless", lambda s, automatic=True: "out of date")
     played, shown = [], []
     monkeypatch.setattr(core, "job_play", played.append)
-    monkeypatch.setattr(core, "not_started_notice", lambda game, why: shown.append(why))
     monkeypatch.setattr(common, "log", lambda s: None)
-    assert core.play_headless(core.games.ELDEN_RING) == 1
+    assert core.play_headless(core.games.ELDEN_RING, notice=lambda game, why: shown.append(why)) == 1
     assert played == [] and shown == ["out of date"]
     monkeypatch.setattr(core, "update_merge_headless", lambda s, automatic=True: None)
     assert core.play_headless(core.games.ELDEN_RING) == 0 and played == [setup]

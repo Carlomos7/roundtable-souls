@@ -1,12 +1,17 @@
-"""Roundtable Souls: a launcher and save toolkit for modded FromSoftware games (Elden Ring and Nightreign)."""
+"""The command line: `roundtable-souls` opens the window; --play, --check and --update run without one, and --game
+picks the game. Each mode imports only what it needs, so a Play from a Steam shortcut never loads the window."""
 
-__version__ = "3.15.0"
+from __future__ import annotations
+
+import sys
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from roundtable_souls.games import Game
 
 
 def main() -> int:
     """Console entry point: the window; or without one --play, --check, --update (see updates.update_headless)."""
-    import sys
-
     from roundtable_souls.system import logging as run_logging
 
     run_logging.setup_logging()
@@ -59,6 +64,36 @@ def play_from_shortcut(game) -> int:
         core.common.log("error: a Play from a Steam shortcut is already running")
         return 1
     try:
-        return core.play_headless(game)
+        return core.play_headless(game, notice=not_started_notice)
     finally:
         hold.release()
+
+
+def not_started_notice(game: Game, why: str) -> None:
+    """--play without the window, when the game was not started: a small window saying why, with a way to open the
+    launcher (a Steam shortcut or Gaming Mode has nowhere else to show it). Nothing happens without a display."""
+    from roundtable_souls import core
+
+    try:
+        import subprocess
+
+        from PySide6.QtWidgets import QApplication, QMessageBox
+
+        app = QApplication.instance() or QApplication(sys.argv[:1])
+        box = QMessageBox()
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle(core.TITLE)
+        box.setText(f"{game.name} was not started: your mods need a rebuild")
+        box.setInformativeText(
+            f"{why}\n\nThe game does not start with merged mods that no longer match your mods, so it cannot run "
+            "with a removed or changed mod still inside them."
+        )
+        open_btn = box.addButton("Open Roundtable Souls", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("Close", QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        del app
+        if box.clickedButton() is open_btn:
+            command = [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-m", "roundtable_souls"]
+            subprocess.Popen([*command, "--game", game.key], close_fds=True)
+    except Exception as e:  # no display (a console, a test): the log says it
+        core.common.log(f"the notice could not be shown: {e}")

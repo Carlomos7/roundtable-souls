@@ -12,6 +12,7 @@ import re
 import sys
 import time
 import traceback
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -676,10 +677,11 @@ def game_from_args(argv: list[str], settings: dict | None = None) -> games.Game 
     return games.resolve(value)
 
 
-def play_headless(game: games.Game | None = None) -> int:
+def play_headless(game: games.Game | None = None, notice: Callable[[games.Game, str], None] | None = None) -> int:
     """`roundtable-souls --game <name> --play`: the Play button without the window, for one game. Uses the setup
     Play last used for that game (or the only one), runs the same session (Steam, me3, wait, save repair, cleanup)
-    and exits. For Steam shortcuts and Gaming Mode."""
+    and exits. For Steam shortcuts and Gaming Mode. notice(game, why) tells the player when the game was not
+    started (the command line passes one that shows a small window)."""
     settings = load_settings()
     game = use_game(game or games.get(settings.get("game")), settings)
     if not game.ready:
@@ -699,7 +701,8 @@ def play_headless(game: games.Game | None = None) -> int:
     why = update_merge_headless(setup, automatic=play_options(settings)["play_update_merge"])
     if why:
         common.log(f"error: the game was not started: {why}")
-        not_started_notice(game, why)
+        if notice is not None:
+            notice(game, why)
         return 1
     try:
         job_play(setup)
@@ -748,34 +751,6 @@ def update_merge_headless(setup, automatic: bool = True) -> str | None:
     except mod_merge.MergeError as e:
         common.log(f"error: the merged mods could not be updated: {e}")
         return f"The merged mods could not be updated: {e}"
-
-
-def not_started_notice(game: games.Game, why: str) -> None:
-    """--play without the window, when the game was not started: a small window saying why, with a way to open the
-    launcher (a Steam shortcut or Gaming Mode has nowhere else to show it). Nothing happens without a display."""
-    try:
-        import subprocess
-
-        from PySide6.QtWidgets import QApplication, QMessageBox
-
-        app = QApplication.instance() or QApplication(sys.argv[:1])
-        box = QMessageBox()
-        box.setIcon(QMessageBox.Icon.Warning)
-        box.setWindowTitle(TITLE)
-        box.setText(f"{game.name} was not started: your mods need a rebuild")
-        box.setInformativeText(
-            f"{why}\n\nThe game does not start with merged mods that no longer match your mods, so it cannot run "
-            "with a removed or changed mod still inside them."
-        )
-        open_btn = box.addButton("Open Roundtable Souls", QMessageBox.ButtonRole.AcceptRole)
-        box.addButton("Close", QMessageBox.ButtonRole.RejectRole)
-        box.exec()
-        del app
-        if box.clickedButton() is open_btn:
-            command = [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-m", "roundtable_souls"]
-            subprocess.Popen([*command, "--game", game.key], close_fds=True)
-    except Exception as e:  # no display (a console, a test): the log says it
-        common.log(f"the notice could not be shown: {e}")
 
 
 def check(game: games.Game | None = None):
