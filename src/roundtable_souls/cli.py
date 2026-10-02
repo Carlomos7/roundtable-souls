@@ -22,11 +22,11 @@ def main() -> int:
 
     sys.excepthook = crashed
     if getattr(sys, "frozen", False):
-        from roundtable_souls import updates
+        from roundtable_souls.updates import apply as updates
 
         updates.velopack_startup()  # Velopack's install/update/uninstall hooks exit here
     if "--update" in sys.argv:
-        from roundtable_souls import updates
+        from roundtable_souls.updates import apply as updates
 
         return updates.update_headless([a for a in sys.argv[1:] if a != "--update"])
     if "--play" in sys.argv or "--check" in sys.argv or any(a.startswith("--game") for a in sys.argv):
@@ -50,8 +50,9 @@ def main() -> int:
 def play_from_shortcut(game) -> int:
     """--play: when the window is open, it runs Play itself (one launcher manages the session); otherwise Play runs
     here, holding the PLAY name so a second shortcut start, or a silent update, waits for it to end."""
-    from roundtable_souls import core, updates
+    from roundtable_souls import core
     from roundtable_souls.platform import instance
+    from roundtable_souls.updates import apply as updates
 
     updates.mark_ready("play")  # this version starts and runs: an update's watchdog can stand down
     if instance.held(instance.WINDOW) and instance.send(f"play {game.key}"):

@@ -15,8 +15,9 @@ from pathlib import Path
 import fakerelease
 import pytest
 
-from roundtable_souls import __version__, signing, updates
+from roundtable_souls import __version__, signing
 from roundtable_souls.config import settings
+from roundtable_souls.updates import apply as updates
 
 VECTORS = Path(__file__).parent / "data" / "minisign"
 

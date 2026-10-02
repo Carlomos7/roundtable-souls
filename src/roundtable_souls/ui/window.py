@@ -69,7 +69,7 @@ from qfluentwidgets import (
 )
 from qfluentwidgets import FluentIcon as FI
 
-from roundtable_souls import core, games, migration, updates
+from roundtable_souls import core, games, migration
 from roundtable_souls.config.settings import FROZEN, appimage, is_installed, is_portable
 from roundtable_souls.core import (
     CUSTOM,
@@ -217,6 +217,7 @@ from roundtable_souls.ui.widgets import (
     titled,
     tone_label,
 )
+from roundtable_souls.updates import apply as updates
 
 ROW_ACTION_W = 156  # the action button on each Mods row
 
