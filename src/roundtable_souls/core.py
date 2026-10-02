@@ -78,9 +78,9 @@ from roundtable_souls.files import (
     atomic_write,
 )
 from roundtable_souls.game import catalog as games
+from roundtable_souls.mods import conflicts as mod_overview
 from roundtable_souls.mods import history as mod_history
 from roundtable_souls.mods import manage as mod_manage
-from roundtable_souls.mods import overview as mod_overview
 from roundtable_souls.mods import profile as profile_tools
 from roundtable_souls.mods import rebuild as mod_merge
 from roundtable_souls.mods import service as mods_service

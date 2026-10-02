@@ -4,7 +4,7 @@ entries me3 would refuse. Uses the small regulation files and profiles of the co
 from test_mod_merge import TALK, World
 from test_param_merge import pack, set_word, vanilla
 
-from roundtable_souls.mods import overview
+from roundtable_souls.mods import conflicts as overview
 from roundtable_souls.mods import rebuild as merge
 from roundtable_souls.platform import paths as common
 

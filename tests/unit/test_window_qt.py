@@ -766,7 +766,7 @@ def test_the_play_pages_log_links_to_activity(sandbox):
 
 
 def test_the_load_order_card_shows_outcomes_from_one_scan(sandbox, tmp_path):
-    from roundtable_souls.mods import overview
+    from roundtable_souls.mods import conflicts as overview
 
     w = sandbox
     prof = w.profiles / "sandbox.me3"
