@@ -18,7 +18,7 @@ import pytest
 from roundtable_souls import __version__
 from roundtable_souls.config import settings
 from roundtable_souls.updates import apply as updates
-from roundtable_souls.updates import signing
+from roundtable_souls.updates import feed, signing
 
 VECTORS = Path(__file__).parent / "data" / "minisign"
 
@@ -49,12 +49,12 @@ class _fetcher:
 
 def test_versions_order_pre_releases_before_their_release():
     order = ["3.13.2", "3.14.0-dev", "3.14.0a1", "3.14.0-beta.2", "3.14.0rc1", "3.14.0-rc.2", "3.14.0", "3.14.1"]
-    keys = [updates.version_key(v) for v in order]
+    keys = [feed.version_key(v) for v in order]
     assert keys == sorted(keys) and len(set(keys)) == len(keys)
-    assert updates.parse_version("v3.14.0rc1") == "3.14.0-rc.1" and updates.parse_version("v3.14.0") == "3.14.0"
-    assert updates.is_newer("3.14.0", "3.14.0-rc.2") and not updates.is_newer("3.14.0-rc.2", "3.14.0")
-    assert updates.is_prerelease("3.14.0-beta.1") and not updates.is_prerelease("3.14.0")
-    assert not updates.is_newer("", "1.0.0") and updates.parse_version("no version") is None
+    assert feed.parse_version("v3.14.0rc1") == "3.14.0-rc.1" and feed.parse_version("v3.14.0") == "3.14.0"
+    assert feed.is_newer("3.14.0", "3.14.0-rc.2") and not feed.is_newer("3.14.0-rc.2", "3.14.0")
+    assert feed.is_prerelease("3.14.0-beta.1") and not feed.is_prerelease("3.14.0")
+    assert not feed.is_newer("", "1.0.0") and feed.parse_version("no version") is None
 
 
 # ---------------------------------------------------------------------------- the check
@@ -62,91 +62,87 @@ def test_versions_order_pre_releases_before_their_release():
 
 def test_newer_release_is_offered_and_cached_for_an_hour():
     newer = _bump(__version__)
-    fetch = _fetcher(updates.Fetched("ok", data=_rel(newer), etag='"e1"'))
+    fetch = _fetcher(feed.Fetched("ok", data=_rel(newer), etag='"e1"'))
     clock = [1000.0]
-    out = updates.check_launcher_update(fetch=fetch, now=lambda: clock[0])
+    out = feed.check_launcher_update(fetch=fetch, now=lambda: clock[0])
     assert out.status == "fresh" and out.offer["version"] == newer and out.checked == 1000.0
     assert settings.load_settings()["launcher_latest"]["version"] == newer
     clock[0] += 1800
-    again = updates.check_launcher_update(fetch=fetch, now=lambda: clock[0])
+    again = feed.check_launcher_update(fetch=fetch, now=lambda: clock[0])
     assert again.status == "cached" and again.offer["version"] == newer and len(fetch.calls) == 1
-    clock[0] += updates.CHECK_EVERY
-    updates.check_launcher_update(fetch=fetch, now=lambda: clock[0])
+    clock[0] += feed.CHECK_EVERY
+    feed.check_launcher_update(fetch=fetch, now=lambda: clock[0])
     assert fetch.calls[-1] == ("stable", '"e1"')  # an hour later it asks again, with the ETag
 
 
 def test_not_modified_keeps_the_cached_answer_and_counts_as_checked():
     newer = _bump(__version__)
     clock = [1000.0]
-    updates.check_launcher_update(
-        fetch=_fetcher(updates.Fetched("ok", data=_rel(newer), etag='"e1"')), now=lambda: clock[0]
-    )
-    clock[0] += updates.CHECK_EVERY + 1
-    out = updates.check_launcher_update(fetch=_fetcher(updates.Fetched("not_modified")), now=lambda: clock[0])
+    feed.check_launcher_update(fetch=_fetcher(feed.Fetched("ok", data=_rel(newer), etag='"e1"')), now=lambda: clock[0])
+    clock[0] += feed.CHECK_EVERY + 1
+    out = feed.check_launcher_update(fetch=_fetcher(feed.Fetched("not_modified")), now=lambda: clock[0])
     assert out.status == "fresh" and out.offer["version"] == newer and out.checked == clock[0]
 
 
 def test_same_or_older_release_is_quiet():
     for v in (__version__, "0.1.0"):
         settings.save_settings(launcher_latest=None)
-        out = updates.check_launcher_update(fetch=_fetcher(updates.Fetched("ok", data=_rel(v))))
+        out = feed.check_launcher_update(fetch=_fetcher(feed.Fetched("ok", data=_rel(v))))
         assert out.status == "fresh" and out.offer is None and not out.failed
 
 
 def test_a_failed_check_is_reported_never_up_to_date():
     for status in ("offline", "rate_limited", "error"):
         settings.save_settings(launcher_latest=None, launcher_next_check=0.0, launcher_check_failures=0)
-        out = updates.check_launcher_update(fetch=_fetcher(updates.Fetched(status, reason="why")), force=True)
+        out = feed.check_launcher_update(fetch=_fetcher(feed.Fetched(status, reason="why")), force=True)
         assert out.failed and out.status == status and out.reason == "why" and out.offer is None
         assert settings.load_settings()["launcher_check_error"] == "why"
 
 
 def test_failures_back_off_and_a_success_resets():
     clock = [10_000.0]
-    down = _fetcher(updates.Fetched("offline", reason="no network"))
+    down = _fetcher(feed.Fetched("offline", reason="no network"))
     waits = []
     for _ in range(7):
-        out = updates.check_launcher_update(fetch=down, now=lambda: clock[0], rand=lambda: 0.0)
+        out = feed.check_launcher_update(fetch=down, now=lambda: clock[0], rand=lambda: 0.0)
         assert out.status == "offline"
         waits.append(out.retry_at - clock[0])
-        blocked = updates.check_launcher_update(fetch=down, now=lambda: clock[0], rand=lambda: 0.0)
+        blocked = feed.check_launcher_update(fetch=down, now=lambda: clock[0], rand=lambda: 0.0)
         assert blocked.status == "waiting" and blocked.reason == "no network"  # no request while backing off
         clock[0] = out.retry_at + 1
-    assert waits[:5] == [3600, 7200, 14400, 28800, 57600] and waits[-1] == updates.MAX_BACKOFF
+    assert waits[:5] == [3600, 7200, 14400, 28800, 57600] and waits[-1] == feed.MAX_BACKOFF
     assert len(down.calls) == 7
-    up = updates.check_launcher_update(
-        fetch=_fetcher(updates.Fetched("ok", data=_rel(__version__))), now=lambda: clock[0]
-    )
+    up = feed.check_launcher_update(fetch=_fetcher(feed.Fetched("ok", data=_rel(__version__))), now=lambda: clock[0])
     s = settings.load_settings()
     assert up.status == "fresh" and s["launcher_check_failures"] == 0 and s["launcher_check_error"] == ""
 
 
 def test_github_limit_waits_until_its_reset():
     clock = [1000.0]
-    out = updates.check_launcher_update(
-        fetch=_fetcher(updates.Fetched("rate_limited", reason="limit", retry_at=5000.0)), now=lambda: clock[0]
+    out = feed.check_launcher_update(
+        fetch=_fetcher(feed.Fetched("rate_limited", reason="limit", retry_at=5000.0)), now=lambda: clock[0]
     )
     assert out.status == "rate_limited" and out.retry_at == 5000.0
 
 
 def test_force_ignores_cache_backoff_toggle_and_skip():
     newer = _bump(__version__)
-    fetch = _fetcher(updates.Fetched("ok", data=_rel(newer)))
-    assert updates.check_launcher_update(fetch=fetch).offer
-    updates.skip_update(newer)
-    assert updates.check_launcher_update(fetch=fetch).offer is None
+    fetch = _fetcher(feed.Fetched("ok", data=_rel(newer)))
+    assert feed.check_launcher_update(fetch=fetch).offer
+    feed.skip_update(newer)
+    assert feed.check_launcher_update(fetch=fetch).offer is None
     settings.save_settings(check_launcher_updates=False, launcher_next_check=1e12)
-    assert updates.check_launcher_update(fetch=fetch).status == "off"
-    forced = updates.check_launcher_update(fetch=fetch, force=True)
+    assert feed.check_launcher_update(fetch=fetch).status == "off"
+    forced = feed.check_launcher_update(fetch=fetch, force=True)
     assert forced.status == "fresh" and forced.offer["version"] == newer and len(fetch.calls) == 2
 
 
 def test_channel_switch_does_not_reuse_the_other_channels_answer():
     beta = _bump(__version__) + "-rc.1"
-    updates.check_launcher_update(fetch=_fetcher(updates.Fetched("ok", data=_rel(__version__))))
+    feed.check_launcher_update(fetch=_fetcher(feed.Fetched("ok", data=_rel(__version__))))
     settings.save_settings(launcher_channel="beta")
-    fetch = _fetcher(updates.Fetched("ok", data=_rel(beta, prerelease=True)))
-    out = updates.check_launcher_update(fetch=fetch)
+    fetch = _fetcher(feed.Fetched("ok", data=_rel(beta, prerelease=True)))
+    out = feed.check_launcher_update(fetch=fetch)
     assert fetch.calls == [("beta", "")] and out.offer["version"] == beta
 
 
@@ -156,11 +152,11 @@ def test_channels_pick_their_release():
         {"tag_name": "v9.0.0", "assets": [{"name": "a", "browser_download_url": "u"}], "body": "b"},
         {"tag_name": "v9.2.0", "draft": True},
     ]
-    assert updates.pick_release(docs, "beta")["version"] == "9.1.0-rc.1"
-    stable = updates.pick_release(docs[1], "stable")
+    assert feed.pick_release(docs, "beta")["version"] == "9.1.0-rc.1"
+    stable = feed.pick_release(docs[1], "stable")
     assert stable["version"] == "9.0.0" and stable["assets"] == {"a": "u"} and stable["notes"] == "b"
-    assert updates.pick_release(docs[0], "stable") is None  # a pre-release is never offered on Stable
-    assert updates.pick_release([], "beta") is None and updates.pick_release("junk", "beta") is None
+    assert feed.pick_release(docs[0], "stable") is None  # a pre-release is never offered on Stable
+    assert feed.pick_release([], "beta") is None and feed.pick_release("junk", "beta") is None
 
 
 class _Resp(io.BytesIO):
@@ -186,7 +182,7 @@ def test_github_answers_are_told_apart():
 
         return opener
 
-    ok = updates.fetch_release(opener=opener_for(_Resp(b'{"tag_name": "v9.9.9"}', {"ETag": '"x"'})))
+    ok = feed.fetch_release(opener=opener_for(_Resp(b'{"tag_name": "v9.9.9"}', {"ETag": '"x"'})))
     assert ok.status == "ok" and ok.data["version"] == "9.9.9" and ok.etag == '"x"'
     seen = {}
 
@@ -194,44 +190,43 @@ def test_github_answers_are_told_apart():
         seen.update(req.headers)
         raise _http_error(304)
 
-    assert updates.fetch_release(etag='"x"', opener=recording).status == "not_modified"
+    assert feed.fetch_release(etag='"x"', opener=recording).status == "not_modified"
     assert seen.get("If-none-match") == '"x"'
-    limited = updates.fetch_release(
+    limited = feed.fetch_release(
         opener=opener_for(_http_error(403, {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "12345"}))
     )
     assert limited.status == "rate_limited" and limited.retry_at == 12345.0
     assert (
-        updates.fetch_release(opener=opener_for(_http_error(429, {"Retry-After": "60"})), now=lambda: 100).retry_at
-        == 160
+        feed.fetch_release(opener=opener_for(_http_error(429, {"Retry-After": "60"})), now=lambda: 100).retry_at == 160
     )
-    assert updates.fetch_release(opener=opener_for(urllib.error.URLError("no route"))).status == "offline"
-    assert updates.fetch_release(opener=opener_for(TimeoutError())).status == "offline"
-    assert updates.fetch_release(opener=opener_for(_http_error(500))).status == "error"
-    assert updates.fetch_release(opener=opener_for(_Resp(b"not json"))).status == "error"
+    assert feed.fetch_release(opener=opener_for(urllib.error.URLError("no route"))).status == "offline"
+    assert feed.fetch_release(opener=opener_for(TimeoutError())).status == "offline"
+    assert feed.fetch_release(opener=opener_for(_http_error(500))).status == "error"
+    assert feed.fetch_release(opener=opener_for(_Resp(b"not json"))).status == "error"
 
 
 def test_advisory_warns_only_below_the_minimum():
     newer = _bump(__version__)
-    got = updates.Fetched("ok", data={"minimum": newer, "message": "known bug", "url": ""})
+    got = feed.Fetched("ok", data={"minimum": newer, "message": "known bug", "url": ""})
     calls = []
 
     def fetch(etag=""):
         calls.append(etag)
         return got
 
-    assert updates.check_advisory(fetch=fetch)["message"] == "known bug"
-    assert updates.check_advisory(fetch=fetch) and len(calls) == 1  # cached for the hour
+    assert feed.check_advisory(fetch=fetch)["message"] == "known bug"
+    assert feed.check_advisory(fetch=fetch) and len(calls) == 1  # cached for the hour
     settings.save_settings(launcher_advisory=None)
     got.data = {"minimum": None, "message": "", "url": ""}
-    assert updates.check_advisory(fetch=fetch) is None
+    assert feed.check_advisory(fetch=fetch) is None
     settings.save_settings(launcher_advisory=None)
     got.data = {"minimum": __version__, "message": "x", "url": ""}
-    assert updates.check_advisory(fetch=fetch) is None  # this version is the minimum: fine
+    assert feed.check_advisory(fetch=fetch) is None  # this version is the minimum: fine
 
 
 def test_release_notes_become_plain_lines():
     md = "## What's Changed\n* **Fixed** a [bug](https://x) in `x` by @me\n\n<!-- hidden -->\n- two\n- three\n"
-    assert updates.release_notes(md, lines=3) == "What's Changed\n• Fixed a bug in x by @me\n• two"
+    assert feed.release_notes(md, lines=3) == "What's Changed\n• Fixed a bug in x by @me\n• two"
 
 
 # ---------------------------------------------------------------------------- signatures
@@ -311,7 +306,7 @@ def test_download_refuses_what_it_cannot_trust(tmp_path):
     }
     for expect, rel in cases.items():
         key = fakerelease.Key().public if expect == "did not check out" else rel.key.public
-        with pytest.raises(updates.UpdateError, match=expect):
+        with pytest.raises(feed.UpdateError, match=expect):
             rel.download(workdir=tmp_path, key=key)
     assert not list(tmp_path.rglob("*.nupkg"))
 
@@ -331,17 +326,17 @@ def test_feed_entries_are_checked_even_when_signed(tmp_path):
         rel.urls["https://x/sig"] = key.sign(
             raw, updates.SIGNED_COMMENT.format(version="99.0.0", channel=updates.OS_CHANNEL)
         ).encode()
-        with pytest.raises(updates.UpdateError, match=expect):
+        with pytest.raises(feed.UpdateError, match=expect):
             rel.download(workdir=tmp_path)
 
 
 def test_download_refuses_not_newer_and_blocked_versions(tmp_path):
     rel = fakerelease.make(version="1.0.0")
-    with pytest.raises(updates.UpdateError, match="not newer"):
+    with pytest.raises(feed.UpdateError, match="not newer"):
         rel.download(workdir=tmp_path, current="1.0.0")
     settings.save_settings(update_blocked=["99.0.0"])
     rel = fakerelease.make()
-    with pytest.raises(updates.UpdateError, match="failed to start here before"):
+    with pytest.raises(feed.UpdateError, match="failed to start here before"):
         rel.download(workdir=tmp_path)
     assert rel.calls == []  # refused before anything was downloaded
 
@@ -356,7 +351,7 @@ def test_verify_prepared_catches_anything_changed_after_the_check(tmp_path):
     ):
         prepared = fakerelease.make().download(workdir=tmp_path / str(len(list(tmp_path.iterdir()))))
         change(prepared)
-        with pytest.raises(updates.UpdateError):
+        with pytest.raises(feed.UpdateError):
             updates.verify_prepared(prepared)
 
 
@@ -446,7 +441,7 @@ def test_fetch_to_file_keeps_the_part_when_the_connection_drops(tmp_path):
                 raise ConnectionResetError("reset")
             return super().read(5)
 
-    with pytest.raises(updates.UpdateError, match="continues where it stopped"):
+    with pytest.raises(feed.UpdateError, match="continues where it stopped"):
         updates.fetch_to_file("https://x/u", part, opener=lambda req, timeout=None: Dropping(b"0123456789"))
     assert part.read_bytes() == b"01234"
 
@@ -538,11 +533,11 @@ def test_apply_hands_velopack_the_verified_folder_and_starts_the_watchdog(tmp_pa
 def test_apply_refuses_without_a_rollback_copy_or_with_another_target(tmp_path, monkeypatch):
     _managed(monkeypatch, tmp_path)
     prepared = fakerelease.make().download(workdir=tmp_path / "dl")
-    with pytest.raises(updates.UpdateError, match="put this version back"):
+    with pytest.raises(feed.UpdateError, match="put this version back"):
         updates.apply_update(prepared, velopack_module=_FakeVelopack(), popen=lambda *a, **k: None)
     prepared.rollback = tmp_path / "kept.nupkg"
     prepared.rollback.write_bytes(b"previous")
-    with pytest.raises(updates.UpdateError, match="did not match"):
+    with pytest.raises(feed.UpdateError, match="did not match"):
         updates.apply_update(prepared, velopack_module=_FakeVelopack(target="98.5.0"), popen=lambda *a, **k: None)
     assert settings.load_settings()["update_pending"] is None
 
@@ -566,11 +561,11 @@ def test_a_rollback_is_reported_once_and_blocks_that_version():
     assert result["status"] == "rolled_back" and result["version"] == "99.0.0" and "90 seconds" in result["error"]
     s = settings.load_settings()
     assert s["update_blocked"] == ["99.0.0"] and s["update_pending"] is None and not (state / "rollback.json").exists()
-    fetch = _fetcher(updates.Fetched("ok", data=_rel("99.0.0")))
-    check = updates.check_launcher_update(fetch=fetch, force=True, current="98.0.0")
+    fetch = _fetcher(feed.Fetched("ok", data=_rel("99.0.0")))
+    check = feed.check_launcher_update(fetch=fetch, force=True, current="98.0.0")
     assert check.offer is None and check.blocked == "99.0.0"  # not even Check for updates offers it
-    check = updates.check_launcher_update(
-        fetch=_fetcher(updates.Fetched("ok", data=_rel("99.0.1"))), force=True, current="98.0.0"
+    check = feed.check_launcher_update(
+        fetch=_fetcher(feed.Fetched("ok", data=_rel("99.0.1"))), force=True, current="98.0.0"
     )
     assert check.offer["version"] == "99.0.1"  # a newer release is offered
     updates.clear_outcome()
@@ -708,7 +703,7 @@ def test_apply_refuses_when_the_build_is_not_this_installs(tmp_path, monkeypatch
     prepared = fakerelease.make().download(workdir=tmp_path / "dl")
     prepared.rollback = tmp_path / "kept.nupkg"
     prepared.rollback.write_bytes(b"previous")
-    with pytest.raises(updates.UpdateError, match="app ID"):
+    with pytest.raises(feed.UpdateError, match="app ID"):
         updates.apply_update(
             prepared, velopack_module=_FakeVelopack(), popen=lambda *a, **k: pytest.fail("no watchdog")
         )

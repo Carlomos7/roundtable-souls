@@ -218,6 +218,7 @@ from roundtable_souls.ui.widgets import (
     tone_label,
 )
 from roundtable_souls.updates import apply as updates
+from roundtable_souls.updates import feed
 from roundtable_souls.updates import inno as migration
 
 ROW_ACTION_W = 156  # the action button on each Mods row
@@ -3761,11 +3762,11 @@ class Launcher(FluentWindow):
     def _check_launcher_update(self, force=False):
         def work():
             try:
-                check = updates.check_launcher_update(force=force)
+                check = feed.check_launcher_update(force=force)
             except Exception as e:
-                check = updates.UpdateCheck("error", reason=str(e))
+                check = feed.UpdateCheck("error", reason=str(e))
             try:
-                advisory = updates.check_advisory(force=force)
+                advisory = feed.check_advisory(force=force)
             except Exception:
                 advisory = None
             self.bus.update.emit({"check": check, "advisory": advisory, "force": force})
@@ -3860,7 +3861,7 @@ class Launcher(FluentWindow):
         notes.clicked.connect(lambda: desktop.open_path(info.get("url") or RELEASES_URL))
         skip = ghost_btn("Skip this version")
         skip.setToolTip("Do not mention this version again; the next one will show.")
-        summary = updates.release_notes(info.get("notes", ""), lines=4)
+        summary = feed.release_notes(info.get("notes", ""), lines=4)
         how = (
             "One click, then a restart. Settings stay."
             if can_apply
@@ -3878,7 +3879,7 @@ class Launcher(FluentWindow):
             go.clicked.connect(lambda: self._start_update(info, bar))
         else:
             go.clicked.connect(lambda: desktop.open_path(info.get("url") or RELEASES_URL))
-        skip.clicked.connect(lambda: (updates.skip_update(version), bar.close()))
+        skip.clicked.connect(lambda: (feed.skip_update(version), bar.close()))
 
     def _cannot_update(self) -> str:
         """Why the program cannot be replaced now, or ''."""

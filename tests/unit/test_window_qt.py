@@ -28,8 +28,8 @@ def app():
 @pytest.fixture
 def launcher(app, monkeypatch):
     launched = []
-    monkeypatch.setattr(window.updates, "check_launcher_update", lambda *a, **k: window.updates.UpdateCheck("off"))
-    monkeypatch.setattr(window.updates, "check_advisory", lambda *a, **k: None)
+    monkeypatch.setattr(window.feed, "check_launcher_update", lambda *a, **k: window.feed.UpdateCheck("off"))
+    monkeypatch.setattr(window.feed, "check_advisory", lambda *a, **k: None)
     monkeypatch.setattr(window, "me3_facts", lambda setup: {"version": None, "info": {}, "latest": None})
     monkeypatch.setattr(window.Launcher, "launch", lambda self: launched.append("play"))
     monkeypatch.setattr(window.Launcher, "launch_offline", lambda self: launched.append("offline"))
@@ -203,8 +203,8 @@ def sandbox(app, monkeypatch, tmp_path):
     (profiles / "sandbox.me3").write_text(SANDBOX_PROFILE, encoding="utf-8")
     monkeypatch.setattr(common, "me3_profiles_dir", lambda: profiles)
     monkeypatch.setattr(common, "save_files", lambda game=None: [])
-    monkeypatch.setattr(window.updates, "check_launcher_update", lambda *a, **k: window.updates.UpdateCheck("off"))
-    monkeypatch.setattr(window.updates, "check_advisory", lambda *a, **k: None)
+    monkeypatch.setattr(window.feed, "check_launcher_update", lambda *a, **k: window.feed.UpdateCheck("off"))
+    monkeypatch.setattr(window.feed, "check_advisory", lambda *a, **k: None)
     monkeypatch.setattr(window, "me3_facts", lambda setup: {"version": None, "info": {}, "latest": None})
     monkeypatch.setattr(window.Launcher, "launch", lambda self: None)
     monkeypatch.setattr(window.Launcher, "_watch_game", lambda self: None)
@@ -267,7 +267,7 @@ def test_update_notice_fits_a_narrow_window(sandbox, monkeypatch):
     QTest.qWait(100)
     notes = "## Changes\n- one\n- two"
     offer = {"version": "9.9.9", "url": "https://example.invalid", "notes": notes, "assets": {}}
-    w._on_update({"check": window.updates.UpdateCheck("fresh", offer=offer), "advisory": None, "force": False})
+    w._on_update({"check": window.feed.UpdateCheck("fresh", offer=offer), "advisory": None, "force": False})
     QTest.qWait(400)
     from qfluentwidgets import InfoBar
 
@@ -1207,13 +1207,13 @@ def _bars(w):
 
 def test_a_failed_check_never_says_up_to_date(sandbox):
     w = sandbox
-    check = window.updates.UpdateCheck("offline", reason="GitHub could not be reached (no route)", retry_at=0.0)
+    check = window.feed.UpdateCheck("offline", reason="GitHub could not be reached (no route)", retry_at=0.0)
     w._on_update({"check": check, "advisory": None, "force": True})
     QTest.qWait(200)
     assert "could not check" in w.launcher_line.text() and "up to date" not in w.launcher_line.text()
     titles = [b.title for b in _bars(w)]
     assert "Could not check" in titles and "Up to date" not in titles
-    ok = window.updates.UpdateCheck("fresh", checked=time.time())
+    ok = window.feed.UpdateCheck("fresh", checked=time.time())
     w._on_update({"check": ok, "advisory": None, "force": True})
     QTest.qWait(200)
     assert "up to date" in w.launcher_line.text() and "last checked" in w.launcher_line.text()
@@ -1223,7 +1223,7 @@ def test_unsigned_release_offers_the_releases_page(sandbox, monkeypatch):
     w = sandbox
     monkeypatch.setattr(window, "FROZEN", True)
     offer = {"version": "9.9.9", "url": "https://example.invalid", "notes": "", "assets": {"RoundtableSouls.zip": "u"}}
-    w._on_update({"check": window.updates.UpdateCheck("fresh", offer=offer), "advisory": None, "force": False})
+    w._on_update({"check": window.feed.UpdateCheck("fresh", offer=offer), "advisory": None, "force": False})
     QTest.qWait(200)
     bar = next(b for b in _bars(w) if "9.9.9" in b.title)
     labels = [b.text() for b in bar.findChildren(QPushButton)]
@@ -1234,7 +1234,7 @@ def test_advisory_warns_once(sandbox):
     w = sandbox
     adv = {"minimum": "99.0.0", "message": "Known crash.", "url": ""}
     for _ in range(2):
-        w._on_update({"check": window.updates.UpdateCheck("fresh"), "advisory": adv, "force": False})
+        w._on_update({"check": window.feed.UpdateCheck("fresh"), "advisory": adv, "force": False})
     QTest.qWait(200)
     assert sum("should be updated" in b.title for b in _bars(w)) == 1
 

@@ -142,7 +142,7 @@ from roundtable_souls.saves.service import (
     saves_needing_attention,
     torrent_text,
 )
-from roundtable_souls.updates.apply import RELEASES_URL
+from roundtable_souls.updates.feed import RELEASES_URL
 
 HERE = exe_dir()
 DATA_DIR = data_dir()

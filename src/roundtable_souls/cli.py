@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 
 def main() -> int:
-    """Console entry point: the window; or without one --play, --check, --update (see updates.update_headless)."""
+    """Console entry point: the window; or without one --play, --check, --update (see headless.update_headless)."""
     from roundtable_souls.platform import logging as run_logging
 
     run_logging.setup_logging()
@@ -23,12 +23,14 @@ def main() -> int:
     sys.excepthook = crashed
     if getattr(sys, "frozen", False):
         from roundtable_souls.updates import apply as updates
+        from roundtable_souls.updates import headless
 
         updates.velopack_startup()  # Velopack's install/update/uninstall hooks exit here
     if "--update" in sys.argv:
         from roundtable_souls.updates import apply as updates
+        from roundtable_souls.updates import headless
 
-        return updates.update_headless([a for a in sys.argv[1:] if a != "--update"])
+        return headless.update_headless([a for a in sys.argv[1:] if a != "--update"])
     if "--play" in sys.argv or "--check" in sys.argv or any(a.startswith("--game") for a in sys.argv):
         from roundtable_souls import core, games
 
