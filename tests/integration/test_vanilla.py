@@ -6,13 +6,16 @@ import struct
 
 import pytest
 
+from roundtable_souls.saves import layout as save_layout_check
+from roundtable_souls.saves import vanilla as save_vanilla
 from roundtable_souls.services import play as g
+from roundtable_souls.services import saves as saves_service
 from support import live_save as _live_save
 
 A = g.save_analyze
 F = g.save_fix
-L = g.save_layout_check
-V = g.save_vanilla
+L = save_layout_check
+V = save_vanilla
 
 GOODS, ARMOR, TALISMAN = 0x40000000, 0x10000000, 0x20000000
 
@@ -101,8 +104,8 @@ def test_restore_vanilla_on_a_copy_of_the_live_save(tmp_path, monkeypatch):
     if not V.restore_needed(plan):
         pytest.skip("live save has nothing to restore right now")
     info0 = g.save_info(copy)
-    assert g.restore_available(info0) and g.repair_available(info0) and not info0["convert_ok"]
-    out = g.restore_vanilla(copy)
+    assert saves_service.restore_available(info0) and saves_service.repair_available(info0) and not info0["convert_ok"]
+    out = saves_service.restore_vanilla(copy)
     assert out["backup"] and out["backup"].read_bytes() == before
     after = copy.read_bytes()
     r1 = L.parse(str(copy))
@@ -148,5 +151,5 @@ def test_restore_refuses_while_game_runs(tmp_path, monkeypatch):
     p = tmp_path / "ER0000.co2"
     p.write_bytes(b"x")
     with pytest.raises(RuntimeError):
-        g.restore_vanilla(p)
+        saves_service.restore_vanilla(p)
     assert p.read_bytes() == b"x"

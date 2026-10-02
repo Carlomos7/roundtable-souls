@@ -1,22 +1,19 @@
-"""Model layer facade: setups, the play session jobs, error reporting, and the names the window and the
-tests reach for. The Seamless ini lives in coop.py, save info and repairs in saves/service.py, profile mods in
-mods/service.py; they are re-exported here so callers have one import.
-"""
+"""Play: the setups a game can launch (me3 profiles, launchers' installation.json), the play session jobs (online,
+offline, repair, cleanup), play without the window (--play, --check), and error reporting. Co-op, saves, mods,
+settings and updates have services modules of their own."""
 
 from __future__ import annotations
 
-import datetime
 import json
 import os
 import re
 import sys
 import time
-import traceback
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from roundtable_souls import __version__, folders
+from roundtable_souls import __version__
 from roundtable_souls.config.settings import (
     FROZEN,
     data_dir,
@@ -25,130 +22,37 @@ from roundtable_souls.config.settings import (
     launch_target,
     load_settings,
     save_game_settings,
-    save_settings,
 )
-from roundtable_souls.coop import ini as coop
 from roundtable_souls.coop.ini import (
-    LINE_RE,
-    PW_RE,
-    SAVE_KINDS,
-    SECTION_RE,
-    SECTION_TITLES,
-    SETTING_COPY,
-    VOLUME_STOPS,
-    _read,
-    choice_label,
     coop_ini_for,
-    ersc_ini_for,
     has_password,
-    label_of,
-    nearest_volume_stop,
     read_keys,
     read_password,
-    read_settings_meta,
-    setting_face,
-    write_keys,
-    write_password,
 )
 from roundtable_souls.coop.scaling import (
-    CUSTOM,
-    NIGHTREIGN_SCALING,
-    SCALING_KEYS,
-    SCALING_LABELS,
-    SCALING_PRESETS,
-    ScalingSpec,
     preset_of,
     read_scaling,
     scaling_spec,
-)
-from roundtable_souls.coop.share import (
-    COMMENT_PREFIX,
-    JSON_FORMAT,
-    export_settings,
-    export_text,
-    indent_lines,
-    load_settings_json,
-    parse_settings_json,
-    plan_import,
-    read_all_settings,
-    strip_json_comments,
-    toggle_comment,
 )
 from roundtable_souls.files import (
     atomic_write,
 )
 from roundtable_souls.game import catalog as games
-from roundtable_souls.mods import conflicts as mod_overview
-from roundtable_souls.mods import history as mod_history
 from roundtable_souls.mods import profile as profile_tools
 from roundtable_souls.mods import profile_edit as mod_manage
 from roundtable_souls.mods import rebuild as mod_merge
-from roundtable_souls.mods import stay_last as mod_stay_last
-from roundtable_souls.mods import undo as mod_undo
 from roundtable_souls.platform import logging as run_logging
-from roundtable_souls.platform import me3_info, steam, trash
+from roundtable_souls.platform import me3_info, steam
 from roundtable_souls.platform import paths as common
-from roundtable_souls.platform import processes as clear_dead_game_shells
 from roundtable_souls.platform import session as me3_session
-from roundtable_souls.platform.paths import PATH_SETTINGS, apply_overrides
+from roundtable_souls.platform.paths import apply_overrides
 from roundtable_souls.resources import ASSETS_DIR
 from roundtable_souls.saves import analyze as save_analyze
 from roundtable_souls.saves import fix as save_fix
-from roundtable_souls.saves import layout as save_layout_check
-from roundtable_souls.saves import library as save_library
-from roundtable_souls.saves import loading as save_loading
-from roundtable_souls.saves import regulation as repair_regulation
 from roundtable_souls.saves import repair as save_repair
-from roundtable_souls.saves import transfer as save_transfer
-from roundtable_souls.saves import vanilla as save_vanilla
-from roundtable_souls.services import mods as mods_service
-from roundtable_souls.services import saves as saves_service
-from roundtable_souls.services.mods import (
-    create_profile,
-    delete_profile,
-    install_mod,
-    me3_facts,
-    plan_mod_install,
-    profile_entries,
-    read_profile_mods,
-    read_profile_settings,
-    replan_mod_install,
-    scan_profile_conflicts,
-    set_mod_options,
-    set_profile_mod_enabled,
-    uninstall_mod,
-    write_profile_setting,
-)
 from roundtable_souls.services.saves import (
-    AREA_NAMES,
-    assert_writable,
-    backups_folder,
-    character_detail,
-    convert_co2_to_sl2,
-    convert_sl2_to_co2,
-    dead_shells_count,
-    delete_backup,
-    dlc_owned,
-    fix_checksums,
-    fix_loading,
-    health_report,
-    keep_backup,
-    list_backups,
-    place_name,
-    remove_mod_items,
-    repair_available,
-    repair_save,
-    restore_available,
-    restore_backup,
-    restore_vanilla,
-    save_findings,
-    save_for_backup,
     save_info,
-    save_summary,
-    saves_needing_attention,
-    torrent_text,
 )
-from roundtable_souls.updates.feed import RELEASES_URL
 
 HERE = exe_dir()
 DATA_DIR = data_dir()

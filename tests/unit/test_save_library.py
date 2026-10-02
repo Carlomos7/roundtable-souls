@@ -10,6 +10,7 @@ from roundtable_souls.platform import paths as common
 from roundtable_souls.saves import library as Lib
 from roundtable_souls.saves import regulation
 from roundtable_souls.services import play as core
+from roundtable_souls.services import saves as saves_service
 
 ER = games.ELDEN_RING
 
@@ -97,6 +98,6 @@ def test_save_files_include_the_names_the_setup_uses(tmp_path, monkeypatch):
         assert [p.name for p in common.save_files(ER)] == ["ER0000.sl2"]
         common.set_setup_save_names(ER, {"standard": "ER0000.sl2", "coop": "run2.co3"})
         assert [p.name for p in common.save_files(ER)] == ["ER0000.sl2", "run2.co3"]
-        assert core.saves_service.save_kind(acct / "run2.co3", ER) == "Seamless Co-op"
+        assert saves_service.save_kind(acct / "run2.co3", ER) == "Seamless Co-op"
     finally:
         common.set_setup_save_names(ER, {})

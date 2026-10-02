@@ -929,8 +929,8 @@ def test_undo_rebuild_and_redo_from_activity(sandbox, monkeypatch):
         ran.append(bool(u.get("redo")))
         return "undid the rebuild: the profile back as before" if not u.get("redo") else "redid the rebuild"
 
-    monkeypatch.setattr(window.core.mod_undo, "run", fake_run)
-    monkeypatch.setattr(window.core.mod_undo, "available", lambda u: bool(u))
+    monkeypatch.setattr(window.mod_undo, "run", fake_run)
+    monkeypatch.setattr(window.mod_undo, "available", lambda u: bool(u))
     monkeypatch.setattr(window, "confirm", lambda *a, **k: True)
     monkeypatch.setattr(window, "notice", lambda *a, **k: type("B", (), {"close": lambda s: None})())
     job = rl.begin_job("rebuild combined parameters")
@@ -977,8 +977,8 @@ def test_the_load_order_card_says_what_loads_after_the_mod_that_must_stay_last(s
     w.switchTo(w.mods_page)
     w.load_exp.setExpand(False)
     fixed, kept = [], []
-    monkeypatch.setattr(window.core.mod_stay_last, "fix", lambda p: fixed.append(p))
-    monkeypatch.setattr(window.core.mod_stay_last, "keep_after", lambda p, names, keep=True: kept.append((names, keep)))
+    monkeypatch.setattr(window.mod_stay_last, "fix", lambda p: fixed.append(p))
+    monkeypatch.setattr(window.mod_stay_last, "keep_after", lambda p, names, keep=True: kept.append((names, keep)))
     st = {"name": "revive", "late": ["hand"], "kept": [], "kept_setting": [], "can_fix": True, "problem": None}
     assert w._fill_stay_last(st) == ["hand"]
     assert "hand loads after revive and replaces its files" in w.last_text.text()

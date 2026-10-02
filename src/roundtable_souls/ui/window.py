@@ -69,92 +69,108 @@ from qfluentwidgets import (
 )
 from qfluentwidgets import FluentIcon as FI
 
+from roundtable_souls import folders
 from roundtable_souls.config.settings import FROZEN, appimage, is_installed, is_portable
 from roundtable_souls.game import catalog as games
 from roundtable_souls.mods import checks as mod_checks
 from roundtable_souls.mods import configs as mod_configs
+from roundtable_souls.mods import conflicts as mod_overview
 from roundtable_souls.mods import extract as mod_extract
+from roundtable_souls.mods import history as mod_history
 from roundtable_souls.mods import install as mod_install
-from roundtable_souls.platform import desktop, instance
+from roundtable_souls.mods import stay_last as mod_stay_last
+from roundtable_souls.mods import undo as mod_undo
+from roundtable_souls.platform import desktop, instance, trash
 from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.resources import ASSETS_DIR
+from roundtable_souls.saves import library as save_library
+from roundtable_souls.saves import transfer as save_transfer
 from roundtable_souls.services import play as core
-from roundtable_souls.services.play import (
+from roundtable_souls.services import saves as saves_service
+from roundtable_souls.services.coop import (
     CUSTOM,
-    LOGS,
-    PLAY_DEFAULTS,
-    RELEASES_URL,
     SAVE_KINDS,
     SCALING_KEYS,
     SCALING_LABELS,
     SCALING_PRESETS,
+    VOLUME_STOPS,
+    choice_label,
+    export_text,
+    label_of,
+    parse_settings_json,
+    plan_import,
+    read_settings_meta,
+    setting_face,
+    write_keys,
+    write_password,
+)
+from roundtable_souls.services.mods import (
+    create_profile,
+    delete_profile,
+    install_mod,
+    me3_facts,
+    plan_mod_install,
+    profile_entries,
+    read_profile_mods,
+    read_profile_settings,
+    replan_mod_install,
+    set_mod_options,
+    uninstall_mod,
+    write_profile_setting,
+)
+from roundtable_souls.services.play import (
+    LOGS,
+    PLAY_DEFAULTS,
     TITLE,
     VERSION,
-    VOLUME_STOPS,
-    apply_overrides,
-    character_detail,
-    choice_label,
-    create_profile,
-    dead_shells_count,
-    delete_backup,
-    delete_profile,
     discover,
-    export_text,
-    fix_checksums,
-    fix_loading,
     forget_setup,
-    game_setting,
     has_password,
-    health_report,
-    install_mod,
     job_clear,
     job_play,
     job_play_offline,
     job_repair,
-    label_of,
-    list_backups,
-    load_settings,
     logo_path,
-    me3_facts,
-    parse_settings_json,
     places,
-    plan_import,
-    plan_mod_install,
     play_command,
     play_options,
     preset_of,
-    profile_entries,
     read_password,
-    read_profile_mods,
-    read_profile_settings,
     read_scaling,
-    read_settings_meta,
     remember_setup,
     remembered_setup,
-    repair_available,
-    repair_save,
-    replan_mod_install,
     report_exception,
-    restore_backup,
-    restore_vanilla,
     route_logs,
     run_job,
     same_source,
-    save_game_settings,
     save_info,
-    save_settings,
-    save_summary,
     scaling_spec,
-    set_mod_options,
-    setting_face,
     setup_from_path,
     steam_state,
-    uninstall_mod,
     use_game,
-    write_keys,
-    write_password,
-    write_profile_setting,
 )
+from roundtable_souls.services.saves import (
+    character_detail,
+    dead_shells_count,
+    delete_backup,
+    fix_checksums,
+    fix_loading,
+    health_report,
+    list_backups,
+    repair_available,
+    repair_save,
+    restore_backup,
+    restore_vanilla,
+    save_summary,
+)
+from roundtable_souls.services.settings import (
+    apply_overrides,
+    game_setting,
+    load_settings,
+    save_game_settings,
+    save_settings,
+)
+from roundtable_souls.services.updates import RELEASES_URL
 from roundtable_souls.ui.activity import ActivityView
 from roundtable_souls.ui.config_files import ConfigFilesDialog
 from roundtable_souls.ui.dialogs import (
@@ -232,7 +248,7 @@ ROW_ACTION_W = 156  # the action button on each Mods row
 class Launcher(FluentWindow):
     def __init__(self):
         super().__init__()
-        core.folders.clear_temp()  # unpacks left by an install that crashed
+        folders.clear_temp()  # unpacks left by an install that crashed
         self.settings = load_settings()
         self.game = use_game(core.STARTUP_GAME or games.get(self.settings.get("game")), self.settings)
         self.bus = Bus()
@@ -1071,7 +1087,7 @@ class Launcher(FluentWindow):
 
         def work():
             try:
-                self.bus.conflicts.emit(core.mod_overview.overview(prof))
+                self.bus.conflicts.emit(mod_overview.overview(prof))
             except Exception as e:  # never leave the card saying "Scanning..."
                 self.bus.conflicts.emit({"profile": str(prof), "error": str(e)})
 
@@ -1124,9 +1140,7 @@ class Launcher(FluentWindow):
             parts.append("no file is shipped twice")
         else:
             parts.append(f"{len(cf)} shipped by more than one")
-            parts += [
-                f"{counts[k]} {core.mod_overview.OUTCOME_TEXT[k]}" for k in core.mod_overview.OUTCOMES if counts.get(k)
-            ]
+            parts += [f"{counts[k]} {mod_overview.OUTCOME_TEXT[k]}" for k in mod_overview.OUTCOMES if counts.get(k)]
         if missing:
             parts.append("missing folder: " + ", ".join(missing))
         if scan.get("truncated"):
@@ -1143,7 +1157,7 @@ class Launcher(FluentWindow):
         per = ov.get("packages") or {}
         lines = []
         for pid, n in per.items():
-            bits = [f"{n[k]} {core.mod_overview.OUTCOME_TEXT[k]}" for k in core.mod_overview.OUTCOMES if n.get(k)]
+            bits = [f"{n[k]} {mod_overview.OUTCOME_TEXT[k]}" for k in mod_overview.OUTCOMES if n.get(k)]
             if n.get("wins"):
                 bits.insert(0, f"used {n['wins']}")
             if bits:
@@ -1164,7 +1178,7 @@ class Launcher(FluentWindow):
             lab.elide_mode = Qt.ElideMiddle
             lab.setText(c["path"])
             rl.addWidget(lab, 1)
-            said = ", ".join(f"{l['id']} {core.mod_overview.OUTCOME_TEXT[l['outcome']]}" for l in c["losers"])
+            said = ", ".join(f"{l['id']} {mod_overview.OUTCOME_TEXT[l['outcome']]}" for l in c["losers"])
             who = hint(f"{c['winner']} is used; {said}")
             who.setWordWrap(True)
             worst = {l["outcome"] for l in c["losers"]}
@@ -1193,9 +1207,7 @@ class Launcher(FluentWindow):
         self.problems_note.setText("\n".join(f"{p['name']}: {'; '.join(p['problems'])}" for p in probs))
         tone_label(self.problems_note, "error")
         summary = [self.merge_pill.text()] if not self.merge_pill.isHidden() else []
-        summary += [
-            f"{counts[k]} {core.mod_overview.OUTCOME_TEXT[k]}" for k in core.mod_overview.OUTCOMES if counts.get(k)
-        ]
+        summary += [f"{counts[k]} {mod_overview.OUTCOME_TEXT[k]}" for k in mod_overview.OUTCOMES if counts.get(k)]
         if late:
             summary.insert(0, f"{len(late)} load{'s' if len(late) == 1 else ''} after {r['stay_last']['name']}")
         if probs:
@@ -1238,7 +1250,7 @@ class Launcher(FluentWindow):
             return
         prof = Path(self.setup.profile)
         try:
-            problem = core.mod_stay_last.fix(prof)
+            problem = mod_stay_last.fix(prof)
         except OSError as e:
             problem = str(e)
         if problem:
@@ -1257,12 +1269,12 @@ class Launcher(FluentWindow):
         if not names:
             return
         try:
-            core.mod_stay_last.keep_after(prof, list(names), keep)
+            mod_stay_last.keep_after(prof, list(names), keep)
             if not keep:
-                problem = core.mod_stay_last.fix(prof)
+                problem = mod_stay_last.fix(prof)
                 if problem:
                     self._toast("Could not fix the load order", problem, error=True)
-        except (OSError, core.mod_stay_last.Unreadable) as e:
+        except (OSError, mod_stay_last.Unreadable) as e:
             self._toast("Could not save that", str(e), error=True)
             return
         self._after_profile_change(
@@ -1832,7 +1844,7 @@ class Launcher(FluentWindow):
         if not self.setup:
             return
         prof = Path(self.setup.profile)
-        copy = core.mod_history.latest(prof)
+        copy = mod_history.latest(prof)
         if copy is None:
             self._toast(title, content)
             return
@@ -1844,7 +1856,7 @@ class Launcher(FluentWindow):
         if not self.setup or not Path(self.setup.profile).is_file():
             return
         prof = Path(self.setup.profile)
-        dlg = VersionsDialog(prof, core.mod_history.versions(prof), core.mod_manage.read_text(prof), self)
+        dlg = VersionsDialog(prof, mod_history.versions(prof), core.mod_manage.read_text(prof), self)
         if dlg.exec() and dlg.chosen() is not None:
             self._restore_version(dlg.chosen())
 
@@ -1853,7 +1865,7 @@ class Launcher(FluentWindow):
             return
         prof = Path(self.setup.profile)
         try:
-            before = core.mod_history.restore(prof, copy)
+            before = mod_history.restore(prof, copy)
         except OSError as e:
             self._toast("Could not restore that version", str(e), error=True)
             return
@@ -2070,7 +2082,7 @@ class Launcher(FluentWindow):
         if not ov or ov.get("error") or not mod_checks.same_folder(Path(ov.get("profile") or ""), prof):
             ov = None
         try:
-            return core.mod_overview.merged_from(prof, entry["name"], ov)
+            return mod_overview.merged_from(prof, entry["name"], ov)
         except Exception:
             return []
 
@@ -2139,7 +2151,7 @@ class Launcher(FluentWindow):
         if self.busy:
             self._toast("Wait for the current job", "Undo runs as a job of its own.", error=True)
             return
-        if not core.mod_undo.available(u):
+        if not mod_undo.available(u):
             self._toast("It cannot be taken back any more", "What it needs is gone.", error=True)
             self.activity.refresh()
             return
@@ -2169,7 +2181,7 @@ class Launcher(FluentWindow):
             name = "the rebuild"
         else:
             name = u.get("name") or "it"
-            in_bin = core.trash.exists(u.get("trash"))
+            in_bin = trash.exists(u.get("trash"))
             dlg = ConfirmDialog(
                 f"Restore {name}",
                 self,
@@ -2195,8 +2207,8 @@ class Launcher(FluentWindow):
                 else f"launcher: restore {name}"
             )
             try:
-                said = core.mod_undo.run(u, run_logging.log)
-            except (core.mod_undo.UndoError, OSError) as e:
+                said = mod_undo.run(u, run_logging.log)
+            except (mod_undo.UndoError, OSError) as e:
                 run_logging.log(f"error: {e}")
                 raise SystemExit(1) from e
             if job_id:
@@ -2473,7 +2485,7 @@ class Launcher(FluentWindow):
             return False
         text = self.profile_edit.toPlainText()
         try:
-            core.mod_history.snapshot(self._profile_file, "before saving the editor")
+            mod_history.snapshot(self._profile_file, "before saving the editor")
             core.atomic_write(
                 self._profile_file, text.replace("\n", "\r\n") if self._profile_crlf else text, backup=True
             )
@@ -2529,8 +2541,8 @@ class Launcher(FluentWindow):
         self.backups_card, bl = card("Backups", FI.HISTORY)
         bl.addWidget(
             hint(
-                f"A backup is taken before every change to a save. The newest {core.folders.KEEP_NEWEST} of each save "
-                f"and everything from the last {core.folders.KEEP_DAYS} days are kept; Keep holds on to one for good. "
+                f"A backup is taken before every change to a save. The newest {folders.KEEP_NEWEST} of each save "
+                f"and everything from the last {folders.KEEP_DAYS} days are kept; Keep holds on to one for good. "
                 "Restore puts a backup back, and backs up the save as it is then, so a restore can be undone."
             )
         )
@@ -3455,9 +3467,9 @@ class Launcher(FluentWindow):
         def work():
             files = core.common.save_files(game)
             for d in {p.parent for p in files}:  # older tools may still drop backup folders beside the saves
-                core.folders.adopt_legacy_save_folders(d, game, again=True)
+                folders.adopt_legacy_save_folders(d, game, again=True)
             infos = [save_info(p, game) for p in files]
-            libs = {str(f): core.save_library.load(f) for f in sorted({p.parent for p in files})}
+            libs = {str(f): save_library.load(f) for f in sorted({p.parent for p in files})}
             self.bus.saves.emit({"token": token, "infos": infos, "libs": libs})
 
         threading.Thread(target=work, daemon=True).start()
@@ -4232,14 +4244,14 @@ class Launcher(FluentWindow):
 
     def _keep_backup(self, b):
         try:
-            core.keep_backup(b["path"], not b["keep"])
+            saves_service.keep_backup(b["path"], not b["keep"])
         except OSError as e:
             self._toast("Could not change it", str(e), error=True)
             return
         self._fill_backups()
 
     def _open_backups_folder(self):
-        folders = core.saves_service.backup_folders()
+        folders = saves_service.backup_folders()
         if not folders:
             self._toast("No saves yet", f"Play {self.game.name} once so it creates its save folder.", info=True)
             return
@@ -4254,7 +4266,7 @@ class Launcher(FluentWindow):
                 error=True,
             )
             return
-        save = core.save_for_backup(b["path"])
+        save = saves_service.save_for_backup(b["path"])
         if not confirm(
             self,
             f"Restore {save.name} from {b['when'][:16]}",
@@ -4416,7 +4428,7 @@ class Launcher(FluentWindow):
             f"Add {path.name} to the library",
             "A copy of the whole file is kept under this name. The save itself does not change.",
             self,
-            text=core.save_library.default_name(path, self.game),
+            text=save_library.default_name(path, self.game),
             apply_text="Add",
         )
         if not dlg.exec():
@@ -4427,8 +4439,8 @@ class Launcher(FluentWindow):
             common = core.common
             common.start_log(f"launcher: add {path.name} to the library")
             try:
-                core.saves_service.assert_writable(path)
-                e = core.save_library.add(path.parent, path, name, game, action="stash")
+                saves_service.assert_writable(path)
+                e = save_library.add(path.parent, path, name, game, action="stash")
                 run_logging.log(f"done: '{e['name']}' ({e['file']}) added from {path.name}")
             except Exception as ex:
                 run_logging.log(f"error: {ex}")
@@ -4443,12 +4455,12 @@ class Launcher(FluentWindow):
         if not targets:
             self._toast("No save to swap into", "Play once so the game creates its save file.", error=True)
             return
-        src = core.save_library.entry_path(Path(folder), entry)
+        src = save_library.entry_path(Path(folder), entry)
         dlg = SwapDialog(self, entry, src, targets, self.game, (self._saves_in_use or {}).get("active"))
         if not dlg.exec():
             return
         target, keep_as, game = dlg.target_path(), dlg.outgoing_name(), self.game
-        if core.save_library.changed_outside(Path(folder), entry) and not confirm(
+        if save_library.changed_outside(Path(folder), entry) and not confirm(
             self,
             f"'{entry['name']}' changed outside the launcher",
             changes=["Its file no longer matches what the library recorded when it was added"],
@@ -4461,8 +4473,8 @@ class Launcher(FluentWindow):
             common = core.common
             common.start_log(f"launcher: swap '{entry['name']}' into {target.name}")
             try:
-                core.saves_service.assert_writable(target)
-                out = core.save_library.swap_in(Path(folder), entry["id"], target, keep_as, game)
+                saves_service.assert_writable(target)
+                out = save_library.swap_in(Path(folder), entry["id"], target, keep_as, game)
                 if out["backup"]:
                     self._undo = (target, out["backup"])
                 if out["outgoing"]:
@@ -4505,8 +4517,8 @@ class Launcher(FluentWindow):
             try:
                 if mode == "replace":
                     common.start_log(f"launcher: copy {path.name} over {target.name}")
-                    core.saves_service.assert_writable(target)
-                    out = core.save_transfer.copy_file(path, target, game, keep_as=name)
+                    saves_service.assert_writable(target)
+                    out = save_transfer.copy_file(path, target, game, keep_as=name)
                     if out["backup"]:
                         self._undo = (target, out["backup"])
                     if out["kept"]:
@@ -4514,8 +4526,8 @@ class Launcher(FluentWindow):
                     run_logging.log(f"done: {target.name} now holds {path.name}'s characters")
                 else:
                     common.start_log(f"launcher: add {path.name} to the library")
-                    core.saves_service.assert_writable(path)
-                    e = core.save_library.add(path.parent, path, name, game, action="copy")
+                    saves_service.assert_writable(path)
+                    e = save_library.add(path.parent, path, name, game, action="copy")
                     run_logging.log(f"done: '{e['name']}' added from {path.name}")
             except Exception as ex:
                 run_logging.log(f"error: {ex}")
@@ -4539,8 +4551,8 @@ class Launcher(FluentWindow):
             common = core.common
             common.start_log(f"launcher: copy slot {src_slot} of {path.name} into slot {dst_slot} of {target.name}")
             try:
-                core.saves_service.assert_writable(target)
-                out = core.save_transfer.copy_character(path, src_slot, target, dst_slot)
+                saves_service.assert_writable(target)
+                out = save_transfer.copy_character(path, src_slot, target, dst_slot)
                 self._undo = (target, out["backup"])
                 who = out["character"] or {}
                 run_logging.log(f"done: {who.get('name', '?')} is in slot {dst_slot} of {target.name}")
@@ -4555,7 +4567,7 @@ class Launcher(FluentWindow):
         if not dlg.exec():
             return
         try:
-            core.save_library.rename(Path(folder), entry["id"], dlg.edit.text())
+            save_library.rename(Path(folder), entry["id"], dlg.edit.text())
         except Exception as ex:
             self._toast("Could not rename", str(ex), error=True)
             return
@@ -4574,7 +4586,7 @@ class Launcher(FluentWindow):
         ):
             return
         try:
-            core.save_library.remove(Path(folder), entry["id"])
+            save_library.remove(Path(folder), entry["id"])
         except Exception as ex:
             self._toast("Could not remove", str(ex), error=True)
             return
@@ -4598,7 +4610,7 @@ class Launcher(FluentWindow):
             "Import into the library",
             f"{Path(src).name} is copied into the library under this name. Nothing live changes.",
             self,
-            text=core.save_library.default_name(Path(src), self.game),
+            text=save_library.default_name(Path(src), self.game),
             apply_text="Import",
         )
         if not dlg.exec():
@@ -4609,7 +4621,7 @@ class Launcher(FluentWindow):
             common = core.common
             common.start_log(f"launcher: import {src} into the library")
             try:
-                e = core.save_library.add(folder, Path(src), name, game, action="import")
+                e = save_library.add(folder, Path(src), name, game, action="import")
                 run_logging.log(f"done: '{e['name']}' imported")
             except Exception as ex:
                 run_logging.log(f"error: {ex}")
@@ -4622,7 +4634,7 @@ class Launcher(FluentWindow):
         if folder is None:
             self._toast("No save folder yet", f"Play {self.game.name} once so it creates one.", error=True)
             return
-        lib = core.save_library.folder_for(folder)
+        lib = save_library.folder_for(folder)
         lib.mkdir(exist_ok=True)
         desktop.open_path(str(lib))
 

@@ -1,6 +1,7 @@
 """What counts as a game item, the Tarnished Edition rule, labels for foreign items, and the report gate."""
 
 from roundtable_souls.services import play as g
+from roundtable_souls.services import saves as saves_service
 
 A = g.save_analyze
 WEAPON, ARMOUR, TALISMAN, GOODS, ASH = 0x0, 0x10000000, 0x20000000, 0x40000000, 0x80000000
@@ -94,8 +95,8 @@ def test_info_findings_do_not_block_the_standard_copy():
 
 
 def test_repair_available_predicate():
-    assert not g.repair_available({"needs_repair": False, "checksum_fixes": {"slots": [], "ud10": False}})
-    assert g.repair_available({"needs_repair": True})
-    assert g.repair_available({"checksum_fixes": {"slots": [0], "ud10": False}})
-    assert g.repair_available({"checksum_fixes": {"slots": [], "ud10": True}})
-    assert g.repair_available({"loading_plan": [{"slot": 0}]})
+    assert not saves_service.repair_available({"needs_repair": False, "checksum_fixes": {"slots": [], "ud10": False}})
+    assert saves_service.repair_available({"needs_repair": True})
+    assert saves_service.repair_available({"checksum_fixes": {"slots": [0], "ud10": False}})
+    assert saves_service.repair_available({"checksum_fixes": {"slots": [], "ud10": True}})
+    assert saves_service.repair_available({"loading_plan": [{"slot": 0}]})

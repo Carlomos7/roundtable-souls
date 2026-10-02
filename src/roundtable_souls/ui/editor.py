@@ -17,7 +17,7 @@ from qfluentwidgets import (
 )
 
 from roundtable_souls import find
-from roundtable_souls.services.play import COMMENT_PREFIX, indent_lines, toggle_comment
+from roundtable_souls.services.coop import COMMENT_PREFIX, indent_lines, toggle_comment
 from roundtable_souls.ui.theme import RADIUS, TEXT_LIGHT, style_editor, tokens
 
 

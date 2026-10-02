@@ -8,11 +8,13 @@ from pathlib import Path
 import pytest
 
 from roundtable_souls import folders
+from roundtable_souls.saves import layout as save_layout_check
 from roundtable_souls.services import play as g
+from roundtable_souls.services import saves as saves_service
 from support import copy_live_save as _copy
 
 F = g.save_fix
-L = g.save_layout_check
+L = save_layout_check
 A = g.save_analyze
 
 
@@ -30,17 +32,17 @@ def test_backup_writes_manifest_and_list_reads_it(tmp_path):
     )
     bak2 = F.backup(copy)  # same second: still a distinct file
     assert bak2 != bak and F.read_manifest(bak2)["action"] == "Before a change"
-    rows = g.list_backups(copy)
+    rows = saves_service.list_backups(copy)
     assert [r["path"] for r in rows][:2] == sorted([bak, bak2], key=lambda p: p.stat().st_mtime, reverse=True) or len(
         rows
     ) == 2
     assert {r["action"] for r in rows} == {"Before fixing loading", "Before a change"} and all(
         r["save_name"] == "ER0000.co2" for r in rows
     )
-    assert g.save_for_backup(bak) == copy
+    assert saves_service.save_for_backup(bak) == copy
     # a backup without a note still lists, and still finds its save through the folder it sits in
     Path(str(bak2) + ".json").unlink()
-    assert any(r["path"] == bak2 and r["action"] == "Before a change" for r in g.list_backups(copy))
+    assert any(r["path"] == bak2 and r["action"] == "Before a change" for r in saves_service.list_backups(copy))
 
 
 def test_fix_writes_a_manifest_that_names_the_change(tmp_path, monkeypatch):
@@ -54,7 +56,7 @@ def test_fix_writes_a_manifest_that_names_the_change(tmp_path, monkeypatch):
     struct.pack_into("<I", data, s["horse_pos"] + 36, 13)
     F._sign_slot(data, i)
     copy.write_bytes(bytes(data))
-    out = g.fix_loading(copy)
+    out = saves_service.fix_loading(copy)
     m = F.read_manifest(out["backup"])
     assert m["action"] == "Before fixing loading" and any("Torrent" in c for c in m["changes"])
 
@@ -69,22 +71,22 @@ def test_restore_backup_round_trip_with_safety_copy(tmp_path, monkeypatch):
     copy.write_bytes(bytes(data))  # the live file moves on
     changed = copy.read_bytes()
     assert changed != original
-    safety = g.restore_backup(bak)
+    safety = saves_service.restore_backup(bak)
     assert copy.read_bytes() == original
     assert (
         safety and safety.read_bytes() == changed and F.read_manifest(safety)["action"] == "Before restoring a backup"
     )
-    g.restore_backup(safety, copy)  # undo the restore
+    saves_service.restore_backup(safety, copy)  # undo the restore
     assert copy.read_bytes() == changed
-    g.delete_backup(bak)
+    saves_service.delete_backup(bak)
     assert not bak.exists() and not Path(str(bak) + ".json").exists()
     junk = tmp_path / "ER0000.co2.junk.bak"
     junk.write_bytes(b"nope")
     with pytest.raises(RuntimeError):
-        g.restore_backup(junk, copy)
+        saves_service.restore_backup(junk, copy)
     monkeypatch.setattr(g.common, "game_running", lambda: True)
     with pytest.raises(RuntimeError):
-        g.restore_backup(safety, copy)
+        saves_service.restore_backup(safety, copy)
 
 
 def test_play_options_defaults_and_backup_before_play(tmp_path, monkeypatch):
@@ -107,10 +109,13 @@ def test_character_detail_and_place_names(tmp_path):
     info = g.save_info(copy)
     ch = info["characters"][0]
     assert ch["where"] and ch["torrent"] and "vig" in ch["stats"]
-    d = g.character_detail(info, ch["slot"] - 1)
+    d = saves_service.character_detail(info, ch["slot"] - 1)
     assert d["name"] == ch["name"] and isinstance(d["mods"], dict) and isinstance(d["loading"], list)
-    assert g.place_name(bytes([0, 0, 10, 11])) == "Roundtable Hold"
-    assert g.place_name(bytes([0, 46, 47, 61])).startswith("Land of Shadow")
-    assert g.place_name(bytes([0, 0, 0, 18])) == "Stranded Graveyard"
-    assert g.torrent_text((1939, 1)) == "resting, 1,939 HP" and g.torrent_text((0, 13)) == "summoned, 0 HP"
-    assert g.character_detail(info, 9) == {}
+    assert saves_service.place_name(bytes([0, 0, 10, 11])) == "Roundtable Hold"
+    assert saves_service.place_name(bytes([0, 46, 47, 61])).startswith("Land of Shadow")
+    assert saves_service.place_name(bytes([0, 0, 0, 18])) == "Stranded Graveyard"
+    assert (
+        saves_service.torrent_text((1939, 1)) == "resting, 1,939 HP"
+        and saves_service.torrent_text((0, 13)) == "summoned, 0 HP"
+    )
+    assert saves_service.character_detail(info, 9) == {}

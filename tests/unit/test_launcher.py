@@ -5,7 +5,10 @@ from pathlib import Path
 
 import pytest
 
+from roundtable_souls.services import coop as coop_service
+from roundtable_souls.services import mods as mods_service
 from roundtable_souls.services import play as g
+from roundtable_souls.services import saves as saves_service
 
 INI = (
     "[GAMEPLAY]\r\n; Invaders join uninvited.  0=FALSE  1=TRUE\r\nallow_invaders = 1\r\n\r\n"
@@ -26,10 +29,10 @@ def test_password_read_write_keeps_layout_and_crlf(tmp_path):
     p = ini(tmp_path)
     before = p.read_bytes()
     assert g.read_password(p) == "secret1"
-    g.write_password(p, "other")
+    coop_service.write_password(p, "other")
     assert g.read_password(p) == "other"
     assert b"\r\n" in p.read_bytes() and p.read_bytes().count(b"\r\n") == before.count(b"\r\n")
-    g.write_password(p, "secret1")
+    coop_service.write_password(p, "secret1")
     assert p.read_bytes() == before
     assert (tmp_path / "ersc_settings.ini.bak").exists()  # one backup of the previous version
 
@@ -38,37 +41,44 @@ def test_scaling_roundtrip_changes_only_its_lines(tmp_path):
     p = ini(tmp_path)
     before = p.read_bytes()
     assert (
-        g.read_scaling(p) == g.SCALING_PRESETS["Seamless default"]
+        g.read_scaling(p) == coop_service.SCALING_PRESETS["Seamless default"]
         and g.preset_of(g.read_scaling(p)) == "Seamless default"
     )
-    assert g.write_keys(p, dict(zip(g.SCALING_KEYS, g.SCALING_PRESETS["Party of 3 (Nightreign rule)"]))) == []
+    assert (
+        coop_service.write_keys(
+            p, dict(zip(coop_service.SCALING_KEYS, coop_service.SCALING_PRESETS["Party of 3 (Nightreign rule)"]))
+        )
+        == []
+    )
     assert g.preset_of(g.read_scaling(p)) == "Party of 3 (Nightreign rule)"
     changed = [l for a, l in zip(before.decode().splitlines(), p.read_text().splitlines()) if a != l]
     assert len(changed) == 3
-    g.write_keys(p, dict(zip(g.SCALING_KEYS, g.SCALING_PRESETS["Seamless default"])))
+    coop_service.write_keys(p, dict(zip(coop_service.SCALING_KEYS, coop_service.SCALING_PRESETS["Seamless default"])))
     assert p.read_bytes() == before
 
 
 def test_unknown_key_is_reported_not_appended(tmp_path):
     p = ini(tmp_path)
     before = p.read_bytes()
-    assert g.write_keys(p, {"made_up": "1"}) == ["made_up"]
+    assert coop_service.write_keys(p, {"made_up": "1"}) == ["made_up"]
     assert p.read_bytes() == before
 
 
 def test_share_text_roundtrip_and_validation(tmp_path):
     p = ini(tmp_path)
-    text = g.export_text(p)
-    flat = g.parse_settings_json(text)
+    text = coop_service.export_text(p)
+    flat = coop_service.parse_settings_json(text)
     assert flat["cooppassword"] == "secret1" and flat["boss_health_scaling"] == "100" and flat["allow_invaders"] == "1"
-    assert g.parse_settings_json('{"cooppassword": "x", "SCALING": {"boss_health_scaling": "75"}}') == {
+    assert coop_service.parse_settings_json('{"cooppassword": "x", "SCALING": {"boss_health_scaling": "75"}}') == {
         "cooppassword": "x",
         "boss_health_scaling": "75",
     }
     for bad in ("nope", "[1]", "{}", '{"format": "x"}'):
         with pytest.raises((ValueError, json.JSONDecodeError)):
-            g.parse_settings_json(bad)
-    changes, unknown = g.plan_import(p, {"cooppassword": "friend", "boss_health_scaling": "100", "bogus": "1"})
+            coop_service.parse_settings_json(bad)
+    changes, unknown = coop_service.plan_import(
+        p, {"cooppassword": "friend", "boss_health_scaling": "100", "bogus": "1"}
+    )
     assert changes == {"cooppassword": ("secret1", "friend")} and unknown == ["bogus"]
 
 
@@ -82,7 +92,7 @@ def test_logo_follows_theme_unless_locked():
 
 def test_save_findings_on_unreadable(tmp_path):
     missing = tmp_path / "nope.sl2"
-    findings = g.save_findings(missing)
+    findings = saves_service.save_findings(missing)
     assert findings and findings[0]["code"] == "read" and findings[0]["level"] == "error"
     junk = tmp_path / "junk.sl2"
     junk.write_bytes(b"not a save")
@@ -92,7 +102,7 @@ def test_save_findings_on_unreadable(tmp_path):
 
 def test_health_report_and_clean_gate(tmp_path):
     missing = tmp_path / "nope.co2"
-    text = g.health_report(missing)
+    text = saves_service.health_report(missing)
     assert "Roundtable Souls save report" in text and "ERROR" in text
     assert not g.save_analyze.findings_are_clean([{"level": "warn", "code": "x", "title": "t", "detail": ""}])
     assert g.save_analyze.findings_are_clean(
@@ -115,12 +125,12 @@ def test_convert_co2_refuses_dirty(tmp_path, monkeypatch):
     p.write_bytes(b"not a save")
     monkeypatch.setattr(g.common, "game_running", lambda: False)
     with pytest.raises(RuntimeError) as exc:
-        g.convert_co2_to_sl2(p)
+        saves_service.convert_co2_to_sl2(p)
     assert "clean" in str(exc.value).lower() or "Findings" in str(exc.value)
 
 
 def test_dead_shells_count_is_int():
-    assert isinstance(g.dead_shells_count(), int) and g.dead_shells_count() >= 0
+    assert isinstance(saves_service.dead_shells_count(), int) and saves_service.dead_shells_count() >= 0
 
 
 def test_atomic_write_replaces_and_backs_up(tmp_path):
@@ -139,10 +149,10 @@ def test_ersc_ini_found_relative_to_profile(tmp_path):
     (tmp_path / "natives" / "SeamlessCoop").mkdir(parents=True)
     (tmp_path / "natives" / "SeamlessCoop" / "ersc_settings.ini").write_text("cooppassword = a\n")
     prof.write_text("[[natives]]\npath = 'natives/SeamlessCoop/ersc.dll'\n")
-    assert g.ersc_ini_for(str(prof)) == tmp_path / "natives" / "SeamlessCoop" / "ersc_settings.ini"
+    assert coop_service.ersc_ini_for(str(prof)) == tmp_path / "natives" / "SeamlessCoop" / "ersc_settings.ini"
     other = tmp_path / "plain.me3"
     other.write_text("[[packages]]\npath = 'mod'\n")
-    assert g.ersc_ini_for(str(other)) is None
+    assert coop_service.ersc_ini_for(str(other)) is None
 
 
 def test_setup_label_is_the_profile_name(tmp_path):
@@ -208,7 +218,7 @@ def test_setup_from_installation_json(tmp_path):
 
 
 def test_settings_meta_types_from_comments(tmp_path):
-    meta = g.read_settings_meta(ini(tmp_path))
+    meta = coop_service.read_settings_meta(ini(tmp_path))
     by = {i["key"]: i for sec in meta for i in sec["items"]}
     assert [sec["section"] for sec in meta] == ["GAMEPLAY", "SCALING", "PASSWORD"]
     assert (
@@ -222,13 +232,15 @@ def test_settings_meta_types_from_comments(tmp_path):
     )
     assert by["default_boot_master_volume"]["kind"] == "int" and by["default_boot_master_volume"]["extra"] == (0, 10)
     assert by["enemy_health_scaling"]["kind"] == "int" and by["enemy_health_scaling"]["extra"] == (0, 500)
-    assert by["cooppassword"]["kind"] == "password" and g.label_of("skip_splash_screens") == "Skip intro logos"
-    assert g.label_of("allow_invaders") == "Invaders"
-    assert g.choice_label("overhead_player_display", 2, "Display player ping") == "Ping"
-    _label, blurb, help_text = g.setting_face("allow_invaders", "Invaders join.  0=FALSE  1=TRUE")
+    assert (
+        by["cooppassword"]["kind"] == "password" and coop_service.label_of("skip_splash_screens") == "Skip intro logos"
+    )
+    assert coop_service.label_of("allow_invaders") == "Invaders"
+    assert coop_service.choice_label("overhead_player_display", 2, "Display player ping") == "Ping"
+    _label, blurb, help_text = coop_service.setting_face("allow_invaders", "Invaders join.  0=FALSE  1=TRUE")
     assert "FALSE" not in blurb and "0=" not in help_text and "invade" in help_text.lower()
-    _label, _blurb, fallback = g.setting_face("made_up_flag", "Does a thing.  0=FALSE  1=TRUE")
-    assert fallback == "Does a thing." and g.label_of("made_up_flag") == "Made up flag"
+    _label, _blurb, fallback = coop_service.setting_face("made_up_flag", "Does a thing.  0=FALSE  1=TRUE")
+    assert fallback == "Does a thing." and coop_service.label_of("made_up_flag") == "Made up flag"
 
 
 PROFILE = (
@@ -243,14 +255,14 @@ PROFILE = (
 def test_profile_mods_are_the_ones_me3_loads(tmp_path):
     p = tmp_path / "profile.me3"
     p.write_bytes(PROFILE.encode())
-    mods = g.read_profile_mods(p)
+    mods = mods_service.read_profile_mods(p)
     assert [(m["kind"], m["id"], m["path"]) for m in mods] == [
         ("package", "flora", "mod/flora"),
         ("native", "ersc.dll", "natives/SeamlessCoop/ersc.dll"),
         ("package", "nightreign-revive", "NightreignRevive/mod"),
     ]
-    assert g.set_profile_mod_enabled(p, 1, False)
-    assert [m["id"] for m in g.read_profile_mods(p)] == ["flora", "nightreign-revive"]
+    assert mods_service.set_profile_mod_enabled(p, 1, False)
+    assert [m["id"] for m in mods_service.read_profile_mods(p)] == ["flora", "nightreign-revive"]
     assert (tmp_path / "profile.me3.bak").is_file()
 
 
@@ -296,12 +308,12 @@ def test_revive_array_profile_lists_seamless_and_revive(tmp_path):
     )
     p = tmp_path / "revive.me3"
     p.write_text(text, encoding="utf-8")
-    assert [(m["kind"], m["id"]) for m in g.read_profile_mods(p)] == [
+    assert [(m["kind"], m["id"]) for m in mods_service.read_profile_mods(p)] == [
         ("native", "ersc.dll"),
         ("native", "ReviveHudBootstrap.dll"),
         ("native", "RevivePrototype.dll"),
         ("package", "nightreign-revive"),
     ]
-    assert g.ersc_ini_for(str(p)) == seamless / "ersc_settings.ini"
+    assert coop_service.ersc_ini_for(str(p)) == seamless / "ersc_settings.ini"
     off = g.offline_profile_text(text)
     assert "enabled = false" in off and "RevivePrototype.dll" in off and 'id = "ersc.dll"' in off

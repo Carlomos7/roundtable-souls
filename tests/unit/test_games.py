@@ -11,6 +11,7 @@ from roundtable_souls.platform import paths as common
 from roundtable_souls.platform import steam
 from roundtable_souls.saves import container
 from roundtable_souls.saves import nightreign as nr
+from roundtable_souls.services import coop as coop_service
 from roundtable_souls.services import play as core
 from roundtable_souls.services import saves
 
@@ -136,11 +137,11 @@ def test_nightreign_coop_ini_has_three_scaling_values_and_no_password(tmp_path):
     assert core.coop_ini_for(str(profile), ER) is None  # it loads nrsc.dll, not ersc.dll
     assert core.coop_ini_for(str(profile), games.SEKIRO) is None
     spec = core.scaling_spec(ini)
-    assert spec is core.NIGHTREIGN_SCALING
-    assert core.read_scaling(ini, spec) == (100, 90, 80) and core.preset_of((100, 90, 80), spec) == core.CUSTOM
+    assert spec is coop_service.NIGHTREIGN_SCALING
+    assert core.read_scaling(ini, spec) == (100, 90, 80) and core.preset_of((100, 90, 80), spec) == coop_service.CUSTOM
     assert not core.has_password(ini) and core.read_password(ini) is None
     before = ini.read_bytes()
-    assert core.write_keys(ini, dict(zip(spec.keys, (120, 90, 80), strict=True))) == []
+    assert coop_service.write_keys(ini, dict(zip(spec.keys, (120, 90, 80), strict=True))) == []
     assert core.read_scaling(ini) == (120, 90, 80)
     assert len(ini.read_bytes()) == len(before)  # 100 -> 120: same length, nothing else touched
 

@@ -5,14 +5,18 @@ import struct
 
 import pytest
 
+from roundtable_souls.saves import layout as save_layout_check
+from roundtable_souls.saves import loading as save_loading
+from roundtable_souls.saves import vanilla as save_vanilla
 from roundtable_souls.services import play as g
+from roundtable_souls.services import saves as saves_service
 from support import copy_live_save as _copy
 
 A = g.save_analyze
 F = g.save_fix
-L = g.save_layout_check
-V = g.save_vanilla
-S = g.save_loading
+L = save_layout_check
+V = save_vanilla
+S = save_loading
 
 
 def test_restore_only_the_ticked_items(tmp_path, monkeypatch):
@@ -27,7 +31,7 @@ def test_restore_only_the_ticked_items(tmp_path, monkeypatch):
     chosen = {e["handle"] for e in target["strip"][:half]}
     kept = [e for e in target["strip"] if e["handle"] not in chosen]
     before = copy.read_bytes()
-    out = g.restore_vanilla(copy, selection={target["slot"]: {"items": chosen, "orphans": False}})
+    out = saves_service.restore_vanilla(copy, selection={target["slot"]: {"items": chosen, "orphans": False}})
     assert [d["slot"] for d in out["done"]] == [target["slot"]] and out["done"][0]["removed"] == len(chosen)
     after = copy.read_bytes()
     r1 = L.parse(str(copy))
@@ -66,10 +70,10 @@ def test_loading_fix_only_the_ticked_issue(tmp_path, monkeypatch):
     F._sign_slot(data, i)
     copy.write_bytes(bytes(data))
     assert S.plan_loading_fixes(L.parse(str(copy)), True)[0]["issues"] == ["torrent", "position"]
-    out = g.fix_loading(copy, selection={i: ["torrent"]})
+    out = saves_service.fix_loading(copy, selection={i: ["torrent"]})
     assert out["fixed"][0]["issues"] == ["torrent"]
     r2 = L.parse(str(copy))
     assert r2["slots"][i]["horse"] == (0, S.TORRENT_DEAD) and S.plan_loading_fixes(r2, True)[0]["issues"] == [
         "position"
     ]
-    assert g.fix_loading(copy, selection={})["backup"] is None  # nothing chosen: nothing written
+    assert saves_service.fix_loading(copy, selection={})["backup"] is None  # nothing chosen: nothing written
