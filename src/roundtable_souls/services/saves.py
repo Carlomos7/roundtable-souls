@@ -7,7 +7,6 @@ import shutil
 import time
 from pathlib import Path
 
-from roundtable_souls import models
 from roundtable_souls.game import catalog as games
 from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.platform import paths as common
@@ -17,6 +16,7 @@ from roundtable_souls.saves import container as save_container
 from roundtable_souls.saves import fix as save_fix
 from roundtable_souls.saves import layout as save_layout_check
 from roundtable_souls.saves import loading as save_loading
+from roundtable_souls.saves import models
 from roundtable_souls.saves import nightreign as repair_nightreign
 from roundtable_souls.saves import regulation as repair_regulation
 from roundtable_souls.saves import vanilla as save_vanilla
