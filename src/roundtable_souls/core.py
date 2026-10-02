@@ -16,7 +16,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from roundtable_souls import __version__, coop, folders
+from roundtable_souls import __version__, folders
 from roundtable_souls.config.settings import (
     FROZEN,
     data_dir,
@@ -27,7 +27,8 @@ from roundtable_souls.config.settings import (
     save_game_settings,
     save_settings,
 )
-from roundtable_souls.coop import (
+from roundtable_souls.coop import ini as coop
+from roundtable_souls.coop.ini import (
     COMMENT_PREFIX,
     CUSTOM,
     JSON_FORMAT,

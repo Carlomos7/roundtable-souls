@@ -113,7 +113,7 @@ ignore_imports = [
     "roundtable_souls.platform.logging -> roundtable_souls.folders",
     "roundtable_souls.folders -> roundtable_souls.game.catalog",
     # S3 (one profile parser in mods; mods.service stops borrowing coop's private helpers)
-    "roundtable_souls.mods.service -> roundtable_souls.coop",
+    "roundtable_souls.mods.service -> roundtable_souls.coop.ini",
 ]
 
 [[tool.importlinter.contracts]]
