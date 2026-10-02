@@ -74,6 +74,9 @@ jobs:
     - name: Type check
       run: uv run pyright
 
+    - name: Import layers
+      run: uv run lint-imports --no-cache
+
     - name: Run tests with coverage
       run: |
         uv run coverage erase

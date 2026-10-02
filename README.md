@@ -135,6 +135,12 @@ uv run pyright
 
 The same checks run before every commit once `uv run pre-commit install` has been run.
 
+Import layers (which package may import which; the contracts are in `pyproject.toml`, under `[tool.importlinter]`):
+
+```bash
+uv run lint-imports --no-cache
+```
+
 ## Usage
 
 ```bash
