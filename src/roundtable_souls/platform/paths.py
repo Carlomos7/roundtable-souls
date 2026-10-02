@@ -110,16 +110,21 @@ def game_dir():
 
 
 def installed_dir(game: games.Game):
-    """The folder with this game's exe in any Steam library, or None (cached per game for the session)."""
+    return find_installed(game.key, game.install_dir, game.exe)
+
+
+def find_installed(key: str, install_dir: str, exe: str) -> Path | None:
+    """The folder with exe under steamapps/common/install_dir in any Steam library, or None (cached per key for the
+    session)."""
 
     def find():
         for root in steam.steam_libraries():
-            candidate = root / "steamapps" / "common" / Path(game.install_dir)
-            if (candidate / game.exe).exists():
+            candidate = root / "steamapps" / "common" / Path(install_dir)
+            if (candidate / exe).exists():
                 return candidate
         return None
 
-    return _detected(("installed_dir", game.key), find)
+    return _detected(("installed_dir", key), find)
 
 
 def regulation_bin():
@@ -136,13 +141,19 @@ def save_roots(game: games.Game | None = None) -> list[Path]:
     """Folders that hold the per-account save folders: %APPDATA%\\<game> on Windows, the same folder inside the
     game's Proton prefix on Linux (in whichever Steam library the prefix lives)."""
     game = game or GAME
+    return save_roots_for(game.save_dir, game.app_id)
+
+
+def save_roots_for(save_dir: str, app_id: str) -> list[Path]:
+    """The per-account save folders' parent for a game whose saves go to %APPDATA%/<save_dir> on Windows, or the
+    same folder inside its Proton prefix (compatdata/<app_id>) on Linux, in whichever Steam library that lives."""
     if IS_WINDOWS:
         appdata = os.environ.get("APPDATA")
-        return [Path(appdata) / game.save_dir] if appdata else []
-    roaming = Path("pfx") / "drive_c" / "users" / "steamuser" / "AppData" / "Roaming" / game.save_dir
+        return [Path(appdata) / save_dir] if appdata else []
+    roaming = Path("pfx") / "drive_c" / "users" / "steamuser" / "AppData" / "Roaming" / save_dir
     roots: list[Path] = []
     for lib in steam.steam_libraries():
-        candidate = lib / "steamapps" / "compatdata" / game.app_id / roaming
+        candidate = lib / "steamapps" / "compatdata" / app_id / roaming
         if candidate.is_dir() and candidate.resolve() not in [r.resolve() for r in roots]:
             roots.append(candidate)
     return roots
@@ -188,11 +199,13 @@ def save_files(game: games.Game | None = None):
 # --------------------------------------------------------------------- me3
 
 
-def me3_exe():
-    """The me3 set in the launcher's settings, else me3 on PATH, else its default per-user install location.
-    The PATH search and default-folder check are cached for the session (cleared when an override changes)."""
-    if ME3_OVERRIDE and Path(ME3_OVERRIDE).is_file():
-        return Path(ME3_OVERRIDE)
+def me3_exe(override: str | None = None):
+    """The me3 set in the launcher's settings (override), else me3 on PATH, else its default per-user install
+    location. The PATH search and default-folder check are cached for the session (cleared when an override
+    changes)."""
+    override = ME3_OVERRIDE if override is None else override
+    if override and Path(override).is_file():
+        return Path(override)
     return _detected("me3_exe", _me3_exe_detected)
 
 
@@ -215,9 +228,10 @@ def me3_config_dir():
     return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "me3"
 
 
-def me3_profiles_dir():
-    if PROFILE_DIR_OVERRIDE and Path(PROFILE_DIR_OVERRIDE).is_dir():
-        return Path(PROFILE_DIR_OVERRIDE)
+def me3_profiles_dir(override: str | None = None):
+    override = PROFILE_DIR_OVERRIDE if override is None else override
+    if override and Path(override).is_dir():
+        return Path(override)
     config = me3_config_dir()
     return config / "profiles" if config else None
 
@@ -245,14 +259,19 @@ def me3_profiles(game: games.Game | None = None):
     """User-made .me3 profiles for the game (the *-default.me3 ones me3 generates are skipped). A profile that names
     no game in [[supports]] counts for Elden Ring, the only game older profiles were written for."""
     game = game or GAME
-    root = me3_profiles_dir()
+    return find_profiles(me3_profiles_dir(), game.key, games.ELDEN_RING.key)
+
+
+def find_profiles(root: Path | None, game_key: str, unnamed_key: str) -> list[Path]:
+    """The user-made .me3 profiles under root for one game (the *-default.me3 ones me3 generates are skipped); a
+    profile that names no game in [[supports]] counts for unnamed_key."""
     if not root or not root.exists():
         return []
     return sorted(
         (
             p
             for p in _iter_me3_files(root)
-            if not p.name.endswith("-default.me3") and game.key in (profile_games(p) or (games.ELDEN_RING.key,))
+            if not p.name.endswith("-default.me3") and game_key in (profile_games(p) or (unnamed_key,))
         ),
         key=lambda p: (p.name.lower(), str(p).lower()),  # the Play list shows file names, so order by those
     )

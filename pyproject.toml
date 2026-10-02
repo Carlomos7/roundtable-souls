@@ -94,6 +94,7 @@ type = "layers"
 exhaustive = false
 layers = [
     "roundtable_souls.cli",
+    "roundtable_souls.app",
     "roundtable_souls.ui",
     "roundtable_souls.services",
     "roundtable_souls.mods | roundtable_souls.saves | roundtable_souls.coop | roundtable_souls.updates",

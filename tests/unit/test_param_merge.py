@@ -268,7 +268,9 @@ def test_a_pack_placed_after_the_combined_one_is_moved_behind_on_rebuild(prof):
 
 def test_a_game_update_or_a_removed_pack_makes_the_combine_stale(prof):
     merge.rebuild(prof, lambda s: None, combine=True)
-    game = common.game_dir() / "regulation.bin"
+    game_dir = common.game_dir()
+    assert game_dir is not None
+    game = game_dir / "regulation.bin"
     game.write_bytes(pack({"EquipParamWeapon": set_word(2000, 0, 1)}))
     assert any("game update" in r for r in merge.health(prof)["reasons"])
     merge.rebuild(prof, lambda s: None)
