@@ -14,6 +14,7 @@ class Result:
     clashes: dict[str, list[str]] = field(default_factory=dict)  # inner path -> mods whose changes met; the last won
     merged: bool = True  # False: the file could not be merged and the last mod's copy is used whole
     removed: dict[str, list[str]] = field(default_factory=dict)  # inner path -> mods whose copy left it out
+    notes: dict[str, list[str]] = field(default_factory=dict)  # inner path -> what a rule decided there, and why
 
     def summary(self) -> str:
         n = len(self.changed)

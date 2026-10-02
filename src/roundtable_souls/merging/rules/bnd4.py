@@ -46,6 +46,7 @@ def merge(base: bytes, bodies: list[tuple[str, bytes]], where: str) -> Result:
                 out.changed.update(sub.changed)
                 out.clashes.update(sub.clashes)
                 out.removed.update(sub.removed)
+                out.notes.update(sub.notes)
                 data = formats.dcx.pack(sub.data, how) if how is not None and sub.data != inner_base else sub.data
                 if sub.data == inner_base:
                     data = vmap[key].data

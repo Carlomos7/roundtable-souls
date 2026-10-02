@@ -450,6 +450,7 @@ class CombineTool:
                             "parts": len(result.changed),
                             "clashes": result.clashes,
                             "removed": result.removed,
+                            "notes": result.notes,
                         }
                         log(f"  merged {rel} from {' and '.join(o['name'] for o in owners)}: {result.summary()}")
                         if result.removed:

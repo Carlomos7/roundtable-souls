@@ -19,11 +19,16 @@ import zlib
 from roundtable_souls import formats
 from roundtable_souls.merging.changes import Result
 from roundtable_souls.merging.rules import bnd4 as bnd4_rule
+from roundtable_souls.merging.rules import esd as esd_rule
 from roundtable_souls.merging.rules import fmg as fmg_rule
+
+# Talk scripts (ESD) are merged by merging.rules.esd only once a merged script has been checked in game; until then
+# they are handled as any other file (the later mod's copy, a clash when several changed it).
+ESD_MERGING = False
 
 
 def mergeable(body: bytes) -> bool:
-    return formats.bnd4.is_bnd4(body) or formats.fmg.is_fmg(body)
+    return formats.bnd4.is_bnd4(body) or formats.fmg.is_fmg(body) or ESD_MERGING and esd_rule.is_esd(body)
 
 
 def merge(
@@ -53,7 +58,7 @@ def merge(
     except damaged as e:
         raise formats.FormatError(f"a copy is damaged or not in the format it claims ({e})") from e
     if not result.merged:
-        return Result(layers[-1][1], result.changed, result.clashes, merged=False, removed=result.removed)
+        return Result(layers[-1][1], result.changed, result.clashes, False, result.removed, result.notes)
     result.data = formats.dcx.pack(result.data, how, compressor, dflt_fallback) if result.data != base else vanilla
     return result
 
@@ -63,6 +68,8 @@ def _merge_body(base: bytes, bodies: list[tuple[str, bytes]], where: str) -> Res
         return bnd4_rule.merge(base, bodies, where)
     if formats.fmg.is_fmg(base) and all(formats.fmg.is_fmg(b) for _, b in bodies):
         return fmg_rule.merge(base, bodies, where)
+    if ESD_MERGING and esd_rule.is_esd(base) and all(esd_rule.is_esd(b) for _, b in bodies):
+        return esd_rule.merge(base, bodies, where)
     changed = [(label, b) for label, b in bodies if b != base]
     out = Result(changed[-1][1] if changed else base, merged=False)
     if changed:
