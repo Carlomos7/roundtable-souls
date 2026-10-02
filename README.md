@@ -8,26 +8,30 @@ A desktop app (PySide6 + Fluent Widgets) that starts Elden Ring and Nightreign t
 
 ```mermaid
 graph TD
-    UI["<b>UI</b><br/>━━━━━━━━━━━━<br/>• window: Play, Co-op, Mods, Saves, Settings, Review & fix<br/>• theme, widgets, editor, dialogs, notes"]
-    CORE["<b>CORE</b><br/>━━━━━━━━━━━━<br/>• games: what differs per game<br/>• core: setups, play jobs, --game, --play<br/>• coop: Seamless ini, share text<br/>• settings + models (pydantic)<br/>• updates, files, resources"]
-    SAVES["<b>SAVES</b><br/>━━━━━━━━━━━━<br/>• layout: Elden Ring save parser<br/>• container: structure check (Nightreign)<br/>• analyze: findings (read-only)<br/>• fix, loading, vanilla, regulation: repairs<br/>• service: save info, backups, repair gates"]
-    MODS["<b>MODS</b><br/>━━━━━━━━━━━━<br/>• profile: me3 settings, load order, conflicts<br/>• manage: install / remove / options<br/>• service: the Mods page's view"]
-    SYSTEM["<b>SYSTEM</b><br/>━━━━━━━━━━━━<br/>• Steam, Proton, game, me3 paths (Windows + Linux)<br/>• session: launch and wait<br/>• processes: leftover game shells<br/>• logging"]
+    UI["<b>UI</b> (ui/, cli.py)<br/>━━━━━━━━━━━━<br/>• window: Play, Co-op, Mods, Saves, Settings, Review & fix<br/>• theme, widgets, editor, dialogs, notes<br/>• cli: --play, --check, --update, --game"]
+    SERVICES["<b>SERVICES</b><br/>━━━━━━━━━━━━<br/>• play: setups, play jobs, --play, --check<br/>• mods, saves, coop, settings, updates"]
+    AREAS["<b>MODS · SAVES · COOP · UPDATES</b><br/>━━━━━━━━━━━━<br/>• mods: profiles, load order, install, remove, checks, conflicts, rebuild<br/>• saves: parsers, checks, repairs, library, backups<br/>• coop: Seamless ini, scaling, sharing<br/>• updates: feed, apply, signing, headless"]
+    MERGING["<b>MERGING</b><br/>━━━━━━━━━━━━<br/>• merger and per-format rules<br/>• build, record"]
+    FILES["<b>FORMATS · GAME</b><br/>━━━━━━━━━━━━<br/>• formats: DCX, BND4, FMG, PARAM, regulation, ESD<br/>• game: catalog, config, archives, Oodle"]
+    CONFIG["<b>CONFIG</b><br/>━━━━━━━━━━━━<br/>• settings, build identity"]
+    PLATFORM["<b>PLATFORM</b><br/>━━━━━━━━━━━━<br/>• paths, Steam, processes, data folder<br/>• session: launch and wait<br/>• logging, locks, trash"]
 
-    UI --> CORE
-    CORE --> SAVES
-    CORE --> MODS
-    CORE --> SYSTEM
+    UI --> SERVICES
+    SERVICES --> AREAS
+    AREAS --> MERGING
+    MERGING --> FILES
+    FILES --> CONFIG
+    CONFIG --> PLATFORM
 
     classDef ui fill:#4A90E2,stroke:#2E5C8A,stroke-width:3px,color:#fff
     classDef core fill:#7B68EE,stroke:#5A4BB5,stroke-width:3px,color:#fff
     classDef layer fill:#50C878,stroke:#3A9B5C,stroke-width:3px,color:#fff
     class UI ui
-    class CORE core
-    class SAVES,MODS,SYSTEM layer
+    class SERVICES core
+    class AREAS,MERGING,FILES,CONFIG,PLATFORM layer
 ```
 
-The window never touches a save directly. Every read goes through `save_info`, every write through a named repair in `saves/` that verifies the new bytes, backs the original up next to the save, and refuses while the game is running. Data that crosses a layer boundary (save info, findings, mod plans) is validated against the pydantic models in `models.py` at the source.
+The window never touches a save directly. Every read goes through `save_info`, every write through a named repair in `saves/` that verifies the new bytes, backs the original up next to the save, and refuses while the game is running. Data that crosses a layer boundary (save info, findings, mod plans) is validated against the pydantic models in `saves/models.py` and `mods/models.py` at the source. Each package may import only from the ones below it in the diagram; CI checks it (`uv run lint-imports`, contracts in `pyproject.toml`).
 
 ## Key Features
 

@@ -14,7 +14,8 @@ Parsing, read-only checks and named repairs for Elden Ring PC saves (`ER0000.sl2
 | `vanilla.py` | Remove mod items per character, opt-in and per item. Rows are neutralised in place so nothing shifts. |
 | `regulation.py` | Rebuild the regulation block me3 leaves dirty, from the game's `regulation.bin`. |
 | `repair.py` | After play: wait until the game has let go of its saves, then repair every save of the active game (Elden Ring: `regulation.py`; Nightreign: `nightreign.py`). |
-| `service.py` | What the window sees: `save_info` (validated against `models.SaveInfo`), backups, copies between standard and co-op saves, and the repair behind each button, all gated on the game being closed. |
+| `backups.py` | Where a save's backups and library copies live in the data folder, the note beside each backup, retention (`KEEP_NEWEST`, `KEEP_DAYS`), and moving older tools' folders in. |
+| `models.py` | The shapes save info and findings are validated against before the window sees them. |
 
 ## Format facts the code relies on
 
@@ -27,3 +28,5 @@ Parsing, read-only checks and named repairs for Elden Ring PC saves (`ER0000.sl2
 - Names for foreign items come from the mods themselves (`item_names.py`): Seamless Co-op's language file, and other mods' `msg/engus/item*.msgbnd.dcx` text tables.
 
 Every write path refuses while the game runs and goes through `fix._commit`.
+
+What the window calls (save info, backups, the repair behind each button, all gated on the game being closed) is `services/saves.py`.
