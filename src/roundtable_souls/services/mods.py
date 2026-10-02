@@ -9,13 +9,13 @@ from pathlib import Path
 from roundtable_souls import models
 from roundtable_souls.config.settings import load_settings, save_settings
 from roundtable_souls.coop.ini import _profile_rows, _read
-from roundtable_souls.files import atomic_write
 from roundtable_souls.mods import install, remove
 from roundtable_souls.mods import profile as profile_tools
 from roundtable_souls.mods import profile_edit as mod_manage
 from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.platform import me3_info
 from roundtable_souls.platform import paths as common
+from roundtable_souls.platform.files import atomic_write
 from roundtable_souls.platform.paths import apply_overrides
 
 _BLOCK_HEADER = re.compile(r"^[ \t]*\[\[(packages|natives)\]\][ \t]*$", re.I)

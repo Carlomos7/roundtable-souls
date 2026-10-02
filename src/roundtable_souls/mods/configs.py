@@ -139,7 +139,7 @@ def read(p: Path) -> dict:
 
 def write(p: Path, text: str, encoding: str, crlf: bool) -> Path:
     """Write text back the way the file was stored (encoding, line endings), keeping one .bak of the old version."""
-    from roundtable_souls.files import atomic_write
+    from roundtable_souls.platform.files import atomic_write
 
     p = Path(p)
     body = text.replace("\n", "\r\n") if crlf else text

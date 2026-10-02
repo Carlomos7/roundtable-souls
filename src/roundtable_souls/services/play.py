@@ -34,9 +34,6 @@ from roundtable_souls.coop.scaling import (
     read_scaling,
     scaling_spec,
 )
-from roundtable_souls.files import (
-    atomic_write,
-)
 from roundtable_souls.game import catalog as games
 from roundtable_souls.mods import profile as profile_tools
 from roundtable_souls.mods import profile_edit as mod_manage
@@ -45,6 +42,9 @@ from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.platform import me3_info, steam
 from roundtable_souls.platform import paths as common
 from roundtable_souls.platform import session as me3_session
+from roundtable_souls.platform.files import (
+    atomic_write,
+)
 from roundtable_souls.platform.paths import apply_overrides
 from roundtable_souls.resources import ASSETS_DIR
 from roundtable_souls.saves import analyze as save_analyze
