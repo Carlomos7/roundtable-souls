@@ -25,6 +25,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from roundtable_souls import identity
+from roundtable_souls.resources import PACKAGE_DIR
 from roundtable_souls.system import filelock
 
 FROZEN = bool(getattr(sys, "frozen", False))
@@ -36,7 +37,7 @@ DATA_ENV = "ROUNDTABLE_SOULS_DATA"
 def exe_dir() -> Path:
     if FROZEN:
         return Path(sys.executable).resolve().parent
-    return Path(__file__).resolve().parents[2]
+    return PACKAGE_DIR.resolve().parents[1]  # src/roundtable_souls -> the repository
 
 
 def velopack_root() -> Path | None:

@@ -17,12 +17,13 @@ import base64
 import binascii
 import hashlib
 from dataclasses import dataclass
-from pathlib import Path
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-KEY_FILE = Path(__file__).resolve().parent / "data" / "release-signing.pub"
+from roundtable_souls.resources import DATA_DIR
+
+KEY_FILE = DATA_DIR / "release-signing.pub"
 TRUSTED_PREFIX = "trusted comment: "
 
 

@@ -44,6 +44,7 @@ from pathlib import Path
 from typing import Any
 
 from roundtable_souls import __version__, folders, identity, signing
+from roundtable_souls.resources import DATA_DIR
 from roundtable_souls.settings import (
     appimage,
     change_settings,
@@ -689,7 +690,7 @@ def stage_rollback(
 def watchdog_script() -> Path:
     """The watchdog, copied out of the program folder (which the update replaces)."""
     name = "update-watchdog.ps1" if sys.platform == "win32" else "update-watchdog.sh"
-    src = Path(__file__).resolve().parent / "data" / name
+    src = DATA_DIR / name
     dst = state_dir() / name
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dst)

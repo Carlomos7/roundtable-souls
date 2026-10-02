@@ -11,10 +11,10 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, fields
 from functools import lru_cache
-from pathlib import Path
 
-DATA = Path(__file__).resolve().parent / "data"
-OVERRIDE_FILE = DATA / "build-identity.json"
+from roundtable_souls.resources import DATA_DIR
+
+OVERRIDE_FILE = DATA_DIR / "build-identity.json"
 
 
 @dataclass(frozen=True)
