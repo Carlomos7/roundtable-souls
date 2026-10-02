@@ -1,40 +1,14 @@
-"""Launch the game through me3, wait for it to exit, then repair the regulation
-section in every save the session touched.
+"""The play session's steps on this machine: make sure Steam is running and signed in, launch the game through me3,
+wait for it to exit, and clear leftover game processes. core.job_play runs them in order and then repairs the saves
+(saves/repair.py)."""
 
-me3's "oversized regulation fix" stops the game from copying its regulation
-into the save. Elden Ring: the repair writes regulation.bin back into
-USER_DATA_11. Nightreign: it re-signs every encrypted section and, when entry
-12 is no longer RSLT, copies that section from a healthy sibling save.
-"""
-
-import argparse
 import subprocess
 import time
 from pathlib import Path
 
-from roundtable_souls.saves.repair import repair_all
 from roundtable_souls.system import common
 from roundtable_souls.system import processes as clear_dead_game_shells
 from roundtable_souls.system.common import fail, log
-
-
-def pick_profile(requested):
-    if requested:
-        return requested
-    profiles = common.me3_profiles()
-    if not profiles:
-        fail(f"no user-made .me3 profile found under {common.me3_profiles_dir()}; pass one with --profile")
-    if len(profiles) == 1:
-        log(f"profile: {profiles[0]}")
-        return str(profiles[0])
-    log("several me3 profiles found:")
-    for i, p in enumerate(profiles, 1):
-        log(f"  {i}. {p}")
-    try:
-        choice = int(input("which one? ").strip())
-        return str(profiles[choice - 1])
-    except ValueError, IndexError, EOFError:
-        fail("no profile chosen; pass one with --profile")
 
 
 def _start_steam():
@@ -167,33 +141,3 @@ def wait_for_game(appear_timeout, quiet=False):
         time.sleep(3)
     log("game closed")
     return True
-
-
-def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--profile", help="me3 profile name, or path to a .me3 file (default: auto-detect)")
-    ap.add_argument("--game", default="eldenring")
-    ap.add_argument("--no-launch", action="store_true", help="do not start the game, only wait and repair")
-    ap.add_argument(
-        "--appear-timeout", type=int, default=20, help="with --no-launch: seconds to wait for a game to show up"
-    )
-    ap.add_argument("--steam-timeout", type=int, default=120, help="seconds to wait for Steam to sign in")
-    a = ap.parse_args()
-    common.start_log("me3_session")
-
-    if a.no_launch:
-        wait_for_game(a.appear_timeout)
-    else:
-        profile = pick_profile(a.profile)
-        ensure_steam(a.steam_timeout)
-        clear_dead_shells("before launch")
-        launch(a.game, profile)
-
-    time.sleep(3)  # let the game's final save write settle
-    repair_all()
-    clear_dead_shells("after exit")
-    log("session finished")
-
-
-if __name__ == "__main__":
-    main()

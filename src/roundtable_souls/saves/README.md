@@ -13,6 +13,7 @@ Parsing, read-only checks and named repairs for Elden Ring PC saves (`ER0000.sl2
 | `loading.py` | States that hang the loading screen, as a table of `LoadCheck`s, each with a detector and an in-place repair. |
 | `vanilla.py` | Remove mod items per character, opt-in and per item. Rows are neutralised in place so nothing shifts. |
 | `regulation.py` | Rebuild the regulation block me3 leaves dirty, from the game's `regulation.bin`. |
+| `repair.py` | After play: wait until the game has let go of its saves, then repair every save of the active game (Elden Ring: `regulation.py`; Nightreign: `nightreign.py`). |
 | `service.py` | What the window sees: `save_info` (validated against `models.SaveInfo`), backups, copies between standard and co-op saves, and the repair behind each button, all gated on the game being closed. |
 
 ## Format facts the code relies on
