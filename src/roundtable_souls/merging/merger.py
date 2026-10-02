@@ -63,9 +63,14 @@ def merge(
     return result
 
 
+def _nested(base: bytes, bodies: list[tuple[str, bytes]], where: str) -> Result | None:
+    """An inner file several mods changed: merged the same way when it is itself a format with a rule, else None."""
+    return _merge_body(base, bodies, where) if mergeable(base) else None
+
+
 def _merge_body(base: bytes, bodies: list[tuple[str, bytes]], where: str) -> Result:
     if formats.bnd4.is_bnd4(base) and all(formats.bnd4.is_bnd4(b) for _, b in bodies):
-        return bnd4_rule.merge(base, bodies, where)
+        return bnd4_rule.merge(base, bodies, where, _nested)
     if formats.fmg.is_fmg(base) and all(formats.fmg.is_fmg(b) for _, b in bodies):
         return fmg_rule.merge(base, bodies, where)
     if ESD_MERGING and esd_rule.is_esd(base) and all(esd_rule.is_esd(b) for _, b in bodies):
@@ -77,7 +82,3 @@ def _merge_body(base: bytes, bodies: list[tuple[str, bytes]], where: str) -> Res
         if len({b for _, b in changed}) > 1:
             out.clashes[where or "/"] = [label for label, _ in changed]
     return out
-
-
-def _inner(data: bytes) -> tuple[bytes, formats.dcx.Dcx | None]:
-    return formats.dcx.unpack(data) if data[:4] == b"DCX\0" and data[0x28:0x2C] != b"KRAK" else (data, None)

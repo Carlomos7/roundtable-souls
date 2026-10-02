@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from roundtable_souls import formats
 from roundtable_souls.merging.changes import REMOVED, Result
 
+Nested = Callable[[bytes, list[tuple[str, bytes]], str], Result | None]
 
-def merge(base: bytes, bodies: list[tuple[str, bytes]], where: str) -> Result:
+
+def merge(base: bytes, bodies: list[tuple[str, bytes]], where: str, nested: Nested) -> Result:
     """Inner file by inner file: what each mod changed, added or left out against the game's archive, applied in
-    load order; an inner file several mods changed is merged inside when it is itself an archive or a text table."""
-    from roundtable_souls.merging.merger import _inner, _merge_body, mergeable  # they dispatch back here
-
+    load order; an inner file several mods changed is merged inside when it is itself an archive or a text table.
+    nested(base, bodies, where) is the merger's own dispatch for such an inner file (None: no rule for it)."""
     van = formats.bnd4.read_bnd4(base)
     _unique(van, "the game's")
     vmap = {e.key: e for e in van.entries}
@@ -41,8 +44,8 @@ def merge(base: bytes, bodies: list[tuple[str, bytes]], where: str) -> Result:
         elif key in vmap and len(kept) == len(changes):  # all changed it: merge inside when it is a container
             inner_base, how = _inner(vmap[key].data)
             inner = [(label, _inner(e.data)[0]) for label, e in kept]
-            if mergeable(inner_base):
-                sub = _merge_body(inner_base, inner, path)
+            sub = nested(inner_base, inner, path)
+            if sub is not None:
                 out.changed.update(sub.changed)
                 out.clashes.update(sub.clashes)
                 out.removed.update(sub.removed)
@@ -79,3 +82,7 @@ def _unique(b: formats.bnd4.Bnd4, whose: str) -> None:
                 f"{whose} copy has two inner files that differ only in capital letters or slashes: {other} and {e.name}"
             )
         seen[e.key] = e.name or f"#{e.id}"
+
+
+def _inner(data: bytes) -> tuple[bytes, formats.dcx.Dcx | None]:
+    return formats.dcx.unpack(data) if data[:4] == b"DCX\0" and data[0x28:0x2C] != b"KRAK" else (data, None)
