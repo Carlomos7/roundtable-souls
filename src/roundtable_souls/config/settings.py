@@ -18,7 +18,6 @@ import re
 import sys
 import threading
 from collections.abc import Callable
-from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
@@ -282,9 +281,3 @@ def save_game_settings(game: str, **changes: Any) -> None:
     games = dict(current.get("games") or {})
     games[game] = {**(games.get(game) or {}), **changes}
     save_settings(games=games)
-
-
-@lru_cache
-def get_settings() -> LauncherSettings:
-    """Cached typed view for code that only reads. Call get_settings.cache_clear() after save_settings()."""
-    return LauncherSettings.model_validate(load_settings())

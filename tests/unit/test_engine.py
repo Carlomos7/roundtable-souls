@@ -310,7 +310,6 @@ def test_a_rebuild_uses_the_engine_only_with_the_switch_on(world, monkeypatch):
     r = manifest_refresh.recipe(world.profile, layer)
     assert r is not None and r.engine is None and r.command  # off: the mod's installer runs
     settings.save_settings(build_merges=True)
-    settings.get_settings.cache_clear()
     r = manifest_refresh.recipe(world.profile, layer)
     assert r.engine is not None and r.label == "the launcher's build of nightreign-revive"
     assert (
@@ -320,7 +319,6 @@ def test_a_rebuild_uses_the_engine_only_with_the_switch_on(world, monkeypatch):
 
 def test_a_whole_rebuild_through_the_engine_is_current_and_can_be_undone(world):
     settings.save_settings(build_merges=True)
-    settings.get_settings.cache_clear()
     tool = merge.find_backend(world.profile)
     merge.approve(tool)
     out = merge.rebuild(world.profile, lambda s: None)

@@ -49,7 +49,6 @@ def test_an_unreadable_file_is_left_alone_and_the_launchers_setting_is_used(tmp_
 def test_a_mark_from_before_3_10_moves_into_roundtable_json(tmp_path, monkeypatch):
     w = World(tmp_path, monkeypatch)
     settings.save_settings(parameter_overlays={merge._key(w.profile): {"package": str(w.winner), "rebuild": None}})
-    settings.get_settings.cache_clear()
     mark = merge.overlay_mark(w.profile)
     assert mark["package"] == w.winner
     stored = profile_settings.load(w.profile)["overlay"]

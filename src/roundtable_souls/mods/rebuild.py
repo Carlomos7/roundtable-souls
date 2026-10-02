@@ -154,7 +154,7 @@ def _legacy_mark(profile: Path):
 
 
 def _set_legacy_mark(profile: Path, value) -> None:
-    from roundtable_souls.config.settings import get_settings, load_settings, save_settings
+    from roundtable_souls.config.settings import load_settings, save_settings
 
     marks = dict(load_settings().get("parameter_overlays") or {})
     if value is None:
@@ -162,7 +162,6 @@ def _set_legacy_mark(profile: Path, value) -> None:
     else:
         marks[_key(profile)] = value
     save_settings(parameter_overlays=marks)
-    get_settings.cache_clear()
 
 
 def overlay_mark(profile: Path) -> dict | None:
@@ -240,12 +239,11 @@ def approved(tool) -> bool:
 
 
 def approve(tool) -> None:
-    from roundtable_souls.config.settings import get_settings, load_settings, save_settings
+    from roundtable_souls.config.settings import load_settings, save_settings
 
     keys = list(load_settings().get("rebuild_approved") or [])
     if tool.approval_key() not in keys:
         save_settings(rebuild_approved=[*keys, tool.approval_key()][-50:])
-        get_settings.cache_clear()
 
 
 def overlay(profile: Path, all_layers: list[dict] | None = None) -> tuple[dict | None, object, bool]:

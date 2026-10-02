@@ -23,13 +23,3 @@ def test_invalid_value_falls_back_to_default_for_that_key():
     settings.settings_path().write_text(json.dumps({"theme": "purple", "me3_path": "x"}), encoding="utf-8")
     loaded = settings.load_settings()
     assert loaded["theme"] == "dark" and loaded["me3_path"] == "x"
-
-
-def test_typed_view_is_cached_until_cleared():
-    settings.save_settings(theme="light")
-    settings.get_settings.cache_clear()
-    assert settings.get_settings().theme == "light"
-    settings.save_settings(theme="dark")
-    assert settings.get_settings().theme == "light"
-    settings.get_settings.cache_clear()
-    assert settings.get_settings().theme == "dark"

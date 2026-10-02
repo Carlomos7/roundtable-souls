@@ -30,9 +30,7 @@ def isolated_settings(tmp_path, monkeypatch):
 
         monkeypatch.setattr(module, name, guarded)
     save_backups._adopted.clear()
-    settings.get_settings.cache_clear()
     yield
-    settings.get_settings.cache_clear()
     save_backups._adopted.clear()
 
 
