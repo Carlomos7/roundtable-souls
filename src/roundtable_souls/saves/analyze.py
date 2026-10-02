@@ -129,7 +129,7 @@ class Catalog:
 def item_label(item_id: int) -> tuple[str, str]:
     """(display name, source) for an item the game does not define: the mod's own name when its files can be read,
     otherwise the kind and ID."""
-    from roundtable_souls.mods.item_names import item_names
+    from roundtable_souls.saves.item_names import item_names
 
     named = item_names().get(item_id)
     if named:

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from roundtable_souls import folders, games, settings
-from roundtable_souls.mods import item_names
+from roundtable_souls.saves import item_names
 from roundtable_souls.system import common
 
 

@@ -757,7 +757,7 @@ def check(game: games.Game | None = None):
     """`roundtable-souls [--game <name>] --check`: what the launcher detects for one game, printed and written to
     logs/last_run.log (so the windowed exe, which has no console, can be checked too). The co-op password is never
     included."""
-    from roundtable_souls.mods.item_names import item_names
+    from roundtable_souls.saves.item_names import item_names
 
     lines = [f"{TITLE} {VERSION}"]
     settings = load_settings()

@@ -9,8 +9,8 @@ import pytest
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from roundtable_souls import formats
-from roundtable_souls.mods import item_names as N
 from roundtable_souls.saves import analyze as A
+from roundtable_souls.saves import item_names as N
 
 
 def param(ids):
