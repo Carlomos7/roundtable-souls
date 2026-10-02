@@ -107,3 +107,12 @@ def test_a_new_build_first_undoes_an_interrupted_one(live, monkeypatch):
     monkeypatch.undo()
     B.Build(live, RECORD)  # the next rebuild starts here
     assert files(live) == before
+
+
+def test_room_counts_the_outputs_the_backup_and_spare(live):
+    b = B.Build(live, RECORD)
+    live_bytes = sum(len(v) for v in files(live).values())
+    b.make_room(1000, free=lambda p: 1000 + live_bytes + B.SPARE)  # exactly enough
+    with pytest.raises(B.BuildError, match="not enough free space"):
+        b.make_room(1000, free=lambda p: 999 + live_bytes + B.SPARE)
+    assert not b.stage.exists()

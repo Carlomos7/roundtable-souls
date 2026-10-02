@@ -131,8 +131,12 @@ def test_the_record_says_how_the_build_was_made_and_other_rules_make_it_out_of_d
     assert rec["removal_choice"] == record.REMOVAL_CHOICE and len(rec["game_config_sha256"]) == 64
     assert "removed" in rec["files"][REL.lower()]
     assert merge.health(prof)["state"] in ("current", "single")
+    assert rec["me3_version"] == "0.13.0"
     older = {**rec, "merger_revision": record.MERGER_REVISION - 1}
     assert record.reasons(older) == ["the launcher's merging changed since this was built"]
+    reordered = {**rec, "ordering": "an earlier model"}
+    assert record.reasons(reordered) == ["the launcher's load order model changed since this was built"]
+    assert record.reasons({**rec, "me3_version": "0.12.0"}) == []  # the ordering model decides, not the version
     assert record.reasons({"files": {}}) == []  # a record from before these fields: its inputs are still checked
 
 
@@ -195,3 +199,17 @@ def test_removing_a_mod_and_rebuilding_equals_building_without_it(prof, tmp_path
     )
     merge.rebuild(fresh / "p.me3", lambda s: None)
     assert (fresh / "mod" / "combined-parameters" / REL).read_bytes() == after_removal
+
+
+def test_a_rebuild_without_room_on_the_drive_is_not_started(prof, monkeypatch):
+    from roundtable_souls.merging import build as B
+
+    merge.rebuild(prof, lambda s: None)
+    folder = builtin.find(prof, merge.layers(prof)).folder
+    before = {p.relative_to(folder).as_posix(): p.read_bytes() for p in folder.rglob("*") if p.is_file()}
+    _add_mod(prof, "map", {"SB_Map.layout": b"big map"})
+    monkeypatch.setattr(B.shutil, "disk_usage", lambda p: type("U", (), {"free": B.SPARE // 2})())
+    with pytest.raises(Exception, match="not enough free space"):
+        merge.rebuild(prof, lambda s: None)
+    after = {p.relative_to(folder).as_posix(): p.read_bytes() for p in folder.rglob("*") if p.is_file()}
+    assert after == before and not folder.with_name("." + folder.name + ".staging").exists()

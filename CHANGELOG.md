@@ -9,6 +9,8 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
 - Files the launcher writes with ZSTD compression all use the frame the game reads (a 64 KB window), as regulation.bin already did.
 - Without the game's Oodle library (Linux), menu text, player animations and effects are written as DFLT, which the game loads, instead of stopping. Reading the game's own Oodle-compressed files there still needs Oodle.
 - Combine: the combined-parameters package is added to the Load after list of the mod that must stay last, so me3 loads it before that mod.
+- Combine: a rebuild is written beside the combined-parameters folder, every file is read back, and only then put in place; a rebuild cut off part way (a crash, a power cut) is undone the next time, so the previous result stands. It is not put in place while the game runs, and it does not start when the drive lacks room for it.
+- Combine: the record lists, file by file, inner files a mod's copy leaves out (they are left out of the result, as before), and says which merging rules, load order model, game data and me3 version made it; a change in the rules makes it out of date. Two inner files whose names differ only in capital letters stop the merge with the reason.
 
 ## [3.14.0] - 2026-10-01
 

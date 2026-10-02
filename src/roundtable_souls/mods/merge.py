@@ -3,8 +3,9 @@ packages into it, and whether that merge still matches today's packages.
 
 me3 serves one regulation.bin: the last enabled package in effective load order that has one. A pack placed before
 that package keeps its file on disk but applies only if a rebuild tool rebuilds the combined file from it; a pack placed
-last replaces the other one's. The launcher never merges files itself. It finds a rebuild tool next to the package that
-must stay last (see mods.backends), runs it on request, and checks the list of sources (path + sha256) the rebuild tool
+last replaces the other one's. The merging itself is done by a backend: the launcher's own Combine (see
+mods.backends.builtin and merging), or a rebuild tool found next to the package that must stay last (see
+mods.backends). This module picks the backend, runs it on request, and checks the list of sources (path + sha256) the rebuild tool
 leaves: for every file the rebuild tool took from the layers, the source must be the last enabled package before it that
 ships that file (or the game's own file when none does), with the same bytes as today.
 

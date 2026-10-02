@@ -34,6 +34,14 @@ def isolated_settings(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def installed_me3_not_asked(monkeypatch):
+    """A rebuild records the installed me3's version by running it: tests never run the developer's me3."""
+    from roundtable_souls.mods.backends import builtin
+
+    monkeypatch.setattr(builtin, "_me3_version", lambda: "0.13.0")
+
+
+@pytest.fixture(autouse=True)
 def run_in_a_temporary_folder(tmp_path, monkeypatch):
     """Every test runs from its own temporary folder, never the repository: a relative path gone wrong (an empty path
     is the current folder) can then only reach that folder."""

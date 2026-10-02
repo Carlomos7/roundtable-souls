@@ -1,5 +1,6 @@
 """A build's outputs, staged beside the live folder, checked, then put in place through a journal.
 
+    room     before anything is written: the drive must hold the outputs, a backup of what they replace, and spare
     stage    every output is written to .<live>.staging first; nothing live changes
     check    each staged file is read back (the caller says how) before anything is replaced
     activate a journal lists what is replaced; live files go to .<live>.backup, staged ones take their place, the
@@ -20,6 +21,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 JOURNAL = ".build-journal.json"
+SPARE = 256 * 1024 * 1024  # left free on the drive after a build: the game and the system need room too
 
 
 class BuildError(RuntimeError):
@@ -36,6 +38,23 @@ class Build:
         recover(self.live)
         shutil.rmtree(self.stage, ignore_errors=True)
         self.stage.mkdir(parents=True)
+
+    def make_room(self, new_bytes: int, free: Callable[[Path], int] | None = None) -> None:
+        """Refuse before anything is written when the drive cannot hold the staged outputs (about new_bytes) and a
+        backup of the live files they replace, with SPARE left over."""
+        live_bytes = sum(p.stat().st_size for p in self.live.rglob("*") if p.is_file()) if self.live.is_dir() else 0
+        need = new_bytes + live_bytes + SPARE
+        where = self.live if self.live.exists() else self.live.parent
+        while not where.exists() and where != where.parent:
+            where = where.parent
+        have = (free or (lambda p: shutil.disk_usage(p).free))(where)
+        if have < need:
+            self.discard()
+            gb = 1024**3
+            raise BuildError(
+                f"not enough free space on {where.anchor or where}: a rebuild needs about {need / gb:.1f} GB, "
+                f"{have / gb:.1f} GB is free"
+            )
 
     def path(self, rel: str) -> Path:
         """Where to write an output (rel to the live folder)."""

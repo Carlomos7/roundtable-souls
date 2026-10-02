@@ -33,6 +33,16 @@ def _sha(p: Path) -> str:
     return merge.sha256(p) or ""
 
 
+def _me3_version() -> str | None:
+    """The installed me3's version, for the record (None when it cannot be asked)."""
+    from roundtable_souls.system import common, me3_info
+
+    try:
+        return me3_info.me3_version(common.me3_exe())
+    except Exception:
+        return None
+
+
 def is_combined(folder: Path) -> bool:
     try:
         data = json.loads((Path(folder) / RECORD).read_text(encoding="utf-8"))
@@ -270,6 +280,10 @@ class CombineTool:
         layers = merge.layers(self.profile) if all_layers is None else all_layers
         packs = self.inputs(layers, until)
         build = Build(self.folder, RECORD)  # finishes undoing an interrupted rebuild first, if there was one
+        try:
+            build.make_room(self._estimate(layers, until, packs))
+        except BuildError as e:
+            raise BackendError(f"The rebuild was not started: {e}. The previous result is unchanged.") from e
         self.previous = self._keep_previous()
         files = self._merge_files(log, layers, until, build)
         base = game_regulation()
@@ -308,6 +322,22 @@ class CombineTool:
         log(f"combine: done in {time.time() - start:.1f}s ({len(report.conflicts)} overlapping rows)")
         return record
 
+    def _estimate(self, layers: list[dict], until: dict | None, packs: list[dict]) -> int:
+        """About how many bytes the outputs take: per merged file its largest copy, plus a regulation.bin."""
+
+        def size(p: Path) -> int:
+            try:
+                return p.stat().st_size
+            except OSError:
+                return 0
+
+        shared = shared_files(self.file_inputs(layers, until))
+        total = sum(max(size(Path(o["folder"]) / o["rel"]) for o in owners) for owners in shared.values())
+        if packs:
+            base = game_regulation()
+            total += max([size(base) if base else 0] + [size(Path(p["folder"]) / REGULATION) for p in packs])
+        return total
+
     def _write_record(
         self, files: dict, base, packs, report, version, out: bytes | None = None, build: Build | None = None
     ) -> dict:
@@ -319,7 +349,7 @@ class CombineTool:
             "when": time.strftime("%Y-%m-%d %H:%M:%S"),
             "files": files,
             "archives": archives_fingerprint(common.game_dir()),
-        } | merge_record.facts()
+        } | merge_record.facts(me3_version=_me3_version())
         if base is None:
             self._put_record(record, build)
             return record

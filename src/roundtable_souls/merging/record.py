@@ -1,5 +1,18 @@
 """What a build record says about how a build was made, beyond its inputs: which merging rules, which load order
-model, which game configuration, and the choices in force. A build made otherwise is out of date."""
+model, which game configuration, and the choices in force. A build made otherwise is out of date.
+
+When a build is out of date (what play checks before starting the game):
+    rules        the merger revision, the ordering model, the game configuration or the removal choice differ
+    inputs       a mod's copy of a merged file, or a pack's regulation.bin, differs from its recorded sha256; which
+                 packages ship it, or their order, changed
+    game         the game's regulation.bin differs from its recorded sha256; an archive index (.bhd) changed size or
+                 modification time (a game update rewrites them; the archives themselves are too large to hash)
+The me3 version is recorded but does not make a build out of date: the ordering model is what decides, and it is the
+same for every me3 version the launcher supports (mods.order.supported).
+
+File hashes are remembered by path, size and modification time (mods.merge.sha256): a file whose size or
+modification time changes is hashed again; one rewritten with the same size and time is not noticed.
+"""
 
 from __future__ import annotations
 
@@ -16,12 +29,13 @@ ORDERING = "me3 sort_dependencies, me3 9b1e080 (me3 0.11.0 to 0.13.0)"
 REMOVAL_CHOICE = "removed: an inner file a mod's copy leaves out is left out of the result"
 
 
-def facts(game: str = "eldenring") -> dict:
+def facts(game: str = "eldenring", me3_version: str | None = None) -> dict:
     """The fields every build record carries next to its inputs."""
     cfg = (game_config.GAMES_DIR / f"{game}.json").read_bytes()
     return {
         "merger_revision": MERGER_REVISION,
         "ordering": ORDERING,
+        "me3_version": me3_version,
         "game_config_sha256": hashlib.sha256(cfg).hexdigest(),
         "removal_choice": REMOVAL_CHOICE,
     }
@@ -36,6 +50,8 @@ def reasons(record: dict, game: str = "eldenring") -> list[str]:
     out = []
     if record.get("merger_revision") != now["merger_revision"]:
         out.append("the launcher's merging changed since this was built")
+    if record.get("ordering") != now["ordering"]:
+        out.append("the launcher's load order model changed since this was built")
     if record.get("game_config_sha256") != now["game_config_sha256"]:
         out.append("the launcher's game data changed since this was built")
     if record.get("removal_choice") != now["removal_choice"]:
