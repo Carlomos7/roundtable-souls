@@ -7,7 +7,7 @@ import pytest
 from roundtable_souls.platform import paths as common
 from roundtable_souls.saves import container
 from roundtable_souls.saves import nightreign as nr
-from roundtable_souls.saves import service as saves
+from roundtable_souls.services import saves
 
 LIVE_NR = Path.home() / "AppData" / "Roaming" / "Nightreign"
 

@@ -99,10 +99,27 @@ from roundtable_souls.saves import library as save_library
 from roundtable_souls.saves import loading as save_loading
 from roundtable_souls.saves import regulation as repair_regulation
 from roundtable_souls.saves import repair as save_repair
-from roundtable_souls.saves import service as saves_service
 from roundtable_souls.saves import transfer as save_transfer
 from roundtable_souls.saves import vanilla as save_vanilla
-from roundtable_souls.saves.service import (
+from roundtable_souls.services import mods as mods_service
+from roundtable_souls.services import saves as saves_service
+from roundtable_souls.services.mods import (
+    create_profile,
+    delete_profile,
+    install_mod,
+    me3_facts,
+    plan_mod_install,
+    profile_entries,
+    read_profile_mods,
+    read_profile_settings,
+    replan_mod_install,
+    scan_profile_conflicts,
+    set_mod_options,
+    set_profile_mod_enabled,
+    uninstall_mod,
+    write_profile_setting,
+)
+from roundtable_souls.services.saves import (
     AREA_NAMES,
     assert_writable,
     backups_folder,
@@ -130,23 +147,6 @@ from roundtable_souls.saves.service import (
     save_summary,
     saves_needing_attention,
     torrent_text,
-)
-from roundtable_souls.services import mods as mods_service
-from roundtable_souls.services.mods import (
-    create_profile,
-    delete_profile,
-    install_mod,
-    me3_facts,
-    plan_mod_install,
-    profile_entries,
-    read_profile_mods,
-    read_profile_settings,
-    replan_mod_install,
-    scan_profile_conflicts,
-    set_mod_options,
-    set_profile_mod_enabled,
-    uninstall_mod,
-    write_profile_setting,
 )
 from roundtable_souls.updates.feed import RELEASES_URL
 
