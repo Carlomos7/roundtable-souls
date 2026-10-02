@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from roundtable_souls import migration
 from roundtable_souls.config import settings
 from roundtable_souls.platform import steam_shortcuts
+from roundtable_souls.updates import inno as migration
 
 
 @pytest.fixture
