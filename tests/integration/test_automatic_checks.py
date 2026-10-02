@@ -26,7 +26,7 @@ def test_pack_flag_on_the_save_leaves_unlisted_gear_alone(tmp_path):
 def test_without_the_flag_unlisted_gear_is_foreign(tmp_path):
     copy = _copy(tmp_path)
     r = L.parse(str(copy))
-    for _i, slot in A.active_slots(r):
+    for _i, slot in L.active_slots(r):
         dlc = bytearray(slot.get("dlc") or bytes(50))
         dlc[A.TARNISHED_FLAG_BYTE] = 0
         slot["dlc"] = bytes(dlc)

@@ -324,6 +324,18 @@ def parse(path):
     return out
 
 
+def active_slots(parsed: dict):
+    """(index, slot) for every slot marked active in the profile summary."""
+    active = (parsed.get("ud10") or {}).get("active") or []
+    for i, slot in enumerate(parsed.get("slots") or []):
+        if i < len(active) and active[i]:
+            yield i, slot
+
+
+def character_name(slot: dict) -> str:
+    return str((slot.get("pgd") or {}).get("name") or "")
+
+
 if __name__ == "__main__":
     for p in sys.argv[1:]:
         print("=====", p)

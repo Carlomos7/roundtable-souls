@@ -76,7 +76,7 @@ def plan_restore(parsed: dict) -> list[dict]:
     """Per active character: what Remove mod items would take off, clear, and what it refuses."""
     plan = []
     catalog = A.Catalog.for_save(parsed)
-    for i, slot in A.active_slots(parsed):
+    for i, slot in L.active_slots(parsed):
         scan = A.scan_mod_items(slot, catalog)
         rows = slot.get("ga_items") or []
         strip, blocked = [], []
@@ -118,7 +118,7 @@ def plan_restore(parsed: dict) -> list[dict]:
         strip = [e for e in strip if e["handle"] not in keep_aow]
         if strip or orphans or blocked:
             plan.append(
-                {"slot": i, "name": A.character_name(slot), "strip": strip, "orphans": orphans, "blocked": blocked}
+                {"slot": i, "name": L.character_name(slot), "strip": strip, "orphans": orphans, "blocked": blocked}
             )
     return plan
 

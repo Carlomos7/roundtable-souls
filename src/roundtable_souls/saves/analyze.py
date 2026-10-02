@@ -3,7 +3,7 @@
 Never writes. The item check compares every held, stored and leftover item against the items the game defines: the
 bundled list (data/known_item_ids.txt) plus every item in the installed game's own regulation.bin, which also covers
 official content the list lacks, such as the Tarnished Edition pack. Anything outside both came from a mod; its name
-comes from the mod's own files when they can be read (mods/item_names.py).
+comes from the mod's own files when they can be read (saves/item_names.py).
 """
 
 from __future__ import annotations
@@ -14,6 +14,10 @@ from dataclasses import dataclass, field
 
 from roundtable_souls import formats
 from roundtable_souls.resources import DATA_DIR
+from roundtable_souls.saves import item_names as mod_item_names  # a module, so tests can stand in for it
+from roundtable_souls.saves import loading as save_loading
+from roundtable_souls.saves.layout import active_slots, character_name
+from roundtable_souls.system import common
 
 WEAPON, ARMOUR, TALISMAN, GOODS, ASH = 0x0, 0x1, 0x2, 0x4, 0x8
 KIND_NAMES = {WEAPON: "Weapon", ARMOUR: "Armour", TALISMAN: "Talisman", GOODS: "Item", ASH: "Ash of War"}
@@ -45,8 +49,6 @@ def game_item_ids() -> frozenset[int]:
     """Every item the installed game's regulation.bin defines (empty when the game or the file cannot be read).
     Read once per version of the file."""
     global _GAME_IDS
-    from roundtable_souls.system import common
-
     path = common.regulation_bin()
     if path is None:
         return frozenset()
@@ -129,9 +131,7 @@ class Catalog:
 def item_label(item_id: int) -> tuple[str, str]:
     """(display name, source) for an item the game does not define: the mod's own name when its files can be read,
     otherwise the kind and ID."""
-    from roundtable_souls.saves.item_names import item_names
-
-    named = item_names().get(item_id)
+    named = mod_item_names.item_names().get(item_id)
     if named:
         return named
     kind, raw = kind_of(item_id), item_id & 0x0FFFFFFF
@@ -139,18 +139,6 @@ def item_label(item_id: int) -> tuple[str, str]:
     if kind == WEAPON and raw % 100:
         return f"{label} {raw - raw % 100} +{raw % 100}", UNLISTED
     return f"{label} {raw}", UNLISTED
-
-
-def active_slots(parsed: dict):
-    """(index, slot) for every slot marked active in the profile summary."""
-    active = (parsed.get("ud10") or {}).get("active") or []
-    for i, slot in enumerate(parsed.get("slots") or []):
-        if i < len(active) and active[i]:
-            yield i, slot
-
-
-def character_name(slot: dict) -> str:
-    return str((slot.get("pgd") or {}).get("name") or "")
 
 
 def slot_tag(index: int, name: str) -> str:
@@ -316,8 +304,6 @@ def analyze_slot(slot: dict, index: int, name: str, catalog: Catalog) -> list[di
 
 
 def _torn_findings(parsed: dict, raw: bytes) -> list[dict]:
-    from roundtable_souls.saves import loading as save_loading
-
     findings = []
     ud10 = parsed.get("ud10") or {}
     for i, why in sorted((parsed.get("unreadable") or {}).items()):
@@ -355,8 +341,6 @@ def _torn_findings(parsed: dict, raw: bytes) -> list[dict]:
 
 def analyze_parsed(parsed: dict, *, dlc_owned: bool | None = None, raw: bytes | None = None) -> list[dict]:
     """Findings for a parsed save (active characters only)."""
-    from roundtable_souls.saves import loading as save_loading
-
     findings = []
     catalog = Catalog.for_save(parsed)
     if catalog.pack:

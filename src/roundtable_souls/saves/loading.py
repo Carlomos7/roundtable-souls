@@ -152,16 +152,14 @@ def detect_slot(slot: dict, dlc_owned: bool | None) -> list[str]:
 
 
 def plan_loading_fixes(parsed: dict, dlc_owned: bool | None = None) -> list[dict]:
-    from roundtable_souls.saves.analyze import active_slots, character_name
-
     plan = []
-    for i, slot in active_slots(parsed):
+    for i, slot in L.active_slots(parsed):
         issues = detect_slot(slot, dlc_owned)
         if issues:
             plan.append(
                 {
                     "slot": i,
-                    "name": character_name(slot),
+                    "name": L.character_name(slot),
                     "issues": issues,
                     "labels": [BY_KEY[k].title for k in issues],
                     "actions": [BY_KEY[k].action for k in issues],
@@ -172,20 +170,18 @@ def plan_loading_fixes(parsed: dict, dlc_owned: bool | None = None) -> list[dict
 
 def torn_write_check(data: bytes, parsed: dict) -> list[dict]:
     """Active slots whose Steam ID is not where the layout put it: bytes shifted mid-slot."""
-    from roundtable_souls.saves.analyze import active_slots, character_name
-
     steam_id = (parsed.get("ud10") or {}).get("steam_id")
     if not steam_id:
         return []
     needle = struct.pack("<Q", steam_id)
     out = []
-    for i, slot in active_slots(parsed):
+    for i, slot in L.active_slots(parsed):
         if slot.get("steam_id") == steam_id:
             continue
         start = slot_start(i)
         found = data.rfind(needle, start, start + L.SLOT_SIZE)
         out.append(
-            {"slot": i, "name": character_name(slot), "shift": found - slot["steam_id_pos"] if found >= 0 else None}
+            {"slot": i, "name": L.character_name(slot), "shift": found - slot["steam_id_pos"] if found >= 0 else None}
         )
     return out
 
