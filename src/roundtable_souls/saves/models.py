@@ -1,4 +1,4 @@
-"""Shapes of the data that crosses layer boundaries: save findings, save info, mod install plans.
+"""Shapes of the save data that crosses layer boundaries: findings and save info (the install plan is mods/models.py).
 
 The producers build plain dicts (the window and the tests read them as dicts) and validate them against
 these models before handing them over, so a missing key or a wrong type fails at the source, not in a widget.
@@ -87,29 +87,3 @@ class SaveInfo(BaseModel):
     loading_plan: list[Any]
     tarnished_flag: bool | None = None
     dlc_owned: bool | None = None
-
-
-class ModEntry(BaseModel):
-    """One [[packages]] or [[natives]] block a plan would add."""
-
-    kind: Literal["package", "native"]
-    path: str
-    id: str | None = None
-
-
-class ModPlan(BaseModel):
-    """What `plan_mod_install` found in a source and what `install_mod` would do with it."""
-
-    model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
-
-    kind: Literal["package", "native", "profile", "unknown"]
-    name: str
-    root: Path
-    staging: Path | None = None
-    array_form: bool
-    dest: Path | None = None
-    entries: list[ModEntry] = Field(default_factory=list)
-    exists: bool = False
-    in_place: bool = False
-    already_listed: list[str] = Field(default_factory=list)
-    error: str | None = None
