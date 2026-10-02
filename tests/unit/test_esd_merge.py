@@ -64,7 +64,7 @@ def merged(*layers):
     return rule.merge(GAME, list(layers), "t000001000.esd")
 
 
-def options(data: bytes) -> list[tuple[int, int]]:
+def options(data: bytes) -> list[tuple[int, int | None]]:
     """(option, the state its choice leads to), as the merged menu offers them."""
     menu = read_esd(data).state_machines[1]
     shown = [rule._command(c)[2][0][1] for c in menu[0].enter_commands if (c.bank, c.index) == (1, 19)]
