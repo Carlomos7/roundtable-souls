@@ -28,8 +28,8 @@ import shutil
 import time
 from pathlib import Path
 
-from roundtable_souls import games
 from roundtable_souls.config.settings import data_dir
+from roundtable_souls.game import catalog as games
 
 BACKUPS = "backups"
 LIBRARY = "library"

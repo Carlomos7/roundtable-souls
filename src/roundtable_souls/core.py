@@ -16,7 +16,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from roundtable_souls import __version__, coop, folders, games
+from roundtable_souls import __version__, coop, folders
 from roundtable_souls.config.settings import (
     FROZEN,
     data_dir,
@@ -72,6 +72,7 @@ from roundtable_souls.coop import (
 from roundtable_souls.files import (
     atomic_write,
 )
+from roundtable_souls.game import catalog as games
 from roundtable_souls.mods import history as mod_history
 from roundtable_souls.mods import manage as mod_manage
 from roundtable_souls.mods import merge as mod_merge

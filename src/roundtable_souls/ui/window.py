@@ -69,7 +69,7 @@ from qfluentwidgets import (
 )
 from qfluentwidgets import FluentIcon as FI
 
-from roundtable_souls import core, games
+from roundtable_souls import core
 from roundtable_souls.config.settings import FROZEN, appimage, is_installed, is_portable
 from roundtable_souls.core import (
     CUSTOM,
@@ -147,6 +147,7 @@ from roundtable_souls.core import (
     write_password,
     write_profile_setting,
 )
+from roundtable_souls.game import catalog as games
 from roundtable_souls.mods import configs as mod_configs
 from roundtable_souls.platform import desktop, instance
 from roundtable_souls.platform import logging as run_logging

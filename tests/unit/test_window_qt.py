@@ -81,7 +81,7 @@ def test_pages_fit_a_narrow_window(launcher, app):
 
 
 def test_game_tabs_switch_every_page(launcher, app):
-    from roundtable_souls import games
+    from roundtable_souls.game import catalog as games
     from roundtable_souls.platform import paths as common
 
     assert list(launcher._game_actions) == [g.key for g in games.GAMES]
@@ -142,7 +142,7 @@ def test_switcher_remembers_the_last_page_per_game(launcher, app):
 def test_switcher_menu_opens_under_the_button_and_picks_a_game(launcher, app):
     from PySide6.QtCore import QPoint
 
-    from roundtable_souls import games
+    from roundtable_souls.game import catalog as games
 
     btn, menu = launcher.game_btn, launcher._game_menu_view
     QTest.mouseClick(btn, Qt.LeftButton)  # the real click path: button -> _showMenu -> menu.exec with its animation
@@ -171,7 +171,7 @@ def test_switcher_menu_opens_under_the_button_and_picks_a_game(launcher, app):
 
 
 def test_ctrl_tab_cycles_games(launcher, app):
-    from roundtable_souls import games
+    from roundtable_souls.game import catalog as games
 
     launcher._cycle_game(1)
     for _ in range(5):
@@ -278,7 +278,7 @@ def test_update_notice_fits_a_narrow_window(sandbox, monkeypatch):
 def test_saves_page_names_the_file_play_uses_and_lists_the_library(sandbox, monkeypatch, tmp_path):
     from PySide6.QtCore import QEventLoop, QTimer
 
-    from roundtable_souls import games
+    from roundtable_souls.game import catalog as games
     from roundtable_souls.platform import paths as common
     from roundtable_souls.saves import library, regulation
 

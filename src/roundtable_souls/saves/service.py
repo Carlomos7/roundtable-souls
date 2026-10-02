@@ -7,7 +7,8 @@ import shutil
 import time
 from pathlib import Path
 
-from roundtable_souls import folders, games, models
+from roundtable_souls import folders, models
+from roundtable_souls.game import catalog as games
 from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.platform import paths as common
 from roundtable_souls.saves import analyze as save_analyze

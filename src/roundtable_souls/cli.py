@@ -7,7 +7,7 @@ import sys
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from roundtable_souls.games import Game
+    from roundtable_souls.game.catalog import Game
 
 
 def main() -> int:
@@ -32,7 +32,8 @@ def main() -> int:
 
         return headless.update_headless([a for a in sys.argv[1:] if a != "--update"])
     if "--play" in sys.argv or "--check" in sys.argv or any(a.startswith("--game") for a in sys.argv):
-        from roundtable_souls import core, games
+        from roundtable_souls import core
+        from roundtable_souls.game import catalog as games
 
         game = core.game_from_args(sys.argv)
         if game is None:

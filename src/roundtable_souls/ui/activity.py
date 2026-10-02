@@ -14,7 +14,7 @@ from PySide6.QtWidgets import QApplication, QHBoxLayout, QVBoxLayout, QWidget
 from qfluentwidgets import CaptionLabel, CheckBox, ComboBox, StrongBodyLabel, TextEdit, TransparentToolButton
 from qfluentwidgets import FluentIcon as FI
 
-from roundtable_souls import games
+from roundtable_souls.game import catalog as games
 from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.ui.theme import ghost_btn, hint, style_editor
 from roundtable_souls.ui.widgets import ElideLabel, GlassCard, StatusPill, action_row, dispose, log_html, tone_label

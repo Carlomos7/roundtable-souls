@@ -71,7 +71,8 @@ def test_a_second_start_reaches_the_window(name):
 
 
 def test_play_from_a_shortcut_hands_off_or_holds_the_play_name(monkeypatch):
-    from roundtable_souls import cli, core, games
+    from roundtable_souls import cli, core
+    from roundtable_souls.game import catalog as games
 
     played, sent = [], []
     monkeypatch.setattr(

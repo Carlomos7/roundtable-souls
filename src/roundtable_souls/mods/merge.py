@@ -26,7 +26,7 @@ import os
 import time
 from pathlib import Path
 
-from roundtable_souls import games
+from roundtable_souls.game import catalog as games
 from roundtable_souls.mods import backends
 from roundtable_souls.mods import manage as mod_manage
 

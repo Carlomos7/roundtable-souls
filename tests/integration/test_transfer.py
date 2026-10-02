@@ -6,7 +6,7 @@ import struct
 
 import pytest
 
-from roundtable_souls import games
+from roundtable_souls.game import catalog as games
 from roundtable_souls.saves import fix as F
 from roundtable_souls.saves import layout as L
 from roundtable_souls.saves import library as Lib

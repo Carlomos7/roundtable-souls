@@ -13,8 +13,8 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-from roundtable_souls import games
 from roundtable_souls.files import atomic_write
+from roundtable_souls.game import catalog as games
 
 
 def _profile_rows(text: str):
