@@ -24,7 +24,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from roundtable_souls import identity
+from roundtable_souls.config import identity
 from roundtable_souls.platform import filelock
 from roundtable_souls.resources import PACKAGE_DIR
 

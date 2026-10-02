@@ -5,7 +5,7 @@ uv run python scripts/build.py                     everything
 uv run python scripts/build.py --no-test           skip the test run
 uv run python scripts/build.py --no-pack           PyInstaller only (dist/RoundtableSouls), no vpk
 uv run python scripts/build.py --identity t.json   bake an identity override into the build (isolated test builds:
-                                                   own app ID, title, feed and key; see src/roundtable_souls/identity.py)
+                                                   own app ID, title, feed and key; see src/roundtable_souls/config/identity.py)
 
 vpk must match the velopack package in uv.lock (VPK_VERSION); it is found as $VPK, then on PATH. Windows builds
 pack for win-x64 (Setup.exe, a portable zip, packages), Linux builds an AppImage for linux-x64. A previous release's
@@ -93,7 +93,7 @@ def load_identity(path: Path | None):
     from dataclasses import fields
 
     sys.path.insert(0, str(ROOT / "src"))
-    from roundtable_souls.identity import Identity
+    from roundtable_souls.config.identity import Identity
 
     if path is None:
         return Identity()

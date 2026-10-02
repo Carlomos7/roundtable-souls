@@ -673,7 +673,7 @@ def test_data_folder_and_install_folder_can_never_be_the_same(tmp_path, monkeypa
     _frozen_at(monkeypatch, root / "current" / "RoundtableSouls.exe")
     with pytest.raises(RuntimeError, match="app ID must differ"):
         settings.data_dir()
-    from roundtable_souls import identity
+    from roundtable_souls.config import identity
 
     assert identity.Identity().pack_id.lower() != identity.Identity().data_dir_name.lower()  # the release default
 
@@ -717,7 +717,7 @@ def test_identity_matches_reads_the_installed_app_id(tmp_path, monkeypatch):
     (root / "current").mkdir(parents=True)
     (root / "Update.exe").write_bytes(b"x")
     _frozen_at(monkeypatch, root / "current" / "RoundtableSouls.exe")
-    from roundtable_souls import identity
+    from roundtable_souls.config import identity
 
     (root / "current" / "sq.version").write_text(
         f"<package><metadata><id>{identity.get().pack_id}</id><version>1.0.0</version></metadata></package>"

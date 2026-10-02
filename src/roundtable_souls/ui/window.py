@@ -5931,7 +5931,7 @@ class Launcher(FluentWindow):
 
 
 def main():
-    from roundtable_souls import identity
+    from roundtable_souls.config import identity
 
     if identity.get().qt_platform:  # an isolated test build (Velopack starts it with the user's own environment)
         os.environ["QT_QPA_PLATFORM"] = identity.get().qt_platform

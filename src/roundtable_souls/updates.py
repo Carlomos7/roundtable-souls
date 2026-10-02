@@ -43,7 +43,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from roundtable_souls import __version__, folders, identity, signing
+from roundtable_souls import __version__, folders, signing
+from roundtable_souls.config import identity
 from roundtable_souls.config.settings import (
     appimage,
     change_settings,
