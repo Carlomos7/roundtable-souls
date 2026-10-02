@@ -3,7 +3,7 @@ DLC.bdt next to the game. Runs on COPIES of a real co-op save (skipped without o
 
 import pytest
 
-from roundtable_souls import core as g
+from roundtable_souls.services import play as g
 from support import copy_live_save as _copy
 
 A = g.save_analyze

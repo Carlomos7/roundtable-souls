@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from roundtable_souls import core as g
 from roundtable_souls import folders
+from roundtable_souls.services import play as g
 from support import copy_live_save as _copy
 
 F = g.save_fix

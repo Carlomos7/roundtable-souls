@@ -69,9 +69,17 @@ from qfluentwidgets import (
 )
 from qfluentwidgets import FluentIcon as FI
 
-from roundtable_souls import core
 from roundtable_souls.config.settings import FROZEN, appimage, is_installed, is_portable
-from roundtable_souls.core import (
+from roundtable_souls.game import catalog as games
+from roundtable_souls.mods import checks as mod_checks
+from roundtable_souls.mods import configs as mod_configs
+from roundtable_souls.mods import extract as mod_extract
+from roundtable_souls.mods import install as mod_install
+from roundtable_souls.platform import desktop, instance
+from roundtable_souls.platform import logging as run_logging
+from roundtable_souls.resources import ASSETS_DIR
+from roundtable_souls.services import play as core
+from roundtable_souls.services.play import (
     CUSTOM,
     LOGS,
     PLAY_DEFAULTS,
@@ -147,14 +155,6 @@ from roundtable_souls.core import (
     write_password,
     write_profile_setting,
 )
-from roundtable_souls.game import catalog as games
-from roundtable_souls.mods import checks as mod_checks
-from roundtable_souls.mods import configs as mod_configs
-from roundtable_souls.mods import extract as mod_extract
-from roundtable_souls.mods import install as mod_install
-from roundtable_souls.platform import desktop, instance
-from roundtable_souls.platform import logging as run_logging
-from roundtable_souls.resources import ASSETS_DIR
 from roundtable_souls.ui.activity import ActivityView
 from roundtable_souls.ui.config_files import ConfigFilesDialog
 from roundtable_souls.ui.dialogs import (

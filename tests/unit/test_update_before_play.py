@@ -6,9 +6,9 @@ import json
 import pytest
 from test_mod_merge import World
 
-from roundtable_souls import core
 from roundtable_souls.mods import rebuild as merge
 from roundtable_souls.platform import logging as run_logging
+from roundtable_souls.services import play as core
 
 
 @pytest.fixture

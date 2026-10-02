@@ -2,8 +2,8 @@
 
 import pytest
 
-from roundtable_souls import core as g
 from roundtable_souls import folders
+from roundtable_souls.services import play as g
 
 
 def test_sl2_to_co2_copies_and_backs_up(tmp_path, monkeypatch):

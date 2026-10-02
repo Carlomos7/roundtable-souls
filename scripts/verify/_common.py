@@ -100,8 +100,8 @@ def sandbox_launcher(out: Path, game: Path) -> None:
     from roundtable_souls import folders
 
     folders.data_root = lambda: data
-    from roundtable_souls import core  # noqa: F401  (applies the (empty) sandbox settings on import)
     from roundtable_souls.platform import paths as common
+    from roundtable_souls.services import play as core  # noqa: F401  (applies the (empty) sandbox settings on import)
 
     common.GAME_EXE_OVERRIDE = str(game / "eldenring.exe")
     common._DETECT_CACHE.clear()

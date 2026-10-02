@@ -10,10 +10,10 @@ from pathlib import Path
 
 import pytest
 
-from roundtable_souls import core
 from roundtable_souls.platform import logging as rl
 from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.platform import paths as common
+from roundtable_souls.services import play as core
 
 
 @pytest.fixture

@@ -66,7 +66,7 @@ select = ["E", "F", "I", "UP", "B"]
 ignore = ["E501", "E731", "E741", "B008", "B905"]
 
 [tool.ruff.lint.per-file-ignores]
-"src/roundtable_souls/core.py" = ["F401"]  # facade re-exports
+"src/roundtable_souls/services/play.py" = ["F401"]  # facade re-exports
 
 [tool.pyright]
 include = ["src", "scripts", "tests"]
@@ -98,7 +98,7 @@ exhaustive = false
 layers = [
     "roundtable_souls.cli",
     "roundtable_souls.ui",
-    "roundtable_souls.core : roundtable_souls.services",
+    "roundtable_souls.services",
     "roundtable_souls.mods | roundtable_souls.saves | roundtable_souls.coop | roundtable_souls.updates",
     "roundtable_souls.merging",
     "roundtable_souls.formats | roundtable_souls.game",
@@ -118,7 +118,7 @@ ignore_imports = [
 name = "No Qt below the UI"
 type = "forbidden"
 source_modules = [
-    "roundtable_souls.core",
+    "roundtable_souls.services",
     "roundtable_souls.mods",
     "roundtable_souls.saves",
     "roundtable_souls.coop",

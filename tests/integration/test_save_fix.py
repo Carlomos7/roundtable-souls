@@ -4,7 +4,7 @@ import shutil
 
 import pytest
 
-from roundtable_souls import core as g
+from roundtable_souls.services import play as g
 from support import live_save as _live_save
 
 F = g.save_fix

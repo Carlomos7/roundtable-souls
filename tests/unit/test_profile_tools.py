@@ -2,7 +2,7 @@
 
 import pytest
 
-from roundtable_souls import core as g
+from roundtable_souls.services import play as g
 
 P = g.profile_tools
 M = g.me3_info

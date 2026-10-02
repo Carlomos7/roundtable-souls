@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from roundtable_souls import core as g
 from roundtable_souls.mods import checks, extract, install, remove
+from roundtable_souls.services import play as g
 
 M = g.mod_manage
 

@@ -1,6 +1,6 @@
 """Editor helpers behind Ctrl+/, Tab and Shift+Tab in the profile and share boxes."""
 
-from roundtable_souls import core as g
+from roundtable_souls.services import play as g
 
 
 def test_toggle_comment_toml_block_and_back():

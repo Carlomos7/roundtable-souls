@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from roundtable_souls import core as g
+from roundtable_souls.services import play as g
 
 INI = (
     "[GAMEPLAY]\r\n; Invaders join uninvited.  0=FALSE  1=TRUE\r\nallow_invaders = 1\r\n\r\n"

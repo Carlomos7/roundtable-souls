@@ -5,11 +5,11 @@ import json
 
 import pytest
 
-from roundtable_souls import core
 from roundtable_souls.game import catalog as games
 from roundtable_souls.platform import paths as common
 from roundtable_souls.saves import library as Lib
 from roundtable_souls.saves import regulation
+from roundtable_souls.services import play as core
 
 ER = games.ELDEN_RING
 

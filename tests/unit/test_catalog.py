@@ -1,6 +1,6 @@
 """What counts as a game item, the Tarnished Edition rule, labels for foreign items, and the report gate."""
 
-from roundtable_souls import core as g
+from roundtable_souls.services import play as g
 
 A = g.save_analyze
 WEAPON, ARMOUR, TALISMAN, GOODS, ASH = 0x0, 0x10000000, 0x20000000, 0x40000000, 0x80000000

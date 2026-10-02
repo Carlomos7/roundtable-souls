@@ -5,13 +5,13 @@ import struct
 
 import pytest
 
-from roundtable_souls import core
 from roundtable_souls.config import settings
 from roundtable_souls.game import catalog as games
 from roundtable_souls.platform import paths as common
 from roundtable_souls.platform import steam
 from roundtable_souls.saves import container
 from roundtable_souls.saves import nightreign as nr
+from roundtable_souls.services import play as core
 from roundtable_souls.services import saves
 
 NR = games.NIGHTREIGN

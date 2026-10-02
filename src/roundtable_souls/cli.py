@@ -32,8 +32,8 @@ def main() -> int:
 
         return headless.update_headless([a for a in sys.argv[1:] if a != "--update"])
     if "--play" in sys.argv or "--check" in sys.argv or any(a.startswith("--game") for a in sys.argv):
-        from roundtable_souls import core
         from roundtable_souls.game import catalog as games
+        from roundtable_souls.services import play as core
 
         game = core.game_from_args(sys.argv)
         if game is None:
@@ -53,8 +53,8 @@ def main() -> int:
 def play_from_shortcut(game) -> int:
     """--play: when the window is open, it runs Play itself (one launcher manages the session); otherwise Play runs
     here, holding the PLAY name so a second shortcut start, or a silent update, waits for it to end."""
-    from roundtable_souls import core
     from roundtable_souls.platform import instance
+    from roundtable_souls.services import play as core
     from roundtable_souls.updates import apply as updates
 
     updates.mark_ready("play")  # this version starts and runs: an update's watchdog can stand down
@@ -76,7 +76,7 @@ def play_from_shortcut(game) -> int:
 def not_started_notice(game: Game, why: str) -> None:
     """--play without the window, when the game was not started: a small window saying why, with a way to open the
     launcher (a Steam shortcut or Gaming Mode has nowhere else to show it). Nothing happens without a display."""
-    from roundtable_souls import core
+    from roundtable_souls.services import play as core
 
     try:
         import subprocess

@@ -6,7 +6,7 @@ import struct
 
 import pytest
 
-from roundtable_souls import core as g
+from roundtable_souls.services import play as g
 from support import live_save as _live_save
 
 A = g.save_analyze
