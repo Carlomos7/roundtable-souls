@@ -311,23 +311,10 @@ class Launcher(FluentWindow):
         sc = QShortcut(QKeySequence("Ctrl+S"), self)
         sc.activated.connect(self._shortcut_save)
         self.bus.line.connect(self._on_line)
-        self.bus.done.connect(self._on_done)
-        self.bus.running.connect(self._on_running)
-        self.bus.saves.connect(self._fill_saves)
-        self.bus.steam.connect(self._on_steam)
-        self.bus.shells.connect(self._on_shells)
-        self.bus.me3.connect(self._on_me3)
-        self.bus.update.connect(self._on_update)
-        self.bus.migration.connect(self._on_migration)
-        self.bus.steam_retarget.connect(self._on_steam_retarget)
-        self.bus.update_outcome.connect(self._on_update_outcome)
-        self.bus.update_progress.connect(self._on_update_progress)
-        self.bus.update_ready.connect(self._on_update_ready)
         self._update_bar = None
         self._offered = None  # the version the update notice shows
         self._instance_hold = None
         self._instance_server = None
-        self.bus.conflicts.connect(self._fill_conflicts)
         self.stackedWidget.currentChanged.connect(self._on_page_changed)
         self.bus.merge.connect(self._on_merge)  # a health result on its own (the overview scan sends it too)
         core.NOTIFY = lambda title, msg: notice(self, "error", title, msg)
@@ -462,7 +449,7 @@ class Launcher(FluentWindow):
         self._fill_setups()
         self._apply_game_ui()
         loc = self.ctx.locations
-        threading.Thread(target=lambda: self.bus.running.emit(loc.game_running()), daemon=True).start()
+        self.jobs.start(lambda _progress: loc.game_running(), on_result=self._on_running)
         if g.ready:
             self.refresh_saves()
         else:
@@ -1088,13 +1075,13 @@ class Launcher(FluentWindow):
         self.conf_note.setText("Scanning packages...")
         prof = Path(self.setup.profile)
 
-        def work():
+        def work(_progress):
             try:
-                self.bus.conflicts.emit(mod_overview.overview(prof))
+                return mod_overview.overview(prof)
             except Exception as e:  # never leave the card saying "Scanning..."
-                self.bus.conflicts.emit({"profile": str(prof), "error": str(e)})
+                return {"profile": str(prof), "error": str(e)}
 
-        threading.Thread(target=work, daemon=True).start()
+        self.jobs.start(work, on_result=self._fill_conflicts)
 
     _refresh_overview = _scan_conflicts
 
@@ -3466,15 +3453,15 @@ class Launcher(FluentWindow):
         self._saves_token = getattr(self, "_saves_token", 0) + 1
         token, game, loc = self._saves_token, self.game, self.ctx.locations
 
-        def work():
+        def work(_progress):
             files = loc.save_files()
             for d in {p.parent for p in files}:  # older tools may still drop backup folders beside the saves
                 save_backups.adopt_legacy_save_folders(d, game, again=True)
             infos = [save_info(p, game, loc=loc) for p in files]
             libs = {str(f): save_library.load(f) for f in sorted({p.parent for p in files})}
-            self.bus.saves.emit({"token": token, "infos": infos, "libs": libs})
+            return {"token": token, "infos": infos, "libs": libs}
 
-        threading.Thread(target=work, daemon=True).start()
+        self.jobs.start(work, on_result=self._fill_saves)
 
     def _fill_saves(self, payload):
         # Ignore a read that a newer refresh has already superseded (avoids reading and rebuilding the cards twice).
@@ -3761,13 +3748,13 @@ class Launcher(FluentWindow):
     def _refresh_me3(self):
         setup, loc = self.setup, self.ctx.locations
 
-        def work():
+        def work(_progress):
             try:
-                self.bus.me3.emit(me3_facts(setup, loc))
+                return me3_facts(setup, loc)
             except Exception as e:
-                self.bus.me3.emit({"error": str(e)})
+                return {"error": str(e)}
 
-        threading.Thread(target=work, daemon=True).start()
+        self.jobs.start(work, on_result=self._on_me3)
 
     @staticmethod
     def _install_kind() -> str:
@@ -3780,7 +3767,7 @@ class Launcher(FluentWindow):
         return "AppImage" if appimage() else "not installed"
 
     def _check_launcher_update(self, force=False):
-        def work():
+        def work(_progress):
             try:
                 check = feed.check_launcher_update(force=force)
             except Exception as e:
@@ -3789,9 +3776,9 @@ class Launcher(FluentWindow):
                 advisory = feed.check_advisory(force=force)
             except Exception:
                 advisory = None
-            self.bus.update.emit({"check": check, "advisory": advisory, "force": force})
+            return {"check": check, "advisory": advisory, "force": force}
 
-        threading.Thread(target=work, daemon=True, name="launcher-update").start()
+        self.jobs.start(work, on_result=self._on_update, name="launcher-update")
 
     def _on_channel(self, index):
         channel = "beta" if index == 1 else "stable"
@@ -3918,20 +3905,22 @@ class Launcher(FluentWindow):
         self._update_bar = notice(self, "info", f"Downloading {TITLE} {info['version']}", "Starting...", closable=False)
         version = info["version"]
 
-        def progress(done, total):
-            mb = done / 1_000_000
-            self.bus.update_progress.emit(f"{mb:.0f} of {total / 1_000_000:.0f} MB" if total else f"{mb:.0f} MB")
+        def work(report):
+            def progress(done, total):
+                mb = done / 1_000_000
+                report(f"{mb:.0f} of {total / 1_000_000:.0f} MB" if total else f"{mb:.0f} MB")
 
-        def work():
             try:
                 prepared = updates.download_update(info, progress=progress)
-                self.bus.update_progress.emit("Keeping this version, to put it back if the new one does not start")
+                report("Keeping this version, to put it back if the new one does not start")
                 prepared.rollback = updates.stage_rollback()
-                self.bus.update_ready.emit({"prepared": prepared, "version": version})
+                return {"prepared": prepared, "version": version}
             except Exception as e:
-                self.bus.update_ready.emit({"error": str(e)})
+                return {"error": str(e)}
 
-        threading.Thread(target=work, daemon=True, name="launcher-download").start()
+        self.jobs.start(
+            work, on_result=self._on_update_ready, on_progress=self._on_update_progress, name="launcher-download"
+        )
 
     def _on_update_progress(self, text):
         if self._update_bar is not None:
@@ -4037,18 +4026,18 @@ class Launcher(FluentWindow):
             notice(self, "success" if status == "done" else "warning", "Moved to the new installer", "\n".join(lines))
 
     def _point_steam_shortcuts(self):
-        def work():
+        def work(_progress):
             try:
                 record = load_settings().inno_migration or {}
                 if record.get("steam_pending") or (record.get("old_exe") and not record.get("steam_done")):
                     changed = migration.finish_steam_step()
                 else:
                     changed = migration.point_play_shortcuts_here()
-                self.bus.steam_retarget.emit({"changed": [s.name for s in changed]})
+                return {"changed": [s.name for s in changed]}
             except Exception as e:
-                self.bus.steam_retarget.emit({"error": str(e)})
+                return {"error": str(e)}
 
-        threading.Thread(target=work, daemon=True, name="steam-shortcuts").start()
+        self.jobs.start(work, on_result=self._on_steam_retarget, name="steam-shortcuts")
 
     def _on_steam_retarget(self, result):
         if result.get("error"):
@@ -4134,20 +4123,22 @@ class Launcher(FluentWindow):
         report how the last update went, finish the move from the old installer, and tidy old downloads."""
         confirmed = updates.mark_ready("window")
 
-        def work():
+        def work(report):
             outcome = confirmed or updates.update_outcome()
-            self.bus.update_outcome.emit(outcome or {})
+            report(outcome or {})
             pending = (load_settings().update_pending or {}).get("version")
             try:
                 updates.clean_downloads(keep=pending)
             except Exception:
                 pass
             try:
-                self.bus.migration.emit(migration.migrate_from_inno() or {})
+                return migration.migrate_from_inno() or {}
             except Exception as e:
-                self.bus.migration.emit({"status": "failed", "reason": str(e)})
+                return {"status": "failed", "reason": str(e)}
 
-        threading.Thread(target=work, daemon=True, name="launcher-start-tasks").start()
+        self.jobs.start(
+            work, on_result=self._on_migration, on_progress=self._on_update_outcome, name="launcher-start-tasks"
+        )
 
     def _on_me3(self, f):
         self._me3 = f
@@ -5690,18 +5681,27 @@ class Launcher(FluentWindow):
         self.start(job_play, "Starting...")
 
     def _watch_game(self):
-        def work():
+        def work(report):
             while True:
                 try:
                     loc = self.ctx.locations
-                    self.bus.running.emit(loc.game_running())
-                    self.bus.steam.emit(*steam_state())
-                    self.bus.shells.emit(dead_shells_count(loc=loc))
+                    report(("running", loc.game_running()))
+                    report(("steam", steam_state()))
+                    report(("shells", dead_shells_count(loc=loc)))
                 except Exception:
                     pass
                 time.sleep(5)
 
-        threading.Thread(target=work, daemon=True).start()
+        self.jobs.start(work, on_progress=self._on_watched)
+
+    def _on_watched(self, seen):
+        what, value = seen
+        if what == "running":
+            self._on_running(value)
+        elif what == "steam":
+            self._on_steam(*value)
+        else:
+            self._on_shells(value)
 
     def _on_running(self, r):
         changed = r != self.game_running

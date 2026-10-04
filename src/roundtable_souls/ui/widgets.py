@@ -407,22 +407,10 @@ class ExpandGroupSettingCard(_ExpandGroupSettingCard):
 
 # ----------------------------------------------------------------------------- helpers
 class Bus(QObject):
-    """Signals the worker threads emit; Qt delivers them on the UI thread."""
+    """Signals emitted on any thread; Qt delivers them on the UI thread. Background work reports through ui/jobs.py;
+    what is left here is the log lines the window shows, which arrive from every thread."""
 
     line = Signal(str, str)  # message, level (info / warning / error, or empty to read it from the text)
-    done = Signal(bool, str)
-    running = Signal(bool)
-    steam = Signal(bool, bool)
-    shells = Signal(int)
-    me3 = Signal(dict)
-    update = Signal(object)  # {'check': UpdateCheck, 'advisory', 'force'}
-    update_progress = Signal(str)
-    update_ready = Signal(object)
-    migration = Signal(object)  # the move from the old installer, at start
-    steam_retarget = Signal(object)  # Point Steam shortcuts here
-    update_outcome = Signal(object)  # how the last update went, at start
-    conflicts = Signal(dict)
-    saves = Signal(dict)
     merge = Signal(dict)
 
 
