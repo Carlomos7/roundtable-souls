@@ -14,6 +14,7 @@ from roundtable_souls.game import catalog as games
 from roundtable_souls.game.locate import Locations
 from roundtable_souls.platform import logging as rl
 from roundtable_souls.platform import logging as run_logging
+from roundtable_souls.services import jobs
 from roundtable_souls.services import play as core
 
 
@@ -244,7 +245,8 @@ def test_run_job_records_how_each_job_ended(logs):
         (interrupted, "Starting..."),
         (crashing, "Installing x..."),
     ):
-        core.run_job(fn, None, Locations(games.ELDEN_RING), lambda m, lvl="": None, done, title)
+        outcome = jobs.run_job(fn, None, Locations(games.ELDEN_RING), title)
+        done(outcome.ok, outcome.status)
     outcomes = [r["outcome"] for r in reversed(rl.read_jobs())]
     assert outcomes == ["done", "failed", "stopped", "failed"]
     assert [r[0] for r in results] == [True, False, False, False]
@@ -258,7 +260,7 @@ def test_run_job_names_the_game_and_profile(logs):
         profile = "C:/profiles/er/p.me3"
 
     loc = Locations(games.NIGHTREIGN)
-    core.run_job(lambda s, loc: None, Setup(), loc, lambda m, lvl="": None, lambda ok, st: None, "Starting...")
+    jobs.run_job(lambda s, loc: None, Setup(), loc, "Starting...")
     r = rl.read_jobs()[0]
     assert r["game"] == "nightreign" and r["profile"].endswith("p.me3") and r["title"] == "Starting"
 

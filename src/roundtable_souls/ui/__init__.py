@@ -1,5 +1,5 @@
-"""The window (PySide6 with Fluent widgets): window, its widgets, theme and dialogs. The only package that
-imports Qt."""
+"""The window (PySide6 with Fluent widgets): window, its widgets, theme and dialogs, and jobs (the window's side
+of services/jobs.py). The only package that imports Qt."""
 
 from typing import TYPE_CHECKING
 
@@ -11,6 +11,7 @@ if TYPE_CHECKING:  # each module is imported where it is used, not here: importi
         editor,
         find,
         install_dialog,
+        jobs,
         notes,
         save_dialogs,
         theme,
@@ -25,6 +26,7 @@ __all__ = [
     "editor",
     "find",
     "install_dialog",
+    "jobs",
     "notes",
     "save_dialogs",
     "theme",

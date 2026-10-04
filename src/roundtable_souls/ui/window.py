@@ -140,7 +140,6 @@ from roundtable_souls.services.play import (
     remembered_setup,
     report_exception,
     route_logs,
-    run_job,
     same_source,
     save_info,
     scaling_spec,
@@ -182,6 +181,7 @@ from roundtable_souls.ui.dialogs import (
     confirm,
 )
 from roundtable_souls.ui.install_dialog import InstallDialog
+from roundtable_souls.ui.jobs import Jobs
 from roundtable_souls.ui.notes import _save_note_widget, save_check_notes
 from roundtable_souls.ui.save_dialogs import CopyCharacterDialog, CopyFileDialog, SwapDialog
 from roundtable_souls.ui.theme import (
@@ -251,6 +251,7 @@ class Launcher(FluentWindow):
         self.settings = self.ctx.settings
         self.game = self.ctx.game
         self.bus = Bus()
+        self.jobs = Jobs(self)
         self.busy = False
         self.game_running = False
         self.steam_bar = None
@@ -5675,11 +5676,7 @@ class Launcher(FluentWindow):
         self.log_pane.banner(status)
         route_logs(self._sink)
         loc = s.locations() if s is not None else self.ctx.locations  # with the saves the setup uses
-        threading.Thread(
-            target=run_job,
-            args=(job, s, loc, self._sink, lambda ok, st: self.bus.done.emit(ok, st), status),
-            daemon=True,
-        ).start()
+        self.jobs.start_job(job, s, loc, status, lambda outcome: self._on_done(outcome.ok, outcome.status))
 
     def launch(self):
         if self.busy or not self.setup:

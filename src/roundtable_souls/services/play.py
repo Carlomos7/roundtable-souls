@@ -535,27 +535,6 @@ def job_clear(setup, loc: Locations):
     me3_session.clear_dead_shells(loc.game_exe_name(), "manual")
 
 
-def run_job(job, setup, loc: Locations, sink, done, title="Job"):
-    """Run job(setup, loc) on this (worker) thread as a logged job of its own: its lines go to its log file and the
-    window, and the jobs index records how it ended."""
-    profile = str(getattr(setup, "profile", "") or "")
-    record = run_logging.begin_job(title.rstrip(". "), game=loc.game.key, profile=profile)
-    log = run_logging.get_logger("job")
-    try:
-        job(setup, loc)
-    except SystemExit as e:
-        stopped = e.code == 130
-        run_logging.end_job(record, "stopped" if stopped else "failed" if e.code not in (0, None) else None)
-        done(e.code in (0, None), "Finished" if e.code in (0, None) else "Stopped (see details)")
-    except Exception:
-        log.exception("the job failed with an unexpected error")
-        run_logging.end_job(record, "failed")
-        done(False, "Error (see details)")
-    else:
-        run_logging.end_job(record)
-        done(True, "Finished")
-
-
 def play_command(game: games.Game) -> tuple[str, str]:
     """(target, launch options) for a Steam shortcut that runs Play for one game without the window."""
     opts = f"--game {game.key} --play"
