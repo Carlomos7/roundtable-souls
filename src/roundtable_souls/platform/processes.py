@@ -8,21 +8,16 @@ running until the next reboot.
 
 Killing the corpse needs administrator rights, so this asks for elevation
 (one UAC prompt) and terminates only processes that are provably dead: named
-eldenring.exe with no threads. A running game always has hundreds.
-
-Usage:
-  clear_dead_game_shells.py [--dry-run]
+eldenring.exe with no threads. A running game always has hundreds. From the command line:
+scripts/clear_dead_shells.py.
 """
 
-import argparse
 import subprocess
 import sys
 
-from roundtable_souls.platform import logging as run_logging
-from roundtable_souls.platform import paths, proc
+from roundtable_souls.platform import proc
 from roundtable_souls.platform.logging import log
 
-ELDEN_RING_EXE = "eldenring.exe"  # the command line clears Elden Ring's
 PS = ["powershell", "-NoProfile", "-NonInteractive", "-Command"]
 
 
@@ -76,18 +71,3 @@ def clear(exe_name: str, dry_run=False):
     else:
         log("cleared")
     return found, remaining
-
-
-def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--dry-run", action="store_true", help="only report, do not kill")
-    a = ap.parse_args()
-    run_logging.start_log("clear_dead_game_shells", "eldenring")
-    if paths.exe_running(ELDEN_RING_EXE):
-        log("note: a real game instance is running; it will not be touched")
-    found, remaining = clear(ELDEN_RING_EXE, a.dry_run)
-    sys.exit(1 if remaining and not a.dry_run else 0)
-
-
-if __name__ == "__main__":
-    main()
