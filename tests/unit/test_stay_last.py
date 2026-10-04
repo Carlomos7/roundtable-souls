@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 from test_mod_merge import World, _pack_source
 
+from roundtable_souls.game import locate
 from roundtable_souls.mods import install, profile_settings, remove, stay_last
 from roundtable_souls.mods import profile as profile_tools
 from roundtable_souls.mods import profile_edit as M
@@ -302,7 +303,6 @@ def test_a_package_that_lists_the_others_is_known_to_stay_last_without_its_files
 
 def test_a_profile_without_it_still_combines(tmp_path, monkeypatch):
     """Two packs and nothing that must stay last: a plain combine, no setup is asked for."""
-    from roundtable_souls.platform import paths as common
 
     base = tmp_path / "p"
     for name in ("a", "b"):
@@ -310,6 +310,6 @@ def test_a_profile_without_it_still_combines(tmp_path, monkeypatch):
         (base / "mod" / name / "regulation.bin").write_bytes(name.encode())
     prof = base / "p.me3"
     prof.write_text("[[packages]]\nid = \"a\"\npath = 'mod/a'\n\n[[packages]]\nid = \"b\"\npath = 'mod/b'\n")
-    monkeypatch.setattr(common, "game_dir", lambda: None)
+    monkeypatch.setattr(locate, "installed_dir", lambda _game: None)
     assert merge.setup_problem(prof) is None
     assert Path(prof).is_file()

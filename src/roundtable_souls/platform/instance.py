@@ -37,13 +37,21 @@ def _user_tag() -> str:
     return hashlib.sha256(user.encode("utf-8")).hexdigest()[:12]
 
 
-def _scope() -> str:
-    """Identifies the data folder these names belong to."""
-    from roundtable_souls.config import identity
-    from roundtable_souls.config.settings import data_dir
+_SCOPE: str | None = None
 
-    where = str(data_dir()).lower() if sys.platform == "win32" else str(data_dir())
-    return f"{identity.get().instance_prefix}.{hashlib.sha256(where.encode('utf-8')).hexdigest()[:12]}"
+
+def use_scope(prefix: str, data_dir: Path) -> None:
+    """Scope the names to this build (prefix: its identity's instance_prefix) and data folder (set once at startup)."""
+    global _SCOPE
+    where = str(data_dir).lower() if sys.platform == "win32" else str(data_dir)
+    _SCOPE = f"{prefix}.{hashlib.sha256(where.encode('utf-8')).hexdigest()[:12]}"
+
+
+def _scope() -> str:
+    """Identifies the build and data folder these names belong to."""
+    if _SCOPE is None:
+        raise RuntimeError("the instance names were not scoped (app.use_data_folder scopes them at startup)")
+    return _SCOPE
 
 
 def full_name(name: str) -> str:

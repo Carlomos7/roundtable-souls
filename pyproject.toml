@@ -103,14 +103,6 @@ layers = [
     "roundtable_souls.config",
     "roundtable_souls.platform",
 ]
-ignore_imports = [
-    # S2 (app.py and AppContext replace the globals and the data-folder lookups the platform layer reads today)
-    "roundtable_souls.platform.paths -> roundtable_souls.game.catalog",
-    "roundtable_souls.platform.paths -> roundtable_souls.config.settings",
-    "roundtable_souls.platform.instance -> roundtable_souls.config.settings",
-    "roundtable_souls.platform.data_folder -> roundtable_souls.config.settings",
-    "roundtable_souls.platform.instance -> roundtable_souls.config.identity",
-]
 
 [[tool.importlinter.contracts]]
 name = "No Qt below the UI"

@@ -8,6 +8,7 @@ import pytest
 from fakegame import bnd, dcx, files_of
 from test_param_merge import vanilla
 
+from roundtable_souls.game import locate
 from roundtable_souls.mods import conflicts as overview
 from roundtable_souls.mods import rebuild as merge
 from roundtable_souls.mods import undo
@@ -25,7 +26,7 @@ def prof(tmp_path, monkeypatch):
     game = tmp_path / "Game"
     game.mkdir()
     (game / "regulation.bin").write_bytes(vanilla())
-    monkeypatch.setattr(common, "game_dir", lambda: game)
+    monkeypatch.setattr(locate, "installed_dir", lambda _game: game)
     monkeypatch.setattr(common, "exe_running", lambda _exe: False)
     fakegame.game(monkeypatch, {REL: dcx(bnd(GAME))})
     base = tmp_path / "p"

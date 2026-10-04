@@ -14,7 +14,6 @@ from roundtable_souls.game import catalog as games
 from roundtable_souls.game.locate import Locations
 from roundtable_souls.platform import logging as rl
 from roundtable_souls.platform import logging as run_logging
-from roundtable_souls.platform import paths as common
 from roundtable_souls.services import play as core
 
 
@@ -172,7 +171,7 @@ def test_a_broken_sink_never_stops_a_job(logs):
 
 def test_a_job_named_inside_run_job_is_renamed_not_restarted(logs):
     job = rl.begin_job("Installing goblins...")
-    common.start_log("launcher: install mod goblins")
+    rl.start_log("launcher: install mod goblins", "eldenring")
     run_logging.log("inside")
     rl.end_job(job)
     recs = rl.read_jobs()
@@ -181,15 +180,15 @@ def test_a_job_named_inside_run_job_is_renamed_not_restarted(logs):
 
 
 def test_the_command_line_gets_a_job_that_ends_at_the_next_one_and_at_exit(logs):
-    common.start_log("launcher: check")
+    rl.start_log("launcher: check", "eldenring")
     run_logging.log("first")
     first = rl.current_job()
-    common.start_log("launcher: play (no window)")
+    rl.start_log("launcher: play (no window)", "eldenring")
     second = rl._standalone
     assert first is not second and first.outcome == "done"
     rl.shutdown()
     assert second.outcome == "done" and [r["title"] for r in rl.read_jobs()] == ["play (no window)", "check"]
-    assert {r["game"] for r in rl.read_jobs()} == {common.GAME.key}  # the game the command line runs for
+    assert {r["game"] for r in rl.read_jobs()} == {"eldenring"}  # the game the command line runs for
 
 
 def test_attachments_belong_to_the_job(logs):

@@ -10,7 +10,7 @@ from roundtable_souls.config.settings import (
     save_game_settings,
     save_settings,
 )
-from roundtable_souls.platform.paths import PATH_SETTINGS, apply_overrides
+from roundtable_souls.game.locate import PATH_SETTINGS
 
 __all__ = [
     "FROZEN",
@@ -22,5 +22,4 @@ __all__ = [
     "save_game_settings",
     "save_settings",
     "PATH_SETTINGS",
-    "apply_overrides",
 ]

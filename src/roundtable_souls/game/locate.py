@@ -39,7 +39,7 @@ class Overrides:
         )
 
     def in_effect(self) -> dict:
-        """What Settings > Locations shows as set (the same keys apply_overrides returned)."""
+        """What Settings > Locations shows as set: me3, game_exe, profile_dir (blank = detect)."""
         return {"me3": self.me3_exe, "game_exe": self.game_exe, "profile_dir": self.profiles_dir}
 
 

@@ -147,7 +147,7 @@ def problems(profile: Path) -> list[dict]:
 
 def overview(profile: Path) -> dict:
     """Everything the Mods page's Load order card and its pill show, from one pass (run it off the UI thread)."""
-    from roundtable_souls.platform import paths as common
+    from roundtable_souls.mods import locations
 
     profile = Path(profile)
     out: dict = {"profile": str(profile)}
@@ -158,7 +158,7 @@ def overview(profile: Path) -> dict:
     try:
         scan = profile_tools.scan_conflicts(profile)
         out["scan"] = scan
-        out["overlaps"] = classify(profile, scan, common.game_dir())
+        out["overlaps"] = classify(profile, scan, locations.get().game_dir())
     except Exception as e:
         out["scan"] = {"error": str(e)}
         out["overlaps"] = {"conflicts": [], "counts": dict.fromkeys(OUTCOMES, 0), "packages": {}}

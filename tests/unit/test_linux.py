@@ -1,5 +1,7 @@
 """Linux and Steam Deck detection, exercised on fake home folders so it runs on any OS."""
 
+from roundtable_souls.game import catalog
+from roundtable_souls.game.locate import Locations
 from roundtable_souls.platform import paths as common
 from roundtable_souls.platform import proc as process_list
 from roundtable_souls.platform import steam as steam_detect
@@ -14,9 +16,6 @@ def linux(monkeypatch, home):
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     monkeypatch.setattr(common.shutil, "which", lambda name: None)
-    monkeypatch.setattr(common, "PROFILE_DIR_OVERRIDE", None)
-    monkeypatch.setattr(common, "ME3_OVERRIDE", None)
-    monkeypatch.setattr(common, "GAME_EXE_OVERRIDE", None)
 
 
 def fake_proc(root, pid, argv, comm, rss_kb):
@@ -72,15 +71,16 @@ def test_steam_library_saves_and_sign_in(tmp_path, monkeypatch):
     (saves / "ER0000.sl2").write_bytes(b"s")
     (saves / "ER0000.co2").write_bytes(b"c")
     assert steam_detect.steam_root() == steam.resolve()
-    assert common.game_dir() == steam / "steamapps" / "common" / "ELDEN RING" / "Game"
-    assert [p.name for p in common.save_files()] == ["ER0000.sl2", "ER0000.co2"]  # the prefix on the SD card
+    er = Locations(catalog.ELDEN_RING)
+    assert er.game_dir() == steam / "steamapps" / "common" / "ELDEN RING" / "Game"
+    assert [p.name for p in er.save_files()] == ["ER0000.sl2", "ER0000.co2"]  # the prefix on the SD card
     assert not steam_detect.steam_logged_in()
     (home / ".steam").mkdir()
     (home / ".steam" / "registry.vdf").write_text('"Registry"\n{\n "ActiveProcess"\n {\n  "ActiveUser"\t\t"0"\n }\n}\n')
     assert not steam_detect.steam_logged_in()
     (home / ".steam" / "registry.vdf").write_text('"ActiveUser"\t\t"123456"\n')
     assert steam_detect.steam_logged_in()
-    assert common.dead_game_shells() == []  # a Windows-only problem
+    assert er.dead_game_shells() == []  # a Windows-only problem
 
 
 def test_me3_paths_follow_its_linux_layout(tmp_path, monkeypatch):

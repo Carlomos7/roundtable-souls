@@ -8,7 +8,7 @@ import pytest
 from roundtable_souls.config import settings
 from roundtable_souls.config.settings import LauncherSettings
 from roundtable_souls.game import catalog as games
-from roundtable_souls.game.locate import Locations, Overrides
+from roundtable_souls.game.locate import Locations, Overrides, installed_dir
 from roundtable_souls.platform import paths as common
 from roundtable_souls.platform import steam
 from roundtable_souls.saves import container
@@ -62,13 +62,12 @@ def test_each_game_finds_its_own_install_and_saves(tmp_path, monkeypatch):
     monkeypatch.setattr(steam, "steam_libraries", lambda: [lib])
     monkeypatch.setattr(common, "IS_WINDOWS", True)
     monkeypatch.setenv("APPDATA", str(appdata))
-    common.set_game(NR)
-    assert common.game_dir() == lib / "steamapps" / "common" / NR.install_dir
-    assert sorted(p.name for p in common.save_files()) == ["NR0000.co2", "NR0000.sl2"]
-    assert common.game_exe_name() == "nightreign.exe"
-    common.set_game(ER)
-    assert sorted(p.name for p in common.save_files()) == ["ER0000.co2", "ER0000.sl2"]
-    assert common.installed_dir(games.SEKIRO) is None and common.save_files(games.SEKIRO) == []
+    nr = Locations(NR)
+    assert nr.game_dir() == lib / "steamapps" / "common" / NR.install_dir
+    assert sorted(p.name for p in nr.save_files()) == ["NR0000.co2", "NR0000.sl2"]
+    assert nr.game_exe_name() == "nightreign.exe"
+    assert sorted(p.name for p in Locations(ER).save_files()) == ["ER0000.co2", "ER0000.sl2"]
+    assert installed_dir(games.SEKIRO) is None and Locations(games.SEKIRO).save_files() == []
 
 
 def test_profiles_are_listed_for_the_game_they_support(tmp_path, monkeypatch):

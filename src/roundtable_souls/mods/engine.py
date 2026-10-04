@@ -268,7 +268,7 @@ def build(
     swap it in, and return {output, previous, restore, sources, seconds}. Raises EngineError; the output in place is
     then unchanged."""
     from roundtable_souls import __version__
-    from roundtable_souls.platform import paths as common
+    from roundtable_souls.mods import locations
 
     started = time.time()
     profile, target_folder, setup = Path(profile), Path(target_folder), Path(setup)
@@ -278,7 +278,8 @@ def build(
     own = target_folder.parent
     if own.resolve() == profile.parent.resolve():
         raise EngineError(f"{recipe['label']}'s package must be in a folder of its own.")
-    game_dir = Path(game_dir) if game_dir else (Path(common.game_dir()) if common.game_dir() else None)
+    found = locations.get().game_dir()
+    game_dir = Path(game_dir) if game_dir else (Path(found) if found else None)
     if game_dir is None or not game_dir.is_dir():
         raise EngineError("The game folder was not found.")
     if _seamless(profile) is None:

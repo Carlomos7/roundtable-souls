@@ -44,9 +44,10 @@ def settings() -> dict:
 def game_dir(given: Path | None) -> Path:
     game = given or (Path(settings()["game"]) if "game" in settings() else None)
     if game is None:
-        from roundtable_souls.platform import paths as common
+        from roundtable_souls.game import catalog
+        from roundtable_souls.game.locate import Locations
 
-        game = common.game_dir()
+        game = Locations(catalog.ELDEN_RING).game_dir()
     if game is None or not (Path(game) / "eldenring.exe").is_file():
         sys.exit(f"no eldenring.exe in {game}; pass --game or set game in {LOCAL.name}")
     return Path(game)
@@ -96,14 +97,14 @@ def sandbox_launcher(out: Path, game: Path) -> None:
     data = out / "launcher-data"
     data.mkdir(parents=True, exist_ok=True)
     settings.data_dir = lambda: data
-    from roundtable_souls.platform import data_folder
+    from roundtable_souls.game import catalog
+    from roundtable_souls.game.locate import Locations, Overrides
+    from roundtable_souls.mods import locations as mod_locations
+    from roundtable_souls.platform import data_folder, paths
 
-    data_folder.data_root = lambda: data
-    from roundtable_souls.platform import paths as common
-    from roundtable_souls.services import play as core  # noqa: F401  (applies the (empty) sandbox settings on import)
-
-    common.GAME_EXE_OVERRIDE = str(game / "eldenring.exe")
-    common._DETECT_CACHE.clear()
+    data_folder.use(data)
+    mod_locations.use(Locations(catalog.ELDEN_RING, Overrides(game_exe=str(game / "eldenring.exe"))))
+    paths.clear_detection_cache()
 
 
 def commit() -> str:

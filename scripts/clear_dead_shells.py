@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from roundtable_souls.app import use_data_folder
 from roundtable_souls.game import catalog
 from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.platform import paths, processes
@@ -22,6 +23,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dry-run", action="store_true", help="only report, do not kill")
     a = ap.parse_args()
+    use_data_folder()
     game = catalog.ELDEN_RING
     run_logging.start_log("clear_dead_game_shells", game.key)
     if paths.exe_running(game.exe):

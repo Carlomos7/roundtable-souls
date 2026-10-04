@@ -11,6 +11,7 @@ from fakegame import bnd, dcx, files_of, fmg, texts_of
 from test_param_merge import pack, rows_of, set_word, vanilla
 
 from roundtable_souls.config import settings
+from roundtable_souls.game import locate
 from roundtable_souls.mods import backends, engine
 from roundtable_souls.mods import rebuild as merge
 from roundtable_souls.mods.backends import manifest_refresh
@@ -82,7 +83,7 @@ class Revive:
         import fakegame
 
         fakegame.game(monkeypatch, game_files())
-        monkeypatch.setattr(common, "game_dir", lambda: self.game)
+        monkeypatch.setattr(locate, "installed_dir", lambda _game: self.game)
         monkeypatch.setattr(common, "exe_running", lambda _exe: False)
         self.setup = self.base / ".nightreign-revive-setup"
         for f in PAYLOAD:

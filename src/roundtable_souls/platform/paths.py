@@ -1,10 +1,10 @@
-"""Where things are on this machine (the game, the saves, me3), on Windows and Linux. Steam is in steam.py, the
-process list in proc.py.
+"""Where things are on this machine (a game's folder and saves, whether it runs, me3), on Windows and Linux. Steam is
+in steam.py, the process list in proc.py.
 
-Every game-specific answer is for the active game (GAME, set with set_game): Elden Ring unless the window's game tabs
-or `--game` picked another. On Linux (desktop or Steam Deck) the game runs through Proton, so its saves live inside
-the game's Proton prefix and the game process is a Wine process whose command line names the game's exe. Nothing
-here writes to disk except the run log.
+These are the primitives: each takes what it looks for (an exe name, a save folder, an override). A game's own answers,
+with the Settings > Locations overrides applied, are game/locate.py's Locations. On Linux (desktop or Steam Deck) the
+game runs through Proton, so its saves live inside the game's Proton prefix and the game process is a Wine process
+whose command line names the game's exe. Nothing here writes to disk.
 """
 
 import os
@@ -12,54 +12,19 @@ import shutil
 import sys
 from pathlib import Path
 
-from roundtable_souls.config.settings import LauncherSettings, data_dir, game_setting, load_settings
-from roundtable_souls.game import catalog as games
-from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.platform import proc, steam
 
 IS_WINDOWS = sys.platform == "win32"
 IS_LINUX = sys.platform.startswith("linux")
-ELDEN_RING_APP_ID = games.ELDEN_RING.app_id
-GAME: games.Game = games.DEFAULT  # the game every lookup below answers for
-
-LOGS_DIR = data_dir() / "logs"  # for opening the folder; code that writes asks run_logging.log_dir()
 
 # A real game instance uses gigabytes. Failed launches leave dead game exe shells behind that sit
 # under 1 MB with no threads; Steam counts those as "running", these tools do not.
 REAL_GAME_MIN_KB = 100_000
 
 
-def start_log(title):
-    run_logging.start_log(title, GAME.key)
-
-
-# Optional overrides the launcher sets from its settings (blank = detect): a custom me3, a custom game exe
-# (me3 launches it with --exe), and a custom me3 profile folder.
-ME3_OVERRIDE = None
-GAME_EXE_OVERRIDE = None
-PROFILE_DIR_OVERRIDE = None
-PATH_SETTINGS = ("me3_path", "game_exe", "me3_profile_dir")  # Settings > Locations; blank = detect
-
-
-def apply_overrides(settings: LauncherSettings | None = None) -> dict:
-    """Push the location settings into the tools layer. The profile folder falls back to what `me3 info` last
-    reported (cached in settings), then to me3's default. Returns what is in effect."""
-    global ME3_OVERRIDE, GAME_EXE_OVERRIDE, PROFILE_DIR_OVERRIDE
-    s = load_settings() if settings is None else settings
-    me3 = s.me3_path.strip()
-    game = str(game_setting(s, GAME.key, "game_exe") or "").strip()
-    prof = s.me3_profile_dir.strip() or str(s.me3_info_cache.get("profile_dir") or "").strip()
-    ME3_OVERRIDE = me3 or None
-    GAME_EXE_OVERRIDE = game or None
-    PROFILE_DIR_OVERRIDE = prof or None
-    _DETECT_CACHE.clear()  # Steam/me3/game folders may now resolve differently
-    steam.clear_cache()
-    return {"me3": me3, "game_exe": game, "profile_dir": prof}
-
-
 # Detection (Steam libraries, the game folder, me3.exe) scans PATH and the disk. The answers are stable within a
 # session, but Setup.summary()/problems() ask for them many times per game-tab switch, so they are memoised here and
-# cleared whenever an override changes (apply_overrides) or a Locations refresh happens.
+# cleared whenever the settings or the game change (app.AppContext).
 _DETECT_CACHE: dict = {}
 
 
@@ -74,26 +39,6 @@ def clear_detection_cache() -> None:
     steam.clear_cache()
 
 
-def set_game(game: games.Game | str, settings: LauncherSettings | None = None) -> games.Game:
-    """Make `game` the one every lookup answers for, and load its own location overrides."""
-    global GAME
-    GAME = game if isinstance(game, games.Game) else games.get(game)
-    apply_overrides(settings)
-    return GAME
-
-
-def game_exe_name():
-    return Path(GAME_EXE_OVERRIDE).name if GAME_EXE_OVERRIDE else GAME.exe
-
-
-def game_running():
-    return exe_running(game_exe_name())
-
-
-def dead_game_shells():
-    return dead_exe_shells(game_exe_name())
-
-
 def exe_running(exe_name: str) -> bool:
     """A real copy of the game whose exe is exe_name runs (one using gigabytes, not a dead shell)."""
     return any(kb >= REAL_GAME_MIN_KB for _, kb in proc.processes(exe_name))
@@ -104,16 +49,6 @@ def dead_exe_shells(exe_name: str) -> list[int]:
     if not IS_WINDOWS:
         return []
     return [pid for pid, kb in proc.processes(exe_name) if kb < REAL_GAME_MIN_KB]
-
-
-def game_dir():
-    if GAME_EXE_OVERRIDE and Path(GAME_EXE_OVERRIDE).is_file():
-        return Path(GAME_EXE_OVERRIDE).parent
-    return installed_dir(GAME)
-
-
-def installed_dir(game: games.Game):
-    return find_installed(game.key, game.install_dir, game.exe)
 
 
 def find_installed(key: str, install_dir: str, exe: str) -> Path | None:
@@ -130,21 +65,7 @@ def find_installed(key: str, install_dir: str, exe: str) -> Path | None:
     return _detected(("installed_dir", key), find)
 
 
-def regulation_bin():
-    game = game_dir()
-    if game and (game / "regulation.bin").exists():
-        return game / "regulation.bin"
-    return None
-
-
 # ------------------------------------------------------------------- saves
-
-
-def save_roots(game: games.Game | None = None) -> list[Path]:
-    """Folders that hold the per-account save folders: %APPDATA%\\<game> on Windows, the same folder inside the
-    game's Proton prefix on Linux (in whichever Steam library the prefix lives)."""
-    game = game or GAME
-    return save_roots_for(game.save_dir, game.app_id)
 
 
 def save_roots_for(save_dir: str, app_id: str) -> list[Path]:
@@ -162,51 +83,13 @@ def save_roots_for(save_dir: str, app_id: str) -> list[Path]:
     return roots
 
 
-# Save names a setup configures beyond the defaults (me3's savefile, Seamless Co-op's save_file_extension), per game.
-# The window and the Play session set them from the setup in use, so those files are listed and repaired too.
-_SETUP_SAVE_NAMES: dict[str, dict[str, str]] = {}
-
-
-def set_setup_save_names(game: games.Game, names: dict[str, str]) -> None:
-    """names: role -> file name, e.g. {"standard": "ER0000.sl2", "coop": "ER0000.co3"}."""
-    _SETUP_SAVE_NAMES[game.key] = {k: v for k, v in names.items() if v}
-
-
-def setup_save_names(game: games.Game | None = None) -> dict[str, str]:
-    return dict(_SETUP_SAVE_NAMES.get((game or GAME).key) or {})
-
-
-def save_names(game: games.Game | None = None) -> list[str]:
-    """The default names (ER0000.sl2, ER0000.co2) and any the current setup configures, without repeats."""
-    game = game or GAME
-    out = []
-    for n in (*game.save_names, *setup_save_names(game).values()):
-        if n.lower() not in (x.lower() for x in out):
-            out.append(n)
-    return out
-
-
-def save_files(game: games.Game | None = None):
-    """Every save the game or the current setup uses (ER0000.sl2 / ER0000.co2, plus any name the setup configures)
-    in the game's save folders, one folder per Steam account."""
-    game = game or GAME
-    names = save_names(game)
-    found = []
-    for root in save_roots(game):
-        for profile in sorted(root.glob("*")):
-            if profile.is_dir():
-                found.extend(p for p in (profile / n for n in names) if p.exists())
-    return found
-
-
 # --------------------------------------------------------------------- me3
 
 
 def me3_exe(override: str | None = None):
     """The me3 set in the launcher's settings (override), else me3 on PATH, else its default per-user install
-    location. The PATH search and default-folder check are cached for the session (cleared when an override
-    changes)."""
-    override = ME3_OVERRIDE if override is None else override
+    location. The PATH search and default-folder check are cached for the session (cleared when the settings
+    change)."""
     if override and Path(override).is_file():
         return Path(override)
     return _detected("me3_exe", _me3_exe_detected)
@@ -232,7 +115,7 @@ def me3_config_dir():
 
 
 def me3_profiles_dir(override: str | None = None):
-    override = PROFILE_DIR_OVERRIDE if override is None else override
+    """The me3 profile folder set in the launcher's settings (override), else me3's own."""
     if override and Path(override).is_dir():
         return Path(override)
     config = me3_config_dir()
@@ -256,13 +139,6 @@ def _iter_me3_files(root: Path, depth: int = 0):
             yield Path(e.path)
         elif e.is_dir() and depth < _PROFILE_SCAN_DEPTH and e.name.lower() not in _PROFILE_PRUNE:
             yield from _iter_me3_files(Path(e.path), depth + 1)
-
-
-def me3_profiles(game: games.Game | None = None):
-    """User-made .me3 profiles for the game (the *-default.me3 ones me3 generates are skipped). A profile that names
-    no game in [[supports]] counts for Elden Ring, the only game older profiles were written for."""
-    game = game or GAME
-    return find_profiles(me3_profiles_dir(), game.key, games.ELDEN_RING.key)
 
 
 def find_profiles(root: Path | None, game_key: str, unnamed_key: str) -> list[Path]:

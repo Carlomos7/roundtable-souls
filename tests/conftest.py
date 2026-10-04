@@ -8,7 +8,9 @@ import pytest
 
 from roundtable_souls.config import settings
 from roundtable_souls.game import catalog as games
-from roundtable_souls.platform import data_folder
+from roundtable_souls.game.locate import Locations
+from roundtable_souls.mods import locations as mod_locations
+from roundtable_souls.platform import data_folder, instance
 from roundtable_souls.platform import paths as common
 from roundtable_souls.saves import backups as save_backups
 from roundtable_souls.saves import item_names
@@ -93,14 +95,14 @@ def no_installed_mod_names(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def elden_ring_is_the_active_game():
-    """Every test starts on Elden Ring, with no detection cached from a prior test that used a different environment."""
-    common.GAME = games.DEFAULT
+def elden_ring_is_the_active_game(tmp_path):
+    """Every test starts on Elden Ring (the rebuild code's locations, as create_app would give them), with no detection
+    cached from a prior test that used a different environment, and instance names scoped to its own folder."""
+    mod_locations.use(Locations(games.DEFAULT))
+    instance.use_scope("RoundtableSouls.Test", tmp_path)
     common.clear_detection_cache()
     common._PROFILE_GAMES_CACHE.clear()
-    common._SETUP_SAVE_NAMES.clear()
     yield
-    common.GAME = games.DEFAULT
+    mod_locations.use(None)
     common.clear_detection_cache()
     common._PROFILE_GAMES_CACHE.clear()
-    common._SETUP_SAVE_NAMES.clear()

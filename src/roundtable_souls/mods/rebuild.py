@@ -88,9 +88,9 @@ def sha256(path: Path) -> str | None:
 
 # ----------------------------------------------------------------------------- layers
 def is_elden_ring(profile: Path) -> bool:
-    from roundtable_souls.platform import paths as common
+    from roundtable_souls.platform import paths
 
-    named = common.profile_games(Path(profile))
+    named = paths.profile_games(Path(profile))
     return games.ELDEN_RING.key in named if named else True  # a profile that names no game counts as Elden Ring's
 
 
@@ -345,8 +345,8 @@ def _shared(all_layers: list[dict], target: dict | None, combine) -> dict[str, l
 def health(profile: Path) -> dict:
     """{state, text, packs, winner, backend, reasons, run, combine, can_combine, ...} for the profile; state None
     when this does not apply (not an Elden Ring profile, or no profile)."""
+    from roundtable_souls.mods import locations
     from roundtable_souls.mods.backends import builtin
-    from roundtable_souls.platform import paths as common
 
     profile = Path(profile)
     out = {
@@ -400,7 +400,7 @@ def health(profile: Path) -> dict:
     if combine is not None:
         reasons += [f"Combined files: {r}" for r in combine.reasons(all_layers, target)]
     if tool is not None:
-        reasons += stale_reasons(profile, all_layers, packs, tool, common.game_dir())
+        reasons += stale_reasons(profile, all_layers, packs, tool, locations.get().game_dir())
     run = out["run"]
     made = max(t.report_time() for t in (tool, combine) if t is not None)
     if run and not run["ok"] and run["when"] >= made - 1:
@@ -610,13 +610,13 @@ def rebuild(profile: Path, log, combine: bool | None = None) -> dict:
     ship parameters, or when combine is True), then the overlay's rebuild tool, if there is one. Keeps the profile's
     own text when a tool only rewrote it and verifies the result. Raises MergeError (and records the failure)
     otherwise. Returns {backend, profile_note}."""
+    from roundtable_souls.mods import locations
     from roundtable_souls.mods.backends import builtin
-    from roundtable_souls.platform import paths as common
 
     profile = Path(profile)
     if not is_elden_ring(profile):
         raise MergeError("Combined parameters are only rebuilt for Elden Ring profiles.")
-    if common.game_running():
+    if locations.get().game_running():
         raise MergeError("Close the game first: the rebuild rewrites files the game has open.")
     all_layers = layers(profile)
     target, tool, _by_hand = overlay(profile, all_layers)

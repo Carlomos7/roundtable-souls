@@ -1,5 +1,6 @@
-"""The launcher's own data folder (config.settings.data_dir: where settings, logs, backups and caches live): its root,
-the temp folder installs unpack into, and the deleted-profiles folder."""
+"""The launcher's own data folder (where settings, logs, backups and caches live): its root, the temp folder installs
+unpack into, and the deleted-profiles folder. The program sets the root once when it starts (app.use_data_folder,
+from config.settings.data_dir)."""
 
 from __future__ import annotations
 
@@ -7,12 +8,21 @@ import shutil
 import time
 from pathlib import Path
 
-from roundtable_souls.config.settings import data_dir
 from roundtable_souls.platform.files import move_into
+
+_ROOT: Path | None = None
+
+
+def use(root: Path) -> None:
+    """The data folder from now on (set once at startup)."""
+    global _ROOT
+    _ROOT = Path(root)
 
 
 def data_root() -> Path:
-    return data_dir()
+    if _ROOT is None:
+        raise RuntimeError("the data folder was not set (app.use_data_folder sets it when the program starts)")
+    return _ROOT
 
 
 def deleted_profiles(profile_dir: Path) -> Path:
