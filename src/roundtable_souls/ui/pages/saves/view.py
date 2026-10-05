@@ -77,7 +77,7 @@ from roundtable_souls.ui.theme import (
     hint,
     primary_btn,
 )
-from roundtable_souls.ui.widgets import (
+from roundtable_souls.ui.widgets.cards import (
     ActionBar,
     ElideLabel,
     PathTag,

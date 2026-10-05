@@ -56,7 +56,7 @@ from roundtable_souls.ui.theme import (
     ghost_btn,
     hint,
 )
-from roundtable_souls.ui.widgets import (
+from roundtable_souls.ui.widgets.cards import (
     ExpandGroupSettingCard,
     HeroBanner,
     LogPane,

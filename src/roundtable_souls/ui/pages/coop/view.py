@@ -64,7 +64,7 @@ from roundtable_souls.ui.theme import (
     HINT_ON_LIGHT,
     hint,
 )
-from roundtable_souls.ui.widgets import (
+from roundtable_souls.ui.widgets.cards import (
     ActionBar,
     EditorPanel,
     ExpandGroupSettingCard,

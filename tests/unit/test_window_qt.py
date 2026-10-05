@@ -410,7 +410,7 @@ def test_saving_the_editor_over_outside_changes_asks_first(sandbox, monkeypatch)
 def test_right_aligned_rows_end_at_the_right_edge_and_wrap(app):
     from PySide6.QtWidgets import QPushButton
 
-    from roundtable_souls.ui.widgets import action_row
+    from roundtable_souls.ui.widgets.cards import action_row
 
     w, flow = action_row("right")
     buttons = [QPushButton(t) for t in ("One", "Two", "Three")]
