@@ -106,6 +106,20 @@ def check_migrations(folder: Path) -> None:
         raise SystemExit(f"build: the database migrations did not make it into the build: {missing or 'none found'}")
 
 
+def check_sqlite() -> None:
+    """The SQLite inside the Python being packaged must meet the storage minimum: a build below it would ship a
+    program that runs without its database. Checked before anything is built."""
+    import sqlite3
+
+    sys.path.insert(0, str(ROOT / "src"))
+    from roundtable_souls.storage.db import sqlite_problem
+
+    problem = sqlite_problem(sqlite3.sqlite_version)
+    if problem:
+        raise SystemExit(f"build: {problem} (Python {sys.version.split()[0]} at {sys.executable}; see .python-version)")
+    print(f"SQLite {sqlite3.sqlite_version} (Python {sys.version.split()[0]})")
+
+
 def load_identity(path: Path | None):
     """The identity a build is packed as: the override file's values over the defaults."""
     import json
@@ -142,6 +156,7 @@ def main() -> int:
     identity_file = None
     if "--identity" in argv:
         identity_file = Path(argv[argv.index("--identity") + 1]).resolve()
+    check_sqlite()
     if "--no-test" not in argv:
         run(py, "-m", "pytest", "-q")
     if WINDOWS:
