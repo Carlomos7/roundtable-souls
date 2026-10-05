@@ -23,7 +23,7 @@ from qfluentwidgets import (
 )
 from qfluentwidgets import FluentIcon as FI
 
-from roundtable_souls.ui.editor import code_edit
+from roundtable_souls.ui.dialogs.editor import code_edit
 from roundtable_souls.ui.theme import (
     RADIUS,
     ghost_btn,

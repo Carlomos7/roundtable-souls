@@ -7,7 +7,6 @@ if TYPE_CHECKING:  # each module is imported where it is used, not here: importi
     from roundtable_souls.ui import (
         activity,
         dialogs,
-        editor,
         find,
         jobs,
         notes,
@@ -19,7 +18,6 @@ if TYPE_CHECKING:  # each module is imported where it is used, not here: importi
 __all__ = [
     "activity",
     "dialogs",
-    "editor",
     "find",
     "jobs",
     "notes",

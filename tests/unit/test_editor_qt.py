@@ -10,7 +10,7 @@ QtTest = pytest.importorskip("PySide6.QtTest")
 from PySide6.QtCore import Qt  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from roundtable_souls.ui.editor import code_edit  # noqa: E402
+from roundtable_souls.ui.dialogs.editor import code_edit  # noqa: E402
 
 QTest = QtTest.QTest
 TEXT = "alpha\nbeta\n  beta two\nend\n"
