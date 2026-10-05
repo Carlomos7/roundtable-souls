@@ -38,6 +38,21 @@ that run goes on without storage. While a migration runs, nothing else opens the
 - A database whose schema is newer than the program knows (a later version ran, then was rolled back) is left
   untouched, and that run goes on without storage.
 
+**What rolls an update back, and what does not.** Only a failure of the new version's own migration code stops
+start-up (no ready report, so the watchdog restores the previous version, which never ran that code). Everything
+else turns storage off for that run and the launcher works normally, because a rollback would not help and would
+repeat at every update:
+- the database is busy (another process has it open while it needs upgrading, or is upgrading it);
+- its schema is newer than the version knows;
+- the file is not a readable database (it is left untouched; moving it aside lets a new one be made);
+- the filesystem or another program stopped it (no space, read-only, locked, cannot be opened); an upgrade
+  interrupted this way is restored from its snapshot first;
+- SQLite is below the minimum (builds refuse to package such a Python, so this happens only outside releases).
+
+**Without storage**, records are never lost and never reported as stored: the file-hash cache is bypassed (files
+are hashed every time, which is slower, never wrong), and activity records are written to the activity log's
+original file, from which the next run with storage imports them.
+
 **Minimum SQLite: 3.51.3.** The SQLite inside the packaged Python is checked at start-up; below the minimum,
 storage is refused for the run with a message saying why. 3.51.3 (2026-03-13) fixes the *WAL-reset* bug, which can
 corrupt a WAL database when two connections in different threads or processes write or checkpoint at the same
@@ -47,7 +62,9 @@ savepoint rollback (fixed in 3.50.2) and corruption from an application breaking
 added in 3.51.0). The features used (WAL, the backup API, `BEGIN IMMEDIATE`, foreign keys) are far older. sqlite.org
 also lists backports of the WAL-reset fix in 3.44.6 and 3.50.7; one minimum is kept instead of a list of patch
 releases. The 3.53.4 note that it fixes problems in 3.53.0–3.53.3 does not describe them, so it does not move the
-minimum.
+minimum. Releases are built with Python 3.14.7 (`.python-version`), which carries SQLite 3.53.1 on Windows and Linux;
+`scripts/build.py` refuses to build with a Python whose SQLite is below the minimum, and the release workflow opens
+a database with each packaged program.
 
 **Times** are stored as UTC milliseconds since the Unix epoch, through one column type that refuses a datetime
 without a time zone.

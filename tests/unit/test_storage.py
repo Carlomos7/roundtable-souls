@@ -234,8 +234,9 @@ def test_an_upgrade_waits_for_other_processes_and_is_postponed_while_they_hold_t
     other = _hold(tmp_path, "open")  # another window with the database open, at 0001
     try:
         migrations("op.create_table('later', sa.Column('id', sa.Integer(), primary_key=True))")
-        with pytest.raises(db.StorageUnavailable, match="waits until they close"):
+        with pytest.raises(db.StorageUnavailable, match="waits until they close") as busy:
             db.open_database(tmp_path, wait=0.3, log=lambda line: None)
+        assert busy.value.reason == "busy"  # contention: normal operation, never a rollback
         assert db.read_revision(tmp_path / db.DB_NAME) == "0001" and not list(tmp_path.glob("*.snapshot"))
         assert _sha(tmp_path / db.DB_NAME) == before  # postponed: nothing was written
     finally:
@@ -263,8 +264,9 @@ def test_nothing_opens_the_database_while_another_process_migrates(tmp_path):
     db.open_database(tmp_path, log=lambda line: None).close()
     migrating = _hold(tmp_path, "exclusive")
     try:
-        with pytest.raises(db.StorageUnavailable, match="updating the database"):
+        with pytest.raises(db.StorageUnavailable, match="updating the database") as busy:
             db.open_database(tmp_path, wait=0.3, log=lambda line: None)
+        assert busy.value.reason == "busy"
     finally:
         _let_go(migrating)
 
@@ -294,8 +296,9 @@ def test_a_newer_schema_than_this_build_knows_is_left_untouched(tmp_path):
     conn.commit()
     conn.close()
     before = _sha(path)
-    with pytest.raises(db.StorageUnavailable, match="newer than this version"):
+    with pytest.raises(db.StorageUnavailable, match="newer than this version") as newer:
         db.open_database(tmp_path, log=lambda line: None)
+    assert newer.value.reason == "newer-schema"
     assert _sha(path) == before and not list(tmp_path.glob("*.snapshot"))
 
 
@@ -308,8 +311,9 @@ def test_sqlite_older_than_the_minimum_is_refused(version, ok):
 
 def test_an_old_sqlite_refuses_storage_before_touching_anything(tmp_path, monkeypatch):
     monkeypatch.setattr(db.sqlite3, "sqlite_version", "3.45.1")
-    with pytest.raises(db.StorageUnavailable, match=r"older than 3\.51\.3"):
+    with pytest.raises(db.StorageUnavailable, match=r"older than 3\.51\.3") as old:
         db.open_database(tmp_path, log=lambda line: None)
+    assert old.value.reason == "old-sqlite"
     assert list(tmp_path.iterdir()) == []
 
 
@@ -332,6 +336,56 @@ def test_everything_the_migration_scripts_import_is_imported_by_storage_db():
     )
     out = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=True).stdout
     assert out.strip() == "[]", f"imported only by the migration scripts: {out.strip()}"
+
+
+# ----------------------------------------------------------------------------- what rolls an update back
+@needs_sqlite
+def test_a_damaged_database_file_is_left_alone_and_storage_is_off_without_a_rollback(tmp_path):
+    path = tmp_path / db.DB_NAME
+    path.write_bytes(b"not a database, " * 100)
+    before = _sha(path)
+    with pytest.raises(db.StorageUnavailable, match="moving it aside") as damaged:
+        db.open_database(tmp_path, log=lambda line: None)
+    assert damaged.value.reason == "damaged" and _sha(path) == before and not list(tmp_path.glob("*.snapshot"))
+
+
+@needs_sqlite
+def test_an_upgrade_stopped_by_the_disk_is_restored_and_does_not_roll_back(tmp_path, migrations):
+    first = db.open_database(tmp_path, log=lambda line: None)
+    _a_run(first)
+    first.close()
+    migrations(
+        """
+        op.create_table('half', sa.Column('id', sa.Integer(), primary_key=True))
+        import sqlite3
+        raise sqlite3.OperationalError("database or disk is full")
+        """
+    )
+    with pytest.raises(db.StorageUnavailable, match="stopped by the system") as full:
+        db.open_database(tmp_path, log=lambda line: None)
+    assert full.value.reason == "environment" and not isinstance(full.value, db.MigrationFailed)
+    assert db.read_revision(tmp_path / db.DB_NAME) == "0001" and _runs(tmp_path / db.DB_NAME) == ["kept"]
+
+
+@needs_sqlite
+def test_a_lock_file_that_cannot_be_used_turns_storage_off(tmp_path, monkeypatch):
+    def refuse(self, exclusive, timeout):
+        raise PermissionError("access denied")
+
+    monkeypatch.setattr(db.ReadWriteLock, "acquire", refuse)
+    with pytest.raises(db.StorageUnavailable) as locked:
+        db.open_database(tmp_path, log=lambda line: None)
+    assert locked.value.reason == "environment"
+
+
+def test_only_a_failure_of_the_migration_code_stops_start_up():
+    import sqlalchemy.exc
+
+    full = sqlalchemy.exc.OperationalError("INSERT", {}, sqlite3.OperationalError("database or disk is full"))
+    assert db._environmental(full) and db._environmental(PermissionError("denied"))
+    assert db._environmental(sqlite3.OperationalError("database is locked"))
+    assert not db._environmental(RuntimeError("a broken migration"))
+    assert not db._environmental(sqlite3.OperationalError("no such column: nope"))  # a bug in the migration
 
 
 # ----------------------------------------------------------------------------- the application

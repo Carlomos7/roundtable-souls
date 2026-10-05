@@ -17,6 +17,20 @@ open_database() is the only way in:
    reported. A database whose schema is newer than this build knows (a later version ran, then was rolled back) is
    left untouched and storage is refused.
 
+Which failures roll an update back. Only MigrationFailed stops start-up (no ready report, so the update watchdog puts
+the previous version back): this version's own migration code failed, and the previous version, which never ran
+it, is the remedy. Everything else is StorageUnavailable (its .reason says which) and the launcher runs normally
+without storage, because a rollback would not help and would only repeat at the next update:
+  "old-sqlite"    the SQLite in this Python is below MIN_SQLITE
+  "busy"          another process has the database open while it needs upgrading, or is upgrading it (contention)
+  "newer-schema"  a later version upgraded it
+  "damaged"       the file exists but is not a readable SQLite database; it is left untouched
+  "environment"   the filesystem refused (no space, read-only, locked by another program, cannot open or create);
+                  an upgrade interrupted this way is restored first, as for MigrationFailed
+Without storage, the hash cache is bypassed (files are hashed every time) and activity records go to their old
+file, logs/jobs.jsonl, from which a later run with storage imports them: nothing is lost and nothing claims to be in
+the database.
+
 Connections: a bounded busy_timeout, foreign_keys on, synchronous FULL, and write transactions started with BEGIN
 IMMEDIATE (a writer waits at the start instead of failing at commit). Database.unit_of_work() is one short unit of
 work: one session, committed once when the block ends (rolled back on an error); never held across long file work.
@@ -42,9 +56,10 @@ from sqlalchemy.pool import NullPool
 from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.platform.filelock import ReadWriteLock
 from roundtable_souls.resources import MIGRATIONS_DIR
-from roundtable_souls.storage import models  # noqa: F401  # migrations/env.py imports it by name at run time; importing
 
-# it here is what puts it in a packaged build (the migration scripts are loaded by path, so the bundler never sees them)
+# migrations/env.py imports models by name at run time; importing it here is what puts it in a packaged build (the
+# migration scripts are loaded by path, so the bundler never sees their imports).
+from roundtable_souls.storage import models  # noqa: F401
 
 DB_NAME = "roundtable.db"
 LOCK_NAME = DB_NAME + ".lock"
@@ -61,8 +76,12 @@ class StorageError(Exception):
 
 
 class StorageUnavailable(StorageError):
-    """Storage is off for this run (SQLite too old, the database busy or newer than this build, an upgrade
-    postponed); the launcher runs on without it. Nothing was changed."""
+    """Storage is off for this run; the launcher runs on without it (the module docstring lists the reasons).
+    Nothing was changed, or an interrupted upgrade was put back first."""
+
+    def __init__(self, message: str, reason: str = "busy"):
+        super().__init__(message)
+        self.reason = reason
 
 
 class MigrationFailed(StorageError):
@@ -103,19 +122,53 @@ def known_revisions() -> set[str]:
     return {s.revision for s in ScriptDirectory.from_config(alembic_config()).walk_revisions()}
 
 
+_ENVIRONMENT = ("locked", "busy", "disk i/o", "unable to open", "readonly", "read-only", "full", "permission")
+
+
+def _environmental(error: BaseException) -> bool:
+    """Whether a failure came from the filesystem or another program, not from the migration code itself."""
+    todo: list[BaseException] = [error]
+    visited: set[int] = set()
+    while todo:
+        seen = todo.pop()
+        if id(seen) in visited:
+            continue
+        visited.add(id(seen))
+        if isinstance(seen, OSError) and not isinstance(seen, sqlite3.Error):
+            return True
+        if isinstance(seen, sqlite3.OperationalError) and any(w in str(seen).lower() for w in _ENVIRONMENT):
+            return True
+        todo += [
+            e for e in (getattr(seen, "orig", None), seen.__cause__, seen.__context__) if isinstance(e, BaseException)
+        ]
+    return False
+
+
 def read_revision(path: Path) -> str | None:
-    """The schema revision a database file is at (read-only, without creating it); None when there is none yet."""
+    """The schema revision a database file is at (read-only, without creating it); None when there is none yet.
+    Raises StorageUnavailable ("damaged" or "environment") when the file can't be read as a database."""
     if not path.is_file() or path.stat().st_size == 0:
         return None
-    conn = sqlite3.connect(f"{path.as_uri()}?mode=ro", uri=True)
     try:
-        has = conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'alembic_version'").fetchone()
-        if not has:
-            return None
-        row = conn.execute("SELECT version_num FROM alembic_version").fetchone()
-        return row[0] if row else None
-    finally:
-        conn.close()
+        conn = sqlite3.connect(f"{path.as_uri()}?mode=ro", uri=True)
+        try:
+            query = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'alembic_version'"
+            if not conn.execute(query).fetchone():
+                return None
+            row = conn.execute("SELECT version_num FROM alembic_version").fetchone()
+            return row[0] if row else None
+        finally:
+            conn.close()
+    except sqlite3.Error as e:
+        if _environmental(e):
+            raise StorageUnavailable(
+                f"The database can't be read now ({e}); storage is off for this run", "environment"
+            ) from e
+        raise StorageUnavailable(
+            f"{path} is not a readable database ({e}). It was left as it is and storage is off; moving it aside "
+            "lets Roundtable Souls start a new one",
+            "damaged",
+        ) from e
 
 
 def _snapshot(path: Path, revision: str | None) -> Path:
@@ -184,6 +237,11 @@ def _migrate(path: Path, log: Callable[[str], None]) -> str:
         engine.dispose()
         outcome = _recover(path, snapshot)
         log(f"error: the database upgrade from {before or 'nothing'} failed ({e}); {outcome}")
+        if _environmental(e):  # the disk or another program, not this version: a rollback would not help
+            raise StorageUnavailable(
+                f"The database upgrade was stopped by the system ({e}); {outcome}; storage is off for this run",
+                "environment",
+            ) from e
         raise MigrationFailed(f"The database upgrade failed ({e}); {outcome}.") from e
     engine.dispose()
     log(f"storage: database {'upgraded from ' + before if before else 'created'} at {head_revision()}")
@@ -251,7 +309,7 @@ def open_database(data_dir: Path, wait: float = LOCK_WAIT, log: Callable[[str], 
     (storage off for this run, nothing changed) or MigrationFailed (see the module docstring)."""
     problem = sqlite_problem()
     if problem:
-        raise StorageUnavailable(problem)
+        raise StorageUnavailable(problem, "old-sqlite")
     path = Path(data_dir) / DB_NAME
     head, known = head_revision(), known_revisions()
     lock = ReadWriteLock(path.with_name(LOCK_NAME))
@@ -260,16 +318,24 @@ def open_database(data_dir: Path, wait: float = LOCK_WAIT, log: Callable[[str], 
         if rev is not None and rev not in known:
             raise StorageUnavailable(
                 f"The database is at schema {rev}, newer than this version of Roundtable Souls knows; it was left "
-                "as it is and storage is off for this run"
+                "as it is and storage is off for this run",
+                "newer-schema",
             )
+
+    def take(exclusive: bool) -> bool:
+        try:
+            return lock.acquire(exclusive, wait)
+        except OSError as e:
+            raise StorageUnavailable(f"The database lock can't be used ({e}); storage is off", "environment") from e
 
     current = read_revision(path)
     refuse_newer(current)
     if current != head:
-        if not lock.acquire(True, wait):
+        if not take(True):
             raise StorageUnavailable(
                 "Other Roundtable Souls windows or Plays have the database open, so its update for this version "
-                "waits until they close; storage is off for this run"
+                "waits until they close; storage is off for this run",
+                "busy",
             )
         try:
             current = read_revision(path)  # another process may have done it meanwhile
@@ -278,13 +344,15 @@ def open_database(data_dir: Path, wait: float = LOCK_WAIT, log: Callable[[str], 
                 _migrate(path, log)
         finally:
             lock.release()
-    if not lock.acquire(False, wait):
-        raise StorageUnavailable("Another Roundtable Souls is updating the database; storage is off for this run")
+    if not take(False):
+        raise StorageUnavailable(
+            "Another Roundtable Souls is updating the database; storage is off for this run", "busy"
+        )
     try:
         current = read_revision(path)
         refuse_newer(current)
         if current != head:
-            raise StorageUnavailable("The database changed while it was opened; storage is off for this run")
+            raise StorageUnavailable("The database changed while it was opened; storage is off for this run", "busy")
         conn = sqlite3.connect(f"{path.as_uri()}?mode=ro", uri=True)  # a read: no write transaction for it
         try:
             mode = str(conn.execute("PRAGMA journal_mode").fetchone()[0]).lower()
