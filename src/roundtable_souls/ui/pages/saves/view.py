@@ -592,6 +592,15 @@ class SavesView:
             dispose(it.widget())
         total = 0
         several = len(libs) > 1
+        unreadable = [doc["unreadable"] for doc in libs.values() if doc.get("unreadable")]
+        for problem in unreadable:
+            warn = CaptionLabel(
+                f"⚠  {problem}. Its copies aren't listed and the library won't change until the file is fixed "
+                "or moved aside; nothing was overwritten."
+            )
+            warn.setWordWrap(True)
+            tone_label(warn, "warn")
+            self.library_rows.addWidget(warn)
         for folder, doc in libs.items():
             entries = sorted(doc.get("entries") or [], key=lambda e: e.get("added") or "", reverse=True)
             total += len(entries)
@@ -648,6 +657,8 @@ class SavesView:
         self.library_note.setText(
             (f"{total} saved cop{'y' if total == 1 else 'ies'}")
             if total
+            else "The library file can't be read."
+            if unreadable
             else "Nothing here yet. Add to library on a save, or import a file."
         )
 

@@ -369,6 +369,24 @@ def test_a_backup_whose_note_cannot_be_read_shows_as_protected_not_kept(sandbox,
     assert pins and not any("Kept for good" in b.toolTip() for b in buttons)
 
 
+def test_an_unreadable_library_file_is_reported_not_shown_as_empty(sandbox, tmp_path):
+    from qfluentwidgets import CaptionLabel
+
+    from roundtable_souls.saves import library
+
+    acct = tmp_path / "EldenRing" / "7656"
+    acct.mkdir(parents=True)
+    folder = library.folder_for(acct)
+    folder.mkdir(parents=True)
+    (folder / library.MANIFEST).write_bytes(b'{"entries": [{"id": "ab')
+    w = sandbox
+    w._fill_library({str(acct): library.load(acct)})
+    texts = [lab.text() for lab in w.library_card.findChildren(CaptionLabel)]
+    assert any("library.json can't be read" in t and "nothing was overwritten" in t for t in texts)
+    assert w.library_note.text() == "The library file can't be read."
+    assert (folder / library.MANIFEST).read_bytes() == b'{"entries": [{"id": "ab'
+
+
 def test_folder_of_mods_entry_shows_as_its_folder_and_can_be_removed(sandbox, monkeypatch):
     from roundtable_souls.mods import profile_edit as manage
 

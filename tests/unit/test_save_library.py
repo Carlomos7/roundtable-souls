@@ -72,6 +72,67 @@ def test_rename_remove_and_outside_changes(tmp_path):
     assert doc["entries"] == [] and [h["action"] for h in doc["history"]] == ["stash", "rename", "delete"]
 
 
+@pytest.mark.parametrize(
+    "damaged",
+    [
+        b'{"version": 1, "entries": [{"id": "ab',  # cut off mid-write
+        b"\xff\xfe not utf-8",
+        b"[]",
+        b'{"version": 1, "entries": {"id": "x"}, "history": []}',
+        b'{"version": 1, "entries": [{"name": "no id"}], "history": []}',
+        b'{"version": 1, "entries": [], "history": "x"}',
+    ],
+)
+def test_an_unreadable_manifest_is_reported_and_never_overwritten(tmp_path, damaged):
+    live = _save(tmp_path / "ER0000.sl2", 1)
+    e = Lib.add(tmp_path, live, "first run", ER)
+    folder = Lib.folder_for(tmp_path)
+    manifest = folder / Lib.MANIFEST
+    manifest.write_bytes(damaged)
+    files_before = sorted(p.name for p in folder.iterdir())
+    doc = Lib.load(tmp_path)
+    assert doc["entries"] == [] and Lib.MANIFEST in doc["unreadable"]
+    for change in (
+        lambda: Lib.add(tmp_path, live, "second", ER),
+        lambda: Lib.rename(tmp_path, e["id"], "renamed"),
+        lambda: Lib.remove(tmp_path, e["id"]),
+        lambda: Lib.swap_in(tmp_path, e["id"], live, "out", ER),
+    ):
+        with pytest.raises(Lib.LibraryUnreadable):
+            change()
+    assert manifest.read_bytes() == damaged  # the bytes stay exactly as they were
+    assert sorted(p.name for p in folder.iterdir()) == files_before  # no copy added, moved or removed
+    assert live.read_bytes()[4] == 1  # and the live save was not swapped
+
+
+def test_a_manifest_that_becomes_unreadable_after_loading_is_not_overwritten(tmp_path):
+    live = _save(tmp_path / "ER0000.sl2", 1)
+    Lib.add(tmp_path, live, "first run", ER)
+    manifest = Lib.folder_for(tmp_path) / Lib.MANIFEST
+    doc = Lib.load(tmp_path)
+    manifest.write_bytes(b"{damaged")
+    with pytest.raises(Lib.LibraryUnreadable):
+        Lib._save(tmp_path, doc)
+    assert manifest.read_bytes() == b"{damaged"
+
+
+def test_a_missing_manifest_still_reads_as_an_empty_library(tmp_path):
+    doc = Lib.load(tmp_path)
+    assert doc["entries"] == [] and "unreadable" not in doc
+    Lib.add(tmp_path, _save(tmp_path / "ER0000.sl2", 1), "first run", ER)
+    assert len(Lib.load(tmp_path)["entries"]) == 1
+
+
+def test_unknown_fields_in_a_readable_manifest_survive_a_change(tmp_path):
+    e = Lib.add(tmp_path, _save(tmp_path / "ER0000.sl2", 1), "a", ER)
+    manifest = Lib.folder_for(tmp_path) / Lib.MANIFEST
+    raw = json.loads(manifest.read_text(encoding="utf-8"))
+    raw["entries"][0]["custom"] = {"from": "a newer launcher"}
+    manifest.write_text(json.dumps(raw), encoding="utf-8")
+    Lib.rename(tmp_path, e["id"], "b")
+    assert json.loads(manifest.read_text(encoding="utf-8"))["entries"][0]["custom"] == {"from": "a newer launcher"}
+
+
 def test_default_name_says_when_without_characters(tmp_path):
     assert Lib.default_name(_save(tmp_path / "ER0000.co2", 1), ER).startswith("ER0000.co2 · ")
 

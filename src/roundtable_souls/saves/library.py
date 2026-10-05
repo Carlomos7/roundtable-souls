@@ -108,25 +108,64 @@ def folder_for(save_dir: Path) -> Path:
     return save_backups.library(save_dir)
 
 
-def load(save_dir: Path) -> dict:
-    """The library for one account folder. Missing or unreadable manifests read as empty; entries whose file is
-    gone are kept but flagged, so nothing silently disappears from the list."""
-    folder = folder_for(save_dir)
-    doc = {"version": 1, "entries": [], "history": []}
+class LibraryUnreadable(LibraryError):
+    """library.json exists but can't be read, or isn't the shape this launcher writes. It is left exactly as it is:
+    nothing in that library changes until it is fixed or moved aside by hand."""
+
+
+def _read_manifest(folder: Path) -> dict | None:
+    """library.json as stored, or None when there is none. Raises LibraryUnreadable when it can't be read, isn't
+    JSON, or isn't an object whose entries (each with an id) and history are lists of objects: rewriting such a file
+    would drop what this launcher can't read."""
+    p = folder / MANIFEST
     try:
-        raw = json.loads((folder / MANIFEST).read_text(encoding="utf-8"))
-        if isinstance(raw, dict):
-            doc["entries"] = [e for e in raw.get("entries") or [] if isinstance(e, dict) and e.get("id")]
-            doc["history"] = [h for h in raw.get("history") or [] if isinstance(h, dict)]
+        raw = json.loads(p.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
     except OSError, ValueError:
-        pass
+        raise LibraryUnreadable(f"{p} can't be read") from None
+    if not isinstance(raw, dict):
+        raise LibraryUnreadable(f"{p} isn't a library manifest")
+    entries, history = raw.get("entries", []), raw.get("history", [])
+    if not isinstance(entries, list) or not all(isinstance(e, dict) and e.get("id") for e in entries):
+        raise LibraryUnreadable(f"{p} has entries this launcher can't read")
+    if not isinstance(history, list) or not all(isinstance(h, dict) for h in history):
+        raise LibraryUnreadable(f"{p} has a history this launcher can't read")
+    return raw
+
+
+def load(save_dir: Path) -> dict:
+    """The library for one account folder; a missing manifest reads as empty. An unreadable one also lists as empty,
+    with doc["unreadable"] saying why, and every change to that library is refused (LibraryUnreadable) so the file
+    is never rewritten as an empty library. Entries whose file is gone are kept but flagged, so nothing silently
+    disappears from the list."""
+    folder = folder_for(save_dir)
+    doc: dict = {"version": 1, "entries": [], "history": []}
+    try:
+        raw = _read_manifest(folder) or {}
+    except LibraryUnreadable as e:
+        doc["unreadable"] = str(e)
+        return doc
+    doc["entries"] = list(raw.get("entries", []))
+    doc["history"] = list(raw.get("history", []))
     for e in doc["entries"]:
         e["missing"] = not (folder / e.get("file", "")).is_file()
     return doc
 
 
+def _load_for_change(save_dir: Path) -> dict:
+    """load(), refusing when the manifest can't be read: a change would overwrite it."""
+    doc = load(save_dir)
+    if doc.get("unreadable"):
+        raise LibraryUnreadable(
+            f"{doc['unreadable']}, so the library was not changed. Fix the file or move it aside, then try again."
+        )
+    return doc
+
+
 def _save(save_dir: Path, doc: dict) -> None:
     folder = folder_for(save_dir)
+    _read_manifest(folder)  # last check: never write over a manifest that became unreadable since it was loaded
     folder.mkdir(parents=True, exist_ok=True)
     clean = {
         "version": 1,
@@ -171,7 +210,7 @@ def add(save_dir: Path, source: Path, name: str, game: games.Game, action: str =
     source = Path(source)
     data = source.read_bytes()
     check_whole(data, game)
-    doc = load(save_dir)
+    doc = _load_for_change(save_dir)
     entry_id = uuid.uuid4().hex[:12]
     fmt = source.suffix.lower().lstrip(".") or "sl2"
     entry = {
@@ -207,7 +246,7 @@ def swap_in(save_dir: Path, entry_id: str, live: Path, outgoing_name: str | None
     (skipped only when there is no live file), and a regular backup is kept for Undo. Returns
     {entry, outgoing, backup}."""
     live = Path(live)
-    doc = load(save_dir)
+    doc = _load_for_change(save_dir)
     entry = find(doc, entry_id)
     src = entry_path(save_dir, entry)
     if not src.is_file():
@@ -223,7 +262,7 @@ def swap_in(save_dir: Path, entry_id: str, live: Path, outgoing_name: str | None
     tmp.replace(live)
     if hashlib.sha256(live.read_bytes()).hexdigest() != hashlib.sha256(data).hexdigest():
         raise LibraryError(f"{live.name} did not read back the same after the swap; restore it from Backups.")
-    doc = load(save_dir)  # add() above rewrote it
+    doc = _load_for_change(save_dir)  # add() above rewrote it
     _log(
         doc,
         "swap in",
@@ -237,7 +276,7 @@ def swap_in(save_dir: Path, entry_id: str, live: Path, outgoing_name: str | None
 
 
 def rename(save_dir: Path, entry_id: str, name: str) -> dict:
-    doc = load(save_dir)
+    doc = _load_for_change(save_dir)
     entry = find(doc, entry_id)
     old = entry["name"]
     entry["name"] = clean_name(name)
@@ -248,7 +287,7 @@ def rename(save_dir: Path, entry_id: str, name: str) -> dict:
 
 def remove(save_dir: Path, entry_id: str) -> Path | None:
     """Take a copy out of the library. Its file moves to the library's removed folder rather than being erased."""
-    doc = load(save_dir)
+    doc = _load_for_change(save_dir)
     entry = find(doc, entry_id)
     src = entry_path(save_dir, entry)
     moved = None
