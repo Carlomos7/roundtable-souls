@@ -17,9 +17,17 @@ from roundtable_souls.ui import shell  # noqa: E402
 from roundtable_souls.ui.pages.coop import view as coop_view  # noqa: E402
 from roundtable_souls.ui.pages.mods import view as mods_view  # noqa: E402
 from roundtable_souls.ui.pages.play import view as play_view  # noqa: E402
+from roundtable_souls.ui.pages.saves import view as saves_view  # noqa: E402
 from roundtable_souls.ui.pages.tools import view as tools_view  # noqa: E402
 
-UI_MODULES = (shell, play_view, coop_view, mods_view, tools_view)  # the window: the shell and its page views
+UI_MODULES = (
+    shell,
+    play_view,
+    coop_view,
+    mods_view,
+    saves_view,
+    tools_view,
+)  # the window: the shell and its page views
 
 
 class _Window:
