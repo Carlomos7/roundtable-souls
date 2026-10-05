@@ -343,6 +343,32 @@ def test_saves_page_names_the_file_play_uses_and_lists_the_library(sandbox, monk
     assert "1 saved copy" in w.library_note.text() and w.library_rows.count() == 1
 
 
+def test_a_backup_whose_note_cannot_be_read_shows_as_protected_not_kept(sandbox, monkeypatch, tmp_path):
+    from PySide6.QtWidgets import QAbstractButton
+    from qfluentwidgets import CaptionLabel
+
+    from roundtable_souls.platform import paths as common
+    from roundtable_souls.saves import backups as save_backups
+
+    acct = tmp_path / "EldenRing" / "7656"
+    acct.mkdir(parents=True)
+    (acct / "ER0000.sl2").write_bytes(b"save")
+    monkeypatch.setattr(common, "save_roots_for", lambda save_dir, app_id: [tmp_path / "EldenRing"])
+    monkeypatch.setattr(Locations, "save_files", REAL_SAVE_FILES)
+    folder = save_backups.backups(acct)
+    folder.mkdir(parents=True)
+    bak = folder / "ER0000.sl2.20260101-000000.bak"
+    bak.write_bytes(b"x")
+    (folder / (bak.name + ".json")).write_bytes(b'{"keep": tr')
+    w = sandbox
+    w._fill_backups()
+    texts = [lab.text() for lab in w.backups_card.findChildren(CaptionLabel)]
+    assert any("Protected: metadata unreadable" in t for t in texts)
+    buttons = w.backups_card.findChildren(QAbstractButton)
+    pins = [b for b in buttons if "Click to keep it for good" in b.toolTip()]
+    assert pins and not any("Kept for good" in b.toolTip() for b in buttons)
+
+
 def test_folder_of_mods_entry_shows_as_its_folder_and_can_be_removed(sandbox, monkeypatch):
     from roundtable_souls.mods import profile_edit as manage
 

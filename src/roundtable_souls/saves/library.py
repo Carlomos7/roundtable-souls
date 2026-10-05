@@ -257,7 +257,7 @@ def remove(save_dir: Path, entry_id: str) -> Path | None:
         trash.mkdir(parents=True, exist_ok=True)
         moved = trash / f"{entry['file']}"
         shutil.move(str(src), str(moved))
-        (trash / f"{entry['file']}.json").write_text(json.dumps(entry, indent=1, ensure_ascii=False), encoding="utf-8")
+        atomic_write(trash / f"{entry['file']}.json", json.dumps(entry, indent=1, ensure_ascii=False))
     doc["entries"] = [e for e in doc["entries"] if e["id"] != entry_id]
     _log(doc, "delete", entry, moved_to=str(moved) if moved else None)
     _save(save_dir, doc)

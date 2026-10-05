@@ -435,7 +435,9 @@ def backup_folders(save: Path | None = None, *, loc: Locations) -> list[Path]:
 
 
 def list_backups(save: Path | None = None, *, loc: Locations) -> list:
-    """Every backup of the save(s), newest first: {path, save_name, save, when, action, changes, size, keep, mtime}."""
+    """Every backup of the save(s), newest first: {path, save_name, save, when, action, changes, size, keep,
+    protected, metadata_unreadable, mtime}. keep is the user's choice; protected is whether pruning leaves it alone
+    (also when its note can't be read: metadata_unreadable)."""
     out = []
     for d in backup_folders(save, loc=loc):
         if not d.is_dir():
@@ -446,6 +448,7 @@ def list_backups(save: Path | None = None, *, loc: Locations) -> list:
             ):
                 continue
             m = save_backups.note_of(f)
+            prot = save_backups.protection(f)
             try:
                 st = f.stat()
             except OSError:
@@ -461,7 +464,9 @@ def list_backups(save: Path | None = None, *, loc: Locations) -> list:
                     "action": _OLD_ACTIONS.get(action, action),
                     "changes": list(m.get("changes") or []),
                     "size": st.st_size,
-                    "keep": bool(m.get("keep")),
+                    "keep": prot == save_backups.KEPT,  # the user's own choice
+                    "protected": prot != save_backups.NOT_KEPT,  # what prune does: kept, or unreadable
+                    "metadata_unreadable": prot == save_backups.UNREADABLE,
                     "mtime": st.st_mtime,
                 }
             )
@@ -527,7 +532,7 @@ def restore_backup(bak: Path, save: Path | None = None, *, loc: Locations) -> Pa
 
 def delete_backup(bak: Path) -> None:
     bak = Path(bak)
-    for p in (bak, Path(str(bak) + ".json")):
+    for p in [bak, *save_backups.note_files(bak)]:
         try:
             p.unlink()
         except FileNotFoundError:

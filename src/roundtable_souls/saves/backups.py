@@ -29,7 +29,7 @@ from pathlib import Path
 
 from roundtable_souls.game import catalog as games
 from roundtable_souls.platform import data_folder
-from roundtable_souls.platform.files import move_into
+from roundtable_souls.platform.files import atomic_write, move_into
 
 BACKUPS = "backups"
 LIBRARY = "library"
@@ -89,15 +89,15 @@ def _saved_name(backup_name: str) -> str:
 
 
 def _note_backups(folder: Path, save_dir: Path, legacy: str) -> None:
-    """Give every backup in an older folder a note naming what it was taken before and which save it is."""
+    """Give every backup in an older folder a note naming what it was taken before and which save it is. An
+    unreadable note is left as it is (the backup is then always kept, see is_kept)."""
     for f in folder.iterdir():
         if f.suffix not in (".bak", ".src"):
             continue
-        note_path = Path(str(f) + ".json")
         try:
-            note = json.loads(note_path.read_text(encoding="utf-8")) if note_path.is_file() else {}
-        except OSError, ValueError:
-            note = {}
+            note = read_note(f) or {}
+        except UnreadableNote:
+            continue
         if not note.get("action"):
             note["action"] = _LEGACY_SOURCE.get(legacy) if f.suffix == ".src" else _LEGACY_BACKUPS[legacy]
         if not note.get("when"):
@@ -106,7 +106,7 @@ def _note_backups(folder: Path, save_dir: Path, legacy: str) -> None:
             note["save"] = str(Path(save_dir) / _saved_name(f.name))
         note.setdefault("changes", [])
         try:
-            note_path.write_text(json.dumps(note, indent=1), encoding="utf-8")
+            write_note(f, note)
         except OSError:
             pass
 
@@ -133,24 +133,103 @@ def adopt_legacy_save_folders(save_dir: Path, game: games.Game | None = None, ag
 
 
 # ----------------------------------------------------------------------------- backup notes and retention
-def note_of(bak: Path) -> dict:
+class UnreadableNote(Exception):
+    """A backup's note exists but can't be read, isn't JSON or isn't a JSON object (a damaged or half-written
+    note). What it said is unknown, so it may have said keep."""
+
+
+def read_note(bak: Path) -> dict | None:
+    """A backup's note, or None when it has none. Raises UnreadableNote when one exists but can't be read."""
     p = Path(str(bak) + ".json")
+    if not p.exists():
+        return None
     try:
-        return json.loads(p.read_text(encoding="utf-8")) if p.is_file() else {}
+        note = json.loads(p.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
     except OSError, ValueError:
+        raise UnreadableNote(p) from None
+    if not isinstance(note, dict):
+        raise UnreadableNote(p)
+    return note
+
+
+def note_of(bak: Path) -> dict:
+    """A backup's note for showing it: empty when it has none or it can't be read (see read_note, is_kept)."""
+    try:
+        return read_note(bak) or {}
+    except UnreadableNote:
         return {}
 
 
+KEPT, NOT_KEPT, UNREADABLE = "kept", "not kept", "unreadable"
+
+
+def protection(bak: Path) -> str:
+    """KEPT (the note says keep: true), NOT_KEPT (no note, or no keep, or keep: false) or UNREADABLE (the note can't
+    be read, or its keep isn't true or false). Pruning leaves KEPT and UNREADABLE backups alone: protection that
+    can't be read may have said keep."""
+    try:
+        note = read_note(bak) or {}
+    except UnreadableNote:
+        return UNREADABLE
+    keep = note.get("keep", False)
+    if not isinstance(keep, bool):
+        return UNREADABLE
+    return KEPT if keep else NOT_KEPT
+
+
+def is_kept(bak: Path) -> bool:
+    """Whether pruning leaves a backup alone whatever its age (see protection)."""
+    return protection(bak) != NOT_KEPT
+
+
+def write_note(bak: Path, note: dict) -> None:
+    """Write a backup's note atomically, so an interrupted write leaves the previous note whole."""
+    atomic_write(Path(str(bak) + ".json"), json.dumps(note, indent=1))
+
+
+def note_files(bak: Path) -> list[Path]:
+    """A backup's note and any unreadable notes set_keep set aside, which go when the backup goes."""
+    note = Path(str(bak) + ".json")
+    aside = note.name + ".unreadable"
+    try:
+        return [note] + [p for p in bak.parent.iterdir() if p.name.startswith(aside)]
+    except OSError:
+        return [note]
+
+
+def _copy_aside(note_path: Path) -> Path:
+    """Copy a note's bytes to <note>.unreadable (-2, -3… if taken). The note itself stays where it is."""
+    data = note_path.read_bytes()
+    aside = note_path.with_name(note_path.name + ".unreadable")
+    n = 2
+    while aside.exists():
+        aside = note_path.with_name(f"{note_path.name}.unreadable-{n}")
+        n += 1
+    atomic_write(aside, data)
+    return aside
+
+
 def set_keep(bak: Path, keep: bool) -> None:
-    """Mark a backup to be kept whatever its age (or not)."""
-    note = note_of(bak)
+    """Mark a backup to be kept whatever its age (or not); the note's other fields stay. When its protection can't
+    be read (protection() is UNREADABLE), the note's bytes are first copied to <backup>.json.unreadable. The note
+    is only ever replaced atomically, so a write that fails leaves it, and the protection it gives, as it was."""
+    note_path = Path(str(bak) + ".json")
+    try:
+        note = read_note(bak) or {}
+    except UnreadableNote:
+        note = None
+    if note is None or not isinstance(note.get("keep", False), bool):
+        _copy_aside(note_path)
+    note = note or {}
     note["keep"] = bool(keep)
-    Path(str(bak) + ".json").write_text(json.dumps(note, indent=1), encoding="utf-8")
+    write_note(bak, note)
 
 
 def prune(folder: Path, save_name: str, now: float | None = None) -> list[Path]:
-    """Remove backups of one save beyond the newest KEEP_NEWEST, unless younger than KEEP_DAYS or marked keep.
-    Returns what was removed."""
+    """Remove backups of one save beyond the newest KEEP_NEWEST, unless younger than KEEP_DAYS, marked keep or
+    with protection that can't be read (is_kept). Returns what was removed."""
     folder = Path(folder)
     if not folder.is_dir():
         return []
@@ -165,9 +244,9 @@ def prune(folder: Path, save_name: str, now: float | None = None) -> list[Path]:
     mine.sort(reverse=True)
     removed = []
     for rank, (mtime, f) in enumerate(mine):
-        if rank < KEEP_NEWEST or now - mtime < KEEP_DAYS * 86400 or note_of(f).get("keep"):
+        if rank < KEEP_NEWEST or now - mtime < KEEP_DAYS * 86400 or is_kept(f):
             continue
-        for p in (f, Path(str(f) + ".json")):
+        for p in [f, *note_files(f)]:
             try:
                 p.unlink()
             except FileNotFoundError:

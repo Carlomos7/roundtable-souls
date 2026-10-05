@@ -12,7 +12,6 @@ Nothing is written when there is nothing to do. Callers refuse while the game ru
 from __future__ import annotations
 
 import hashlib
-import json
 import shutil
 import time
 from pathlib import Path
@@ -60,18 +59,15 @@ def write_manifest(bak: Path, manifest: dict, save: Path | None = None) -> None:
         "changes": list(manifest.get("changes") or []),
     }
     try:
-        Path(str(bak) + ".json").write_text(json.dumps(doc, indent=1), encoding="utf-8")
+        save_backups.write_note(bak, doc)
     except OSError:
         pass
 
 
 def read_manifest(bak: Path) -> dict | None:
-    p = Path(str(bak) + ".json")
-    if not p.is_file():
-        return None
     try:
-        return json.loads(p.read_text(encoding="utf-8"))
-    except OSError, ValueError:
+        return save_backups.read_note(bak)
+    except save_backups.UnreadableNote:
         return None
 
 

@@ -424,12 +424,22 @@ class SavesView:
             sub = hint(b["when"][:16] + (f"  ·  {first}" if first else ""))
             sub.setWordWrap(True)
             text.addWidget(sub)
+            if b.get("metadata_unreadable"):
+                warn = CaptionLabel("⚠  Protected: metadata unreadable")
+                tone_label(warn, "warn")
+                warn.setToolTip(
+                    "This backup's note can't be read, so whether it was kept is unknown. It never ages out until "
+                    "you choose: keep it for good or let it age out (the note's bytes are saved beside it first)."
+                )
+                text.addWidget(warn)
             row.setToolTip(detail or "No change list recorded.")
             rl.addLayout(text, 1)
             k = icon_btn(
                 FI.PIN if b["keep"] else FI.UNPIN,
                 "Kept for good. Click to let it age out like the others."
                 if b["keep"]
+                else "Protected: metadata unreadable. Click to keep it for good."
+                if b.get("metadata_unreadable")
                 else "Keep this backup whatever its age.",
             )
             k.clicked.connect(lambda _=False, bk=b: self._keep_backup(bk))
