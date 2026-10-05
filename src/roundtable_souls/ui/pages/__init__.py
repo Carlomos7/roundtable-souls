@@ -5,8 +5,8 @@ join them page by page."""
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # each module is imported where it is used, not here: importing the package does nothing
-    from roundtable_souls.ui.pages import coop, tools
+    from roundtable_souls.ui.pages import coop, play, tools
 
-PAGES = ("coop", "tools")  # the page views the window is made of
+PAGES = ("play", "coop", "tools")  # the page views the window is made of
 
-__all__ = ["PAGES", "coop", "tools"]
+__all__ = ["PAGES", "play", "coop", "tools"]
