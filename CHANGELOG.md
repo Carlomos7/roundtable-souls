@@ -4,7 +4,34 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
 
 ## [Unreleased]
 
-## [3.15.0] - 2026-10-02
+## [3.16.0] - 2026-10-05
+
+3.15.0 was never published (its release build stopped), so its changes, listed below under 3.15.0, reach you with
+this version.
+
+- Backups: a backup whose note is damaged or was cut off half-written is never removed by the automatic clean-up, and
+  the Saves page shows it as "Protected: metadata unreadable". Notes are written so an interrupted write can no longer
+  damage them, and keeping a backup "for good" keeps the rest of its note.
+- Backups: two launchers at once (the window and a Play from a Steam shortcut, say) no longer race when a backup is
+  taken, kept, restored, deleted or cleaned up.
+- Save library: a library.json that can't be read is reported and left as it is, instead of being replaced by an
+  empty library. Two launchers changing the library at once no longer lose each other's changes, and fields a newer
+  version wrote are kept.
+- Save library: a swap whose history could not be written still counts (it is added later), and a copy whose removal
+  stopped halfway can be put back or its removal finished from the Saves page.
+- Play: with "Back up saves before Play" on, a failed backup no longer starts the game without asking. The window
+  offers Retry, Launch without backup or Cancel; a Steam shortcut stops with a notice unless it was started with
+  --allow-without-backup.
+- The launcher now keeps its file-hash cache and its activity log in a small database, roundtable.db in its data
+  folder. Existing records are imported the first time; the old files are left in place, so an earlier version still
+  works if an update is rolled back. Activity entries are kept for 90 days. Undo records stay where they were.
+- If the database can't be used (another launcher is updating it, it comes from a newer version, it is damaged, or
+  the disk refuses), the launcher works as before without it; only a failed upgrade of the database stops start-up,
+  so a bad update is rolled back to the version that worked.
+- Under the hood: the code was reorganized into clearer packages (no change in behaviour), and releases are built
+  with Python 3.14.7.
+
+## [3.15.0] - 2026-10-02 (not published; included in 3.16.0)
 
 - Load order: the launcher now works out the order exactly as me3 does (the same steps, checked against me3's own code on more than 100,000 profiles), so the file a mod wins or loses is shown right. Before, a mod placed with load_after could be shown in the wrong place. Mods named in another mod's Load after list load in that list's order. Switched-off mods take part in the order as in me3, mods whose folder is missing are left out, and a profile me3 would refuse (a loop, or a required mod that is missing, missing its folder or named with different capital letters) is shown as such on the Load order card.
 - Load order: when the installed me3 is older than 0.11.0, the Load order card says the order shown was not checked for that version.

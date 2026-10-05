@@ -1,6 +1,6 @@
 # 0005 The launcher's own records go into one SQLite database, through SQLAlchemy and Alembic
 
-**Status:** in use from the release after 3.15.0. The database is created and kept at the current schema; the
+**Status:** in use since 3.16.0. The database is created and kept at the current schema; the
 records move into it area by area, starting with the file-hash cache, the activity log and the rebuild run log.
 
 ## Decision
