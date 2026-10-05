@@ -67,7 +67,6 @@ from roundtable_souls.services.settings import (
     load_settings,
     save_settings,
 )
-from roundtable_souls.ui.config_files import ConfigFilesDialog
 from roundtable_souls.ui.dialogs.common import (
     ChoiceListDialog,
     ConfirmDialog,
@@ -76,6 +75,7 @@ from roundtable_souls.ui.dialogs.common import (
     VersionsDialog,
     confirm,
 )
+from roundtable_souls.ui.dialogs.config_files import ConfigFilesDialog
 from roundtable_souls.ui.dialogs.install import InstallDialog
 from roundtable_souls.ui.theme import (
     ghost_btn,
