@@ -13,10 +13,35 @@ from PySide6.QtWidgets import QApplication, QPushButton  # noqa: E402
 
 from roundtable_souls.app import create_app  # noqa: E402
 from roundtable_souls.game.locate import Locations  # noqa: E402
-from roundtable_souls.ui import shell as window  # noqa: E402
+from roundtable_souls.ui import shell  # noqa: E402
+from roundtable_souls.ui.pages.tools import view as tools_view  # noqa: E402
+
+UI_MODULES = (shell, tools_view)  # the window: the shell and its page views
+
+
+class _Window:
+    """A name the window's modules use, from whichever module holds it now (the shell or a page view)."""
+
+    def __getattr__(self, name):
+        for module in UI_MODULES:
+            if hasattr(module, name):
+                return getattr(module, name)
+        raise AttributeError(name)
+
+
+ui = _Window()
+
+
+def patch_ui(monkeypatch, name, value):
+    """Replace a name in every window module that uses it."""
+    found = [m for m in UI_MODULES if hasattr(m, name)]
+    assert found, name
+    for module in found:
+        monkeypatch.setattr(module, name, value)
+
 
 REAL_SAVE_FILES = Locations.save_files
-REAL_LAUNCH = window.Launcher.launch
+REAL_LAUNCH = ui.Launcher.launch
 
 QTest = QtTest.QTest
 
@@ -29,12 +54,12 @@ def app():
 @pytest.fixture
 def launcher(app, monkeypatch):
     launched = []
-    monkeypatch.setattr(window.feed, "check_launcher_update", lambda *a, **k: window.feed.UpdateCheck("off"))
-    monkeypatch.setattr(window.feed, "check_advisory", lambda *a, **k: None)
-    monkeypatch.setattr(window, "me3_facts", lambda setup, loc: {"version": None, "info": {}, "latest": None})
-    monkeypatch.setattr(window.Launcher, "launch", lambda self: launched.append("play"))
-    monkeypatch.setattr(window.Launcher, "launch_offline", lambda self: launched.append("offline"))
-    w = window.Launcher(create_app())
+    monkeypatch.setattr(ui.feed, "check_launcher_update", lambda *a, **k: ui.feed.UpdateCheck("off"))
+    monkeypatch.setattr(ui.feed, "check_advisory", lambda *a, **k: None)
+    patch_ui(monkeypatch, "me3_facts", lambda setup, loc: {"version": None, "info": {}, "latest": None})
+    monkeypatch.setattr(ui.Launcher, "launch", lambda self: launched.append("play"))
+    monkeypatch.setattr(ui.Launcher, "launch_offline", lambda self: launched.append("offline"))
+    w = ui.Launcher(create_app())
     w.resize(1080, 760)
     w.show()
     for _ in range(20):
@@ -203,12 +228,12 @@ def sandbox(app, monkeypatch, tmp_path):
     (profiles / "sandbox.me3").write_text(SANDBOX_PROFILE, encoding="utf-8")
     monkeypatch.setattr(common, "me3_profiles_dir", lambda override=None: profiles)
     monkeypatch.setattr(Locations, "save_files", lambda self: [])
-    monkeypatch.setattr(window.feed, "check_launcher_update", lambda *a, **k: window.feed.UpdateCheck("off"))
-    monkeypatch.setattr(window.feed, "check_advisory", lambda *a, **k: None)
-    monkeypatch.setattr(window, "me3_facts", lambda setup, loc: {"version": None, "info": {}, "latest": None})
-    monkeypatch.setattr(window.Launcher, "launch", lambda self: None)
-    monkeypatch.setattr(window.Launcher, "_watch_game", lambda self: None)
-    w = window.Launcher(create_app())
+    monkeypatch.setattr(ui.feed, "check_launcher_update", lambda *a, **k: ui.feed.UpdateCheck("off"))
+    monkeypatch.setattr(ui.feed, "check_advisory", lambda *a, **k: None)
+    patch_ui(monkeypatch, "me3_facts", lambda setup, loc: {"version": None, "info": {}, "latest": None})
+    monkeypatch.setattr(ui.Launcher, "launch", lambda self: None)
+    monkeypatch.setattr(ui.Launcher, "_watch_game", lambda self: None)
+    w = ui.Launcher(create_app())
     w.resize(1080, 760)
     w.show()
     QTest.qWait(300)
@@ -251,23 +276,23 @@ def test_closing_with_unsaved_edits_asks_save_discard_or_cancel(sandbox, monkeyp
     w._do_page_fill(w._page_fill_token)
     w.pw.setText("changed")
     asked = []
-    monkeypatch.setattr(window, "ask_unsaved", lambda parent, what, action: asked.append(what) or None)
+    patch_ui(monkeypatch, "ask_unsaved", lambda parent, what, action: asked.append(what) or None)
     w.close()
     assert w.isVisible() and asked and "Password" in asked[0][0]  # Cancel keeps the window open
-    monkeypatch.setattr(window, "ask_unsaved", lambda parent, what, action: "discard")
+    patch_ui(monkeypatch, "ask_unsaved", lambda parent, what, action: "discard")
     w.close()
     assert not w.isVisible() and "cooppassword = start" in ini.read_text(encoding="utf-8")  # nothing written
 
 
 def test_update_notice_fits_a_narrow_window(sandbox, monkeypatch):
     w = sandbox
-    monkeypatch.setattr(window, "FROZEN", True)
-    monkeypatch.setattr(window.updates, "can_self_update", lambda *a, **k: True)
+    patch_ui(monkeypatch, "FROZEN", True)
+    monkeypatch.setattr(ui.updates, "can_self_update", lambda *a, **k: True)
     w.resize(740, 640)
     QTest.qWait(100)
     notes = "## Changes\n- one\n- two"
     offer = {"version": "9.9.9", "url": "https://example.invalid", "notes": notes, "assets": {}}
-    w._on_update({"check": window.feed.UpdateCheck("fresh", offer=offer), "advisory": None, "force": False})
+    w._on_update({"check": ui.feed.UpdateCheck("fresh", offer=offer), "advisory": None, "force": False})
     QTest.qWait(400)
     from qfluentwidgets import InfoBar
 
@@ -323,14 +348,14 @@ def test_folder_of_mods_entry_shows_as_its_folder_and_can_be_removed(sandbox, mo
     w._fill_mods()
     QTest.qWait(100)
     assert w.pack_exp.card.contentLabel.text() == "1 loaded"  # the folder entry is not counted as a mod
-    labels = [lab.full_text() for lab in w.pack_exp.findChildren(window.ElideLabel)]
+    labels = [lab.full_text() for lab in w.pack_exp.findChildren(ui.ElideLabel)]
     assert "all" not in labels and "hud" in labels and "mod" in labels  # shown as the folder it is
     from PySide6.QtWidgets import QAbstractButton
 
     buttons = [b for b in w.pack_exp.findChildren(QAbstractButton) if b.isVisible()]
     assert any(b.text() == "Not loaded (1)" for b in buttons)
     remove = next(b for b in buttons if b.toolTip().startswith("Remove 'all'"))  # the trash in the delete column
-    monkeypatch.setattr(window, "confirm", lambda *a, **k: True)
+    patch_ui(monkeypatch, "confirm", lambda *a, **k: True)
     QTest.mouseClick(remove, Qt.LeftButton)
     QTest.qWait(100)
     assert [e["name"] for e in manage.entries(prof) if e["kind"] == "package"] == ["hud"]
@@ -364,7 +389,7 @@ def test_saving_the_editor_over_outside_changes_asks_first(sandbox, monkeypatch)
     w.profile_panel.edit.setPlainText(w.profile_panel.text() + "# mine\n")
     prof.write_text(prof.read_text(encoding="utf-8") + "# theirs\n", encoding="utf-8")
     asked = []
-    monkeypatch.setattr(window, "confirm", lambda *a, **k: asked.append(a[1]) or False)
+    patch_ui(monkeypatch, "confirm", lambda *a, **k: asked.append(a[1]) or False)
     assert w._save_profile() is False and asked and "changed on disk" in asked[0]
     assert "# theirs" in prof.read_text(encoding="utf-8") and "# mine" not in prof.read_text(encoding="utf-8")
     QTest.mouseClick(w.profile_panel.bar.secondary, Qt.LeftButton)  # Discard reads the file again
@@ -395,9 +420,9 @@ def test_seamless_settings_button_opens_the_coop_page(sandbox, monkeypatch):
     w = sandbox
     w.switchTo(w.mods_page)
     w._fill_mods()
-    ersc = next(e for e in window.profile_entries(w.setup.profile) if e["name"] == "ersc.dll")
+    ersc = next(e for e in ui.profile_entries(w.setup.profile) if e["name"] == "ersc.dll")
     opened = []
-    monkeypatch.setattr(window.ConfigFilesDialog, "exec", lambda self: opened.append(self))
+    monkeypatch.setattr(ui.ConfigFilesDialog, "exec", lambda self: opened.append(self))
     w._native_settings(ersc)
     assert w.stackedWidget.currentWidget() is w.coop_page and opened == []  # its ini belongs to the Co-op page
     (w.profiles / "natives" / "SeamlessCoop" / "ersc.dll").with_name("extra_settings.ini").write_text("a = 1\n")
@@ -441,9 +466,9 @@ def test_dropping_mods_on_the_mods_page_installs_each_in_turn(sandbox, monkeypat
         asked.append(dlg.plan["name"])
         return dlg.validate()
 
-    monkeypatch.setattr(window.InstallDialog, "exec", answer)
+    monkeypatch.setattr(ui.InstallDialog, "exec", answer)
     toasts = []
-    monkeypatch.setattr(window.Launcher, "_toast", lambda self, title, msg, **k: toasts.append(title))
+    monkeypatch.setattr(ui.Launcher, "_toast", lambda self, title, msg, **k: toasts.append(title))
     w = sandbox
     dl = tmp_path / "downloads"
     for name in ("Armor", "Hud"):
@@ -482,7 +507,7 @@ def test_install_dialog_offers_a_rebuild_only_before_the_merger(app, tmp_path, m
     plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"))
     parent = QWidget()
     parent.resize(1000, 800)
-    dlg = window.InstallDialog(parent, plan, lambda *a: plan, world.profile)
+    dlg = ui.InstallDialog(parent, plan, lambda *a: plan, world.profile)
     assert not dlg.rebuild.isHidden() and dlg.rebuild.isChecked()
     assert dlg.validate() and plan["merge"] is True and plan["insert_before"] == "last"
     dlg.rebuild.setChecked(False)
@@ -505,9 +530,7 @@ def test_install_dialog_offers_a_rebuild_only_before_the_merger(app, tmp_path, m
 def test_merge_health_is_a_pill_and_prompts_when_it_goes_stale(sandbox, monkeypatch):
     w = sandbox
     shown = []
-    monkeypatch.setattr(
-        window, "notice", lambda *a, **k: shown.append(a[2]) or type("B", (), {"close": lambda s: None})()
-    )
+    patch_ui(monkeypatch, "notice", lambda *a, **k: shown.append(a[2]) or type("B", (), {"close": lambda s: None})())
     prof = str(w.profiles / "sandbox.me3")
     base = {"profile": prof, "packs": ["p", "last"], "winner": "last", "backend": "the rebuild tool of last"}
     w.switchTo(w.mods_page)
@@ -553,10 +576,10 @@ def test_an_install_that_asked_for_it_rebuilds_afterwards(sandbox, monkeypatch, 
     monkeypatch.setattr(run_logging, "log", lambda *a, **k: None)
     rebuilt = []
     tool = type("T", (), {"label": "a tool", "package": {"name": "last"}, "problem": lambda self: None})()
-    monkeypatch.setattr(window.core.mod_merge, "find_backend", lambda p: tool)
-    monkeypatch.setattr(window.core.mod_merge, "approved", lambda t: True)
+    monkeypatch.setattr(ui.core.mod_merge, "find_backend", lambda p: tool)
+    monkeypatch.setattr(ui.core.mod_merge, "approved", lambda t: True)
     monkeypatch.setattr(
-        window.core.mod_merge, "rebuild", lambda p, log, **k: rebuilt.append(p) or {"backend": "m", "profile_note": ""}
+        ui.core.mod_merge, "rebuild", lambda p, log, **k: rebuilt.append(p) or {"backend": "m", "profile_note": ""}
     )
 
     def answer(dlg):
@@ -564,7 +587,7 @@ def test_an_install_that_asked_for_it_rebuilds_afterwards(sandbox, monkeypatch, 
         dlg.plan["merge"] = True  # as if the rebuild box was ticked
         return ok
 
-    monkeypatch.setattr(window.InstallDialog, "exec", answer)
+    monkeypatch.setattr(ui.InstallDialog, "exec", answer)
     w = sandbox
     src = tmp_path / "dl" / "Armor"
     (src / "parts").mkdir(parents=True)
@@ -601,12 +624,12 @@ def test_a_rebuild_tool_runs_only_after_it_is_allowed_once(sandbox, monkeypatch,
 
     prof = _declared(tmp_path, monkeypatch)
     asked, started = [], []
-    monkeypatch.setattr(window, "confirm", lambda *a, **k: asked.append(k.get("detail", "")) or False)
-    monkeypatch.setattr(window.Launcher, "start", lambda self, job, status, **k: started.append(status))
+    patch_ui(monkeypatch, "confirm", lambda *a, **k: asked.append(k.get("detail", "")) or False)
+    monkeypatch.setattr(ui.Launcher, "start", lambda self, job, status, **k: started.append(status))
     w = sandbox
     w._rebuild_merge(prof)
     assert len(asked) == 1 and "combine.py" in asked[0] and started == []  # declined: nothing runs
-    monkeypatch.setattr(window, "confirm", lambda *a, **k: asked.append("again") or True)
+    patch_ui(monkeypatch, "confirm", lambda *a, **k: asked.append("again") or True)
     w._rebuild_merge(prof)
     assert started == ["Rebuilding combined parameters..."] and merge.approved(merge.find_backend(prof))
     w._rebuild_merge(prof)
@@ -616,8 +639,8 @@ def test_a_rebuild_tool_runs_only_after_it_is_allowed_once(sandbox, monkeypatch,
 def test_stacked_packs_offer_combine_on_the_mods_page(sandbox, monkeypatch):
     w = sandbox
     started = []
-    monkeypatch.setattr(window.Launcher, "start", lambda self, job, status, **k: started.append(status))
-    monkeypatch.setattr(window.core.mod_merge, "health", lambda p: {"state": "stacked", "can_combine": True})
+    monkeypatch.setattr(ui.Launcher, "start", lambda self, job, status, **k: started.append(status))
+    monkeypatch.setattr(ui.core.mod_merge, "health", lambda p: {"state": "stacked", "can_combine": True})
     prof = str(w.profiles / "sandbox.me3")
     w.switchTo(w.mods_page)
     w._on_merge(
@@ -641,7 +664,7 @@ def test_install_dialog_names_a_combine_when_there_is_no_tool(app, tmp_path, mon
     plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"))
     parent = QWidget()
     parent.resize(1000, 800)
-    dlg = window.InstallDialog(parent, plan, lambda *a: plan, world.profile)
+    dlg = ui.InstallDialog(parent, plan, lambda *a: plan, world.profile)
     assert not dlg.rebuild.isHidden() and dlg.rebuild.text() == "Combine parameters with the other packs after install"
     dlg.reg_place.setCurrentIndex(dlg.reg_place.count() - 1)  # Last: still combined, placement only orders overlaps
     assert not dlg.rebuild.isHidden() and "combined with the other packs" in dlg.reg_effect.text()
@@ -653,7 +676,7 @@ def test_install_dialog_names_a_combine_when_there_is_no_tool(app, tmp_path, mon
 def test_the_log_pane_wraps_its_buttons_and_opens_the_logs_folder(sandbox, monkeypatch):
     w = sandbox
     opened = []
-    monkeypatch.setattr(window.desktop, "open_path", lambda p: opened.append(p))
+    monkeypatch.setattr(ui.desktop, "open_path", lambda p: opened.append(p))
     w.switchTo(w.play_page) if hasattr(w, "play_page") else None
     w.log_exp.setExpand(True)
     pane = w.log_pane
@@ -675,8 +698,8 @@ def test_a_jobs_lines_reach_the_pane_with_their_level(sandbox, monkeypatch):
     monkeypatch.setattr(w.log_pane, "add", lambda msg, kind=None: (seen.append((msg, kind)), real_add(msg, kind)))
 
     def job(_setup, _loc):
-        window.run_logging.log("working")
-        window.run_logging.log("warning: something to know")
+        ui.run_logging.log("working")
+        ui.run_logging.log("warning: something to know")
 
     w.start(job, "Testing...", need_setup=False)
     loop = QEventLoop()
@@ -686,7 +709,7 @@ def test_a_jobs_lines_reach_the_pane_with_their_level(sandbox, monkeypatch):
         QTimer.singleShot(50, loop.quit)
         loop.exec()
     assert ("working", "info") in seen and ("warning: something to know", "warning") in seen
-    rec = window.core.run_logging.read_jobs()[0]
+    rec = ui.core.run_logging.read_jobs()[0]
     assert rec["title"] == "Testing" and rec["outcome"] == "warnings"
 
 
@@ -713,16 +736,16 @@ def _wait_idle(w, loops=100):
 def test_a_failed_job_shows_on_activity_with_a_badge_until_looked_at(sandbox, monkeypatch):
     w = sandbox
     buttons = []
-    real_notice = window.notice
+    real_notice = ui.notice
 
     def spy(parent, kind, title, content="", actions=(), **k):
         buttons.extend(b.text() for b in actions)
         return real_notice(parent, kind, title, content, actions=actions, **k)
 
-    monkeypatch.setattr(window, "notice", spy)
+    patch_ui(monkeypatch, "notice", spy)
 
     def job(_setup, _loc):
-        window.run_logging.log("error: the save is locked")
+        ui.run_logging.log("error: the save is locked")
         raise SystemExit(1)
 
     w.switchTo(w.play_page)
@@ -743,7 +766,7 @@ def test_activity_entries_fit_a_narrow_window(sandbox):
     from roundtable_souls.platform import logging as rl
 
     job = rl.begin_job("install mod a very long mod name that would never fit on a narrow window at all")
-    window.run_logging.log("done: " + "installed and combined with several other packs " * 3)
+    ui.run_logging.log("done: " + "installed and combined with several other packs " * 3)
     rl.end_job(job)
     w = sandbox
     w.switchTo(w.activity_page)
@@ -783,7 +806,7 @@ def test_the_load_order_card_shows_outcomes_from_one_scan(sandbox, tmp_path):
     assert "1 shipped by more than one" in w.conf_note.text() and "1 replaced" in w.conf_note.text()
     assert "a: 1 replaced" in w.conf_packages.text() and "b: used 1" in w.conf_packages.text()
     assert "1 replaced" in w.load_exp.card.contentLabel.text()
-    labels = [lab.text() for lab in w.load_exp.findChildren(window.CaptionLabel)]
+    labels = [lab.text() for lab in w.load_exp.findChildren(ui.CaptionLabel)]
     assert any("b is used; a replaced" in t for t in labels)
     assert w.problems_head.isHidden()
     w._fill_conflicts({"profile": str(prof), "error": "disk on fire"})
@@ -807,13 +830,13 @@ def test_clicking_the_pill_opens_the_load_order(sandbox):
 def _notices(monkeypatch):
     """Capture window notices: [(title, [(button text, button)])]."""
     got = []
-    real = window.notice
+    real = ui.notice
 
     def spy(parent, kind, title, content="", actions=(), **k):
         got.append((title, [(b.text(), b) for b in actions]))
         return real(parent, kind, title, content, actions=actions, **k)
 
-    monkeypatch.setattr(window, "notice", spy)
+    patch_ui(monkeypatch, "notice", spy)
     return got
 
 
@@ -822,7 +845,7 @@ def test_turning_a_mod_off_offers_undo_and_undo_restores_the_file(sandbox, monke
     got = _notices(monkeypatch)
     prof = w.profiles / "sandbox.me3"
     before = prof.read_text(encoding="utf-8")
-    entry = next(e for e in window.profile_entries(prof) if e["kind"] == "native")
+    entry = next(e for e in ui.profile_entries(prof) if e["kind"] == "native")
     w._toggle_mod(entry, False)
     assert "enabled = false" in prof.read_text(encoding="utf-8")
     title, buttons = next(n for n in got if "turned off" in n[0])
@@ -836,8 +859,8 @@ def test_versions_lists_earlier_copies_and_restores_one(sandbox, monkeypatch):
     w = sandbox
     prof = w.profiles / "sandbox.me3"
     original = prof.read_text(encoding="utf-8")
-    entry = next(e for e in window.profile_entries(prof) if e["kind"] == "native")
-    monkeypatch.setattr(window, "notice", lambda *a, **k: type("B", (), {"close": lambda s: None})())
+    entry = next(e for e in ui.profile_entries(prof) if e["kind"] == "native")
+    patch_ui(monkeypatch, "notice", lambda *a, **k: type("B", (), {"close": lambda s: None})())
     w._toggle_mod(entry, False)
     chosen = []
 
@@ -847,7 +870,7 @@ def test_versions_lists_earlier_copies_and_restores_one(sandbox, monkeypatch):
         dlg.list.setCurrentRow(0)
         return True
 
-    monkeypatch.setattr(window.VersionsDialog, "exec", pick)
+    monkeypatch.setattr(ui.VersionsDialog, "exec", pick)
     w._show_versions()
     assert chosen and "before turning ersc.dll off" in chosen[0][0] and "1 line differs from now" in chosen[0][0]
     assert prof.read_text(encoding="utf-8") == original
@@ -859,7 +882,7 @@ def test_removing_a_mod_is_a_job_that_activity_can_restore(sandbox, monkeypatch)
     w = sandbox
     prof = w.profiles / "sandbox.me3"
     original = prof.read_text(encoding="utf-8")
-    monkeypatch.setattr(window, "notice", lambda *a, **k: type("B", (), {"close": lambda s: None})())
+    patch_ui(monkeypatch, "notice", lambda *a, **k: type("B", (), {"close": lambda s: None})())
     shown = []
 
     def accept(dlg):
@@ -867,8 +890,8 @@ def test_removing_a_mod_is_a_job_that_activity_can_restore(sandbox, monkeypatch)
         dlg.choice = "apply"
         return True
 
-    monkeypatch.setattr(window.ConfirmDialog, "exec", accept)
-    entry = next(e for e in window.profile_entries(prof) if e["kind"] == "native")
+    monkeypatch.setattr(ui.ConfirmDialog, "exec", accept)
+    entry = next(e for e in ui.profile_entries(prof) if e["kind"] == "native")
     w._remove_mod(entry)
     _wait_idle(w)
     assert shown[0] == ("Remove", None)  # not inside any combined result: one way to go ahead
@@ -889,19 +912,19 @@ def test_removing_a_merged_package_says_play_rebuilds_first(sandbox, monkeypatch
     prof.write_text(
         prof.read_text(encoding="utf-8") + "\n[[packages]]\nid = \"near\"\npath = 'mod/near'\n", encoding="utf-8"
     )
-    monkeypatch.setattr(window.Launcher, "_merged_from", lambda self, p, e: ["regulation.bin"])
-    monkeypatch.setattr(window, "notice", lambda *a, **k: type("B", (), {"close": lambda s: None})())
+    monkeypatch.setattr(ui.Launcher, "_merged_from", lambda self, p, e: ["regulation.bin"])
+    patch_ui(monkeypatch, "notice", lambda *a, **k: type("B", (), {"close": lambda s: None})())
     rebuilt, shown = [], []
-    monkeypatch.setattr(window.core.mod_merge, "rebuild", lambda p, log, **k: rebuilt.append(p) or {"backend": "t"})
-    monkeypatch.setattr(window.core.mod_merge, "find_backend", lambda p: None)
+    monkeypatch.setattr(ui.core.mod_merge, "rebuild", lambda p, log, **k: rebuilt.append(p) or {"backend": "t"})
+    monkeypatch.setattr(ui.core.mod_merge, "find_backend", lambda p: None)
 
     def accept(dlg):
         shown.append((dlg.yesButton.text(), dlg.secondButton.text() if dlg.secondButton else None))
         dlg.choice = "apply"
         return True
 
-    monkeypatch.setattr(window.ConfirmDialog, "exec", accept)
-    entry = next(e for e in window.profile_entries(prof) if e["name"] == "near")
+    monkeypatch.setattr(ui.ConfirmDialog, "exec", accept)
+    entry = next(e for e in ui.profile_entries(prof) if e["name"] == "near")
     w._remove_mod(entry)
     _wait_idle(w)
     assert shown[0] == ("Remove", None) and rebuilt == []  # one button; Play (or Rebuild) brings it up to date
@@ -909,7 +932,7 @@ def test_removing_a_merged_package_says_play_rebuilds_first(sandbox, monkeypatch
     prof.write_text(
         prof.read_text(encoding="utf-8") + "\n[[packages]]\nid = \"near\"\npath = 'mod/near'\n", encoding="utf-8"
     )
-    entry = next(e for e in window.profile_entries(prof) if e["name"] == "near")
+    entry = next(e for e in ui.profile_entries(prof) if e["name"] == "near")
     w._remove_mod(entry)
     _wait_idle(w)
     assert shown[1] == ("Remove", None) and rebuilt == []
@@ -929,10 +952,10 @@ def test_undo_rebuild_and_redo_from_activity(sandbox, monkeypatch):
         ran.append(bool(u.get("redo")))
         return "undid the rebuild: the profile back as before" if not u.get("redo") else "redid the rebuild"
 
-    monkeypatch.setattr(window.mod_undo, "run", fake_run)
-    monkeypatch.setattr(window.mod_undo, "available", lambda u: bool(u))
-    monkeypatch.setattr(window, "confirm", lambda *a, **k: True)
-    monkeypatch.setattr(window, "notice", lambda *a, **k: type("B", (), {"close": lambda s: None})())
+    monkeypatch.setattr(ui.mod_undo, "run", fake_run)
+    monkeypatch.setattr(ui.mod_undo, "available", lambda u: bool(u))
+    patch_ui(monkeypatch, "confirm", lambda *a, **k: True)
+    patch_ui(monkeypatch, "notice", lambda *a, **k: type("B", (), {"close": lambda s: None})())
     job = rl.begin_job("rebuild combined parameters")
     rl.set_undo({"type": "rebuild", "profile": str(prof), "profile_before": str(kept)})
     rl.end_job(job)
@@ -960,7 +983,7 @@ def test_install_dialog_places_a_mod_before_the_one_that_must_stay_last(app, tmp
     plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"))
     parent = QWidget()
     parent.resize(1000, 800)
-    dlg = window.InstallDialog(parent, plan, lambda *a: plan, world.profile)
+    dlg = ui.InstallDialog(parent, plan, lambda *a: plan, world.profile)
     assert "Placed before last" in dlg.last_note.text() and not dlg.after_last.isHidden()
     assert dlg.reg_place.isHidden()  # no load order choice to make
     dlg.validate()
@@ -977,8 +1000,8 @@ def test_the_load_order_card_says_what_loads_after_the_mod_that_must_stay_last(s
     w.switchTo(w.mods_page)
     w.load_exp.setExpand(False)
     fixed, kept = [], []
-    monkeypatch.setattr(window.mod_stay_last, "fix", lambda p: fixed.append(p))
-    monkeypatch.setattr(window.mod_stay_last, "keep_after", lambda p, names, keep=True: kept.append((names, keep)))
+    monkeypatch.setattr(ui.mod_stay_last, "fix", lambda p: fixed.append(p))
+    monkeypatch.setattr(ui.mod_stay_last, "keep_after", lambda p, names, keep=True: kept.append((names, keep)))
     st = {"name": "revive", "late": ["hand"], "kept": [], "kept_setting": [], "can_fix": True, "problem": None}
     assert w._fill_stay_last(st) == ["hand"]
     assert "hand loads after revive and replaces its files" in w.last_text.text()
@@ -1005,16 +1028,16 @@ def _stale_merge(monkeypatch, fail=False):
     ran = []
     h = {"state": "stale", "text": "Combined parameters are out of date", "reasons": ["p changed"], "backend": "t"}
     h.update(packs=["p", "last"], winner="last")
-    monkeypatch.setattr(window.core.mod_merge, "play_check", lambda p: {**h, "blocked": None})
+    monkeypatch.setattr(ui.core.mod_merge, "play_check", lambda p: {**h, "blocked": None})
 
     def update(p, log):
         ran.append(p)
         if fail:
-            window.core.mod_merge.note_run(p, False, "the tool refused a file")
-            raise window.core.mod_merge.MergeError("the tool refused a file")
+            ui.core.mod_merge.note_run(p, False, "the tool refused a file")
+            raise ui.core.mod_merge.MergeError("the tool refused a file")
         return {"backend": "t", "profile_note": "kept", "undo": None}
 
-    monkeypatch.setattr(window.core.mod_merge, "update_before_play", update)
+    monkeypatch.setattr(ui.core.mod_merge, "update_before_play", update)
     return ran
 
 
@@ -1027,7 +1050,7 @@ def test_play_updates_the_merged_mods_first_then_starts(sandbox, monkeypatch):
     for _ in range(5):
         QApplication.processEvents()
     assert len(ran) == 1 and resumed == [1]
-    monkeypatch.setattr(window.core.mod_merge, "play_check", lambda p: None)
+    monkeypatch.setattr(ui.core.mod_merge, "play_check", lambda p: None)
     assert w._update_first(lambda: resumed.append(2)) is False  # up to date: Play goes straight on
 
 
@@ -1056,7 +1079,7 @@ def test_a_failed_update_offers_play_anyway_once(sandbox, monkeypatch):
         def exec(self):
             return True
 
-    monkeypatch.setattr(window, "ConfirmDialog", Answer)
+    patch_ui(monkeypatch, "ConfirmDialog", Answer)
     resumed = []
     w._update_first(lambda: resumed.append(1))
     _wait_idle(w)
@@ -1095,7 +1118,7 @@ def _fresh_play(w):
 
 def _answer(monkeypatch, choice):
     _Answer.asked, _Answer.choice = [], choice
-    monkeypatch.setattr(window, "ConfirmDialog", _Answer)
+    patch_ui(monkeypatch, "ConfirmDialog", _Answer)
     return _Answer.asked
 
 
@@ -1104,7 +1127,7 @@ def test_with_automatic_rebuilds_off_play_asks_and_never_starts_silently(sandbox
     _fresh_play(w)
     ran = _stale_merge(monkeypatch)
     w.settings.play_update_merge = False
-    assert not w.play_rows["play_update_merge"].isHidden() or w.game is not window.games.ELDEN_RING
+    assert not w.play_rows["play_update_merge"].isHidden() or w.game is not ui.games.ELDEN_RING
     asked = _answer(monkeypatch, None)  # closed: nothing happens
     resumed = []
     assert w._update_first(lambda: resumed.append(1)) is True and not w.busy and ran == []
@@ -1128,8 +1151,8 @@ def test_play_asks_when_the_merged_mods_cannot_be_rebuilt(sandbox, monkeypatch):
     w = sandbox
     _fresh_play(w)
     ran = _stale_merge(monkeypatch)
-    h = window.core.mod_merge.play_check(None)
-    monkeypatch.setattr(window.core.mod_merge, "play_check", lambda p: {**h, "blocked": "the last package is missing"})
+    h = ui.core.mod_merge.play_check(None)
+    monkeypatch.setattr(ui.core.mod_merge, "play_check", lambda p: {**h, "blocked": "the last package is missing"})
     asked = _answer(monkeypatch, None)
     assert w._update_first(lambda: None) is True and ran == [] and not w.busy
     assert asked[0][1:3] == ("Play anyway", "View details") and "missing" in asked[0][3][1]
@@ -1158,9 +1181,9 @@ def test_play_asks_for_the_update_before_anything_else(sandbox, monkeypatch):
 def test_install_mod_opens_one_picker_and_cancel_means_cancel(launcher, monkeypatch):
     w = launcher
     opened, menus, installed = [], [], []
-    monkeypatch.setattr(window.QFileDialog, "getOpenFileName", lambda *a, **k: opened.append("file") or ("", ""))
-    monkeypatch.setattr(window.QFileDialog, "getExistingDirectory", lambda *a, **k: opened.append("folder") or "")
-    monkeypatch.setattr(window.RoundMenu, "exec", lambda self, *a, **k: menus.append(self))
+    monkeypatch.setattr(ui.QFileDialog, "getOpenFileName", lambda *a, **k: opened.append("file") or ("", ""))
+    monkeypatch.setattr(ui.QFileDialog, "getExistingDirectory", lambda *a, **k: opened.append("folder") or "")
+    monkeypatch.setattr(ui.RoundMenu, "exec", lambda self, *a, **k: menus.append(self))
     monkeypatch.setattr(w, "_mods_locked", lambda: False)
     monkeypatch.setattr(w, "_install_paths", lambda paths: installed.append(paths))
     w._install_mod()
@@ -1179,12 +1202,10 @@ def test_an_unapproved_rebuild_tool_is_offered_once_on_the_mods_page(sandbox, mo
         "Tool", (), {"label": "the rebuild tool of revive", "package": {"name": "revive"}, "problem": lambda s: None}
     )()
     allowed = {"yes": False}
-    monkeypatch.setattr(window.core.mod_merge, "find_backend", lambda p: tool)
-    monkeypatch.setattr(window.core.mod_merge, "approved", lambda t: allowed["yes"])
+    monkeypatch.setattr(ui.core.mod_merge, "find_backend", lambda p: tool)
+    monkeypatch.setattr(ui.core.mod_merge, "approved", lambda t: allowed["yes"])
     shown = []
-    monkeypatch.setattr(
-        window, "notice", lambda *a, **k: shown.append(a[2]) or type("B", (), {"close": lambda s: None})()
-    )
+    patch_ui(monkeypatch, "notice", lambda *a, **k: shown.append(a[2]) or type("B", (), {"close": lambda s: None})())
     prof = w.profiles / "sandbox.me3"
     w.switchTo(w.play_page)
     w._offer_tool_approval(prof)  # not over another page
@@ -1207,13 +1228,13 @@ def _bars(w):
 
 def test_a_failed_check_never_says_up_to_date(sandbox):
     w = sandbox
-    check = window.feed.UpdateCheck("offline", reason="GitHub could not be reached (no route)", retry_at=0.0)
+    check = ui.feed.UpdateCheck("offline", reason="GitHub could not be reached (no route)", retry_at=0.0)
     w._on_update({"check": check, "advisory": None, "force": True})
     QTest.qWait(200)
     assert "could not check" in w.launcher_line.text() and "up to date" not in w.launcher_line.text()
     titles = [b.title for b in _bars(w)]
     assert "Could not check" in titles and "Up to date" not in titles
-    ok = window.feed.UpdateCheck("fresh", checked=time.time())
+    ok = ui.feed.UpdateCheck("fresh", checked=time.time())
     w._on_update({"check": ok, "advisory": None, "force": True})
     QTest.qWait(200)
     assert "up to date" in w.launcher_line.text() and "last checked" in w.launcher_line.text()
@@ -1221,9 +1242,9 @@ def test_a_failed_check_never_says_up_to_date(sandbox):
 
 def test_unsigned_release_offers_the_releases_page(sandbox, monkeypatch):
     w = sandbox
-    monkeypatch.setattr(window, "FROZEN", True)
+    patch_ui(monkeypatch, "FROZEN", True)
     offer = {"version": "9.9.9", "url": "https://example.invalid", "notes": "", "assets": {"RoundtableSouls.zip": "u"}}
-    w._on_update({"check": window.feed.UpdateCheck("fresh", offer=offer), "advisory": None, "force": False})
+    w._on_update({"check": ui.feed.UpdateCheck("fresh", offer=offer), "advisory": None, "force": False})
     QTest.qWait(200)
     bar = next(b for b in _bars(w) if "9.9.9" in b.title)
     labels = [b.text() for b in bar.findChildren(QPushButton)]
@@ -1234,7 +1255,7 @@ def test_advisory_warns_once(sandbox):
     w = sandbox
     adv = {"minimum": "99.0.0", "message": "Known crash.", "url": ""}
     for _ in range(2):
-        w._on_update({"check": window.feed.UpdateCheck("fresh"), "advisory": adv, "force": False})
+        w._on_update({"check": ui.feed.UpdateCheck("fresh"), "advisory": adv, "force": False})
     QTest.qWait(200)
     assert sum("should be updated" in b.title for b in _bars(w)) == 1
 
@@ -1246,7 +1267,7 @@ def test_update_outcomes_are_reported_once_at_start(sandbox):
     bar = next(b for b in _bars(w) if "did not finish" in b.title)
     labels = [b.text() for b in bar.findChildren(QPushButton)]
     assert "Try again" in labels and "Releases" in labels and "did not finish installing" in bar.content
-    assert window.load_settings().update_result is None  # shown once
+    assert ui.load_settings().update_result is None  # shown once
     w._on_update_outcome({"status": "rolled_back", "version": "9.9.8", "error": "it did not finish starting"})
     QTest.qWait(200)
     bar = next(b for b in _bars(w) if "was put back" in b.title)
@@ -1255,10 +1276,10 @@ def test_update_outcomes_are_reported_once_at_start(sandbox):
 
 def test_update_is_refused_while_a_shortcut_play_runs(sandbox, monkeypatch):
     w = sandbox
-    monkeypatch.setattr(window.updates, "busy_reason", lambda: "A Play started from a Steam shortcut is still running.")
+    monkeypatch.setattr(ui.updates, "busy_reason", lambda: "A Play started from a Steam shortcut is still running.")
     started = []
-    monkeypatch.setattr(window.updates, "download_update", lambda *a, **k: started.append(1))
-    bar = window.notice(w, "info", "x")
+    monkeypatch.setattr(ui.updates, "download_update", lambda *a, **k: started.append(1))
+    bar = ui.notice(w, "info", "x")
     w._start_update({"version": "9.9.9", "assets": {}}, bar)
     QTest.qWait(200)
     assert not started and any("Cannot update now" == b.title for b in _bars(w))
@@ -1267,7 +1288,7 @@ def test_update_is_refused_while_a_shortcut_play_runs(sandbox, monkeypatch):
 def test_a_steam_shortcut_play_is_run_by_the_open_window(sandbox, monkeypatch):
     w = sandbox
     launched = []
-    monkeypatch.setattr(window.Launcher, "launch", lambda self: launched.append(self.game.key))
+    monkeypatch.setattr(ui.Launcher, "launch", lambda self: launched.append(self.game.key))
     w._on_instance_message("play nightreign")
     QTest.qWait(300)
     assert launched == ["nightreign"] and w.game.key == "nightreign"
