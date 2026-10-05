@@ -1,7 +1,12 @@
 """Shared fixtures: an isolated settings file and data folder so tests never read or write the developer's own
 (backups, the save library, deleted profiles), and no item names from whatever mods happen to be installed on the
-machine running the tests (tests that read names build their own)."""
+machine running the tests (tests that read names build their own). While a test runs, writing a file anywhere but
+the temporary folders is refused (writes_stay_in_temporary_folders), so a patch undone too early fails the test
+instead of touching the developer's files."""
 
+import os
+import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -14,6 +19,57 @@ from roundtable_souls.platform import data_folder, instance
 from roundtable_souls.platform import paths as common
 from roundtable_souls.saves import backups as save_backups
 from roundtable_souls.saves import item_names
+
+_WRITABLE: list[str] = []  # while a test runs: the folders it may write in; empty = not guarding
+_WRITE_FLAGS = os.O_WRONLY | os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_TRUNC
+
+
+def _refuse_outside(path) -> None:
+    if not _WRITABLE or path is None or isinstance(path, int):
+        return
+    try:
+        text = os.fsdecode(path)
+    except TypeError:
+        return
+    if text.startswith("\\\\.\\pipe\\"):  # a named pipe (platform.instance talking to the window), not a file
+        return
+    for candidate in (os.path.abspath(text), os.path.realpath(text)):
+        p = os.path.normcase(candidate)
+        if "__pycache__" in p or any(p == root or p.startswith(root + os.sep) for root in _WRITABLE):
+            return
+    raise PermissionError(f"a test tried to write outside its temporary folders: {text}")
+
+
+def _audit(event: str, args: tuple) -> None:
+    """Python's audit events for everything that writes, renames, removes or creates files and folders."""
+    if not _WRITABLE:
+        return
+    if event == "open":
+        path, mode, flags = args
+        if (isinstance(mode, str) and any(c in mode for c in "wax+")) or (mode is None and flags & _WRITE_FLAGS):
+            _refuse_outside(path)
+    elif event in ("os.remove", "os.rmdir", "os.mkdir", "os.truncate", "os.utime", "os.chmod", "shutil.rmtree"):
+        _refuse_outside(args[0])
+    elif event in ("os.rename", "os.replace", "os.link", "os.symlink"):
+        _refuse_outside(args[0])
+        _refuse_outside(args[1])
+    elif event in ("shutil.copyfile", "shutil.copytree"):
+        _refuse_outside(args[1])
+
+
+sys.addaudithook(_audit)  # audit hooks can't be removed; _WRITABLE switches it on per test
+
+
+@pytest.fixture(autouse=True)
+def writes_stay_in_temporary_folders(tmp_path_factory):
+    """Refuse, for the whole test, writes outside pytest's temporary folders (every tmp_path) and the system
+    temporary folder (where pytest and Qt keep their own scratch files)."""
+    roots = {tmp_path_factory.getbasetemp(), Path(tempfile.gettempdir())}
+    _WRITABLE[:] = sorted(
+        {os.path.normcase(os.path.realpath(r)) for r in roots} | {os.path.normcase(str(r)) for r in roots}
+    )
+    yield
+    _WRITABLE.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -63,6 +119,9 @@ def recycle_bin_left_clean(monkeypatch):
     def send(path):
         rec = real(path)
         made.append(rec)
+        for p in (rec.get("item"), rec.get("info")):  # this test's own bin items may be restored and purged
+            if p:
+                _WRITABLE.append(os.path.normcase(os.path.abspath(p)))
         return rec
 
     monkeypatch.setattr(trash, "send", send)
