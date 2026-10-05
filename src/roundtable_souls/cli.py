@@ -51,7 +51,7 @@ def main() -> int:
             core.check(ctx.settings, ctx.locations, ctx.data_dir)
             return 0
     from roundtable_souls.app import create_app
-    from roundtable_souls.ui.window import main as window_main
+    from roundtable_souls.ui.shell import main as window_main
 
     return int(window_main(create_app(game)) or 0)
 

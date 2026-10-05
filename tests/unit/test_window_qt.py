@@ -13,7 +13,7 @@ from PySide6.QtWidgets import QApplication, QPushButton  # noqa: E402
 
 from roundtable_souls.app import create_app  # noqa: E402
 from roundtable_souls.game.locate import Locations  # noqa: E402
-from roundtable_souls.ui import window  # noqa: E402
+from roundtable_souls.ui import shell as window  # noqa: E402
 
 REAL_SAVE_FILES = Locations.save_files
 REAL_LAUNCH = window.Launcher.launch
