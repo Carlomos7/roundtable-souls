@@ -76,7 +76,7 @@ from roundtable_souls.ui.dialogs.common import (
     VersionsDialog,
     confirm,
 )
-from roundtable_souls.ui.install_dialog import InstallDialog
+from roundtable_souls.ui.dialogs.install import InstallDialog
 from roundtable_souls.ui.theme import (
     ghost_btn,
     hint,
