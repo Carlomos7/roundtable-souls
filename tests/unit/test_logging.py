@@ -279,26 +279,43 @@ def test_a_job_left_running_by_a_closed_launcher_reads_as_interrupted(logs):
     assert recs["ghost"]["outcome"] == "interrupted" and recs[job.id]["outcome"] == "done"
 
 
-def test_retention_keeps_the_newest_or_the_last_days_and_removes_files(logs):
+def test_retention_removes_old_log_files_but_keeps_records_and_never_rewrites_the_index(logs):
     jobs = []
     for i in range(6):
         j = rl.begin_job(f"Repair {i}")
         rl.end_job(j)
         jobs.append(j)
-    # age the first four by 30 days in the index
+    # age the first four by years in the index (their log files go after 14 days, beyond the newest 3 here)
     recs = index(logs)
     for r in recs:
         n = int(r["title"].split()[-1])
         if n < 4:
             r["start"] = "2020-01-01T00:00:00"
     (logs / rl.JOBS_INDEX).write_text("".join(json.dumps(r) + "\n" for r in recs), encoding="utf-8")
+    before = (logs / rl.JOBS_INDEX).read_bytes()
     dropped = rl.prune(keep=3, days=14)
-    kept = {r["title"] for r in rl.read_jobs()}
-    assert kept == {"Repair 3", "Repair 4", "Repair 5"} or kept == {"Repair 4", "Repair 5", "Repair 3"}
     assert len(dropped) == 3
     for j in jobs[:3]:
         assert not j.path.exists()
-    assert len(index(logs)) == 3  # one line per job after compaction
+    assert {r["title"] for r in rl.read_jobs()} == {f"Repair {i}" for i in range(6)}  # records are kept 90 days
+    assert (logs / rl.JOBS_INDEX).read_bytes() == before  # an older version may still read it: never rewritten
+
+
+def test_completed_records_older_than_90_days_are_not_listed_unless_they_carry_undo(logs):
+    for i in range(4):
+        rl.end_job(rl.begin_job(f"Repair {i}"))
+    recs = index(logs)
+    old = time.time() - (rl.ACTIVITY_DAYS + 1) * 86400
+    for r in recs:
+        n = int(r["title"].split()[-1])
+        if n in (0, 1, 2):
+            r["t"] = old
+        if n == 1:
+            r["undo"] = {"kind": "remove"}  # protective: kept whatever its age
+        if n == 2:
+            r["outcome"] = "running"  # interrupted long ago: never removed by age
+    (logs / rl.JOBS_INDEX).write_text("".join(json.dumps(r) + "\n" for r in recs), encoding="utf-8")
+    assert {r["title"] for r in rl.read_jobs()} == {"Repair 1", "Repair 2", "Repair 3"}
 
 
 def test_retention_never_drops_a_running_job(logs):

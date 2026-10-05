@@ -532,6 +532,7 @@ class Launcher(PlayView, CoopView, ModsView, SavesView, ToolsView, FluentWindow)
         """For a real start only (tests build the window without it): tell an update's watchdog this version is up,
         report how the last update went, finish the move from the old installer, and tidy old downloads."""
         confirmed = updates.mark_ready("window")
+        self.ctx.start_imports()  # after the ready report: the imports may take a while and never delay it
 
         def work(report):
             outcome = confirmed or updates.update_outcome()

@@ -25,6 +25,7 @@ import json
 import os
 import time
 from pathlib import Path
+from typing import Protocol
 
 from roundtable_souls.game import catalog as games
 from roundtable_souls.mods import backends, checks
@@ -42,8 +43,29 @@ STATE_TEXT = {
 
 
 # ----------------------------------------------------------------------------- hashes
-_HASHES: dict[str, tuple[int, int, str]] = {}
+class HashStore(Protocol):
+    """The persistent hash cache (storage.cache.HashCache): used once active; get() returns None on a miss or any
+    failure, put() never raises."""
+
+    active: bool
+
+    def get(self, key: str, size: int, mtime_ns: int) -> str | None: ...
+
+    def put(self, key: str, size: int, mtime_ns: int, sha256: str) -> None: ...
+
+
+_HASHES: dict[str, tuple[int, int, str]] = {}  # this process's own memory of hashes, same rule
 _HASHES_LOADED = False
+_HASH_STORE: HashStore | None = None
+_HASH_FILE_IN_USE = True  # False: storage is off for this run, so the persistent cache is bypassed
+
+
+def use_hash_store(store: HashStore | None, file_in_use: bool = True) -> None:
+    """Set at start-up by the application: the database's cache (used once its import is verified; until then the
+    old file), or None with file_in_use False when storage is off for the run (memory only: files are hashed again,
+    and cache/hashes.json is left as it is)."""
+    global _HASH_STORE, _HASH_FILE_IN_USE
+    _HASH_STORE, _HASH_FILE_IN_USE = store, file_in_use
 
 
 def _hash_file() -> Path:
@@ -53,36 +75,48 @@ def _hash_file() -> Path:
 
 
 def sha256(path: Path) -> str | None:
-    """sha256 of a file, remembered by path, size and modification time (merged archives are large)."""
+    """sha256 of a file, remembered by path, size and modification time (merged archives are large). A remembered
+    hash is used only while the file's size and modification time (ns) are exactly the same; a cache that fails is
+    a miss, so the file is hashed (never a reason to call a build current). None when the file can't be read."""
     global _HASHES_LOADED
     path = Path(path)
     try:
         st = path.stat()
     except OSError:
         return None
-    if not _HASHES_LOADED:
+    key = os.path.normcase(str(path.resolve()))
+    store = _HASH_STORE if _HASH_STORE is not None and _HASH_STORE.active else None
+    legacy = store is None and _HASH_FILE_IN_USE
+    if legacy and not _HASHES_LOADED:
         _HASHES_LOADED = True
         try:
             _HASHES.update({k: tuple(v) for k, v in json.loads(_hash_file().read_text(encoding="utf-8")).items()})
         except OSError, ValueError:
             pass
-    key = os.path.normcase(str(path.resolve()))
     hit = _HASHES.get(key)
     if hit and hit[0] == st.st_size and hit[1] == st.st_mtime_ns:
         return hit[2]
-    h = hashlib.sha256()
+    if store is not None:
+        remembered = store.get(key, st.st_size, st.st_mtime_ns)  # its own short unit of work, closed again
+        if remembered:
+            _HASHES[key] = (st.st_size, st.st_mtime_ns, remembered)
+            return remembered
+    h = hashlib.sha256()  # no database transaction is open while the file is read
     with path.open("rb") as f:
         for chunk in iter(lambda: f.read(1 << 20), b""):
             h.update(chunk)
     _HASHES[key] = (st.st_size, st.st_mtime_ns, h.hexdigest())
-    try:
-        out = _hash_file()
-        out.parent.mkdir(parents=True, exist_ok=True)
-        tmp = out.with_suffix(".tmp")
-        tmp.write_text(json.dumps(_HASHES), encoding="utf-8")
-        tmp.replace(out)
-    except OSError:
-        pass
+    if store is not None:
+        store.put(key, st.st_size, st.st_mtime_ns, h.hexdigest())
+    elif legacy:
+        try:
+            out = _hash_file()
+            out.parent.mkdir(parents=True, exist_ok=True)
+            tmp = out.with_suffix(".tmp")
+            tmp.write_text(json.dumps(_HASHES), encoding="utf-8")
+            tmp.replace(out)
+        except OSError:
+            pass
     return _HASHES[key][2]
 
 

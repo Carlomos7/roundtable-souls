@@ -16,6 +16,8 @@ import pytest
 from roundtable_souls.platform.filelock import ReadWriteLock
 from roundtable_souls.storage import db, models
 
+HEAD = db.head_revision()  # the newest real revision; test revisions (9xxx) are added after it
+
 needs_sqlite = pytest.mark.skipif(
     db.sqlite_problem() is not None, reason=f"this Python's SQLite is too old for storage: {db.sqlite_problem()}"
 )
@@ -69,7 +71,8 @@ def migrations(tmp_path, monkeypatch):
     shutil.copytree(db.MIGRATIONS_DIR, copy, ignore=shutil.ignore_patterns("__pycache__"))
     monkeypatch.setattr(db, "MIGRATIONS_DIR", copy)
 
-    def add(body: str, revision="0002", down="0001"):
+    def add(body: str, revision="9001", down: str | None = None):
+        down = down or HEAD
         (copy / "versions" / f"{revision}_test.py").write_text(
             "import sqlalchemy as sa\nfrom alembic import op\n\n"
             f"revision = {revision!r}\ndown_revision = {down!r}\nbranch_labels = None\ndepends_on = None\n\n\n"
@@ -99,18 +102,18 @@ def _runs(path):
 def test_a_fresh_database_is_created_at_the_current_schema_in_wal(tmp_path, lines):
     database = db.open_database(tmp_path, log=lines.append)
     try:
-        assert database.revision == db.head_revision() == "0001" and database.journal_mode == "wal"
-        assert db.read_revision(tmp_path / db.DB_NAME) == "0001"
+        assert database.revision == HEAD and database.journal_mode == "wal"
+        assert db.read_revision(tmp_path / db.DB_NAME) == HEAD
         conn = sqlite3.connect(tmp_path / db.DB_NAME)
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         conn.close()
-        assert tables == {"alembic_version", "file_hashes", "jobs", "rebuild_runs"}
+        assert tables == {"alembic_version", "file_hashes", "jobs", "rebuild_runs", "import_state"}
         assert not list(tmp_path.glob("*.snapshot"))  # nothing to snapshot before the first schema
         with database.engine.connect() as c:
             assert c.exec_driver_sql("PRAGMA foreign_keys").scalar() == 1
             assert c.exec_driver_sql("PRAGMA synchronous").scalar() == 2  # FULL
             assert c.exec_driver_sql("PRAGMA busy_timeout").scalar() == db.BUSY_TIMEOUT_MS
-        assert any("created at 0001" in line for line in lines)
+        assert any(f"created at {HEAD}" in line for line in lines)
     finally:
         database.close()
 
@@ -157,10 +160,10 @@ def test_an_upgrade_takes_a_consistent_snapshot_first_and_keeps_the_data(tmp_pat
     migrations("op.add_column('rebuild_runs', sa.Column('note', sa.Text(), nullable=True))")
     second = db.open_database(tmp_path, log=lines.append)
     try:
-        assert second.revision == "0002" and _runs(tmp_path / db.DB_NAME) == ["kept"]
-        snaps = list(tmp_path.glob(f"{db.DB_NAME}.0001.*.snapshot"))
-        assert len(snaps) == 1 and db.read_revision(snaps[0]) == "0001" and _runs(snaps[0]) == ["kept"]
-        assert any("upgraded from 0001" in line for line in lines)
+        assert second.revision == "9001" and _runs(tmp_path / db.DB_NAME) == ["kept"]
+        snaps = list(tmp_path.glob(f"{db.DB_NAME}.{HEAD}.*.snapshot"))
+        assert len(snaps) == 1 and db.read_revision(snaps[0]) == HEAD and _runs(snaps[0]) == ["kept"]
+        assert any(f"upgraded from {HEAD}" in line for line in lines)
     finally:
         second.close()
 
@@ -170,12 +173,14 @@ def test_only_the_newest_snapshots_are_kept(tmp_path, migrations):
     db.open_database(tmp_path, log=lambda line: None).close()
     for n in range(2, 7):
         migrations(
-            f"op.create_table('t{n}', sa.Column('id', sa.Integer(), primary_key=True))", f"{n:04d}", f"{n - 1:04d}"
+            f"op.create_table('t{n}', sa.Column('id', sa.Integer(), primary_key=True))",
+            f"90{n:02d}",
+            HEAD if n == 2 else f"90{n - 1:02d}",
         )
         db.open_database(tmp_path, log=lambda line: None).close()
         time.sleep(0.02)
     names = sorted(p.name.split(".")[2] for p in tmp_path.glob("*.snapshot"))
-    assert names == ["0003", "0004", "0005"]  # the revisions the last three upgrades started from
+    assert names == ["9003", "9004", "9005"]  # the revisions the last three upgrades started from
 
 
 @needs_sqlite
@@ -193,12 +198,12 @@ def test_a_failed_upgrade_restores_the_snapshot_and_raises(tmp_path, migrations,
     with pytest.raises(db.MigrationFailed, match="restored from"):
         db.open_database(tmp_path, log=lines.append)
     path = tmp_path / db.DB_NAME
-    assert db.read_revision(path) == "0001" and _runs(path) == ["kept"]
+    assert db.read_revision(path) == HEAD and _runs(path) == ["kept"]
     conn = sqlite3.connect(path)
     assert conn.execute("PRAGMA integrity_check").fetchone() == ("ok",)
     assert not conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'half'").fetchone()
     conn.close()
-    assert any("upgrade from 0001 failed" in line for line in lines)
+    assert any(f"upgrade from {HEAD} failed" in line for line in lines)
 
 
 @needs_sqlite
@@ -211,7 +216,7 @@ def test_a_snapshot_that_fails_its_check_is_kept_and_the_database_left_as_found(
     with pytest.raises(db.MigrationFailed, match="left as found"):
         db.open_database(tmp_path, log=lambda line: None)
     assert len(restores) == 1 and restores[0].is_file()  # the snapshot that failed its check is kept
-    assert db.read_revision(tmp_path / db.DB_NAME) == "0001"
+    assert db.read_revision(tmp_path / db.DB_NAME) == HEAD
 
 
 @needs_sqlite
@@ -231,18 +236,18 @@ def test_a_failed_first_creation_leaves_no_database(tmp_path, migrations):
 def test_an_upgrade_waits_for_other_processes_and_is_postponed_while_they_hold_the_database(tmp_path, migrations):
     db.open_database(tmp_path, log=lambda line: None).close()
     before = _sha(tmp_path / db.DB_NAME)
-    other = _hold(tmp_path, "open")  # another window with the database open, at 0001
+    other = _hold(tmp_path, "open")  # another window with the database open, at the current schema
     try:
         migrations("op.create_table('later', sa.Column('id', sa.Integer(), primary_key=True))")
         with pytest.raises(db.StorageUnavailable, match="waits until they close") as busy:
             db.open_database(tmp_path, wait=0.3, log=lambda line: None)
         assert busy.value.reason == "busy"  # contention: normal operation, never a rollback
-        assert db.read_revision(tmp_path / db.DB_NAME) == "0001" and not list(tmp_path.glob("*.snapshot"))
+        assert db.read_revision(tmp_path / db.DB_NAME) == HEAD and not list(tmp_path.glob("*.snapshot"))
         assert _sha(tmp_path / db.DB_NAME) == before  # postponed: nothing was written
     finally:
         _let_go(other)
     upgraded = db.open_database(tmp_path, wait=0.3, log=lambda line: None)  # they closed: it runs now
-    assert upgraded.revision == "0002"
+    assert upgraded.revision == "9001"
     upgraded.close()
 
 
@@ -253,7 +258,7 @@ def test_a_second_process_opens_a_current_database_without_waiting(tmp_path):
     try:
         started = time.monotonic()
         mine = db.open_database(tmp_path, wait=5, log=lambda line: None)
-        assert time.monotonic() - started < 2 and mine.revision == "0001"  # shared with the other, no upgrade wait
+        assert time.monotonic() - started < 2 and mine.revision == HEAD  # shared with the other, no upgrade wait
         mine.close()
     finally:
         _let_go(other)
@@ -364,7 +369,7 @@ def test_an_upgrade_stopped_by_the_disk_is_restored_and_does_not_roll_back(tmp_p
     with pytest.raises(db.StorageUnavailable, match="stopped by the system") as full:
         db.open_database(tmp_path, log=lambda line: None)
     assert full.value.reason == "environment" and not isinstance(full.value, db.MigrationFailed)
-    assert db.read_revision(tmp_path / db.DB_NAME) == "0001" and _runs(tmp_path / db.DB_NAME) == ["kept"]
+    assert db.read_revision(tmp_path / db.DB_NAME) == HEAD and _runs(tmp_path / db.DB_NAME) == ["kept"]
 
 
 @needs_sqlite
@@ -437,4 +442,6 @@ def test_check_storage_reports_the_database_it_opened(capsys):
 
     assert cli.check_storage() == 0
     out = capsys.readouterr().out
-    assert "0001_first_schema.py" in out and "at 0001 (head 0001), journal wal" in out and out.rstrip().endswith("OK")
+    assert (
+        "0001_first_schema.py" in out and f"at {HEAD} (head {HEAD}), journal wal" in out and out.rstrip().endswith("OK")
+    )

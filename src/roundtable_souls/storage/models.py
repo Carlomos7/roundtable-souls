@@ -91,3 +91,19 @@ class RebuildRun(Base):
     ran_at: Mapped[datetime.datetime] = mapped_column(UtcMillis)
     ok: Mapped[bool] = mapped_column(Boolean)
     message: Mapped[str] = mapped_column(Text, default="")
+
+
+class ImportState(Base):
+    """How far an old record file has been imported, so an import resumes where it stopped and notices when the file
+    was rewritten (an older build ran after a rollback). position: bytes of the file imported; prefix_sha256: of
+    those bytes; content_sha256: of the whole file at the last import (for files rewritten whole); verified_at: when
+    every record of the file was last found in the database (the area switches to the database only after that)."""
+
+    __tablename__ = "import_state"
+
+    source: Mapped[str] = mapped_column(String, primary_key=True)  # "jobs.jsonl", "hashes.json"
+    position: Mapped[int] = mapped_column(BigInteger, default=0)
+    prefix_sha256: Mapped[str] = mapped_column(String(64), default="")
+    content_sha256: Mapped[str] = mapped_column(String(64), default="")
+    verified_at: Mapped[datetime.datetime | None] = mapped_column(UtcMillis)
+    updated_at: Mapped[datetime.datetime] = mapped_column(UtcMillis, default=utc_now, onupdate=utc_now)

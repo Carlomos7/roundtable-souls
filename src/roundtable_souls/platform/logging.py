@@ -9,12 +9,15 @@ Where lines go:
                            including DEBUG detail, with a header and a footer saying how it ended
     logs/jobs/<...>.<name>.log
                            a job's attachments: another program's own output (me3's launch output)
-    logs/jobs.jsonl        one line per job start and end: what it was, when, how long, how it ended, its files
+    logs/jobs.jsonl        one line per job start and end: what it was, when, how long, how it ended, its files;
+                           once the launcher's database holds the activity log (use_job_store), only the records it
+                           could not take and those carrying undo, which stays in this file (see storage.activity)
     the window             the running job's lines, and warnings and errors from anywhere
 
 A job's file only gets lines logged while that job is the current one in the logging thread's context, so background
-threads (update checks, the game watcher) never leak into it. Jobs and their files are kept for 14 days, or the newest
-50, whichever keeps more.
+threads (update checks, the game watcher) never leak into it. Job log files are kept for 14 days, or the newest 50
+jobs', whichever keeps more. jobs.jsonl itself is never rewritten here: an older version restored by an update's
+watchdog keeps reading it, and records the database could not take wait in it to be imported.
 
 Every path is worked out when it is used, from the launcher's data folder, so tests (which point that folder at a
 temporary one) never write to the real logs. When the folder cannot be written, logging carries on without files.
@@ -38,6 +41,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Protocol
 
 LOGGER_NAME = "roundtable_souls"
 APP_LOG = "launcher.log"
@@ -47,6 +51,8 @@ JOBS_DIR = "jobs"
 JOBS_INDEX = "jobs.jsonl"
 KEEP_JOBS = 50
 KEEP_DAYS = 14
+ACTIVITY_DAYS = 90  # completed job records are kept this long (in the database: storage.activity's retention)
+COMPLETED = ("done", "warnings", "failed", "stopped")
 OLD_DIR = "old"  # files older launcher versions wrote, kept for a while
 LEGACY_FILES = ("last_run.log", "me3_launch.log", "launcher-errors.log")
 LINE_FORMAT = "%(asctime)s.%(msecs)03d  %(levelname)-7s  %(short)s  %(message)s"
@@ -55,6 +61,26 @@ DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 OUTCOMES = ("running", "done", "warnings", "failed", "stopped", "interrupted")
 
 _lock = threading.RLock()
+
+
+class JobStore(Protocol):
+    """Where job records go besides jobs.jsonl (storage.activity.ActivityLog). save() returns False when the record
+    was not stored; records() returns None when the store can't be read."""
+
+    def save(self, record: dict) -> bool: ...
+
+    def records(self) -> list[dict] | None: ...
+
+
+_store: JobStore | None = None
+
+
+def use_job_store(store: JobStore | None) -> None:
+    """Set at start-up by the application (None: jobs.jsonl only, as before)."""
+    global _store
+    _store = store
+
+
 _current: contextvars.ContextVar[Job | None] = contextvars.ContextVar("roundtable_job", default=None)
 _app_handler: logging.Handler | None = None
 _sink_handler: logging.Handler | None = None
@@ -424,11 +450,7 @@ def mark_undone(job_id: str) -> None:
         if rec is None:
             return
         rec = {**rec, "undo": None, "undone": datetime.datetime.now().isoformat(timespec="seconds")}
-        try:
-            with (log_dir() / JOBS_INDEX).open("a", encoding="utf-8") as f:
-                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-        except OSError:
-            pass
+        _keep(rec)  # "undone" always goes to the file, where the undo it cancels is
 
 
 def set_summary(text: str) -> None:
@@ -480,12 +502,26 @@ def _record(job: Job) -> dict:
 
 
 def _write_index(job: Job) -> None:
+    _keep(_record(job))
+
+
+def _keep(rec: dict) -> None:
+    """Store a job record: in the database when it takes it, and in jobs.jsonl when it did not (nothing is lost, and
+    nothing is said to be stored that was not) or when the record carries undo (undo stays in the file)."""
+    stored = False
+    if _store is not None:
+        try:
+            stored = bool(_store.save(rec))
+        except Exception:
+            stored = False
+    if stored and not rec.get("undo") and not rec.get("undone"):
+        return
     with _lock:
         try:
             d = log_dir()
             d.mkdir(parents=True, exist_ok=True)
             with (d / JOBS_INDEX).open("a", encoding="utf-8") as f:
-                f.write(json.dumps(_record(job), ensure_ascii=False) + "\n")
+                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
         except OSError:
             pass
 
@@ -514,14 +550,32 @@ def _pid_alive(pid: int) -> bool:
     return True
 
 
+def _finality(rec: dict) -> tuple:
+    return (rec.get("outcome") != "running", rec.get("end") or "", float(rec.get("t") or 0))
+
+
+def _expired(rec: dict, cutoff: float) -> bool:
+    """A completed record whose job ended before cutoff (records waiting in jobs.jsonl follow the same retention as
+    the database's rows; running and interrupted ones never expire)."""
+    if rec.get("outcome") not in COMPLETED:
+        return False
+    try:
+        ended = float(rec.get("t") or 0) + float(rec.get("seconds") or 0)
+    except TypeError, ValueError:
+        return False
+    return 0 < ended < cutoff
+
+
 def read_jobs() -> list[dict]:
-    """Every job the index knows, newest first, one record each (its last state). A job still marked running by a
-    launcher that is no longer running is reported as interrupted. Unreadable lines are skipped."""
+    """Every job known, newest first, one record each (its last state): the database's rows (when it holds the
+    activity log) merged with jobs.jsonl by job id, so records waiting in the file show at once. Undo always comes
+    from the file. A job still marked running by a launcher that is no longer running is reported as interrupted.
+    Unreadable lines are skipped."""
     with _lock:
         try:
             lines = (log_dir() / JOBS_INDEX).read_text(encoding="utf-8", errors="replace").splitlines()
         except OSError:
-            return []
+            lines = []
     by_id: dict[str, dict] = {}
     for line in lines:
         try:
@@ -530,7 +584,21 @@ def read_jobs() -> list[dict]:
             continue
         if isinstance(rec, dict) and rec.get("id"):
             by_id[rec["id"]] = rec
-    out = list(by_id.values())
+    stored = None
+    if _store is not None:
+        try:
+            stored = _store.records()
+        except Exception:
+            stored = None
+    merged = {r["id"]: r for r in stored or [] if r.get("id")}
+    for job_id, rec in by_id.items():
+        base = merged.get(job_id)
+        if base is None or _finality(rec) >= _finality(base):
+            merged[job_id] = {**(base or {}), **rec}
+        else:
+            merged[job_id] = {**base, "undo": rec.get("undo"), "undone": rec.get("undone")}
+    cutoff = time.time() - ACTIVITY_DAYS * 86400
+    out = [r for r in merged.values() if r.get("undo") or not _expired(r, cutoff)]
     alive: dict[int, bool] = {}
     for rec in out:
         if rec.get("outcome") == "running":
@@ -548,9 +616,9 @@ def recent_jobs(limit: int = 50) -> list[dict]:
 
 
 def prune(keep: int = KEEP_JOBS, days: int = KEEP_DAYS, now: float | None = None) -> list[str]:
-    """Drop jobs beyond the newest `keep` that are also older than `days`, with their files; rewrite the index with
-    one line per kept job; remove job files the index no longer knows once they are that old too. Returns the ids
-    dropped. Never touches a running job."""
+    """Remove the log files of jobs beyond the newest `keep` that are also older than `days`, and job files no record
+    knows once they are that old too. Returns the ids whose files went. Never touches a running job. The records stay:
+    jobs.jsonl is not rewritten, and the database's own retention keeps completed rows 90 days."""
     now = time.time() if now is None else now
     cutoff = now - days * 86400
     with _lock:
@@ -585,23 +653,7 @@ def prune(keep: int = KEEP_JOBS, days: int = KEEP_DAYS, now: float | None = None
                         f.unlink()
                 except OSError:
                     pass
-        if drop or len(jobs) != sum(1 for _ in _index_lines(d)):
-            kept = [r for r in reversed(jobs) if r["id"] in keep_ids]
-            try:
-                tmp = d / (JOBS_INDEX + ".tmp")
-                tmp.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in kept), encoding="utf-8")
-                tmp.replace(d / JOBS_INDEX)
-            except OSError:
-                pass
-        return [r["id"] for r in drop]
-
-
-def _index_lines(d: Path):
-    try:
-        with (d / JOBS_INDEX).open(encoding="utf-8", errors="replace") as f:
-            yield from f
-    except OSError:
-        return
+        return [r["id"] for r in drop]  # jobs.jsonl is not rewritten (module docstring)
 
 
 # ----------------------------------------------------------------------------- reading jobs back

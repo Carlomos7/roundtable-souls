@@ -1,7 +1,9 @@
 """The command line: `roundtable-souls` opens the window; --play, --check and --update run without one, and --game
 picks the game. --play --allow-without-backup starts the game even when 'back up saves before Play' fails.
---check-storage opens (creating or upgrading) the launcher's database in the data folder and prints what it found:
-a check for builds, which reads nothing else. Each mode imports only what it needs, so a Play from a Steam shortcut never loads the window."""
+--check-storage opens (creating or upgrading) the launcher's database in the data folder, imports the old record files
+(cache/hashes.json, logs/jobs.jsonl) into it and prints what it found: a check for builds, which touches nothing
+outside the data folder. Each mode imports only what it needs, so a Play from a Steam shortcut never loads the
+window."""
 
 from __future__ import annotations
 
@@ -103,6 +105,15 @@ def check_storage() -> int:
             head = storage_db.head_revision()
             say(f"database: {db.path} at {db.revision} (head {head}), journal {db.journal_mode}")
             ok = db.revision == head
+            from roundtable_souls.platform import logging as run_logging
+            from roundtable_souls.storage.activity import ActivityLog
+            from roundtable_souls.storage.cache import HashCache
+            from roundtable_souls.storage.imports import run_imports
+
+            cache, activity = HashCache(db, say), ActivityLog(db, say)
+            jobs = run_logging.log_dir() / run_logging.JOBS_INDEX
+            out = run_imports(root / "cache" / "hashes.json", jobs, cache, activity, lambda line: say(f"  {line}"))
+            ok = ok and bool(out["hash cache"]) and bool(out["activity log"])
         finally:
             db.close()
         say("OK" if ok else "FAILED: not at the current schema")
@@ -161,6 +172,7 @@ def play_from_shortcut(game, allow_without_backup: bool = False) -> int:
         except MigrationFailed as e:  # not ready: an update's watchdog rolls back
             return storage_failed(e, window=False)
         updates.mark_ready("play")  # this version starts and runs: an update's watchdog can stand down
+        ctx.start_imports()
         if allow_without_backup:
             return core.play_headless(ctx.settings, ctx.locations, notice=not_started_notice, allow_without_backup=True)
         return core.play_headless(ctx.settings, ctx.locations, notice=not_started_notice)

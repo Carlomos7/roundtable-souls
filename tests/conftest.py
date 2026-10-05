@@ -173,6 +173,18 @@ def no_installed_mod_names(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def records_back_to_their_files():
+    """create_app points the hash cache and the activity log at its database; every test ends with them back on their
+    files, so no test writes through another test's (closed) database."""
+    from roundtable_souls.mods import rebuild
+    from roundtable_souls.platform import logging as run_logging
+
+    yield
+    rebuild.use_hash_store(None)
+    run_logging.use_job_store(None)
+
+
+@pytest.fixture(autouse=True)
 def elden_ring_is_the_active_game(tmp_path):
     """Every test starts on Elden Ring (the rebuild code's locations, as create_app would give them), with no detection
     cached from a prior test that used a different environment, and instance names scoped to its own folder."""
