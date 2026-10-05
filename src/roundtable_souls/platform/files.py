@@ -4,21 +4,31 @@ from __future__ import annotations
 
 import os
 import shutil
+import uuid
 from pathlib import Path
 
 
 def atomic_write(path: Path, data, backup=False):
-    """Write to a temp file next to the target and rename over it (atomic on Windows), keeping one .bak."""
+    """Write to a temp file next to the target and rename over it (atomic on Windows), keeping one .bak. A write
+    that fails leaves the target as it was and removes the temp file. Each write has its own temp file
+    (<name>.<pid>.<random>.tmp), so two writers of the same file (threads or processes) never write into one."""
     path = Path(path)
-    tmp = path.with_name(path.name + ".tmp")
-    if isinstance(data, str):
-        with open(tmp, "w", encoding="utf-8", newline="") as f:
-            f.write(data)
-    else:
-        tmp.write_bytes(data)
-    if backup and path.exists():
-        shutil.copy2(path, path.with_name(path.name + ".bak"))
-    os.replace(tmp, path)
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.{uuid.uuid4().hex[:12]}.tmp")
+    try:
+        if isinstance(data, str):
+            with open(tmp, "w", encoding="utf-8", newline="") as f:
+                f.write(data)
+        else:
+            tmp.write_bytes(data)
+        if backup and path.exists():
+            shutil.copy2(path, path.with_name(path.name + ".bak"))
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
 
 
 def move_into(src_dir: Path, dest_dir: Path) -> None:
