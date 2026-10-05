@@ -34,7 +34,7 @@ def main() -> int:
         print(f"{path.relative_to(ROOT)}: {new}")
     print(
         f'\nNext:\n  uv lock\n  git commit -am "Release {new}"\n  git tag -a v{new} -m "Roundtable Souls {new}"\n'
-        "  git push && git push --tags"
+        "  git push && git push --tags\n\nThe Release workflow publishes it as a beta; the Promote workflow (Actions tab) makes it stable."
     )
     return 0
 

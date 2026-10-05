@@ -187,7 +187,8 @@ Pushing a version tag releases (`.github/workflows/release.yml`).
 2. **Build.** Windows and Linux each lint, test, build with PyInstaller and pack with `vpk` 1.2.161. Before packing, they fetch the previous release's full package with `vpk download github`, so the release also carries a delta for copies one version behind.
 3. **Install test (Windows only).** `scripts/ci/velopack-install-test.ps1` installs the latest published release, then the new setup. It checks that the old Inno install is replaced, the data is kept and the Start menu shortcut points at the new copy, then that uninstalling keeps the data.
 4. **Sign.** The publish job signs each feed (`releases.win.json`, `releases.linux.json`; trusted comment `roundtable-souls <version> <os>`) and `SHA256SUMS.txt` with minisign.
-5. **Publish.** The release is uploaded as a draft. Every file is downloaded back and checked against the checksums and the signatures, and only then is the release published. A tag with a hyphen (`v3.4.0-rc.1`) becomes a pre-release, which only the Beta channel offers.
+5. **Publish to beta.** The release is uploaded as a draft. Every file is downloaded back and checked against the checksums and the signatures, and only then is the release published, as a pre-release: the Beta channel offers it, Stable does not.
+6. **Promote to stable.** When the beta has been used for a while, run the **Promote** workflow (`.github/workflows/promote.yml`) from the Actions tab with the tag. It checks that the release is a published beta, newer than the stable one, that its Release run succeeded, and every file against its checksum and signature, then marks the same release as the latest: Stable offers it from then on. Nothing is rebuilt. A tag with a suffix (`v3.4.0-rc.1`) stays a beta; it cannot be promoted, since the launcher's Stable channel refuses such versions. A fix found in beta ships as the next version.
 
 Only repository admins can create or move `v*` tags. Starting the workflow by hand from the Actions tab builds and tests everything without publishing.
 
@@ -197,7 +198,8 @@ uv run python scripts/bump_version.py 3.3.0   # pyproject.toml and __init__.py (
 uv lock                                       # uv.lock records the version; the release builds --locked
 git commit -am "Release 3.3.0"
 git tag -a v3.3.0 -m "Roundtable Souls 3.3.0"
-git push && git push --tags
+git push && git push --tags                   # builds, tests and publishes 3.3.0 as a beta
+# later: Actions tab -> Promote -> v3.3.0      # the same release becomes the stable one
 ```
 
 Updates, failed-start rollback, the Inno migration, portable data and uninstall are tested end to end on isolated test builds (their own app ID, data folder, feed and key) before a release; Steam Deck checks are done by hand. Signing needs the `MINISIGN_KEY` repository secret (the minisign secret key file, without a password); the matching public key is `src/roundtable_souls/data/release-signing.pub`. Replacing the key is described in [docs/decisions/0003-signed-releases.md](docs/decisions/0003-signed-releases.md).
