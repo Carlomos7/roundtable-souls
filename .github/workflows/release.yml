@@ -103,6 +103,12 @@ jobs:
       timeout-minutes: 20  # every program in it is also bounded and reported (scripts/ci/velopack-install-test.ps1)
       run: ./scripts/ci/velopack-install-test.ps1
 
+    # What users do: the installed previous release's Update now (headless --update), against a local feed signed with
+    # a throwaway key; this build must start, create its database and report ready, with no rollback.
+    - name: Update test (the previous release updates itself to this build)
+      timeout-minutes: 20  # every wait in it is also bounded and reported (scripts/ci/velopack-update-test.py)
+      run: uv run python scripts/ci/velopack-update-test.py
+
     - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: windows
