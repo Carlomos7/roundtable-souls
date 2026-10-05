@@ -14,9 +14,10 @@ from PySide6.QtWidgets import QApplication, QPushButton  # noqa: E402
 from roundtable_souls.app import create_app  # noqa: E402
 from roundtable_souls.game.locate import Locations  # noqa: E402
 from roundtable_souls.ui import shell  # noqa: E402
+from roundtable_souls.ui.pages.coop import view as coop_view  # noqa: E402
 from roundtable_souls.ui.pages.tools import view as tools_view  # noqa: E402
 
-UI_MODULES = (shell, tools_view)  # the window: the shell and its page views
+UI_MODULES = (shell, coop_view, tools_view)  # the window: the shell and its page views
 
 
 class _Window:
