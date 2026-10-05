@@ -80,25 +80,14 @@ from roundtable_souls.ui.install_dialog import InstallDialog
 from roundtable_souls.ui.theme import (
     ghost_btn,
     hint,
-)
-from roundtable_souls.ui.widgets.cards import (
-    DropOverlay,
-    EditorPanel,
-    ElideLabel,
-    ExpandGroupSettingCard,
-    NameWithTag,
-    SettingRow,
-    StatusPill,
-    action_row,
-    card,
-    dispose,
-    icon_btn,
-    notice,
-    page,
-    style_menu,
-    titled,
     tone_label,
 )
+from roundtable_souls.ui.widgets.cards import ExpandGroupSettingCard, SettingRow, card, icon_btn
+from roundtable_souls.ui.widgets.labels import ElideLabel, NameWithTag
+from roundtable_souls.ui.widgets.layout import action_row, dispose, page, titled
+from roundtable_souls.ui.widgets.menus import style_menu
+from roundtable_souls.ui.widgets.notices import DropOverlay, StatusPill, notice
+from roundtable_souls.ui.widgets.panels import EditorPanel
 
 ROW_ACTION_W = 156  # the action button on each Mods row
 

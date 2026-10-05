@@ -10,8 +10,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QWidget
 from qfluentwidgets import BodyLabel, CheckBox, ComboBox, LineEdit, ScrollArea, SubtitleLabel
 
 from roundtable_souls.ui.dialogs import Dialog
-from roundtable_souls.ui.theme import hint
-from roundtable_souls.ui.widgets.cards import tone_label
+from roundtable_souls.ui.theme import hint, tone_label
 
 # what each kind of file is, and (for the ones left unticked) why it is not needed
 GROUP_TEXT = {

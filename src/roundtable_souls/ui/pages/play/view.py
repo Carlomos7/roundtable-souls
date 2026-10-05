@@ -55,16 +55,13 @@ from roundtable_souls.ui.theme import (
     HINT_ON_LIGHT,
     ghost_btn,
     hint,
-)
-from roundtable_souls.ui.widgets.cards import (
-    ExpandGroupSettingCard,
-    HeroBanner,
-    LogPane,
-    notice,
-    page,
-    short_problem,
     tone_label,
 )
+from roundtable_souls.ui.widgets.cards import ExpandGroupSettingCard
+from roundtable_souls.ui.widgets.hero import HeroBanner
+from roundtable_souls.ui.widgets.layout import page
+from roundtable_souls.ui.widgets.log import LogPane, short_problem
+from roundtable_souls.ui.widgets.notices import notice
 
 
 class PlayView:

@@ -16,16 +16,12 @@ from qfluentwidgets import FluentIcon as FI
 
 from roundtable_souls.game import catalog as games
 from roundtable_souls.platform import logging as run_logging
-from roundtable_souls.ui.theme import ghost_btn, hint, style_editor
-from roundtable_souls.ui.widgets.cards import (
-    ElideLabel,
-    GlassCard,
-    StatusPill,
-    action_row,
-    dispose,
-    log_html,
-    tone_label,
-)
+from roundtable_souls.ui.theme import ghost_btn, hint, style_editor, tone_label
+from roundtable_souls.ui.widgets.cards import GlassCard
+from roundtable_souls.ui.widgets.labels import ElideLabel
+from roundtable_souls.ui.widgets.layout import action_row, dispose
+from roundtable_souls.ui.widgets.log import log_html
+from roundtable_souls.ui.widgets.notices import StatusPill
 
 SHOWN = 100  # entries listed at most (retention keeps about this many anyway)
 

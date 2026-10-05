@@ -64,16 +64,9 @@ from roundtable_souls.ui.theme import (
     HINT_ON_LIGHT,
     hint,
 )
-from roundtable_souls.ui.widgets.cards import (
-    ActionBar,
-    EditorPanel,
-    ExpandGroupSettingCard,
-    SettingRow,
-    card,
-    count_label,
-    page,
-    titled,
-)
+from roundtable_souls.ui.widgets.cards import ExpandGroupSettingCard, SettingRow, card, count_label
+from roundtable_souls.ui.widgets.layout import page, titled
+from roundtable_souls.ui.widgets.panels import ActionBar, EditorPanel
 
 
 class CoopView:

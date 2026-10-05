@@ -63,20 +63,11 @@ from roundtable_souls.ui.theme import (
     ghost_btn,
     hint,
     primary_btn,
-)
-from roundtable_souls.ui.widgets.cards import (
-    ExpandGroupSettingCard,
-    LogoPreview,
-    PairRow,
-    SettingRow,
-    action_row,
-    card,
-    icon_btn,
-    notice,
-    page,
-    titled,
     tone_label,
 )
+from roundtable_souls.ui.widgets.cards import ExpandGroupSettingCard, LogoPreview, PairRow, SettingRow, card, icon_btn
+from roundtable_souls.ui.widgets.layout import action_row, page, titled
+from roundtable_souls.ui.widgets.notices import notice
 from roundtable_souls.updates import apply as updates
 from roundtable_souls.updates import feed
 from roundtable_souls.updates import inno as migration
