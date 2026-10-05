@@ -4,6 +4,7 @@ Every test uses a real SQLite file in its own temporary folder."""
 
 import datetime
 import hashlib
+import os
 import shutil
 import sqlite3
 import subprocess
@@ -305,6 +306,13 @@ def test_a_newer_schema_than_this_build_knows_is_left_untouched(tmp_path):
         db.open_database(tmp_path, log=lambda line: None)
     assert newer.value.reason == "newer-schema"
     assert _sha(path) == before and not list(tmp_path.glob("*.snapshot"))
+
+
+def test_ci_runs_the_storage_tests_rather_than_skipping_them():
+    """On CI the storage tests must run: a Python whose SQLite is too old there (a runner's preinstalled one) would
+    skip them silently and test a build without its database. Locally an old SQLite only skips them."""
+    if os.environ.get("CI") and db.sqlite_problem():
+        pytest.fail(f"CI's Python can't use storage: {db.sqlite_problem()} (UV_PYTHON_PREFERENCE=only-managed?)")
 
 
 @pytest.mark.parametrize(

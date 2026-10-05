@@ -15,6 +15,9 @@ concurrency:
 
 env:
   VPK_VERSION: "1.2.161"  # = the velopack package pinned in pyproject.toml / uv.lock
+  # uv's own Python builds, not the runner's preinstalled ones: the runner's python.org 3.14.7 carries SQLite 3.50.4,
+  # below what the launcher's database needs; scripts/build.py refuses to package it (docs/decisions/0005-storage.md)
+  UV_PYTHON_PREFERENCE: only-managed
 
 jobs:
   verify:

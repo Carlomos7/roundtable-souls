@@ -16,6 +16,7 @@ PermissionError, so a patch undone too early fails the test instead of touching 
   created (recycle_bin_left_clean restores and purges them). Reading is never refused."""
 
 import os
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -53,6 +54,12 @@ def _refuse_outside(path) -> None:
     raise PermissionError(f"a test tried to write outside its temporary folders: {text}")
 
 
+def _relative_to_a_dir_fd(path, dir_fd) -> bool:
+    """A name relative to an open directory (shutil.rmtree on Linux deletes this way): where it is can't be told
+    from the name, so it is not checked (the module docstring lists dir_fd paths as not covered)."""
+    return isinstance(dir_fd, int) and not isinstance(dir_fd, bool) and not os.path.isabs(os.fsdecode(path))
+
+
 def _audit(event: str, args: tuple) -> None:
     """The audit events listed in the module docstring as covered."""
     if not _WRITABLE:
@@ -62,10 +69,13 @@ def _audit(event: str, args: tuple) -> None:
         if (isinstance(mode, str) and any(c in mode for c in "wax+")) or (mode is None and flags & _WRITE_FLAGS):
             _refuse_outside(path)
     elif event in ("os.remove", "os.rmdir", "os.mkdir", "os.truncate", "os.utime", "os.chmod", "shutil.rmtree"):
-        _refuse_outside(args[0])
+        if not _relative_to_a_dir_fd(args[0], args[-1]):
+            _refuse_outside(args[0])
     elif event in ("os.rename", "os.replace", "os.link", "os.symlink"):
-        _refuse_outside(args[0])
-        _refuse_outside(args[1])
+        dir_fds = args[2:4] if event in ("os.rename", "os.replace", "os.link") else (args[-1], args[-1])
+        for path, dir_fd in zip(args[:2], dir_fds, strict=False):
+            if not _relative_to_a_dir_fd(path, dir_fd):
+                _refuse_outside(path)
     elif event in ("shutil.copyfile", "shutil.copytree"):
         _refuse_outside(args[1])
     elif event == "sqlite3.connect":
@@ -127,10 +137,16 @@ def run_in_a_temporary_folder(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def recycle_bin_left_clean(monkeypatch):
-    """Removing a mod sends its folder to the real Recycle Bin: every item a test sends there is purged after it,
-    so the bin is left as it was."""
+def recycle_bin_left_clean(monkeypatch, tmp_path):
+    """Removing a mod sends its folder to the trash. On Windows that is the real Recycle Bin: every item a test sends
+    there is purged after it, so the bin is left as it was. Elsewhere the desktop trash is a folder the launcher
+    writes itself, so each test gets its own in its temporary folder (the real one is never touched)."""
     from roundtable_souls.platform import trash
+
+    if sys.platform != "win32":
+        own = tmp_path / "Trash"
+        monkeypatch.setattr(trash, "_home_trash", lambda: own)
+        monkeypatch.setattr(trash, "_trash_for", lambda path: (own.mkdir(parents=True, exist_ok=True), own)[1])
 
     made = []
     real = trash.send
@@ -185,14 +201,19 @@ def records_back_to_their_files():
 
 
 @pytest.fixture(autouse=True)
-def elden_ring_is_the_active_game(tmp_path):
+def elden_ring_is_the_active_game(tmp_path, monkeypatch):
     """Every test starts on Elden Ring (the rebuild code's locations, as create_app would give them), with no detection
-    cached from a prior test that used a different environment, and instance names scoped to its own folder."""
+    cached from a prior test that used a different environment, and instance names scoped to its own folder. On Linux
+    their lock files and sockets go in a folder of the test's own, not the real $XDG_RUNTIME_DIR: a short one directly
+    in the system temporary folder, because a socket's path must stay under about 108 characters."""
     mod_locations.use(Locations(games.DEFAULT))
     instance.use_scope("RoundtableSouls.Test", tmp_path)
+    locks = Path(tempfile.mkdtemp(prefix="rsl-"))
+    monkeypatch.setattr(instance, "_lock_dir", lambda: locks)
     common.clear_detection_cache()
     common._PROFILE_GAMES_CACHE.clear()
     yield
     mod_locations.use(None)
     common.clear_detection_cache()
     common._PROFILE_GAMES_CACHE.clear()
+    shutil.rmtree(locks, ignore_errors=True)
