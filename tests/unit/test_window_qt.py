@@ -257,6 +257,11 @@ def sandbox(app, monkeypatch, tmp_path):
     (profiles / "sandbox.me3").write_text(SANDBOX_PROFILE, encoding="utf-8")
     monkeypatch.setattr(common, "me3_profiles_dir", lambda override=None: profiles)
     monkeypatch.setattr(Locations, "save_files", lambda self: [])
+    # nothing of the developer's: saves in a temporary folder (tests that list saves bring their own), no game or
+    # me3 install found
+    monkeypatch.setattr(common, "save_roots_for", lambda save_dir, app_id: [tmp_path / "game-saves" / save_dir])
+    monkeypatch.setattr(common, "me3_exe", lambda override=None: None)
+    monkeypatch.setattr(common, "find_installed", lambda key, install_dir, exe: None)
     monkeypatch.setattr(ui.feed, "check_launcher_update", lambda *a, **k: ui.feed.UpdateCheck("off"))
     monkeypatch.setattr(ui.feed, "check_advisory", lambda *a, **k: None)
     patch_ui(monkeypatch, "me3_facts", lambda setup, loc: {"version": None, "info": {}, "latest": None})
