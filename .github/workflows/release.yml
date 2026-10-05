@@ -76,6 +76,19 @@ jobs:
         dotnet tool install vpk --version "$VPK_VERSION" --tool-path "$RUNNER_TEMP/vpk"
         echo "VPK=$RUNNER_TEMP/vpk/vpk.exe" >> "$GITHUB_ENV"
 
+    # A run that is not a release tag publishes nothing. Its build gets a version above the newest published release
+    # (the next patch, unless the tree's version is already higher): vpk refuses to pack a version that is published,
+    # and the update test needs something newer to update to. Only this run's files change; nothing is committed.
+    - name: Version for a test build (not a release tag)
+      if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+      shell: bash
+      run: |
+        latest=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+        current=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)
+        next=$(uv run python -c 'import re,sys; key=lambda v: tuple(int(x) for x in re.findall(r"\d+", v)[:3]); c, l = sys.argv[1], sys.argv[2]; m = key(l); print(c if key(c) > m else f"{m[0]}.{m[1]}.{m[2] + 1}")' "$current" "$latest")
+        echo "latest published: $latest; this tree: $current; this test build: $next"
+        [ "$next" = "$current" ] || uv run python scripts/bump_version.py "$next"
+
     # vpk diffs against the previous release's full package to make a delta; none before the first Velopack release.
     - name: Previous release, for a delta package
       shell: bash
@@ -150,6 +163,19 @@ jobs:
       run: |
         dotnet tool install vpk --version "$VPK_VERSION" --tool-path "$RUNNER_TEMP/vpk"
         echo "VPK=$RUNNER_TEMP/vpk/vpk" >> "$GITHUB_ENV"
+
+    # A run that is not a release tag publishes nothing. Its build gets a version above the newest published release
+    # (the next patch, unless the tree's version is already higher): vpk refuses to pack a version that is published,
+    # and the update test needs something newer to update to. Only this run's files change; nothing is committed.
+    - name: Version for a test build (not a release tag)
+      if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+      shell: bash
+      run: |
+        latest=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+        current=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)
+        next=$(uv run python -c 'import re,sys; key=lambda v: tuple(int(x) for x in re.findall(r"\d+", v)[:3]); c, l = sys.argv[1], sys.argv[2]; m = key(l); print(c if key(c) > m else f"{m[0]}.{m[1]}.{m[2] + 1}")' "$current" "$latest")
+        echo "latest published: $latest; this tree: $current; this test build: $next"
+        [ "$next" = "$current" ] || uv run python scripts/bump_version.py "$next"
 
     - name: Previous release, for a delta package
       run: |
