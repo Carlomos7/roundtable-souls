@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from roundtable_souls.mods import manage as mod_manage
+from roundtable_souls.mods import profile_edit as mod_manage
 
 LABEL = {"remove": "Restore", "rebuild": "Undo rebuild"}
 
@@ -43,7 +43,7 @@ def _listed(profile: Path, path: str) -> bool:
 
 
 def _in_bin(undo: dict) -> bool:
-    from roundtable_souls.system import trash
+    from roundtable_souls.platform import trash
 
     return trash.exists(undo.get("trash"))
 
@@ -81,7 +81,7 @@ def run(undo: dict, log) -> str:
 
 
 def _restore_removed(undo: dict, log) -> str:
-    from roundtable_souls.system import trash
+    from roundtable_souls.platform import trash
 
     profile = Path(undo.get("profile") or "")
     name = undo.get("name") or "the mod"

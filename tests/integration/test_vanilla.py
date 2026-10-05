@@ -6,13 +6,18 @@ import struct
 
 import pytest
 
-from roundtable_souls import core as g
+from roundtable_souls.platform import paths
+from roundtable_souls.saves import layout as save_layout_check
+from roundtable_souls.saves import vanilla as save_vanilla
+from roundtable_souls.services import play as g
+from roundtable_souls.services import saves as saves_service
+from support import er, er_items
 from support import live_save as _live_save
 
 A = g.save_analyze
 F = g.save_fix
-L = g.save_layout_check
-V = g.save_vanilla
+L = save_layout_check
+V = save_vanilla
 
 GOODS, ARMOR, TALISMAN = 0x40000000, 0x10000000, 0x20000000
 
@@ -65,7 +70,7 @@ def test_scan_mod_items_finds_direct_goods_rows_and_worn():
         equipped_items=[ARMOR | 7420000, GOODS | 8380001],
         pouch=[(pot, 9)] + [(0, 0xFFFFFFFF)] * 5,
     )
-    scan = A.scan_mod_items(slot)
+    scan = A.scan_mod_items(slot, A.Catalog.for_save(None, er_items()))
     by = {e["name"]: e for e in scan["held"]}
     pot_n, sword_n, hat_n = "Item 8380001", "Weapon 77700000 +8", "Armour 7420000"
     assert set(by) == {pot_n, sword_n, hat_n}
@@ -73,7 +78,7 @@ def test_scan_mod_items_finds_direct_goods_rows_and_worn():
     assert by[hat_n]["worn"] and by[hat_n]["row"] == 1
     assert not by[sword_n]["worn"] and by[sword_n]["pos"] == 1  # past count still counts
     assert [o["name"] for o in scan["orphans"]] == ["Weapon 77710000"]
-    plan = V.plan_restore({"ud10": {"active": [True]}, "slots": [slot]})
+    plan = V.plan_restore({"ud10": {"active": [True]}, "slots": [slot]}, er_items())
     assert [e["name"] for e in plan[0]["strip"]] == [pot_n, sword_n]  # worn goods strip via the pouch
     assert [b["name"] for b in plan[0]["blocked"]] == [hat_n]
     assert V.restore_needed(plan) and any(f"KEPT (worn) {hat_n}" in l for l in V.describe(plan))
@@ -92,17 +97,17 @@ def test_restore_vanilla_on_a_copy_of_the_live_save(tmp_path, monkeypatch):
     src = _live_save()
     if not src:
         pytest.skip("no live co-op save on this PC")
-    monkeypatch.setattr(g.common, "game_running", lambda: False)
+    monkeypatch.setattr(paths, "exe_running", lambda _exe: False)
     copy = tmp_path / "ER0000.co2"
     shutil.copy2(src, copy)
     before = copy.read_bytes()
     r0 = L.parse(str(copy))
-    plan = V.plan_restore(r0)
+    plan = V.plan_restore(r0, er_items())
     if not V.restore_needed(plan):
         pytest.skip("live save has nothing to restore right now")
-    info0 = g.save_info(copy)
-    assert g.restore_available(info0) and g.repair_available(info0) and not info0["convert_ok"]
-    out = g.restore_vanilla(copy)
+    info0 = g.save_info(copy, loc=er())
+    assert saves_service.restore_available(info0) and saves_service.repair_available(info0) and not info0["convert_ok"]
+    out = saves_service.restore_vanilla(copy, loc=er())
     assert out["backup"] and out["backup"].read_bytes() == before
     after = copy.read_bytes()
     r1 = L.parse(str(copy))
@@ -128,7 +133,7 @@ def test_restore_vanilla_on_a_copy_of_the_live_save(tmp_path, monkeypatch):
                 for lst in ("common", "key"):
                     n = sum(1 for e in p["strip"] if e["box"] == box and e["list"] == lst)
                     assert s1[box][lst + "_count"] == max(0, s0[box][lst + "_count"] - n)
-            scan = A.scan_mod_items(s1, A.Catalog.for_save(r1))
+            scan = A.scan_mod_items(s1, A.Catalog.for_save(r1, er_items()))
             assert all(e["worn"] for e in scan["held"]) and not scan["orphans"]
             for e in p["strip"]:
                 for qi in e["quick"]:
@@ -136,17 +141,17 @@ def test_restore_vanilla_on_a_copy_of_the_live_save(tmp_path, monkeypatch):
                 for pi in e["pouch"]:
                     assert s1["pouch"][pi] == (0, 0xFFFFFFFF) and s1["equipped_items"][32 + pi] == 0xFFFFFFFF
     assert after[r0["ud10_pos"] :] == before[r0["ud10_pos"] :]
-    plan2 = V.plan_restore(r1)
+    plan2 = V.plan_restore(r1, er_items())
     assert not V.restore_needed(plan2)  # only blocked (worn) entries may remain
     assert {b["name"] for p in plan2 for b in p["blocked"]} == {b["name"] for b in out["blocked"]}
-    again = V.apply_restore(copy)
+    again = V.apply_restore(copy, items=er_items())
     assert again["backup"] is None and again["done"] == []  # idempotent: nothing written the second time
 
 
 def test_restore_refuses_while_game_runs(tmp_path, monkeypatch):
-    monkeypatch.setattr(g.common, "game_running", lambda: True)
+    monkeypatch.setattr(paths, "exe_running", lambda _exe: True)
     p = tmp_path / "ER0000.co2"
     p.write_bytes(b"x")
     with pytest.raises(RuntimeError):
-        g.restore_vanilla(p)
+        saves_service.restore_vanilla(p, loc=er())
     assert p.read_bytes() == b"x"

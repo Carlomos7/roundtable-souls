@@ -1,0 +1,73 @@
+"""Remove dead eldenring.exe shells.
+
+When Elden Ring exits it spawns a second copy of itself that dies at once,
+and on some machines that corpse stays in the process list: zero threads,
+zero handles, no memory. Steam ignores it, but Discord, overlays and other
+"is the game running?" checks go by name and keep reporting the game as
+running until the next reboot.
+
+Killing the corpse needs administrator rights, so this asks for elevation
+(one UAC prompt) and terminates only processes that are provably dead: named
+eldenring.exe with no threads. A running game always has hundreds. From the command line:
+scripts/clear_dead_shells.py.
+"""
+
+import subprocess
+import sys
+
+from roundtable_souls.platform import proc
+from roundtable_souls.platform.logging import log
+
+PS = ["powershell", "-NoProfile", "-NonInteractive", "-Command"]
+
+
+def dead_shells(exe_name: str):
+    """PIDs of the game's exe (exe_name: eldenring.exe for Elden Ring) with zero threads."""
+    if sys.platform != "win32":
+        return []
+    name = exe_name.rsplit(".", 1)[0].replace("'", "")
+    script = (
+        f"Get-Process -Name '{name}' -ErrorAction SilentlyContinue | "
+        "Where-Object { $_.Threads.Count -eq 0 } | ForEach-Object { $_.Id }"
+    )
+    try:
+        out = subprocess.run(
+            PS + [script], capture_output=True, text=True, timeout=30, creationflags=proc.NO_WINDOW
+        ).stdout
+    except OSError, subprocess.TimeoutExpired:
+        return []
+    return [int(x) for x in out.split() if x.isdigit()]
+
+
+def kill_elevated(pids, exe_name):
+    """Stop the given PIDs from an elevated PowerShell. Returns the PIDs still
+    present afterwards."""
+    ids = ",".join(str(p) for p in pids)
+    inner = f"Stop-Process -Id {ids} -Force -ErrorAction SilentlyContinue"
+    launcher = (
+        f"$p = Start-Process powershell.exe -ArgumentList '-NoProfile','-NonInteractive','-Command',"
+        f'"{inner}" -Verb RunAs -Wait -PassThru; exit $p.ExitCode'
+    )
+    try:
+        subprocess.run(PS + [launcher], capture_output=True, text=True, timeout=120, creationflags=proc.NO_WINDOW)
+    except (OSError, subprocess.TimeoutExpired) as err:
+        log(f"could not run the elevated kill: {err}")
+    return [p for p in dead_shells(exe_name) if p in pids]
+
+
+def clear(exe_name: str, dry_run=False):
+    """Find and remove dead shells. Returns (found, remaining)."""
+    found = dead_shells(exe_name)
+    if not found:
+        log(f"no dead {exe_name} shells")
+        return [], []
+    log(f"dead {exe_name} shell(s): {', '.join(map(str, found))}")
+    if dry_run:
+        return found, found
+    log("asking for administrator rights to remove them (UAC prompt)")
+    remaining = kill_elevated(found, exe_name)
+    if remaining:
+        log(f"still present (UAC declined, or held by a driver): {', '.join(map(str, remaining))}")
+    else:
+        log("cleared")
+    return found, remaining

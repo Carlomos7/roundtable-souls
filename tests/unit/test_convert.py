@@ -2,30 +2,32 @@
 
 import pytest
 
-from roundtable_souls import core as g
-from roundtable_souls import folders
+from roundtable_souls.platform import paths
+from roundtable_souls.saves import backups as save_backups
+from roundtable_souls.services import saves as saves_service
+from support import er
 
 
 def test_sl2_to_co2_copies_and_backs_up(tmp_path, monkeypatch):
-    monkeypatch.setattr(g.common, "game_running", lambda: False)
+    monkeypatch.setattr(paths, "exe_running", lambda _exe: False)
     src = tmp_path / "ER0000.sl2"
     src.write_bytes(b"standard")
-    out = g.convert_sl2_to_co2(src)
+    out = saves_service.convert_sl2_to_co2(src, loc=er())
     assert out == tmp_path / "ER0000.co2" and out.read_bytes() == b"standard"
     out.write_bytes(b"older coop")
-    g.convert_sl2_to_co2(src)
+    saves_service.convert_sl2_to_co2(src, loc=er())
     assert out.read_bytes() == b"standard"
-    backups = [p for p in folders.backups(tmp_path).iterdir() if p.suffix == ".bak"]
+    backups = [p for p in save_backups.backups(tmp_path).iterdir() if p.suffix == ".bak"]
     assert [p.read_bytes() for p in backups] == [b"older coop"]  # only the file that was replaced
-    assert g.list_backups(out)[0]["action"] == "Before copying the standard save over it"
+    assert saves_service.list_backups(out, loc=er())[0]["action"] == "Before copying the standard save over it"
 
 
 def test_sl2_to_co2_refusals(tmp_path, monkeypatch):
-    monkeypatch.setattr(g.common, "game_running", lambda: False)
+    monkeypatch.setattr(paths, "exe_running", lambda _exe: False)
     with pytest.raises(RuntimeError):
-        g.convert_sl2_to_co2(tmp_path / "ER0000.co2")
-    monkeypatch.setattr(g.common, "game_running", lambda: True)
+        saves_service.convert_sl2_to_co2(tmp_path / "ER0000.co2", loc=er())
+    monkeypatch.setattr(paths, "exe_running", lambda _exe: True)
     src = tmp_path / "ER0000.sl2"
     src.write_bytes(b"x")
     with pytest.raises(RuntimeError):
-        g.convert_sl2_to_co2(src)
+        saves_service.convert_sl2_to_co2(src, loc=er())

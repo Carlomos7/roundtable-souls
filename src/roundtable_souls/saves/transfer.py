@@ -16,7 +16,7 @@ from __future__ import annotations
 import struct
 from pathlib import Path
 
-from roundtable_souls import games
+from roundtable_souls.game import catalog as games
 from roundtable_souls.saves import fix as save_fix
 from roundtable_souls.saves import layout as L
 from roundtable_souls.saves import library

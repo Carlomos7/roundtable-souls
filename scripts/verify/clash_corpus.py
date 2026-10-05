@@ -29,8 +29,8 @@ def main() -> int:
     from roundtable_souls.game import archives
     from roundtable_souls.game import oodle as game_oodle
     from roundtable_souls.merging import merger
-    from roundtable_souls.mods import merge
     from roundtable_souls.mods import profile as profile_tools
+    from roundtable_souls.mods import rebuild as merge
     from roundtable_souls.mods.backends import builtin
 
     profile = args.profile or Path(_common.settings().get("profile") or "")

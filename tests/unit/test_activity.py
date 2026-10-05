@@ -6,9 +6,9 @@ import os
 
 import pytest
 
-from roundtable_souls.system import common
-from roundtable_souls.system import logging as rl
-from roundtable_souls.ui import activity as act
+from roundtable_souls.platform import logging as rl
+from roundtable_souls.platform import logging as run_logging
+from roundtable_souls.ui.dialogs import activity as act
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -16,7 +16,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 def make_job(title, lines=(), outcome=None, game="eldenring", attach=None):
     job = rl.begin_job(title, game=game)
     for line in lines:
-        common.log(line)
+        run_logging.log(line)
     if attach:
         rl.attachment(attach[0]).write_text(attach[1], encoding="utf-8")
     rl.end_job(job, outcome)
@@ -34,7 +34,7 @@ def test_a_job_keeps_its_summary_and_first_problem():
 
 def test_set_summary_wins_over_the_done_line():
     job = rl.begin_job("rebuild")
-    common.log("done: rebuilt")
+    run_logging.log("done: rebuilt")
     rl.set_summary("Combined 2 packs; 1 overlapping row")
     rl.end_job(job)
     assert rl.read_jobs()[0]["summary"] == "Combined 2 packs; 1 overlapping row"
@@ -139,7 +139,7 @@ def test_the_page_lists_jobs_by_day_with_outcomes_and_opens_one(app):
 def test_show_details_reveals_debug_lines(app):
     job = rl.begin_job("rebuild")
     rl.get_logger("mods.merge").debug("hash cache hit for regulation.bin")
-    common.log("done: rebuilt")
+    run_logging.log("done: rebuilt")
     rl.end_job(job)
     view = act.ActivityView()
     view.refresh()

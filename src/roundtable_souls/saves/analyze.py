@@ -11,13 +11,17 @@ from __future__ import annotations
 import struct
 from collections import Counter
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from roundtable_souls import formats
 from roundtable_souls.resources import DATA_DIR
 from roundtable_souls.saves import item_names as mod_item_names  # a module, so tests can stand in for it
 from roundtable_souls.saves import loading as save_loading
 from roundtable_souls.saves.layout import active_slots, character_name
-from roundtable_souls.system import common
+
+if TYPE_CHECKING:
+    from roundtable_souls.game.locate import Locations
 
 WEAPON, ARMOUR, TALISMAN, GOODS, ASH = 0x0, 0x1, 0x2, 0x4, 0x8
 KIND_NAMES = {WEAPON: "Weapon", ARMOUR: "Armour", TALISMAN: "Talisman", GOODS: "Item", ASH: "Ash of War"}
@@ -45,11 +49,10 @@ def known_item_ids() -> set[int]:
     return _KNOWN_IDS
 
 
-def game_item_ids() -> frozenset[int]:
-    """Every item the installed game's regulation.bin defines (empty when the game or the file cannot be read).
-    Read once per version of the file."""
+def game_item_ids(path: Path | None) -> frozenset[int]:
+    """Every item the installed game's regulation.bin (path) defines (empty when the game or the file cannot be
+    read). Read once per version of the file."""
     global _GAME_IDS
-    path = common.regulation_bin()
     if path is None:
         return frozenset()
     try:
@@ -90,16 +93,32 @@ def tarnished_flag(parsed: dict) -> bool:
 
 
 @dataclass(frozen=True)
+class GameItems:
+    """What a save is checked against on this PC: the items the installed game's regulation.bin defines, and the
+    names the installed mods give the items they add."""
+
+    game: frozenset[int] = field(default_factory=frozenset)
+    names: mod_item_names.ItemNames = field(default_factory=lambda: mod_item_names.ItemNames({}))
+
+    @classmethod
+    def for_locations(cls, loc: Locations) -> GameItems:
+        return cls(
+            game_item_ids(loc.regulation_bin()), mod_item_names.item_names(loc.game_dir(), loc.me3_profiles_dir())
+        )
+
+
+@dataclass(frozen=True)
 class Catalog:
-    """Decides whether an item ID belongs to the game for one save."""
+    """Decides whether an item ID belongs to the game for one save, and names the ones that do not."""
 
     known: frozenset[int] = field(default_factory=frozenset)
     pack: bool = False  # the save has the Tarnished Edition pack enabled
     game: frozenset[int] = field(default_factory=frozenset)  # items the installed game's regulation defines
+    names: mod_item_names.ItemNames = field(default_factory=lambda: mod_item_names.ItemNames({}))
 
     @classmethod
-    def for_save(cls, parsed: dict | None = None, game: frozenset[int] | None = None) -> Catalog:
-        return cls(frozenset(known_item_ids()), tarnished_flag(parsed or {}), game_item_ids() if game is None else game)
+    def for_save(cls, parsed: dict | None, items: GameItems) -> Catalog:
+        return cls(frozenset(known_item_ids()), tarnished_flag(parsed or {}), items.game, items.names)
 
     @property
     def available(self) -> bool:
@@ -128,10 +147,10 @@ class Catalog:
         return not self.game and self.pack and kind in EQUIPMENT
 
 
-def item_label(item_id: int) -> tuple[str, str]:
+def item_label(item_id: int, names: mod_item_names.ItemNames) -> tuple[str, str]:
     """(display name, source) for an item the game does not define: the mod's own name when its files can be read,
     otherwise the kind and ID."""
-    named = mod_item_names.item_names().get(item_id)
+    named = names.get(item_id)
     if named:
         return named
     kind, raw = kind_of(item_id), item_id & 0x0FFFFFFF
@@ -188,14 +207,13 @@ def _worn_ids(slot: dict) -> set[int]:
     return {v for v in (slot.get("chr_asm") or []) if v} | {v for v in (slot.get("equipped_items") or []) if v}
 
 
-def scan_mod_items(slot: dict, catalog: Catalog | None = None) -> dict:
+def scan_mod_items(slot: dict, catalog: Catalog) -> dict:
     """Items on one character that the game does not define.
 
     held:    inventory and chest entries, each with its gaItem row (weapons, armour, ashes) or direct handle
              (goods, talismans), the quick / pouch slots pointing at it, and whether it is worn.
     orphans: gaItem rows with a foreign ID that no inventory entry references.
     """
-    catalog = catalog or Catalog.for_save()
     rows = {}
     for index, row in enumerate(slot.get("ga_items") or []):
         handle = row.get("gaitem_handle") or 0
@@ -218,7 +236,7 @@ def scan_mod_items(slot: dict, catalog: Catalog | None = None) -> dict:
                     row, item_id = rows[handle][0], rows[handle][1]["item_id"]
                 if catalog.is_game_item(item_id):
                     continue
-                name, source = item_label(item_id)
+                name, source = item_label(item_id, catalog.names)
                 raw = item_id & 0x0FFFFFFF
                 held.append(
                     {
@@ -243,7 +261,7 @@ def scan_mod_items(slot: dict, catalog: Catalog | None = None) -> dict:
         item_id = row["item_id"]
         if handle in seen or catalog.is_game_item(item_id) or item_id in worn or (item_id & 0x0FFFFFFF) in worn:
             continue
-        name, source = item_label(item_id)
+        name, source = item_label(item_id, catalog.names)
         orphans.append({"row": index, "handle": handle, "item_id": item_id, "name": name, "source": source})
     return {"held": held, "orphans": orphans}
 
@@ -339,10 +357,12 @@ def _torn_findings(parsed: dict, raw: bytes) -> list[dict]:
     return findings
 
 
-def analyze_parsed(parsed: dict, *, dlc_owned: bool | None = None, raw: bytes | None = None) -> list[dict]:
+def analyze_parsed(
+    parsed: dict, items: GameItems, *, dlc_owned: bool | None = None, raw: bytes | None = None
+) -> list[dict]:
     """Findings for a parsed save (active characters only)."""
     findings = []
-    catalog = Catalog.for_save(parsed)
+    catalog = Catalog.for_save(parsed, items)
     if catalog.pack:
         findings.append(
             {

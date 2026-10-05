@@ -6,13 +6,18 @@ import struct
 
 import pytest
 
-from roundtable_souls import core as g
+from roundtable_souls.platform import paths
+from roundtable_souls.saves import layout as save_layout_check
+from roundtable_souls.saves import loading as save_loading
+from roundtable_souls.services import play as g
+from roundtable_souls.services import saves as saves_service
 from support import copy_live_save as _copy
+from support import er
 
 A = g.save_analyze
 F = g.save_fix
-L = g.save_layout_check
-S = g.save_loading
+L = save_layout_check
+S = save_loading
 
 
 def _first_active(r):
@@ -53,7 +58,7 @@ def _mutate(copy, fn):
 
 def test_torrent_bug_detected_and_fixed(tmp_path, monkeypatch):
     copy = _copy(tmp_path)
-    monkeypatch.setattr(g.common, "game_running", lambda: False)
+    monkeypatch.setattr(paths, "exe_running", lambda _exe: False)
     i = _mutate(
         copy,
         lambda d, s: (
@@ -61,27 +66,27 @@ def test_torrent_bug_detected_and_fixed(tmp_path, monkeypatch):
             struct.pack_into("<I", d, s["horse_pos"] + 36, S.TORRENT_SUMMONED),
         ),
     )
-    info = g.save_info(copy)
-    assert [p["issues"] for p in info["loading_plan"]] == [["torrent"]] and g.repair_available(info)
+    info = g.save_info(copy, loc=er())
+    assert [p["issues"] for p in info["loading_plan"]] == [["torrent"]] and saves_service.repair_available(info)
     assert any(f["code"] == "loading" and f["key"] == "torrent" for f in info["findings"])
-    assert g.save_summary(info)[0][0].startswith("May not load")
+    assert saves_service.save_summary(info)[0][0].startswith("May not load")
     before = copy.read_bytes()
-    out = g.fix_loading(copy)
+    out = saves_service.fix_loading(copy, loc=er())
     assert out["fixed"][0]["issues"] == ["torrent"] and out["backup"].read_bytes() == before
     r = L.parse(str(copy))
     assert r["slot_md5_ok"][i] and r["slots"][i]["horse"] == (0, S.TORRENT_DEAD)
-    assert g.save_info(copy)["loading_plan"] == []
+    assert g.save_info(copy, loc=er())["loading_plan"] == []
     diff = sum(1 for a, b in zip(before, copy.read_bytes()) if a != b)
     assert diff <= 1 + 16  # the state byte plus the checksum
 
 
 def test_bad_position_teleports_to_roundtable(tmp_path, monkeypatch):
     copy = _copy(tmp_path)
-    monkeypatch.setattr(g.common, "game_running", lambda: False)
+    monkeypatch.setattr(paths, "exe_running", lambda _exe: False)
     i = _mutate(copy, lambda d, s: struct.pack_into("<fff", d, s["coords_pos"], math.nan, 1.0, 2.0))
-    info = g.save_info(copy)
+    info = g.save_info(copy, loc=er())
     assert [p["issues"] for p in info["loading_plan"]] == [["position"]]
-    g.fix_loading(copy)
+    saves_service.fix_loading(copy, loc=er())
     r = L.parse(str(copy))
     s = r["slots"][i]
     assert (
@@ -94,8 +99,8 @@ def test_bad_position_teleports_to_roundtable(tmp_path, monkeypatch):
 
 def test_dlc_area_without_dlc(tmp_path, monkeypatch):
     copy = _copy(tmp_path)
-    monkeypatch.setattr(g.common, "game_running", lambda: False)
-    monkeypatch.setattr(g.saves_service, "dlc_owned", lambda: False)
+    monkeypatch.setattr(paths, "exe_running", lambda _exe: False)
+    monkeypatch.setattr(saves_service, "dlc_owned", lambda **k: False)
 
     def mut(d, s):
         d[s["ga_items_pos"] - 0x1C : s["ga_items_pos"] - 0x18] = bytes([0, 40, 42, 61])  # Land of Shadow
@@ -103,10 +108,10 @@ def test_dlc_area_without_dlc(tmp_path, monkeypatch):
         struct.pack_into("<H", d, s["weather_pos"], 3)  # weather off
 
     i = _mutate(copy, mut)
-    info = g.save_info(copy)
+    info = g.save_info(copy, loc=er())
     issues = info["loading_plan"][0]["issues"]
     assert issues == ["dlc_area"]  # the move also clears the entry mark
-    g.fix_loading(copy)
+    saves_service.fix_loading(copy, loc=er())
     r = L.parse(str(copy))
     s = r["slots"][i]
     assert bytes(s["map_id"]) == S.ROUNDTABLE_HOLD and s["dlc"][1] == 0
@@ -143,25 +148,27 @@ def test_one_unreadable_slot_does_not_hide_the_others(tmp_path, monkeypatch):
         and r2["ud10"]["active_raw"][i]
     )
     assert all(not r2["slots"][j].get("unreadable") for j in victims[1:])
-    info = g.save_info(copy)
+    info = g.save_info(copy, loc=er())
     assert [c["slot"] - 1 for c in info["characters"]] == victims[1:]
     assert any(f["title"].startswith("Torn write") for f in info["findings"]) and not info.get(
         "unreadable"
     )  # current version + no parse = damage
-    assert g.save_summary(info)[0][0] == "Damaged file" and not info["error"]
+    assert saves_service.save_summary(info)[0][0] == "Damaged file" and not info["error"]
     # the same slot stamped as an early-patch version is reported as an old layout instead
     struct.pack_into("<I", data, L.HEADER + i * F.SLOT_STRIDE + 0x10, 70)
     F._sign_slot(data, i)
     copy.write_bytes(bytes(data))
-    info2 = g.save_info(copy)
+    info2 = g.save_info(copy, loc=er())
     assert (
         info2["unreadable"][0]["slot"] == i + 1
         and any(f["code"] == "old_slot" for f in info2["findings"])
         and not any(f["title"].startswith("Torn") for f in info2["findings"])
     )
-    assert g.save_summary(info2)[0][0] == "Loads fine"
-    monkeypatch.setattr(g.common, "game_running", lambda: False)
-    assert g.fix_loading(copy, selection={})["backup"] is None  # nothing touches the unreadable slot
+    assert saves_service.save_summary(info2)[0][0] == "Loads fine"
+    monkeypatch.setattr(paths, "exe_running", lambda _exe: False)
+    assert (
+        saves_service.fix_loading(copy, selection={}, loc=er())["backup"] is None
+    )  # nothing touches the unreadable slot
     assert V_plan_is_quiet(info, i)
 
 
@@ -188,7 +195,7 @@ def test_torn_write_is_detected_not_repaired(tmp_path):
     data[start:end] = body
     F._sign_slot(data, i)
     copy.write_bytes(bytes(data))
-    info = g.save_info(copy)
+    info = g.save_info(copy, loc=er())
     torn = [
         f
         for f in info["findings"]
@@ -196,4 +203,4 @@ def test_torn_write_is_detected_not_repaired(tmp_path):
     ]
     assert torn, [f["title"] for f in info["findings"]]
     assert info["loading_plan"] == [] or True  # never a loading fix on a damaged slot
-    assert g.save_summary(info)[0][0] in ("Damaged file", "Could not read")
+    assert saves_service.save_summary(info)[0][0] in ("Damaged file", "Could not read")

@@ -123,7 +123,8 @@ def match(setup: Path | None) -> tuple[dict | None, str | None, str | None]:
 def layers(profile: Path, target_folder: Path) -> list[Path]:
     """The enabled packages before the target, in the order its own installer merges them: file order, each moved
     after what it loads after (and before what it loads before), taking the first that can go next."""
-    from roundtable_souls.mods import manage as mod_manage
+    from roundtable_souls.mods import checks
+    from roundtable_souls.mods import profile_edit as mod_manage
 
     rows = [
         e
@@ -131,7 +132,7 @@ def layers(profile: Path, target_folder: Path) -> list[Path]:
         if e["kind"] == "package"
         and e.get("enabled", True)
         and e.get("path")
-        and not mod_manage.same_folder(mod_manage.resolve(profile, e["path"]), target_folder)
+        and not checks.same_folder(mod_manage.resolve(profile, e["path"]), target_folder)
     ]
     ids = [(e.get("id") or Path(e["path"]).name) for e in rows]
     if len(set(ids)) != len(ids):
@@ -158,7 +159,7 @@ def layers(profile: Path, target_folder: Path) -> list[Path]:
 
 
 def _seamless(profile: Path) -> Path | None:
-    from roundtable_souls.mods import manage as mod_manage
+    from roundtable_souls.mods import profile_edit as mod_manage
 
     for e in mod_manage.entries(profile):
         if e["kind"] == "native" and e.get("enabled", True) and Path(e.get("path") or "").name.lower() == "ersc.dll":
@@ -169,7 +170,7 @@ def _seamless(profile: Path) -> Path | None:
 # ----------------------------------------------------------------------------- the tool
 def run_tool(exe: Path, args: list[str], env: dict, timeout: int, cwd: Path) -> tuple[int, str]:
     """Run the mod's tool once: (exit code, its output)."""
-    from roundtable_souls.system import common
+    from roundtable_souls.platform import proc
 
     try:
         p = subprocess.run(
@@ -181,7 +182,7 @@ def run_tool(exe: Path, args: list[str], env: dict, timeout: int, cwd: Path) -> 
             encoding="utf-8",
             errors="replace",
             timeout=timeout,
-            creationflags=common.NO_WINDOW,
+            creationflags=proc.NO_WINDOW,
         )
     except subprocess.TimeoutExpired as e:
         raise EngineError(f"{Path(exe).name} took longer than {timeout // 60} minutes and was stopped.") from e
@@ -267,7 +268,7 @@ def build(
     swap it in, and return {output, previous, restore, sources, seconds}. Raises EngineError; the output in place is
     then unchanged."""
     from roundtable_souls import __version__
-    from roundtable_souls.system import common
+    from roundtable_souls.mods import locations
 
     started = time.time()
     profile, target_folder, setup = Path(profile), Path(target_folder), Path(setup)
@@ -277,7 +278,8 @@ def build(
     own = target_folder.parent
     if own.resolve() == profile.parent.resolve():
         raise EngineError(f"{recipe['label']}'s package must be in a folder of its own.")
-    game_dir = Path(game_dir) if game_dir else (Path(common.game_dir()) if common.game_dir() else None)
+    found = locations.get().game_dir()
+    game_dir = Path(game_dir) if game_dir else (Path(found) if found else None)
     if game_dir is None or not game_dir.is_dir():
         raise EngineError("The game folder was not found.")
     if _seamless(profile) is None:

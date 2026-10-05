@@ -7,11 +7,13 @@ import struct
 import pytest
 
 from roundtable_souls import formats
+from roundtable_souls.game import locate
 from roundtable_souls.merging.rules import param as pm
-from roundtable_souls.mods import manage as M
-from roundtable_souls.mods import merge
+from roundtable_souls.mods import profile_edit as M
+from roundtable_souls.mods import rebuild as merge
+from roundtable_souls.mods import remove
 from roundtable_souls.mods.backends import builtin
-from roundtable_souls.system import common
+from roundtable_souls.platform import paths as common
 
 DCX = (  # the 0x4C header of the game's regulation (sizes are filled in on write)
     b"DCX\0"
@@ -211,8 +213,8 @@ def prof(tmp_path, monkeypatch):
     game = tmp_path / "Game"
     game.mkdir()
     (game / "regulation.bin").write_bytes(vanilla())
-    monkeypatch.setattr(common, "game_dir", lambda: game)
-    monkeypatch.setattr(common, "game_running", lambda: False)
+    monkeypatch.setattr(locate, "installed_dir", lambda _game: game)
+    monkeypatch.setattr(common, "exe_running", lambda _exe: False)
     base = tmp_path / "profiles" / "er"
     text = "# mine\n"
     for name, raw in (
@@ -267,18 +269,20 @@ def test_a_pack_placed_after_the_combined_one_is_moved_behind_on_rebuild(prof):
 
 def test_a_game_update_or_a_removed_pack_makes_the_combine_stale(prof):
     merge.rebuild(prof, lambda s: None, combine=True)
-    game = common.game_dir() / "regulation.bin"
+    game_dir = locate.installed_dir(locate.catalog.ELDEN_RING)
+    assert game_dir is not None
+    game = game_dir / "regulation.bin"
     game.write_bytes(pack({"EquipParamWeapon": set_word(2000, 0, 1)}))
     assert any("game update" in r for r in merge.health(prof)["reasons"])
     merge.rebuild(prof, lambda s: None)
     idx = next(e["index"] for e in M.entries(prof) if e["name"] == "balance")
-    M.uninstall(prof, idx)
+    remove.uninstall(prof, idx)
     assert any("balance was combined but is no longer loaded" in r for r in merge.health(prof)["reasons"])
 
 
 def test_one_pack_alone_is_not_combined_unless_asked(prof):
     idx = next(e["index"] for e in M.entries(prof) if e["name"] == "balance")
-    M.uninstall(prof, idx)
+    remove.uninstall(prof, idx)
     assert merge.health(prof)["state"] == "single"
     with pytest.raises(merge.MergeError, match="nothing to combine"):
         merge.rebuild(prof, lambda s: None)

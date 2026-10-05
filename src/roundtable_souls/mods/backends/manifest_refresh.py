@@ -75,7 +75,7 @@ def _merges(setup: Path | None) -> set[str]:
 
 
 def _recipe(profile: Path, layer: dict, manifest: Path, data: dict) -> Recipe:
-    from roundtable_souls.system import common
+    from roundtable_souls.mods import locations
 
     setup = _find_setup(profile, data)
     label = f"the rebuild tool of {layer['name']}"
@@ -90,9 +90,10 @@ def _recipe(profile: Path, layer: dict, manifest: Path, data: dict) -> Recipe:
         if written_here:
             command = [str(py), "-I", "-u", str(script), "refresh", *where]
         else:
-            game_dir = common.game_dir()
-            exe = Path(game_dir) / common.game_exe_name() if game_dir else None
-            me3 = common.me3_exe()
+            loc = locations.get()
+            game_dir = loc.game_dir()
+            exe = Path(game_dir) / loc.game_exe_name() if game_dir else None
+            me3 = loc.me3_exe()
             if exe is None or not exe.is_file():
                 problem = "The game was not found."
             elif not me3:
@@ -155,16 +156,15 @@ class _Build:
 def _engine(profile: Path, layer: dict, setup: Path | None):
     """(problem, the build to run, approval key) when the launcher builds this mod itself: the switch on Settings is
     on and a recipe fits its download. None otherwise (its own installer runs)."""
-    from roundtable_souls.mods import engine
-    from roundtable_souls.settings import load_settings
-    from roundtable_souls.system import common
+    from roundtable_souls.config.settings import load_settings
+    from roundtable_souls.mods import engine, locations
 
-    if setup is None or not load_settings().get("build_merges", False):
+    if setup is None or not load_settings().build_merges:
         return None
     recipe, version, _why = engine.match(setup)
     if recipe is None:
         return None
-    game_dir = common.game_dir()
+    game_dir = locations.get().game_dir()
     problem = None if game_dir and Path(game_dir).is_dir() else "The game was not found."
     try:
         tool = hashlib.sha256((setup / recipe["tool"]["path"]).read_bytes()).hexdigest()

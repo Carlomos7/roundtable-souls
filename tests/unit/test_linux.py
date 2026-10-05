@@ -1,19 +1,21 @@
 """Linux and Steam Deck detection, exercised on fake home folders so it runs on any OS."""
 
-from roundtable_souls import updates
-from roundtable_souls.system import common
+from roundtable_souls.game import catalog
+from roundtable_souls.game.locate import Locations
+from roundtable_souls.platform import paths as common
+from roundtable_souls.platform import proc as process_list
+from roundtable_souls.platform import steam as steam_detect
+from roundtable_souls.updates import apply as updates
 
 
 def linux(monkeypatch, home):
-    monkeypatch.setattr(common, "IS_WINDOWS", False)
-    monkeypatch.setattr(common, "IS_LINUX", True)
+    for module in (common, steam_detect, process_list):  # each keeps its own copy of the platform flags
+        monkeypatch.setattr(module, "IS_WINDOWS", False)
+        monkeypatch.setattr(module, "IS_LINUX", True)
     monkeypatch.setattr(common.Path, "home", classmethod(lambda cls: home))
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     monkeypatch.setattr(common.shutil, "which", lambda name: None)
-    monkeypatch.setattr(common, "PROFILE_DIR_OVERRIDE", None)
-    monkeypatch.setattr(common, "ME3_OVERRIDE", None)
-    monkeypatch.setattr(common, "GAME_EXE_OVERRIDE", None)
 
 
 def fake_proc(root, pid, argv, comm, rss_kb):
@@ -36,9 +38,9 @@ def test_proton_game_and_steam_are_found_in_proc(tmp_path):
     fake_proc(proc, 101, ["/home/deck/.local/share/Steam/ubuntu12_32/steam", "-silent"], "steam", 300_000)
     fake_proc(proc, 102, ["/usr/bin/python3"], "python3", 10_000)
     (proc / "self").mkdir()
-    assert common._linux_processes("eldenring.exe", proc) == [(100, 5_000_000)]
-    assert common._linux_processes("steam", proc) == [(101, 300_000)]
-    assert common._linux_processes("missing.exe", proc) == []
+    assert process_list._linux_processes("eldenring.exe", proc) == [(100, 5_000_000)]
+    assert process_list._linux_processes("steam", proc) == [(101, 300_000)]
+    assert process_list._linux_processes("missing.exe", proc) == []
 
 
 def test_steam_library_saves_and_sign_in(tmp_path, monkeypatch):
@@ -68,16 +70,17 @@ def test_steam_library_saves_and_sign_in(tmp_path, monkeypatch):
     saves.mkdir(parents=True)
     (saves / "ER0000.sl2").write_bytes(b"s")
     (saves / "ER0000.co2").write_bytes(b"c")
-    assert common.steam_root() == steam.resolve()
-    assert common.game_dir() == steam / "steamapps" / "common" / "ELDEN RING" / "Game"
-    assert [p.name for p in common.save_files()] == ["ER0000.sl2", "ER0000.co2"]  # the prefix on the SD card
-    assert not common.steam_logged_in()
+    assert steam_detect.steam_root() == steam.resolve()
+    er = Locations(catalog.ELDEN_RING)
+    assert er.game_dir() == steam / "steamapps" / "common" / "ELDEN RING" / "Game"
+    assert [p.name for p in er.save_files()] == ["ER0000.sl2", "ER0000.co2"]  # the prefix on the SD card
+    assert not steam_detect.steam_logged_in()
     (home / ".steam").mkdir()
     (home / ".steam" / "registry.vdf").write_text('"Registry"\n{\n "ActiveProcess"\n {\n  "ActiveUser"\t\t"0"\n }\n}\n')
-    assert not common.steam_logged_in()
+    assert not steam_detect.steam_logged_in()
     (home / ".steam" / "registry.vdf").write_text('"ActiveUser"\t\t"123456"\n')
-    assert common.steam_logged_in()
-    assert common.dead_game_shells() == []  # a Windows-only problem
+    assert steam_detect.steam_logged_in()
+    assert er.dead_game_shells() == []  # a Windows-only problem
 
 
 def test_me3_paths_follow_its_linux_layout(tmp_path, monkeypatch):

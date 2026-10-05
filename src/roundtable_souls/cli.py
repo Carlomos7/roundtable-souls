@@ -7,13 +7,15 @@ import sys
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from roundtable_souls.games import Game
+    from roundtable_souls.game.catalog import Game
 
 
 def main() -> int:
-    """Console entry point: the window; or without one --play, --check, --update (see updates.update_headless)."""
-    from roundtable_souls.system import logging as run_logging
+    """Console entry point: the window; or without one --play, --check, --update (see headless.update_headless)."""
+    from roundtable_souls.app import use_data_folder
+    from roundtable_souls.platform import logging as run_logging
 
+    use_data_folder()  # before anything logs: the platform layer is told where the data folder is
     run_logging.setup_logging()
 
     def crashed(exc_type, exc, tb):  # the window replaces this with one that also shows a message
@@ -22,15 +24,19 @@ def main() -> int:
 
     sys.excepthook = crashed
     if getattr(sys, "frozen", False):
-        from roundtable_souls import updates
+        from roundtable_souls.updates import apply as updates
+        from roundtable_souls.updates import headless
 
         updates.velopack_startup()  # Velopack's install/update/uninstall hooks exit here
     if "--update" in sys.argv:
-        from roundtable_souls import updates
+        from roundtable_souls.updates import apply as updates
+        from roundtable_souls.updates import headless
 
-        return updates.update_headless([a for a in sys.argv[1:] if a != "--update"])
+        return headless.update_headless([a for a in sys.argv[1:] if a != "--update"])
+    game = None  # --game without --play/--check: the tab the window opens on, this run only
     if "--play" in sys.argv or "--check" in sys.argv or any(a.startswith("--game") for a in sys.argv):
-        from roundtable_souls import core, games
+        from roundtable_souls.game import catalog as games
+        from roundtable_souls.services import play as core
 
         game = core.game_from_args(sys.argv)
         if game is None:
@@ -39,32 +45,39 @@ def main() -> int:
         if "--play" in sys.argv:
             return play_from_shortcut(game)
         if "--check" in sys.argv:
-            core.check(game)
-            return 0
-        core.STARTUP_GAME = game  # the window opens on this tab, this run only
-    from roundtable_souls.ui.window import main as window_main
+            from roundtable_souls.app import create_app
 
-    return int(window_main() or 0)
+            ctx = create_app(game)
+            core.check(ctx.settings, ctx.locations, ctx.data_dir)
+            return 0
+    from roundtable_souls.app import create_app
+    from roundtable_souls.ui.shell import main as window_main
+
+    return int(window_main(create_app(game)) or 0)
 
 
 def play_from_shortcut(game) -> int:
     """--play: when the window is open, it runs Play itself (one launcher manages the session); otherwise Play runs
     here, holding the PLAY name so a second shortcut start, or a silent update, waits for it to end."""
-    from roundtable_souls import core, updates
-    from roundtable_souls.system import instance
+    from roundtable_souls.app import create_app
+    from roundtable_souls.platform import instance
+    from roundtable_souls.platform import logging as run_logging
+    from roundtable_souls.services import play as core
+    from roundtable_souls.updates import apply as updates
 
     updates.mark_ready("play")  # this version starts and runs: an update's watchdog can stand down
     if instance.held(instance.WINDOW) and instance.send(f"play {game.key}"):
-        core.common.start_log("launcher: play (no window)")
-        core.common.log("Roundtable Souls is open: Play was handed to its window")
+        run_logging.start_log("launcher: play (no window)", game.key)
+        run_logging.log("Roundtable Souls is open: Play was handed to its window")
         return 0
     hold = instance.acquire(instance.PLAY)
     if hold is None:
-        core.common.start_log("launcher: play (no window)")
-        core.common.log("error: a Play from a Steam shortcut is already running")
+        run_logging.start_log("launcher: play (no window)", game.key)
+        run_logging.log("error: a Play from a Steam shortcut is already running")
         return 1
     try:
-        return core.play_headless(game, notice=not_started_notice)
+        ctx = create_app(game)
+        return core.play_headless(ctx.settings, ctx.locations, notice=not_started_notice)
     finally:
         hold.release()
 
@@ -72,7 +85,7 @@ def play_from_shortcut(game) -> int:
 def not_started_notice(game: Game, why: str) -> None:
     """--play without the window, when the game was not started: a small window saying why, with a way to open the
     launcher (a Steam shortcut or Gaming Mode has nowhere else to show it). Nothing happens without a display."""
-    from roundtable_souls import core
+    from roundtable_souls.services import play as core
 
     try:
         import subprocess
@@ -96,4 +109,4 @@ def not_started_notice(game: Game, why: str) -> None:
             command = [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, "-m", "roundtable_souls"]
             subprocess.Popen([*command, "--game", game.key], close_fds=True)
     except Exception as e:  # no display (a console, a test): the log says it
-        core.common.log(f"the notice could not be shown: {e}")
+        core.run_logging.log(f"the notice could not be shown: {e}")

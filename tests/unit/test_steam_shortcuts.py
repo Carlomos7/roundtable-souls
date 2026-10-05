@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from roundtable_souls.system import steam_shortcuts as vdf
+from roundtable_souls.platform import steam_shortcuts as vdf
 
 
 def _s(name, value):

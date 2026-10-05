@@ -1,6 +1,6 @@
 """Find / replace helpers behind the editor's find bar."""
 
-from roundtable_souls import find
+from roundtable_souls.ui import find
 
 TEXT = "path = 'mod/Flora'\npath = 'mod/flora'\nenabled = true\n"
 

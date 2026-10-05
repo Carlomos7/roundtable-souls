@@ -29,8 +29,7 @@ import argparse
 import hashlib
 from pathlib import Path
 
-from roundtable_souls.system import common
-from roundtable_souls.system.common import fail, log
+from roundtable_souls.platform.logging import fail, log
 
 UD11_OFF = 0x19603B0
 UD11_SIZE = 0x240020
@@ -119,15 +118,23 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="report what would change without writing")
     ap.add_argument("-o", "--out", help="output path (single save only; default: repair in place)")
     a = ap.parse_args()
-    common.start_log("repair_regulation")
+    from roundtable_souls.config.settings import data_dir
+    from roundtable_souls.game import catalog
+    from roundtable_souls.game.locate import Locations
+    from roundtable_souls.platform import data_folder
+    from roundtable_souls.platform import logging as run_logging
 
-    saves = [Path(p) for p in a.saves] or common.save_files()
+    data_folder.use(data_dir())  # the job log goes to the launcher's data folder
+    loc = Locations(catalog.ELDEN_RING)  # detected; Settings > Locations is the window's, not this tool's
+    run_logging.start_log("repair_regulation", loc.game.key)
+
+    saves = [Path(p) for p in a.saves] or loc.save_files()
     if not saves:
         fail("no saves given and none found under %APPDATA%/EldenRing")
     if a.out and len(saves) > 1:
         fail("-o only works with a single save")
 
-    source = Path(a.regulation) if a.regulation else common.regulation_bin()
+    source = Path(a.regulation) if a.regulation else loc.regulation_bin()
     if not source or not source.exists():
         fail("could not find the game's regulation.bin through Steam; pass it with --regulation")
     reg, header = load_regulation(source)
@@ -135,7 +142,7 @@ def main():
         fail(f"{source}: regulation length {len(reg):#x} does not look right")
     log(f"regulation: {source} ({len(reg):#x} bytes, md5 {hashlib.md5(reg).hexdigest()})")
 
-    if common.game_running() and not a.dry_run:
+    if loc.game_running() and not a.dry_run:
         fail("Elden Ring is running: close it first so the game does not overwrite the repaired save", code=2)
 
     fixed = 0

@@ -8,9 +8,12 @@ import pytest
 from fakegame import bnd, dcx, files_of
 from test_param_merge import vanilla
 
-from roundtable_souls.mods import merge, overview, undo
+from roundtable_souls.game import locate
+from roundtable_souls.mods import conflicts as overview
+from roundtable_souls.mods import rebuild as merge
+from roundtable_souls.mods import undo
 from roundtable_souls.mods.backends import builtin
-from roundtable_souls.system import common
+from roundtable_souls.platform import paths as common
 
 REL = "menu/hi/01_common.sblytbnd.dcx"
 GAME = {"SB_KG.layout": b"xbox buttons", "SB_Marker.layout": b"white marker", "SB_Map.layout": b"map"}
@@ -23,8 +26,8 @@ def prof(tmp_path, monkeypatch):
     game = tmp_path / "Game"
     game.mkdir()
     (game / "regulation.bin").write_bytes(vanilla())
-    monkeypatch.setattr(common, "game_dir", lambda: game)
-    monkeypatch.setattr(common, "game_running", lambda: False)
+    monkeypatch.setattr(locate, "installed_dir", lambda _game: game)
+    monkeypatch.setattr(common, "exe_running", lambda _exe: False)
     fakegame.game(monkeypatch, {REL: dcx(bnd(GAME))})
     base = tmp_path / "p"
     for name, change in (
@@ -178,13 +181,14 @@ def _add_mod(prof, name: str, change: dict) -> None:
 
 
 def test_removing_a_mod_and_rebuilding_equals_building_without_it(prof, tmp_path, monkeypatch):
-    from roundtable_souls.mods import manage
+    from roundtable_souls.mods import profile_edit as manage
+    from roundtable_souls.mods import remove
 
     _add_mod(prof, "map", {"SB_Map.layout": b"big map"})
     merge.rebuild(prof, lambda s: None)
     assert _merged(prof)["SB_Marker.layout"] == b"blue marker"
     idx = next(e["index"] for e in manage.entries(prof) if e["name"] == "marker")
-    manage.uninstall(prof, idx)
+    remove.uninstall(prof, idx)
     merge.rebuild(prof, lambda s: None)
     after_removal = (prof.parent / "mod" / "combined-parameters" / REL).read_bytes()
     assert files_of(after_removal) == {**GAME, "SB_KG.layout": b"ps5 buttons", "SB_Map.layout": b"big map"}

@@ -28,17 +28,18 @@ REGULATION = "regulation.bin"
 
 
 def _sha(p: Path) -> str:
-    from roundtable_souls.mods import merge
+    from roundtable_souls.mods import rebuild as merge
 
     return merge.sha256(p) or ""
 
 
 def _me3_version() -> str | None:
     """The installed me3's version, for the record (None when it cannot be asked)."""
-    from roundtable_souls.system import common, me3_info
+    from roundtable_souls.mods import locations
+    from roundtable_souls.platform import me3_info
 
     try:
-        return me3_info.me3_version(common.me3_exe())
+        return me3_info.me3_version(locations.get().me3_exe())
     except Exception:
         return None
 
@@ -67,9 +68,9 @@ def find(profile: Path, all_layers: list[dict]) -> CombineTool | None:
 
 
 def game_regulation() -> Path | None:
-    from roundtable_souls.system import common
+    from roundtable_souls.mods import locations
 
-    d = common.game_dir()
+    d = locations.get().game_dir()
     p = Path(d) / REGULATION if d else None
     return p if p is not None and p.is_file() else None
 
@@ -115,10 +116,10 @@ def history_root(profile: Path) -> Path:
     import hashlib
     import os
 
-    from roundtable_souls import folders
+    from roundtable_souls.platform import data_folder
 
     key = hashlib.sha1(os.path.normcase(os.path.abspath(profile)).encode()).hexdigest()[:8]
-    return folders.data_root() / "mods" / "combined-history" / f"{Path(profile).stem}-{key}"
+    return data_folder.data_root() / "mods" / "combined-history" / f"{Path(profile).stem}-{key}"
 
 
 class CombineTool:
@@ -210,13 +211,17 @@ class CombineTool:
 
     def file_reasons(self, all_layers: list[dict], until: dict | None) -> list[str]:
         """Why the merged files no longer match today's packages."""
-        from roundtable_souls.system import common
+        from roundtable_souls.mods import locations
 
         rec = self.record()
         done = rec.get("files") or {}
         shared = shared_files(self.file_inputs(all_layers, until))
         out = []
-        if (done or shared) and rec.get("archives") and rec["archives"] != archives_fingerprint(common.game_dir()):
+        if (
+            (done or shared)
+            and rec.get("archives")
+            and rec["archives"] != archives_fingerprint(locations.get().game_dir())
+        ):
             return ["the game's own files changed since they were merged (a game update?)"]
         for low, owners in sorted(shared.items()):
             had = done.get(low)
@@ -274,8 +279,8 @@ class CombineTool:
     def run(self, log, all_layers: list[dict] | None = None, until: dict | None = None) -> dict:
         from roundtable_souls import __version__
         from roundtable_souls.merging.rules import param as param_merge
-        from roundtable_souls.mods import merge
-        from roundtable_souls.system import common
+        from roundtable_souls.mods import locations
+        from roundtable_souls.mods import rebuild as merge
 
         layers = merge.layers(self.profile) if all_layers is None else all_layers
         packs = self.inputs(layers, until)
@@ -298,7 +303,7 @@ class CombineTool:
             f"combine: {len(packs)} packs onto the game's regulation.bin: {', '.join(p['name'] for p in packs) or 'none'}"
         )
         start = time.time()
-        game_dir = common.game_dir()
+        game_dir = locations.get().game_dir()
         oodle = None
         try:
             from roundtable_souls.game.oodle import find_oodle
@@ -341,14 +346,14 @@ class CombineTool:
     def _write_record(
         self, files: dict, base, packs, report, version, out: bytes | None = None, build: Build | None = None
     ) -> dict:
-        from roundtable_souls.system import common
+        from roundtable_souls.mods import locations
 
         record = {
             "combined": 1,
             "made_by": f"Roundtable Souls {version}",
             "when": time.strftime("%Y-%m-%d %H:%M:%S"),
             "files": files,
-            "archives": archives_fingerprint(common.game_dir()),
+            "archives": archives_fingerprint(locations.get().game_dir()),
         } | merge_record.facts(me3_version=_me3_version())
         if base is None:
             self._put_record(record, build)
@@ -388,9 +393,9 @@ class CombineTool:
     def _activate(self, build: Build) -> None:
         """Read every staged output back, then put them in place (refused while the game runs)."""
         from roundtable_souls.game.oodle import find_oodle
-        from roundtable_souls.system import common
+        from roundtable_souls.mods import locations
 
-        game_dir = common.game_dir()
+        game_dir = locations.get().game_dir()
         dec = find_oodle(Path(game_dir)) if game_dir else None
 
         def read(rel: str, data: bytes) -> None:
@@ -403,7 +408,9 @@ class CombineTool:
 
         try:
             build.check(read)
-            build.activate(lambda: "Close the game first: it has these files open." if common.game_running() else None)
+            build.activate(
+                lambda: "Close the game first: it has these files open." if locations.get().game_running() else None
+            )
         except BuildError as e:
             raise BackendError(f"The rebuild was not put in place: {e}. The previous result is unchanged.") from e
 
@@ -413,7 +420,7 @@ class CombineTool:
         from roundtable_souls.game import archives as gamearchive
         from roundtable_souls.game.oodle import find_oodle
         from roundtable_souls.merging import merger
-        from roundtable_souls.system import common
+        from roundtable_souls.mods import locations
 
         shared = shared_files(self.file_inputs(layers, until))
         before = self.record().get("files") or {}
@@ -422,7 +429,7 @@ class CombineTool:
                 build.remove(had["rel"])
         if not shared:
             return {}
-        game_dir = common.game_dir()
+        game_dir = locations.get().game_dir()
         dec = find_oodle(Path(game_dir)) if game_dir else None
         comp = game_oodle.oodle_compressor(Path(game_dir)) if game_dir else None
         out: dict = {}

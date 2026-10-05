@@ -12,7 +12,9 @@ from dataclasses import dataclass, field
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
-from roundtable_souls import identity, signing, updates
+from roundtable_souls.config import identity
+from roundtable_souls.updates import apply as updates
+from roundtable_souls.updates import feed, signing
 
 PACK = identity.get().pack_id
 
@@ -63,7 +65,7 @@ class Release:
     def fetch(self, url: str) -> bytes:
         self.calls.append(url)
         if url not in self.urls:
-            raise updates.UpdateError(f"404 {url}")
+            raise feed.UpdateError(f"404 {url}")
         return self.urls[url]
 
     def fetch_file(self, url, part, progress=None):

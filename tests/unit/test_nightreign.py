@@ -4,10 +4,11 @@ from pathlib import Path
 
 import pytest
 
+from roundtable_souls.platform import paths as common
 from roundtable_souls.saves import container
 from roundtable_souls.saves import nightreign as nr
-from roundtable_souls.saves import service as saves
-from roundtable_souls.system import common
+from roundtable_souls.services import saves
+from support import er
 
 LIVE_NR = Path.home() / "AppData" / "Roaming" / "Nightreign"
 
@@ -51,7 +52,7 @@ def test_packed_save_is_healthy_and_rewrite_is_identity():
 
 
 def test_stale_checksum_is_restored_without_changing_payload(tmp_path, monkeypatch):
-    monkeypatch.setattr(common, "game_running", lambda: False)
+    monkeypatch.setattr(common, "exe_running", lambda _exe: False)
     data = bytearray(nr.pack_save(_payloads(), ivs=_ivs()))
     orig = bytes(data)
     sec = container.sections(orig)[0]
@@ -72,7 +73,7 @@ def test_stale_checksum_is_restored_without_changing_payload(tmp_path, monkeypat
 
 
 def test_garbled_regulation_is_restored_from_sibling(tmp_path, monkeypatch):
-    monkeypatch.setattr(common, "game_running", lambda: False)
+    monkeypatch.setattr(common, "exe_running", lambda _exe: False)
     ivs = _ivs()
     healthy = nr.pack_save(_payloads(), ivs=ivs)
     garbled = nr.pack_save(_payloads(reg=b"XXXX" + bytes(12)), ivs=ivs)
@@ -88,15 +89,15 @@ def test_garbled_regulation_is_restored_from_sibling(tmp_path, monkeypatch):
 
 
 def test_healthy_save_repair_does_not_write(tmp_path, monkeypatch):
-    monkeypatch.setattr(common, "game_running", lambda: False)
+    monkeypatch.setattr(common, "exe_running", lambda _exe: False)
     p = tmp_path / "NR0000.sl2"
     p.write_bytes(nr.pack_save(_payloads(), ivs=_ivs()))
     before = p.read_bytes()
     assert nr.repair(p, log=lambda *_: None) is False
     assert p.read_bytes() == before
-    from roundtable_souls import folders
+    from roundtable_souls.saves import backups as save_backups
 
-    assert not folders.backups(tmp_path).exists()
+    assert not save_backups.backups(tmp_path).exists()
 
 
 def test_save_info_flags_stale_checksum(tmp_path):
@@ -108,7 +109,7 @@ def test_save_info_flags_stale_checksum(tmp_path):
     data[sec.offset : sec.offset + sec.size] = nr.encrypt_entry(iv, dec)
     p = tmp_path / "NR0000.co2"
     p.write_bytes(data)
-    info = saves.save_info(p)
+    info = saves.save_info(p, loc=er())
     assert info["needs_repair"] and saves.repair_available(info)
     assert [f["code"] for f in info["findings"]] == ["layout", "checksum", "regulation"]
     assert info["findings"][1]["level"] == "warn"

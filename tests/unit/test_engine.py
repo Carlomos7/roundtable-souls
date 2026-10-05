@@ -10,10 +10,12 @@ import pytest
 from fakegame import bnd, dcx, files_of, fmg, texts_of
 from test_param_merge import pack, rows_of, set_word, vanilla
 
-from roundtable_souls import settings
-from roundtable_souls.mods import backends, engine, merge
+from roundtable_souls.config import settings
+from roundtable_souls.game import locate
+from roundtable_souls.mods import backends, engine
+from roundtable_souls.mods import rebuild as merge
 from roundtable_souls.mods.backends import manifest_refresh
-from roundtable_souls.system import common
+from roundtable_souls.platform import paths as common
 
 RECIPE = json.loads((engine.RECIPES_DIR / "nightreign-revive-lite.json").read_text(encoding="utf-8"))
 PROFILE = """profileVersion = "v1"
@@ -81,8 +83,8 @@ class Revive:
         import fakegame
 
         fakegame.game(monkeypatch, game_files())
-        monkeypatch.setattr(common, "game_dir", lambda: self.game)
-        monkeypatch.setattr(common, "game_running", lambda: False)
+        monkeypatch.setattr(locate, "installed_dir", lambda _game: self.game)
+        monkeypatch.setattr(common, "exe_running", lambda _exe: False)
         self.setup = self.base / ".nightreign-revive-setup"
         for f in PAYLOAD:
             (self.setup / f).parent.mkdir(parents=True, exist_ok=True)
@@ -309,7 +311,6 @@ def test_a_rebuild_uses_the_engine_only_with_the_switch_on(world, monkeypatch):
     r = manifest_refresh.recipe(world.profile, layer)
     assert r is not None and r.engine is None and r.command  # off: the mod's installer runs
     settings.save_settings(build_merges=True)
-    settings.get_settings.cache_clear()
     r = manifest_refresh.recipe(world.profile, layer)
     assert r.engine is not None and r.label == "the launcher's build of nightreign-revive"
     assert (
@@ -319,7 +320,6 @@ def test_a_rebuild_uses_the_engine_only_with_the_switch_on(world, monkeypatch):
 
 def test_a_whole_rebuild_through_the_engine_is_current_and_can_be_undone(world):
     settings.save_settings(build_merges=True)
-    settings.get_settings.cache_clear()
     tool = merge.find_backend(world.profile)
     merge.approve(tool)
     out = merge.rebuild(world.profile, lambda s: None)

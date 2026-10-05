@@ -62,14 +62,14 @@ def main() -> int:
 
     from roundtable_souls.game import archives as gamearchive
     from roundtable_souls.game.oodle import find_oodle
-    from roundtable_souls.mods import merge
+    from roundtable_souls.mods import rebuild as merge
     from roundtable_souls.mods.backends import builtin
-    from roundtable_souls.system import common
+    from roundtable_souls.platform import paths
 
     # A Rebuild refuses while the game runs because it rewrites files the game may have open. Everything here is
     # written inside the output folder, which the game does not use, and the game's own files are only read, so that
     # check is switched off for this run only (the launcher itself is unchanged).
-    common.game_running = lambda: False
+    paths.exe_running = lambda _exe: False
     dec = find_oodle(game)
     comp = game_oodle.oodle_compressor(game)
     if comp is None:

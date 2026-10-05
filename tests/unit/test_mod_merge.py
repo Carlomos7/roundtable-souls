@@ -8,9 +8,11 @@ from pathlib import Path
 
 import pytest
 
-from roundtable_souls.mods import backends, merge
-from roundtable_souls.mods import manage as M
-from roundtable_souls.system import common
+from roundtable_souls.game import locate
+from roundtable_souls.mods import backends, install, remove
+from roundtable_souls.mods import profile_edit as M
+from roundtable_souls.mods import rebuild as merge
+from roundtable_souls.platform import paths as common
 
 TALK = "script/talk/m00_00_00_00.talkesdbnd.dcx"
 PROFILE = (
@@ -34,8 +36,8 @@ class World:
         self.game.mkdir(parents=True)
         (self.game / "regulation.bin").write_bytes(b"GAME")
         (self.game / "eldenring.exe").write_bytes(b"x")
-        monkeypatch.setattr(common, "game_dir", lambda: self.game)
-        monkeypatch.setattr(common, "game_running", lambda: False)
+        monkeypatch.setattr(locate, "installed_dir", lambda _game: self.game)
+        monkeypatch.setattr(common, "exe_running", lambda _exe: False)
         (self.base / "mod" / "parts" / "parts").mkdir(parents=True)
         self.winner = self.base / "Merger" / "mod"
         (self.winner / "script" / "talk").mkdir(parents=True)
@@ -157,7 +159,7 @@ def test_changed_bytes_disabling_and_uninstalling_a_source_make_it_stale(world):
     assert "params is no longer loaded" in merge.health(world.profile)["reasons"][0]
     M.set_options(world.profile, idx, {"enabled": True})
     assert merge.health(world.profile)["state"] == "current"
-    M.uninstall(world.profile, idx)
+    remove.uninstall(world.profile, idx)
     h = merge.health(world.profile)
     assert h["state"] == "stale" and "params is no longer loaded" in h["reasons"][0]
     assert "still in last's build" in h["reasons"][0]  # named by its folder, with what it means
@@ -231,7 +233,7 @@ def test_a_merger_that_stops_leaves_the_profile_as_it_was(world, monkeypatch):
 
 
 def test_no_rebuild_while_the_game_runs(world, monkeypatch):
-    monkeypatch.setattr(common, "game_running", lambda: True)
+    monkeypatch.setattr(common, "exe_running", lambda _exe: True)
     with pytest.raises(merge.MergeError, match="Close the game"):
         merge.rebuild(world.profile, lambda s: None)
     assert world.runs == 1
@@ -289,12 +291,12 @@ def _pack_source(root: Path, wrapper=True):
 
 def test_install_offers_a_rebuild_before_the_merger(world):
     src = _pack_source(world.base.parent.parent / "dl")
-    plan = M.plan_install(world.profile, src)
+    plan = install.plan_install(world.profile, src)
     assert plan["merge_offered"] and plan["merge_label"] == "the rebuild tool of last"
     assert plan["regulation_packages"][-1]["name"] == "last" and plan["merge_source_now"] is None
     assert any("talk file" in n for n in plan["merge_notes"])
     world.pack("older")
-    plan = M.plan_install(world.profile, src)
+    plan = install.plan_install(world.profile, src)
     assert plan["merge_combine"] and plan["merge_tool"]  # combined with older first, so both apply
     assert any("combined with older" in n for n in plan["merge_notes"])
 
@@ -302,7 +304,7 @@ def test_install_offers_a_rebuild_before_the_merger(world):
 def test_without_a_tool_the_offer_is_to_combine(tmp_path, world):
     (world.base / "Merger" / "installation.json").unlink()
     world.pack("a")
-    plan = M.plan_install(world.profile, _pack_source(tmp_path / "dl"))
+    plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"))
     assert [x["name"] for x in plan["regulation_packages"]] == ["a", "last"]
     assert not plan["merge_tool"] and plan["merge_combine"]  # no tool: the launcher combines the packs itself
 
@@ -315,7 +317,7 @@ def test_a_zip_and_a_folder_with_the_same_layout_plan_alike(world, tmp_path):
             if p.is_file():
                 f.write(p, p.relative_to(src).as_posix())
     keys = ("kind", "merge_offered", "merge_notes", "merge_source_now", "regulation_winner")
-    a, b = M.plan_install(world.profile, src), M.plan_install(world.profile, z)
+    a, b = install.plan_install(world.profile, src), install.plan_install(world.profile, z)
     assert {k: a[k] for k in keys} == {k: b[k] for k in keys}
 
 
@@ -323,9 +325,9 @@ def test_a_leftover_regulation_bin_does_not_hide_the_real_mod_folder(tmp_path):
     top = tmp_path / "x"
     _pack_source(top, wrapper=False)
     (top / "regulation.bin").write_bytes(b"old")
-    assert M.find_roots(top) == [top / "mod"]
+    assert install.find_roots(top) == [top / "mod"]
     (top / "mod" / "menu").rename(top / "menu")  # a real mod at the top: kept
-    assert M.find_roots(tmp_path / "x") == [top]
+    assert install.find_roots(tmp_path / "x") == [top]
 
 
 # ----------------------------------------------------------------------------- overlay set by hand
@@ -356,7 +358,7 @@ def test_an_overlay_without_a_tool_still_says_what_must_stay_last(world, tmp_pat
     merge.set_overlay_override(world.profile, world.winner)
     h = merge.health(world.profile)
     assert h["backend"] is None and "setup files are missing: installation.json" in h["reasons"][0]
-    plan = M.plan_install(world.profile, _pack_source(tmp_path / "dl"))
+    plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"))
     assert plan["merge_target"] == "last" and not plan["merge_offered"]
     late = world.base / "mod" / "late"
     late.mkdir()
@@ -395,8 +397,8 @@ def _declared(tmp_path, monkeypatch):
     import sys
 
     base = tmp_path / "prof"
-    monkeypatch.setattr(common, "game_running", lambda: False)
-    monkeypatch.setattr(common, "game_dir", lambda: tmp_path / "Game")
+    monkeypatch.setattr(common, "exe_running", lambda _exe: False)
+    monkeypatch.setattr(locate, "installed_dir", lambda _game: tmp_path / "Game")
     for name in ("params", "overhaul"):
         (base / "mod" / name).mkdir(parents=True)
         (base / "mod" / name / "regulation.bin").write_bytes(name.encode())

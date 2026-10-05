@@ -17,7 +17,6 @@ from pathlib import Path
 
 from roundtable_souls import formats
 from roundtable_souls.game import oodle as game_oodle
-from roundtable_souls.system import common
 
 GOODS = 0x40000000
 SEAMLESS = "Seamless Co-op"
@@ -64,20 +63,18 @@ class ItemNames:
         return None
 
 
-def _seamless_folders() -> list[Path]:
+def _seamless_folders(game: Path | None, profiles: Path | None) -> list[Path]:
     folders = []
-    game = common.game_dir()
     if game and (Path(game) / "SeamlessCoop").is_dir():
         folders.append(Path(game) / "SeamlessCoop")
-    profiles = common.me3_profiles_dir()
     if profiles and profiles.is_dir():
         folders.extend(dll.parent for dll in profiles.rglob("ersc.dll"))
     return folders
 
 
-def seamless_names() -> dict[int, tuple[str, str]]:
+def seamless_names(game: Path | None, profiles: Path | None) -> dict[int, tuple[str, str]]:
     out: dict[int, tuple[str, str]] = {}
-    for folder in _seamless_folders():
+    for folder in _seamless_folders(game, profiles):
         locale = folder / "locale"
         files = [locale / f"{lang}.json" for lang in LANGUAGES] + sorted(locale.glob("*.json"))
         for path in files:
@@ -143,23 +140,24 @@ def _fingerprint(paths: list[Path]) -> tuple:
     return tuple(out)
 
 
-def item_names(refresh: bool = False) -> ItemNames:
-    """Names for the mods installed right now. The mod folders are looked at again at most every few seconds (or on
-    refresh), and the names are rebuilt only when the files behind them changed."""
+def item_names(game: Path | None, profiles: Path | None, refresh: bool = False) -> ItemNames:
+    """Names for the mods installed right now (game: the game's folder; profiles: me3's profiles folder). The mod
+    folders are looked at again at most every few seconds (or on refresh), and the names are rebuilt only when the
+    files behind them changed."""
     global _CACHE, _CHECKED_AT
     now = time.monotonic()
-    if _CACHE and not refresh and now - _CHECKED_AT < RECHECK_SECONDS:
+    where = (str(game or ""), str(profiles or ""))
+    if _CACHE and _CACHE[0][0] == where and not refresh and now - _CHECKED_AT < RECHECK_SECONDS:
         return _CACHE[1]
     _CHECKED_AT = now
-    profiles = common.me3_profiles_dir()
     roots = [profiles] if profiles and profiles.is_dir() else []
-    watched = _seamless_folders() + [m for r in roots for m in r.rglob("item*.msgbnd.dcx")]
-    key = _fingerprint(watched)
+    watched = _seamless_folders(game, profiles) + [m for r in roots for m in r.rglob("item*.msgbnd.dcx")]
+    key = (where, _fingerprint(watched))
     if _CACHE and _CACHE[0] == key:
         return _CACHE[1]
     names: dict[int, tuple[str, str]] = {}
-    names.update(mod_text_names(roots, game_oodle.find_oodle(common.game_dir())))
-    names.update(seamless_names())
+    names.update(mod_text_names(roots, game_oodle.find_oodle(game)))
+    names.update(seamless_names(game, profiles))
     result = ItemNames(names)
     _CACHE = (key, result)
     return result

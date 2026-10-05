@@ -38,7 +38,7 @@ def arg(name: str) -> str:
 
 def version_key(v: str) -> tuple:
     sys.path.insert(0, str(ROOT / "src"))
-    from roundtable_souls.updates import version_key as key
+    from roundtable_souls.updates.feed import version_key as key
 
     return key(v)
 

@@ -65,9 +65,6 @@ line-ending = "lf"
 select = ["E", "F", "I", "UP", "B"]
 ignore = ["E501", "E731", "E741", "B008", "B905"]
 
-[tool.ruff.lint.per-file-ignores]
-"src/roundtable_souls/core.py" = ["F401"]  # facade re-exports
-
 [tool.pyright]
 include = ["src", "scripts", "tests"]
 pythonVersion = "3.14"
@@ -97,41 +94,29 @@ type = "layers"
 exhaustive = false
 layers = [
     "roundtable_souls.cli",
+    "roundtable_souls.app",
     "roundtable_souls.ui",
-    "roundtable_souls.core",
-    "roundtable_souls.mods | roundtable_souls.saves | roundtable_souls.coop | roundtable_souls.updates | roundtable_souls.migration",
+    "roundtable_souls.services",
+    "roundtable_souls.mods | roundtable_souls.saves | roundtable_souls.coop | roundtable_souls.updates",
     "roundtable_souls.merging",
-    "roundtable_souls.formats | roundtable_souls.game | roundtable_souls.games",
-    "roundtable_souls.settings : roundtable_souls.folders",
-    "roundtable_souls.system",
-]
-ignore_imports = [
-    # S2 (app.py and AppContext replace the globals and the data-folder lookups the platform layer reads today)
-    "roundtable_souls.system.common -> roundtable_souls.games",
-    "roundtable_souls.system.common -> roundtable_souls.settings",
-    "roundtable_souls.system.instance -> roundtable_souls.settings",
-    "roundtable_souls.system.logging -> roundtable_souls.folders",
-    "roundtable_souls.folders -> roundtable_souls.games",
-    # S3 (one profile parser in mods; mods.service stops borrowing coop's private helpers)
-    "roundtable_souls.mods.service -> roundtable_souls.coop",
+    "roundtable_souls.formats | roundtable_souls.game",
+    "roundtable_souls.config",
+    "roundtable_souls.platform",
 ]
 
 [[tool.importlinter.contracts]]
 name = "No Qt below the UI"
 type = "forbidden"
 source_modules = [
-    "roundtable_souls.core",
+    "roundtable_souls.services",
     "roundtable_souls.mods",
     "roundtable_souls.saves",
     "roundtable_souls.coop",
     "roundtable_souls.updates",
-    "roundtable_souls.migration",
     "roundtable_souls.merging",
     "roundtable_souls.formats",
     "roundtable_souls.game",
-    "roundtable_souls.games",
-    "roundtable_souls.settings",
-    "roundtable_souls.folders",
-    "roundtable_souls.system",
+    "roundtable_souls.config",
+    "roundtable_souls.platform",
 ]
 forbidden_modules = ["PySide6", "qfluentwidgets", "shiboken6"]

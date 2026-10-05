@@ -1,8 +1,10 @@
 """What counts as a game item, the Tarnished Edition rule, labels for foreign items, and the report gate."""
 
-from roundtable_souls import core as g
+from roundtable_souls.services import play as g
+from roundtable_souls.services import saves as saves_service
 
 A = g.save_analyze
+NO_NAMES = A.mod_item_names.ItemNames({})
 WEAPON, ARMOUR, TALISMAN, GOODS, ASH = 0x0, 0x10000000, 0x20000000, 0x40000000, 0x80000000
 
 
@@ -39,14 +41,14 @@ def test_tarnished_flag_is_read_from_active_characters_only():
     assert A.tarnished_flag(save([0, 1], [True, True]))
     assert not A.tarnished_flag(save([0, 1], [True, False]))
     assert not A.tarnished_flag({})
-    assert A.Catalog.for_save(save([1], [True])).pack
+    assert A.Catalog.for_save(save([1], [True]), A.GameItems()).pack
 
 
 def test_labels_name_the_kind_and_id():
-    assert A.item_label(ARMOUR | 5350000) == ("Armour 5350000", A.UNLISTED)
-    assert A.item_label(3560008) == ("Weapon 3560000 +8", A.UNLISTED)
-    assert A.item_label(GOODS | 8380002)[0] == "Item 8380002"
-    assert A.item_label(TALISMAN | 7)[0] == "Talisman 7"
+    assert A.item_label(ARMOUR | 5350000, NO_NAMES) == ("Armour 5350000", A.UNLISTED)
+    assert A.item_label(3560008, NO_NAMES) == ("Weapon 3560000 +8", A.UNLISTED)
+    assert A.item_label(GOODS | 8380002, NO_NAMES)[0] == "Item 8380002"
+    assert A.item_label(TALISMAN | 7, NO_NAMES)[0] == "Talisman 7"
 
 
 def test_bundled_list_is_game_items_only():
@@ -94,8 +96,8 @@ def test_info_findings_do_not_block_the_standard_copy():
 
 
 def test_repair_available_predicate():
-    assert not g.repair_available({"needs_repair": False, "checksum_fixes": {"slots": [], "ud10": False}})
-    assert g.repair_available({"needs_repair": True})
-    assert g.repair_available({"checksum_fixes": {"slots": [0], "ud10": False}})
-    assert g.repair_available({"checksum_fixes": {"slots": [], "ud10": True}})
-    assert g.repair_available({"loading_plan": [{"slot": 0}]})
+    assert not saves_service.repair_available({"needs_repair": False, "checksum_fixes": {"slots": [], "ud10": False}})
+    assert saves_service.repair_available({"needs_repair": True})
+    assert saves_service.repair_available({"checksum_fixes": {"slots": [0], "ud10": False}})
+    assert saves_service.repair_available({"checksum_fixes": {"slots": [], "ud10": True}})
+    assert saves_service.repair_available({"loading_plan": [{"slot": 0}]})

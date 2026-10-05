@@ -7,9 +7,10 @@ import sys
 import pytest
 from test_mod_merge import TALK, World
 
-from roundtable_souls.mods import manage as M
-from roundtable_souls.mods import merge, overview, undo
-from roundtable_souls.system import trash
+from roundtable_souls.mods import conflicts as overview
+from roundtable_souls.mods import rebuild as merge
+from roundtable_souls.mods import remove, undo
+from roundtable_souls.platform import trash
 
 PROFILE = """profileVersion = "v1"
 
@@ -57,7 +58,7 @@ def prof(tmp_path, monkeypatch):
 
 
 def removal(p, index, sent, delete=True):
-    out = M.uninstall(p, index, delete_folder=delete)
+    out = remove.uninstall(p, index, delete_folder=delete)
     if out.get("trash"):
         sent.append(out["trash"])
     rec = {

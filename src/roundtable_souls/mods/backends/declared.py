@@ -31,17 +31,18 @@ _PLACE = re.compile(r"\{(here|package|profile|profile_dir|game_dir|game_exe|me3)
 
 
 def _values(profile: Path, layer: dict, here: Path) -> dict[str, str]:
-    from roundtable_souls.system import common
+    from roundtable_souls.mods import locations
 
-    game_dir = common.game_dir()
+    loc = locations.get()
+    game_dir = loc.game_dir()
     return {
         "here": str(here),
         "package": str(layer["folder"]),
         "profile": str(profile),
         "profile_dir": str(profile.parent),
         "game_dir": str(game_dir or ""),
-        "game_exe": str(Path(game_dir) / common.game_exe_name()) if game_dir else "",
-        "me3": str(common.me3_exe() or ""),
+        "game_exe": str(Path(game_dir) / loc.game_exe_name()) if game_dir else "",
+        "me3": str(loc.me3_exe() or ""),
     }
 
 

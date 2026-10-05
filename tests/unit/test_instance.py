@@ -9,7 +9,7 @@ from PySide6.QtCore import QEventLoop, QTimer
 from PySide6.QtNetwork import QLocalServer
 from PySide6.QtWidgets import QApplication
 
-from roundtable_souls.system import filelock, instance
+from roundtable_souls.platform import filelock, instance
 
 
 @pytest.fixture
@@ -71,11 +71,13 @@ def test_a_second_start_reaches_the_window(name):
 
 
 def test_play_from_a_shortcut_hands_off_or_holds_the_play_name(monkeypatch):
-    from roundtable_souls import cli, core, games
+    from roundtable_souls import cli
+    from roundtable_souls.game import catalog as games
+    from roundtable_souls.services import play as core
 
     played, sent = [], []
     monkeypatch.setattr(
-        core, "play_headless", lambda game, notice=None: played.append(instance.held(instance.PLAY)) or 0
+        core, "play_headless", lambda settings, loc, notice=None: played.append(instance.held(instance.PLAY)) or 0
     )
     monkeypatch.setattr(instance, "WINDOW", f"RoundtableSouls.Test.{uuid.uuid4().hex}")
     monkeypatch.setattr(instance, "PLAY", f"RoundtableSouls.Test.{uuid.uuid4().hex}")

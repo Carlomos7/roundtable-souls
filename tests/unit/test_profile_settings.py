@@ -5,8 +5,9 @@ import shutil
 
 from test_mod_merge import World
 
-from roundtable_souls import settings
-from roundtable_souls.mods import merge, profile_settings
+from roundtable_souls.config import settings
+from roundtable_souls.mods import profile_settings
+from roundtable_souls.mods import rebuild as merge
 
 
 def test_settings_round_trip_and_keep_what_this_version_does_not_know(tmp_path):
@@ -48,14 +49,13 @@ def test_an_unreadable_file_is_left_alone_and_the_launchers_setting_is_used(tmp_
 def test_a_mark_from_before_3_10_moves_into_roundtable_json(tmp_path, monkeypatch):
     w = World(tmp_path, monkeypatch)
     settings.save_settings(parameter_overlays={merge._key(w.profile): {"package": str(w.winner), "rebuild": None}})
-    settings.get_settings.cache_clear()
     mark = merge.overlay_mark(w.profile)
     assert mark["package"] == w.winner
     stored = profile_settings.load(w.profile)["overlay"]
     assert stored == {"package": "Merger/mod", "rebuild": None}  # relative: it travels with the folder
     merge.set_overlay_override(w.profile, None)
     assert profile_settings.load(w.profile)["overlay"] is None and merge.overlay_mark(w.profile) is None
-    assert merge._key(w.profile) not in (settings.load_settings().get("parameter_overlays") or {})
+    assert merge._key(w.profile) not in (settings.load_settings().parameter_overlays or {})
 
 
 def test_a_copied_profile_folder_resolves_the_same_way(tmp_path, monkeypatch):

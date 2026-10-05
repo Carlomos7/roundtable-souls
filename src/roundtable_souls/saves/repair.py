@@ -7,10 +7,10 @@ longer RSLT, copies that section from a healthy sibling save. (Moved from system
 
 import time
 
+from roundtable_souls.game.locate import Locations
+from roundtable_souls.platform.logging import fail, log
 from roundtable_souls.saves import nightreign as repair_nightreign
 from roundtable_souls.saves import regulation as repair
-from roundtable_souls.system import common
-from roundtable_souls.system.common import fail, log
 
 
 def wait_for_save_flush(saves, timeout=30):
@@ -33,25 +33,26 @@ def wait_for_save_flush(saves, timeout=30):
     return False
 
 
-def repair_all():
-    if not common.GAME.regulation_repair:
-        log(f"{common.GAME.name}: no save repair after play")
+def repair_all(loc: Locations):
+    """Repair every save of loc's game that me3 left with a dirty regulation section."""
+    if not loc.game.regulation_repair:
+        log(f"{loc.game.name}: no save repair after play")
         return
-    saves = common.save_files()
+    saves = loc.save_files()
     if not saves:
-        log(f"no {common.GAME.name} saves found on this PC")
+        log(f"no {loc.game.name} saves found on this PC")
         return
-    if common.game_running():
+    if loc.game_running():
         fail("the game is still running, not touching the saves", code=2)
     wait_for_save_flush(saves)
-    if common.GAME.save_reader == "nightreign":
+    if loc.game.save_reader == "nightreign":
         fixed = 0
         for save in saves:
             log(str(save))
             fixed += repair_nightreign.repair(save, log=log)
         log(f"done: {fixed} repaired")
         return
-    source = common.regulation_bin()
+    source = loc.regulation_bin()
     if not source:
         fail("could not find the game's regulation.bin through Steam")
     reg, header = repair.load_regulation(source)
