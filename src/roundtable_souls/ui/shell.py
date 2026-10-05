@@ -1,13 +1,17 @@
-"""The window (PySide6 + Fluent Widgets). All logic lives in core.py.
+"""The window (PySide6 + Fluent Widgets): the shell. What the window does is in services/; the window is handed the
+app context (app.create_app) and runs background work through ui/jobs.py.
 
-Game tabs in the title bar pick the game every page works on (Elden Ring, Nightreign; Dark Souls III and Sekiro are
+The shell holds the title bar, the game switcher, the navigation rail, the Activity page, the job status and what
+every page shares; each page's widgets and handlers are its view in ui/pages/<page>/view.py, a mixin Launcher
+inherits. Game tabs pick the game every page works on (Elden Ring, Nightreign; Dark Souls III and Sekiro are
 placeholders until their support lands). Settings is shared by all games.
 
 Pages (navigation rail on the left):
   Play    who you are (from the save), which setup, one big Play button, one line saying what will happen
   Co-op   Seamless Co-op password, difficulty, and a save bar that stays on screen
-  Saves   the save files and the characters in them, read-only
-  Tools   repair, cleanup, logs, theme
+  Mods    the profile's mods, their order and options, installs, merge health
+  Saves   the save files and the characters in them, backups, the library, the review page
+  Tools   locations, me3, Play session, appearance, updates (shown as Settings)
 
     roundtable-souls              the window
     roundtable-souls --check      print what would be used and exit (no window)
