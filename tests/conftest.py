@@ -1,13 +1,26 @@
 """Shared fixtures: an isolated settings file and data folder so tests never read or write the developer's own
 (backups, the save library, deleted profiles), and no item names from whatever mods happen to be installed on the
-machine running the tests (tests that read names build their own). While a test runs, writing a file anywhere but
-the temporary folders is refused (writes_stay_in_temporary_folders), so a patch undone too early fails the test
-instead of touching the developer's files."""
+machine running the tests (tests that read names build their own).
+
+The write guard (writes_stay_in_temporary_folders, an audit hook): while a test runs, file changes made through
+Python in the test process itself outside pytest's temporary folders and the system temporary folder raise
+PermissionError, so a patch undone too early fails the test instead of touching the developer's files.
+  Covered: open() and os.open() for writing (so Path.write_*, touch, tempfile), rename, replace, remove/unlink,
+  rmdir, mkdir/makedirs, truncate, utime, chmod, link, symlink, shutil's copyfile, copytree, rmtree (and move,
+  which is made of these), and sqlite3.connect (a read-only "mode=ro" URI excepted).
+  Not covered: child processes the test starts; native code writing without Python's audit events (ctypes and
+  Win32 calls such as the Recycle Bin's SHFileOperation, Qt's own file I/O such as QSettings or QSaveFile, writes
+  SQLite makes after a connection is open); files opened before the test started (session- or module-scoped
+  fixtures) and writes to already-open file descriptors; paths given relative to a dir_fd.
+  Allowed besides the temporary folders: named pipes, __pycache__ folders, and the Recycle Bin items a test itself
+  created (recycle_bin_left_clean restores and purges them). Reading is never refused."""
 
 import os
 import sys
 import tempfile
 from pathlib import Path
+from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 import pytest
 
@@ -41,7 +54,7 @@ def _refuse_outside(path) -> None:
 
 
 def _audit(event: str, args: tuple) -> None:
-    """Python's audit events for everything that writes, renames, removes or creates files and folders."""
+    """The audit events listed in the module docstring as covered."""
     if not _WRITABLE:
         return
     if event == "open":
@@ -55,6 +68,12 @@ def _audit(event: str, args: tuple) -> None:
         _refuse_outside(args[1])
     elif event in ("shutil.copyfile", "shutil.copytree"):
         _refuse_outside(args[1])
+    elif event == "sqlite3.connect":
+        target = os.fsdecode(args[0]) if isinstance(args[0], (str, bytes, os.PathLike)) else ""
+        if target and target != ":memory:" and "mode=ro" not in target:
+            if target.startswith("file:"):
+                target = url2pathname(urlparse(target).path)
+            _refuse_outside(target)
 
 
 sys.addaudithook(_audit)  # audit hooks can't be removed; _WRITABLE switches it on per test
@@ -62,8 +81,8 @@ sys.addaudithook(_audit)  # audit hooks can't be removed; _WRITABLE switches it 
 
 @pytest.fixture(autouse=True)
 def writes_stay_in_temporary_folders(tmp_path_factory):
-    """Refuse, for the whole test, writes outside pytest's temporary folders (every tmp_path) and the system
-    temporary folder (where pytest and Qt keep their own scratch files)."""
+    """Switch the write guard on for the whole test (module docstring): pytest's temporary folders (every tmp_path)
+    and the system temporary folder (where pytest and Qt keep their own scratch files) stay writable."""
     roots = {tmp_path_factory.getbasetemp(), Path(tempfile.gettempdir())}
     _WRITABLE[:] = sorted(
         {os.path.normcase(os.path.realpath(r)) for r in roots} | {os.path.normcase(str(r)) for r in roots}

@@ -63,7 +63,25 @@ def app():
 
 
 @pytest.fixture
-def launcher(app, monkeypatch):
+def launcher(app, monkeypatch, tmp_path):
+    """The real window over synthetic data only: one save per game in a temporary save folder, one me3 profile in a
+    temporary profiles folder, and no game or me3 install found, so nothing of the developer's is read."""
+    from roundtable_souls.game import catalog as games
+    from roundtable_souls.platform import paths as common
+
+    saves = tmp_path / "game-saves"
+    for g in games.GAMES:  # small stand-ins: listed like saves, read as files the launcher can't parse
+        acct = saves / g.save_dir / "76561198000000000"
+        acct.mkdir(parents=True, exist_ok=True)
+        (acct / g.save_names[0]).write_bytes(b"BND4" + bytes(1020))
+    profiles = tmp_path / "me3-profiles"
+    profiles.mkdir()
+    (profiles / "synthetic.me3").write_text(SANDBOX_PROFILE, encoding="utf-8")
+    monkeypatch.setattr(common, "save_roots_for", lambda save_dir, app_id: [saves / save_dir])
+    monkeypatch.setattr(common, "me3_profiles_dir", lambda override=None: profiles)
+    monkeypatch.setattr(common, "me3_exe", lambda override=None: None)
+    monkeypatch.setattr(common, "find_installed", lambda key, install_dir, exe: None)
+    monkeypatch.setattr(Locations, "save_files", REAL_SAVE_FILES)  # listed from the synthetic folder above
     launched = []
     monkeypatch.setattr(ui.feed, "check_launcher_update", lambda *a, **k: ui.feed.UpdateCheck("off"))
     monkeypatch.setattr(ui.feed, "check_advisory", lambda *a, **k: None)

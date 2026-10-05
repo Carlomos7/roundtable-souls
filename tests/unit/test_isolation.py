@@ -43,5 +43,19 @@ def test_writing_outside_the_temporary_folders_is_refused(tmp_path, leaves_nothi
     assert inside.read_text() == "x"
 
 
+def test_a_database_outside_the_temporary_folders_is_refused_but_reading_one_is_not(tmp_path, leaves_nothing_outside):
+    import sqlite3
+
+    target = OUTSIDE.with_suffix(".txt")
+    with pytest.raises(PermissionError):
+        sqlite3.connect(target)
+    with pytest.raises(PermissionError):
+        sqlite3.connect(target.as_uri(), uri=True)
+    inside = tmp_path / "x.db"
+    sqlite3.connect(inside).close()
+    sqlite3.connect(f"{inside.as_uri()}?mode=ro", uri=True).close()  # reading is never refused
+    sqlite3.connect(":memory:").close()
+
+
 def test_reading_outside_is_still_allowed(tmp_path):
     assert Path(__file__).read_text(encoding="utf-8").startswith('"""')
