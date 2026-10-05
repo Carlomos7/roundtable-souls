@@ -4,12 +4,16 @@ create_app() builds it when the program starts (cli.main, or a test), never at i
 identity, the settings as last read, the game the window shows (or --game asked for) and that game's Locations; code
 is handed what it needs from it. use_data_folder() runs first of all (the command line calls it before logging
 starts): the platform layer is told the data folder and the build's instance scope instead of reading the settings.
+
+create_app() also opens the launcher's database (storage.db), migrating it first when needed. When storage is
+refused for the run (storage.db.StorageUnavailable) the context has no database and says why; when a migration
+fails, MigrationFailed reaches the caller, which must not report the version ready.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from roundtable_souls.config import identity
@@ -18,6 +22,8 @@ from roundtable_souls.game import catalog
 from roundtable_souls.game.locate import Locations
 from roundtable_souls.mods import locations as mod_locations
 from roundtable_souls.platform import data_folder, instance, paths
+from roundtable_souls.platform import logging as run_logging
+from roundtable_souls.storage import db as storage_db
 
 
 @dataclass
@@ -27,6 +33,8 @@ class AppContext:
     game: catalog.Game
     locations: Locations
     data_dir: Path
+    storage: storage_db.Database | None = field(default=None, repr=False)
+    storage_problem: str = ""  # why there is no database this run, when there isn't
 
     def _located(self, loc: Locations) -> Locations:
         self.locations = loc
@@ -49,6 +57,12 @@ class AppContext:
         paths.clear_detection_cache()
         return self._located(Locations.from_settings(self.settings, self.game))
 
+    def close(self) -> None:
+        """Close the database (its connections and its shared lock); the process ending does the same."""
+        if self.storage is not None:
+            self.storage.close()
+            self.storage = None
+
     def note_setup_saves(self, names: Mapping[str, str]) -> Locations:
         """The setup in use names its own save files (role -> file name): they are listed and repaired too."""
         return self._located(self.locations.with_setup_save_names(names))
@@ -69,4 +83,9 @@ def create_app(start_game: catalog.Game | None = None) -> AppContext:
     game = start_game or catalog.get(settings.game)
     ctx = AppContext(identity.get(), settings, game, Locations.from_settings(settings, game), data)
     mod_locations.use(ctx.locations)
+    try:
+        ctx.storage = storage_db.open_database(data_folder.data_root())
+    except storage_db.StorageUnavailable as e:
+        ctx.storage_problem = str(e)
+        run_logging.log(f"storage: {e}")
     return ctx

@@ -35,6 +35,9 @@ coverage.xml
 /saves/
 /temp/
 /updates/
+/roundtable.db
+/roundtable.db-*
+/roundtable.db.*
 *.log
 
 # Editors

@@ -1,9 +1,11 @@
 """An exclusive lock on a file, shared by every launcher process of this user (the window, a Play from a Steam
 shortcut, an older copy still closing). locked() is used around read-change-write of the settings file;
-exclusive() around changes that must not run unlocked (backups, the save library)."""
+exclusive() around changes that must not run unlocked (backups, the save library). ReadWriteLock is held shared by
+many processes or exclusively by one (the database: open connections, and its migration)."""
 
 from __future__ import annotations
 
+import functools
 import os
 import sys
 import threading
@@ -74,6 +76,102 @@ def exclusive(path: Path, timeout: float, busy: Callable[[], Exception] | None =
             yield
         finally:
             counts.pop(key, None)
+
+
+class ReadWriteLock:
+    """A lock file held shared (any number of processes) or exclusively (one), across processes: LockFileEx on
+    Windows, flock elsewhere. Not re-entrant; one instance holds at most one lock at a time. A process that dies
+    releases what it held with its handles."""
+
+    def __init__(self, path: Path):
+        self.path = Path(path)
+        self.mode: str | None = None  # "shared" or "exclusive" while held
+        self._fd: int | None = None
+
+    def acquire(self, exclusive: bool, timeout: float) -> bool:
+        """Wait up to timeout seconds; True when held."""
+        if self.mode is not None:
+            raise RuntimeError(f"{self.path} is already held ({self.mode})")
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o600)
+        deadline = time.monotonic() + timeout
+        while not _try_rw(fd, exclusive):
+            if time.monotonic() >= deadline:
+                os.close(fd)
+                return False
+            time.sleep(0.02)
+        self._fd, self.mode = fd, "exclusive" if exclusive else "shared"
+        return True
+
+    def release(self) -> None:
+        if self._fd is None:
+            return
+        try:
+            _unlock_rw(self._fd)
+        except OSError:
+            pass
+        os.close(self._fd)
+        self._fd, self.mode = None, None
+
+
+@functools.cache
+def _win_lock_api():
+    """LockFileEx / UnlockFileEx and their OVERLAPPED argument (Windows only)."""
+    import ctypes
+    from ctypes import wintypes
+
+    class OVERLAPPED(ctypes.Structure):
+        _fields_ = [
+            ("Internal", ctypes.c_void_p),
+            ("InternalHigh", ctypes.c_void_p),
+            ("Offset", wintypes.DWORD),
+            ("OffsetHigh", wintypes.DWORD),
+            ("hEvent", wintypes.HANDLE),
+        ]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    lock, unlock = kernel32.LockFileEx, kernel32.UnlockFileEx
+    lock.argtypes = [
+        wintypes.HANDLE,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        ctypes.POINTER(OVERLAPPED),
+    ]
+    unlock.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD, ctypes.POINTER(OVERLAPPED)]
+    lock.restype = unlock.restype = wintypes.BOOL
+    return OVERLAPPED, lock, unlock
+
+
+def _try_rw(fd: int, exclusive: bool) -> bool:
+    if sys.platform == "win32":
+        import ctypes
+        import msvcrt
+
+        overlapped, lock, _unlock_api = _win_lock_api()
+        flags = 0x1 | (0x2 if exclusive else 0)  # LOCKFILE_FAIL_IMMEDIATELY | LOCKFILE_EXCLUSIVE_LOCK
+        return bool(lock(msvcrt.get_osfhandle(fd), flags, 0, 1, 0, ctypes.byref(overlapped())))
+    import fcntl
+
+    try:
+        fcntl.flock(fd, (fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH) | fcntl.LOCK_NB)
+        return True
+    except OSError:
+        return False
+
+
+def _unlock_rw(fd: int) -> None:
+    if sys.platform == "win32":
+        import ctypes
+        import msvcrt
+
+        overlapped, _lock_api, unlock = _win_lock_api()
+        unlock(msvcrt.get_osfhandle(fd), 0, 1, 0, ctypes.byref(overlapped()))
+    else:
+        import fcntl
+
+        fcntl.flock(fd, fcntl.LOCK_UN)
 
 
 @contextmanager

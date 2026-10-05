@@ -149,7 +149,8 @@ DEALINGS IN THE SOFTWARE.
 ## Libraries
 
 Bundled into the release exe: PySide6 and Qt (LGPL-3.0), PySide6-Fluent-Widgets (GPL-3.0),
-PySideSix-Frameless-Window (LGPL-3.0), pydantic (MIT), py7zr (LGPL-2.1), darkdetect (BSD-3-Clause). Their license
+PySideSix-Frameless-Window (LGPL-3.0), pydantic (MIT), py7zr (LGPL-2.1), darkdetect (BSD-3-Clause), SQLAlchemy (MIT),
+Alembic (MIT), Mako (MIT), MarkupSafe (BSD-3-Clause). Their license
 texts ship inside the installed packages; the complete source of this program is the repository it was built from.
 
 ## Apache License 2.0

@@ -62,6 +62,8 @@ def pyinstaller(py: str, identity_file: Path | None) -> Path:
         staged.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(identity_file, staged)
         extra = ["--add-data", f"{staged}{os.pathsep}roundtable_souls/data"]
+    # Alembic loads the migration scripts by path, so they ship as files (--collect-data leaves .py files out).
+    extra += ["--add-data", f"{PKG / 'storage' / 'migrations'}{os.pathsep}roundtable_souls/storage/migrations"]
     run(
         py, "-m", "PyInstaller", "--noconfirm", "--onedir", "--windowed", "--name", EXE_NAME,
         "--icon", PKG / "assets" / "icon.ico", "--paths", ROOT / "src",
@@ -71,6 +73,7 @@ def pyinstaller(py: str, identity_file: Path | None) -> Path:
     )  # fmt: skip
     folder = DIST / EXE_NAME
     check_identity(folder, identity_file)
+    check_migrations(folder)
     print("Built:", folder)
     return folder
 
@@ -85,6 +88,22 @@ def check_identity(folder: Path, identity_file: Path | None) -> None:
         return
     if len(found) != 1 or found[0].read_bytes() != identity_file.read_bytes():
         raise SystemExit(f"build: the identity override did not make it into the build exactly ({found})")
+
+
+def check_migrations(folder: Path) -> None:
+    """Every migration script and Alembic's env.py must be in the build as a file, byte for byte; without them the
+    packaged program cannot create or upgrade its database. (Running the build with --check-storage then proves it
+    opens one: the release workflow does.)"""
+    source = PKG / "storage" / "migrations"
+    wanted = [p.relative_to(source) for p in source.rglob("*") if p.is_file() and "__pycache__" not in p.parts]
+    shipped = next((p for p in folder.rglob("migrations") if p.parent.name == "storage"), None)
+    missing = [
+        str(w)
+        for w in wanted
+        if shipped is None or not (shipped / w).is_file() or (shipped / w).read_bytes() != (source / w).read_bytes()
+    ]
+    if missing or not any(w.parts[0] == "versions" for w in wanted):
+        raise SystemExit(f"build: the database migrations did not make it into the build: {missing or 'none found'}")
 
 
 def load_identity(path: Path | None):

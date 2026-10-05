@@ -10,3 +10,4 @@ records are not rewritten afterwards.
 | 0002 | [Merged Oodle files stay at level 6 (6/6)](0002-kraken-layout-speed.md) | in use since 3.13.1 |
 | 0003 | [Release feeds are signed with minisign](0003-signed-releases.md) | in use from the release after 3.13.2 |
 | 0004 | [Velopack installs and applies updates; the launcher decides what to trust and undoes failed starts](0004-velopack.md) | in use from the release after 3.13.2 |
+| 0005 | [The launcher's own records go into one SQLite database, through SQLAlchemy and Alembic](0005-storage.md) | in use from the release after 3.15.0 |

@@ -6,3 +6,4 @@ from pathlib import Path
 PACKAGE_DIR = Path(str(files("roundtable_souls")))
 DATA_DIR = PACKAGE_DIR / "data"
 ASSETS_DIR = PACKAGE_DIR / "assets"
+MIGRATIONS_DIR = PACKAGE_DIR / "storage" / "migrations"  # Alembic loads these scripts by path, so builds ship them

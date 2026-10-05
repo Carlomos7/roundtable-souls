@@ -86,7 +86,11 @@ jobs:
 
     - name: Smoke-test the program
       shell: bash
-      run: ./dist/RoundtableSouls/RoundtableSouls.exe --shots shots && ls shots
+      run: |
+        ./dist/RoundtableSouls/RoundtableSouls.exe --shots shots && ls shots
+        # the packaged migrations create a database (in a temporary data folder, never a real one)
+        ROUNDTABLE_SOULS_DATA="$RUNNER_TEMP/storage-check" ./dist/RoundtableSouls/RoundtableSouls.exe --check-storage
+        cat "$RUNNER_TEMP/storage-check/storage-check.txt"
 
     # The setup on a clean runner: the previous release installed first (the Inno install of 3.13.2 and earlier is
     # replaced, settings kept, shortcuts pointed at the new copy), then uninstall keeps the data.
@@ -150,6 +154,8 @@ jobs:
         ./dist/RoundtableSouls/RoundtableSouls --check
         chmod +x dist/share/RoundtableSouls-linux-x86_64.AppImage
         ./dist/share/RoundtableSouls-linux-x86_64.AppImage --check
+        ROUNDTABLE_SOULS_DATA="$RUNNER_TEMP/storage-check" ./dist/RoundtableSouls/RoundtableSouls --check-storage
+        ROUNDTABLE_SOULS_DATA="$RUNNER_TEMP/storage-check-appimage" ./dist/share/RoundtableSouls-linux-x86_64.AppImage --check-storage
 
     - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
