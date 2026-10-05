@@ -86,6 +86,7 @@ jobs:
 
     - name: Smoke-test the program
       shell: bash
+      timeout-minutes: 10
       run: |
         ./dist/RoundtableSouls/RoundtableSouls.exe --shots shots && ls shots
         # the packaged migrations create a database (in a temporary data folder, never a real one)
@@ -96,6 +97,7 @@ jobs:
     # replaced, settings kept, shortcuts pointed at the new copy), then uninstall keeps the data.
     - name: Install, migration and uninstall test
       shell: pwsh
+      timeout-minutes: 20  # every program in it is also bounded and reported (scripts/ci/velopack-install-test.ps1)
       run: ./scripts/ci/velopack-install-test.ps1
 
     - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -150,6 +152,7 @@ jobs:
       run: uv run python scripts/build.py --no-test
 
     - name: Smoke-test the program and the AppImage
+      timeout-minutes: 10
       run: |
         ./dist/RoundtableSouls/RoundtableSouls --check
         chmod +x dist/share/RoundtableSouls-linux-x86_64.AppImage
