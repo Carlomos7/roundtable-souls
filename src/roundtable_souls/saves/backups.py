@@ -23,9 +23,7 @@ from __future__ import annotations
 
 import datetime
 import json
-import os
 import re
-import threading
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -144,46 +142,21 @@ def adopt_legacy_save_folders(save_dir: Path, game: games.Game | None = None, ag
 # ----------------------------------------------------------------------------- the account lock
 LOCK_TIMEOUT = 10.0  # seconds to wait for another process (the window, a Play from a shortcut, a repair)
 
-_held = threading.local()  # per thread: lock key -> how deep this thread is inside account_lock
 
-
-class BackupsBusy(OSError):
+class BackupsBusy(filelock.Busy):
     """Another launcher process or thread held one account's backups lock past the timeout. Nothing was changed."""
-
-
-def _held_counts() -> dict[str, int]:
-    counts = getattr(_held, "counts", None)
-    if counts is None:
-        counts = _held.counts = {}
-    return counts
 
 
 @contextmanager
 def account_lock(folder: Path, timeout: float | None = None) -> Iterator[None]:
     """Hold the lock on one account's backups folder (<folder>.lock beside it) while the block runs, shared by every
-    launcher process and thread. Every change to backups and their notes runs under it: taking one, keep, prune,
-    delete, adopting older folders. A call inside another on the same thread (fix.backup pruning) just enters.
-    Raises BackupsBusy when the lock isn't free within timeout (LOCK_TIMEOUT): unlike the settings lock, the block
-    never runs without it. A process that dies holding it releases it with its handles."""
-    key = os.path.normcase(os.path.abspath(folder))
-    counts = _held_counts()
-    if counts.get(key):
-        counts[key] += 1
-        try:
-            yield
-        finally:
-            counts[key] -= 1
-        return
-    with filelock.locked(Path(folder), LOCK_TIMEOUT if timeout is None else timeout) as got:
-        if not got:
-            raise BackupsBusy(
-                f"Another Roundtable Souls window or Play is changing these backups ({folder}). Try again."
-            )
-        counts[key] = 1
-        try:
-            yield
-        finally:
-            counts.pop(key, None)
+    launcher process and thread (platform.filelock.exclusive). Every change to backups and their notes runs under
+    it: taking one, keep, prune, delete, adopting older folders. A call inside another on the same thread
+    (fix.backup pruning) just enters. Raises BackupsBusy when the lock isn't free within timeout (LOCK_TIMEOUT):
+    the block never runs without it."""
+    message = f"Another Roundtable Souls window or Play is changing these backups ({folder}). Try again."
+    with filelock.exclusive(Path(folder), LOCK_TIMEOUT if timeout is None else timeout, lambda: BackupsBusy(message)):
+        yield
 
 
 # ----------------------------------------------------------------------------- backup notes and retention

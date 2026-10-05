@@ -20,9 +20,12 @@ import json
 import shutil
 import struct
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from roundtable_souls.game import catalog as games
+from roundtable_souls.platform import filelock
 from roundtable_souls.platform.files import atomic_write
 from roundtable_souls.saves import backups as save_backups
 from roundtable_souls.saves import container as save_container
@@ -108,6 +111,23 @@ def folder_for(save_dir: Path) -> Path:
     return save_backups.library(save_dir)
 
 
+class LibraryBusy(LibraryError):
+    """Another launcher process or thread held the library's lock past the timeout. Nothing was changed."""
+
+
+@contextmanager
+def library_lock(save_dir: Path) -> Iterator[None]:
+    """Hold the lock on one account's library (<library>.lock beside its folder) for a whole change: the manifest
+    is read after the lock is taken and written, with the copies it moves, before it is let go. Shared by every
+    launcher process and thread (platform.filelock.exclusive); a call inside another on the same thread
+    (swap_in adding the outgoing save) just enters. Raises LibraryBusy when it isn't free within
+    save_backups.LOCK_TIMEOUT."""
+    folder = folder_for(save_dir)
+    message = f"Another Roundtable Souls window or Play is changing the save library ({folder}). Try again."
+    with filelock.exclusive(folder, save_backups.LOCK_TIMEOUT, lambda: LibraryBusy(message)):
+        yield
+
+
 class LibraryUnreadable(LibraryError):
     """library.json exists but can't be read, or isn't the shape this launcher writes. It is left exactly as it is:
     nothing in that library changes until it is fixed or moved aside by hand."""
@@ -138,7 +158,8 @@ def load(save_dir: Path) -> dict:
     """The library for one account folder; a missing manifest reads as empty. An unreadable one also lists as empty,
     with doc["unreadable"] saying why, and every change to that library is refused (LibraryUnreadable) so the file
     is never rewritten as an empty library. Entries whose file is gone are kept but flagged, so nothing silently
-    disappears from the list."""
+    disappears from the list. A missing file still in the removed folder (a removal that could neither finish nor
+    move it back) is named in in_removed. Fields this launcher doesn't know, at any level, are kept."""
     folder = folder_for(save_dir)
     doc: dict = {"version": 1, "entries": [], "history": []}
     try:
@@ -146,10 +167,14 @@ def load(save_dir: Path) -> dict:
     except LibraryUnreadable as e:
         doc["unreadable"] = str(e)
         return doc
+    doc.update(raw)
     doc["entries"] = list(raw.get("entries", []))
     doc["history"] = list(raw.get("history", []))
     for e in doc["entries"]:
         e["missing"] = not (folder / e.get("file", "")).is_file()
+        stranded = folder / save_backups.LIBRARY_REMOVED / e.get("file", "")
+        if e["missing"] and e.get("file") and stranded.is_file():
+            e["in_removed"] = str(stranded)
     return doc
 
 
@@ -167,12 +192,13 @@ def _save(save_dir: Path, doc: dict) -> None:
     folder = folder_for(save_dir)
     _read_manifest(folder)  # last check: never write over a manifest that became unreadable since it was loaded
     folder.mkdir(parents=True, exist_ok=True)
-    clean = {
-        "version": 1,
-        "entries": [{k: v for k, v in e.items() if k != "missing"} for e in doc["entries"]],
-        "history": doc["history"][-500:],
-    }
+    clean = {k: v for k, v in doc.items() if k != "unreadable"}  # top-level fields this launcher doesn't know stay
+    clean["entries"] = [{k: v for k, v in e.items() if k not in _SHOWN_ONLY} for e in doc["entries"]]
+    clean["history"] = doc["history"][-500:]
     atomic_write(folder / MANIFEST, json.dumps(clean, indent=1, ensure_ascii=False))
+
+
+_SHOWN_ONLY = ("missing", "in_removed")  # worked out by load(), never stored
 
 
 def _log(doc: dict, action: str, entry: dict | None, **detail) -> None:
@@ -210,6 +236,11 @@ def add(save_dir: Path, source: Path, name: str, game: games.Game, action: str =
     source = Path(source)
     data = source.read_bytes()
     check_whole(data, game)
+    with library_lock(save_dir):
+        return _add(save_dir, source, data, name, game, action, note)
+
+
+def _add(save_dir: Path, source: Path, data: bytes, name: str, game: games.Game, action: str, note: str) -> dict:
     doc = _load_for_change(save_dir)
     entry_id = uuid.uuid4().hex[:12]
     fmt = source.suffix.lower().lstrip(".") or "sl2"
@@ -237,15 +268,23 @@ def add(save_dir: Path, source: Path, name: str, game: games.Game, action: str =
         raise LibraryError("The copy did not read back the same; nothing was added.")
     doc["entries"].append(entry)
     _log(doc, action, entry, source=source.name)
-    _save(save_dir, doc)
+    try:
+        _save(save_dir, doc)
+    except BaseException:
+        target.unlink(missing_ok=True)  # not in the manifest: the copy would only be left behind
+        raise
     return entry
 
 
 def swap_in(save_dir: Path, entry_id: str, live: Path, outgoing_name: str | None, game: games.Game) -> dict:
     """Put a library copy in place of the live save. The live file goes into the library first under outgoing_name
     (skipped only when there is no live file), and a regular backup is kept for Undo. Returns
-    {entry, outgoing, backup}."""
-    live = Path(live)
+    {entry, outgoing, backup}. Runs under the library lock throughout."""
+    with library_lock(save_dir):
+        return _swap_in(save_dir, entry_id, Path(live), outgoing_name, game)
+
+
+def _swap_in(save_dir: Path, entry_id: str, live: Path, outgoing_name: str | None, game: games.Game) -> dict:
     doc = _load_for_change(save_dir)
     entry = find(doc, entry_id)
     src = entry_path(save_dir, entry)
@@ -276,28 +315,52 @@ def swap_in(save_dir: Path, entry_id: str, live: Path, outgoing_name: str | None
 
 
 def rename(save_dir: Path, entry_id: str, name: str) -> dict:
-    doc = _load_for_change(save_dir)
-    entry = find(doc, entry_id)
-    old = entry["name"]
-    entry["name"] = clean_name(name)
-    _log(doc, "rename", entry, was=old)
-    _save(save_dir, doc)
-    return entry
+    with library_lock(save_dir):
+        doc = _load_for_change(save_dir)
+        entry = find(doc, entry_id)
+        old = entry["name"]
+        entry["name"] = clean_name(name)
+        _log(doc, "rename", entry, was=old)
+        _save(save_dir, doc)
+        return entry
 
 
 def remove(save_dir: Path, entry_id: str) -> Path | None:
-    """Take a copy out of the library. Its file moves to the library's removed folder rather than being erased."""
-    doc = _load_for_change(save_dir)
-    entry = find(doc, entry_id)
-    src = entry_path(save_dir, entry)
-    moved = None
-    if src.is_file():
-        trash = folder_for(save_dir) / save_backups.LIBRARY_REMOVED
-        trash.mkdir(parents=True, exist_ok=True)
-        moved = trash / f"{entry['file']}"
-        shutil.move(str(src), str(moved))
-        atomic_write(trash / f"{entry['file']}.json", json.dumps(entry, indent=1, ensure_ascii=False))
-    doc["entries"] = [e for e in doc["entries"] if e["id"] != entry_id]
-    _log(doc, "delete", entry, moved_to=str(moved) if moved else None)
-    _save(save_dir, doc)
-    return moved
+    """Take a copy out of the library. Its file moves to the library's removed folder rather than being erased, with
+    a note (<file>.json: the entry, and library_path, where it was) written first. When the manifest can't be
+    written afterwards the file is moved back and the note removed; if even that fails, both stay in the removed
+    folder, the library still lists the entry (load() names the file in in_removed) and the error says where."""
+    with library_lock(save_dir):
+        doc = _load_for_change(save_dir)
+        entry = find(doc, entry_id)
+        src = entry_path(save_dir, entry)
+        moved = note = None
+        if src.is_file():
+            trash = folder_for(save_dir) / save_backups.LIBRARY_REMOVED
+            trash.mkdir(parents=True, exist_ok=True)
+            moved, note = trash / entry["file"], trash / f"{entry['file']}.json"
+            record = {**{k: v for k, v in entry.items() if k not in _SHOWN_ONLY}, "library_path": str(src)}
+            atomic_write(note, json.dumps(record, indent=1, ensure_ascii=False))
+            shutil.move(str(src), str(moved))
+        doc["entries"] = [e for e in doc["entries"] if e["id"] != entry_id]
+        _log(doc, "delete", entry, moved_to=str(moved) if moved else None)
+        try:
+            _save(save_dir, doc)
+        except BaseException as e:
+            if moved is not None and note is not None:
+                _undo_remove(src, moved, note, e)
+            raise
+        return moved
+
+
+def _undo_remove(src: Path, moved: Path, note: Path, cause: BaseException) -> None:
+    """Put a removed copy back after the manifest could not be written. Raises LibraryError naming where everything
+    is when the copy can't be moved back."""
+    try:
+        shutil.move(str(moved), str(src))
+    except OSError as e:
+        raise LibraryError(
+            f"The library could not be updated ({cause}), and the copy could not be put back ({e}). It is at "
+            f"{moved}; {note.name} beside it says where it belongs. The library still lists it."
+        ) from cause
+    note.unlink(missing_ok=True)

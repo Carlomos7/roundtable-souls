@@ -629,7 +629,11 @@ class SavesView:
                     f"from {e.get('from', '?')}",
                     (e.get("added") or "")[:16].replace("T", " "),
                 ]
-                if e.get("missing"):
+                if e.get("in_removed"):
+                    bits.insert(
+                        0, f"file left in the removed folder by a removal that didn't finish: {e['in_removed']}"
+                    )
+                elif e.get("missing"):
                     bits.insert(0, "file missing")
                 sub = hint("  ·  ".join(b for b in bits if b))
                 sub.setWordWrap(True)
