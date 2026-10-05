@@ -24,6 +24,7 @@ from __future__ import annotations
 import datetime
 import json
 import re
+import threading
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -156,7 +157,19 @@ def account_lock(folder: Path, timeout: float | None = None) -> Iterator[None]:
     the block never runs without it."""
     message = f"Another Roundtable Souls window or Play is changing these backups ({folder}). Try again."
     with filelock.exclusive(Path(folder), LOCK_TIMEOUT if timeout is None else timeout, lambda: BackupsBusy(message)):
-        yield
+        _depth.n = getattr(_depth, "n", 0) + 1
+        try:
+            yield
+        finally:
+            _depth.n -= 1
+
+
+_depth = threading.local()  # how many account locks this thread is inside (library.library_lock checks the order)
+
+
+def holding_account_lock() -> bool:
+    """Whether this thread is inside account_lock: the save library's lock must not be taken then."""
+    return getattr(_depth, "n", 0) > 0
 
 
 # ----------------------------------------------------------------------------- backup notes and retention

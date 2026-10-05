@@ -111,6 +111,10 @@ def folder_for(save_dir: Path) -> Path:
     return save_backups.library(save_dir)
 
 
+class LockOrderError(RuntimeError):
+    """A programming error: the library lock was asked for inside a backups lock (see library_lock)."""
+
+
 class LibraryBusy(LibraryError):
     """Another launcher process or thread held the library's lock past the timeout. Nothing was changed."""
 
@@ -121,7 +125,11 @@ def library_lock(save_dir: Path) -> Iterator[None]:
     is read after the lock is taken and written, with the copies it moves, before it is let go. Shared by every
     launcher process and thread (platform.filelock.exclusive); a call inside another on the same thread
     (swap_in adding the outgoing save) just enters. Raises LibraryBusy when it isn't free within
-    save_backups.LOCK_TIMEOUT."""
+    save_backups.LOCK_TIMEOUT. Lock order: the library lock first, then the backups lock (swap_in backs up the live
+    save inside it); taking the library lock while this thread holds a backups lock raises LockOrderError, since
+    two processes taking them in opposite orders could each wait for the other."""
+    if save_backups.holding_account_lock():
+        raise LockOrderError("The save library's lock is taken before a backups lock, never inside one.")
     folder = folder_for(save_dir)
     message = f"Another Roundtable Souls window or Play is changing the save library ({folder}). Try again."
     with filelock.exclusive(folder, save_backups.LOCK_TIMEOUT, lambda: LibraryBusy(message)):
@@ -189,28 +197,79 @@ def _load_for_change(save_dir: Path) -> dict:
 
 
 def _save(save_dir: Path, doc: dict) -> None:
+    """Write the manifest (under library_lock). History lines a change could not write earlier (pending-history/)
+    are added first, once each (by their op id), and their files removed after the write."""
     folder = folder_for(save_dir)
     _read_manifest(folder)  # last check: never write over a manifest that became unreadable since it was loaded
     folder.mkdir(parents=True, exist_ok=True)
+    pending = _pending_history(folder)
+    seen = {h.get("op") for h in doc["history"] if h.get("op")}
+    for _path, lines in pending:
+        for line in lines:
+            if line.get("op") not in seen:
+                doc["history"].append(line)
+                seen.add(line.get("op"))
     clean = {k: v for k, v in doc.items() if k != "unreadable"}  # top-level fields this launcher doesn't know stay
     clean["entries"] = [{k: v for k, v in e.items() if k not in _SHOWN_ONLY} for e in doc["entries"]]
     clean["history"] = doc["history"][-500:]
     atomic_write(folder / MANIFEST, json.dumps(clean, indent=1, ensure_ascii=False))
+    for path, _lines in pending:
+        path.unlink(missing_ok=True)
+
+
+PENDING_HISTORY = "pending-history"  # in the library folder: history lines a finished change could not write yet
+
+
+def _pending_history(folder: Path) -> list[tuple[Path, list[dict]]]:
+    """Waiting history files and their lines. One that can't be read stays where it is, untouched."""
+    out = []
+    d = folder / PENDING_HISTORY
+    for path in sorted(d.glob("*.json")) if d.is_dir() else []:
+        try:
+            lines = json.loads(path.read_text(encoding="utf-8"))
+        except OSError, ValueError:
+            continue
+        if isinstance(lines, list) and all(isinstance(h, dict) and h.get("op") for h in lines):
+            out.append((path, lines))
+    return out
+
+
+def _record(save_dir: Path, line: dict) -> str | None:
+    """Add one history line for a change that already happened on disk (a swap, a restore). None when written.
+    When the manifest can't be written (or read), the line waits in pending-history/ for the next change and the
+    returned sentence says so; the change itself stands either way."""
+    try:
+        doc = _load_for_change(save_dir)
+        doc["history"].append(line)
+        _save(save_dir, doc)
+        return None
+    except (OSError, LibraryError) as e:
+        line["op"] = line.get("op") or uuid.uuid4().hex
+        folder = folder_for(save_dir)
+        try:
+            (folder / PENDING_HISTORY).mkdir(parents=True, exist_ok=True)
+            path = folder / PENDING_HISTORY / f"{line['op']}.json"
+            atomic_write(path, json.dumps([line], indent=1, ensure_ascii=False))
+        except OSError as e2:
+            return f"the library's history could not be updated ({e}), nor kept for later ({e2})"
+        return f"the library's history could not be updated ({e}); the record is kept in {path} and added later"
 
 
 _SHOWN_ONLY = ("missing", "in_removed")  # worked out by load(), never stored
 
 
+def _line(action: str, entry: dict | None, **detail) -> dict:
+    return {
+        "when": datetime.datetime.now().isoformat(timespec="seconds"),
+        "action": action,
+        "entry": entry["id"] if entry else None,
+        "name": entry["name"] if entry else None,
+        **detail,
+    }
+
+
 def _log(doc: dict, action: str, entry: dict | None, **detail) -> None:
-    doc["history"].append(
-        {
-            "when": datetime.datetime.now().isoformat(timespec="seconds"),
-            "action": action,
-            "entry": entry["id"] if entry else None,
-            "name": entry["name"] if entry else None,
-            **detail,
-        }
-    )
+    doc["history"].append(_line(action, entry, **detail))
 
 
 def entry_path(save_dir: Path, entry: dict) -> Path:
@@ -279,7 +338,8 @@ def _add(save_dir: Path, source: Path, data: bytes, name: str, game: games.Game,
 def swap_in(save_dir: Path, entry_id: str, live: Path, outgoing_name: str | None, game: games.Game) -> dict:
     """Put a library copy in place of the live save. The live file goes into the library first under outgoing_name
     (skipped only when there is no live file), and a regular backup is kept for Undo. Returns
-    {entry, outgoing, backup}. Runs under the library lock throughout."""
+    {entry, outgoing, backup, warning}. Runs under the library lock throughout. Once the live file is replaced the
+    swap stands: when its history line can't be written, warning says so and where the record waits."""
     with library_lock(save_dir):
         return _swap_in(save_dir, entry_id, Path(live), outgoing_name, game)
 
@@ -301,17 +361,18 @@ def _swap_in(save_dir: Path, entry_id: str, live: Path, outgoing_name: str | Non
     tmp.replace(live)
     if hashlib.sha256(live.read_bytes()).hexdigest() != hashlib.sha256(data).hexdigest():
         raise LibraryError(f"{live.name} did not read back the same after the swap; restore it from Backups.")
-    doc = _load_for_change(save_dir)  # add() above rewrote it
-    _log(
-        doc,
-        "swap in",
-        find(doc, entry_id),
-        target=live.name,
-        outgoing=outgoing["id"] if outgoing else None,
-        backup=bak.name if bak else None,
+    # The swap has happened: from here on nothing undoes it or reports it as failed.
+    warning = _record(
+        save_dir,
+        _line(
+            "swap in",
+            entry,
+            target=live.name,
+            outgoing=outgoing["id"] if outgoing else None,
+            backup=bak.name if bak else None,
+        ),
     )
-    _save(save_dir, doc)
-    return {"entry": entry, "outgoing": outgoing, "backup": bak}
+    return {"entry": entry, "outgoing": outgoing, "backup": bak, "warning": warning}
 
 
 def rename(save_dir: Path, entry_id: str, name: str) -> dict:
@@ -351,6 +412,53 @@ def remove(save_dir: Path, entry_id: str) -> Path | None:
                 _undo_remove(src, moved, note, e)
             raise
         return moved
+
+
+def _stranded(save_dir: Path, doc: dict, entry_id: str) -> tuple[dict, Path, Path, Path]:
+    """A copy a failed removal left in removed/, checked against what the removal recorded: (entry, home, moved,
+    note). Raises LibraryError, changing nothing, when anything differs from then: the copy is back home, gone
+    from removed/, changed since, or its note is missing, unreadable or about another copy or place."""
+    entry = find(doc, entry_id)
+    folder = folder_for(save_dir)
+    home = folder / entry["file"]
+    moved = folder / save_backups.LIBRARY_REMOVED / entry["file"]
+    note = moved.with_name(moved.name + ".json")
+    if home.exists():
+        raise LibraryError(f"'{entry['name']}' is in the library again; nothing was changed.")
+    if not moved.is_file():
+        raise LibraryError(f"'{entry['name']}' is not in the removed folder ({moved}); nothing was changed.")
+    try:
+        record = json.loads(note.read_text(encoding="utf-8"))
+    except OSError, ValueError:
+        raise LibraryError(f"The note beside {moved} can't be read; nothing was changed.") from None
+    if not isinstance(record, dict) or record.get("id") != entry["id"] or record.get("library_path") != str(home):
+        raise LibraryError(f"The note beside {moved} is about another copy or place; nothing was changed.")
+    if entry.get("sha256") and _sha256(moved) != entry["sha256"]:
+        raise LibraryError(f"{moved} changed after it was moved; nothing was changed.")
+    return entry, home, moved, note
+
+
+def restore_removed(save_dir: Path, entry_id: str) -> str | None:
+    """Put back a copy a failed removal left in removed/ (load() marks it in_removed), after checking nothing
+    changed since (_stranded). Works after a restart: everything it needs is on disk. Returns a warning when only
+    the history line has to wait (_record)."""
+    with library_lock(save_dir):
+        doc = _load_for_change(save_dir)
+        entry, home, moved, note = _stranded(save_dir, doc, entry_id)
+        shutil.move(str(moved), str(home))
+        note.unlink(missing_ok=True)
+        return _record(save_dir, _line("restore", entry, moved_from=str(moved)))
+
+
+def finish_removal(save_dir: Path, entry_id: str) -> None:
+    """Finish a removal that failed after moving the copy to removed/: the entry leaves the library, the copy and
+    its note stay in removed/ as after any removal. Checked first like restore_removed."""
+    with library_lock(save_dir):
+        doc = _load_for_change(save_dir)
+        entry, _home, moved, _note = _stranded(save_dir, doc, entry_id)
+        doc["entries"] = [e for e in doc["entries"] if e["id"] != entry_id]
+        _log(doc, "delete", entry, moved_to=str(moved), finished_later=True)
+        _save(save_dir, doc)
 
 
 def _undo_remove(src: Path, moved: Path, note: Path, cause: BaseException) -> None:

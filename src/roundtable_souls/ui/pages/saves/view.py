@@ -642,6 +642,17 @@ class SavesView:
                     "\n".join(f"Slot {c['slot']}: {c['name']}, level {c['level']}" for c in chars) or e["name"]
                 )
                 rl.addLayout(text, 1)
+                if e.get("in_removed"):  # a removal that stopped halfway: put it back or finish it
+                    b = ghost_btn("Put back", FI.RETURN)
+                    b.setToolTip("Move the copy back into the library, if it is unchanged since it was moved.")
+                    b.clicked.connect(lambda _=False, f=folder, en=e: self._finish_stranded(f, en, restore=True))
+                    rl.addWidget(b, 0, Qt.AlignVCenter)
+                    b = ghost_btn("Finish removing", FI.DELETE)
+                    b.setToolTip("Take it out of the library; the copy stays in the removed folder.")
+                    b.clicked.connect(lambda _=False, f=folder, en=e: self._finish_stranded(f, en, restore=False))
+                    rl.addWidget(b, 0, Qt.AlignVCenter)
+                    self.library_rows.addWidget(row)
+                    continue
                 b = ghost_btn("Swap in", FI.SYNC)
                 b.setEnabled(not e.get("missing") and not self.game_running and not self.busy)
                 b.setToolTip(
@@ -724,6 +735,8 @@ class SavesView:
                 if out["outgoing"]:
                     run_logging.log(f"kept the replaced save as '{out['outgoing']['name']}'")
                 run_logging.log(f"done: '{entry['name']}' is now {target.name}")
+                if out.get("warning"):  # the swap stands; only its history line waits
+                    run_logging.log(f"warning: {out['warning']}")
             except Exception as ex:
                 run_logging.log(f"error: {ex}")
                 raise SystemExit(1) from ex
@@ -834,6 +847,19 @@ class SavesView:
         except Exception as ex:
             self._toast("Could not remove", str(ex), error=True)
             return
+        self.refresh_saves()
+
+    def _finish_stranded(self, folder, entry, restore):
+        """Put back, or finish removing, a copy a failed removal left in the removed folder."""
+        try:
+            if restore:
+                warning = save_library.restore_removed(Path(folder), entry["id"])
+                if warning:
+                    self._toast(f"'{entry['name']}' is back in the library", warning, info=True)
+            else:
+                save_library.finish_removal(Path(folder), entry["id"])
+        except Exception as ex:
+            self._toast("Could not put it back" if restore else "Could not finish removing it", str(ex), error=True)
         self.refresh_saves()
 
     def _library_folder(self):

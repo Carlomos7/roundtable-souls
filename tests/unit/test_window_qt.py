@@ -387,6 +387,36 @@ def test_an_unreadable_library_file_is_reported_not_shown_as_empty(sandbox, tmp_
     assert (folder / library.MANIFEST).read_bytes() == b'{"entries": [{"id": "ab'
 
 
+def test_a_removal_that_stopped_halfway_can_be_put_back_from_the_library_card(sandbox, monkeypatch, tmp_path):
+    import json
+
+    from PySide6.QtWidgets import QAbstractButton
+
+    from roundtable_souls.game import catalog as games
+    from roundtable_souls.saves import backups as save_backups
+    from roundtable_souls.saves import library, regulation
+
+    acct = tmp_path / "EldenRing" / "7656"
+    acct.mkdir(parents=True)
+    data = bytearray(regulation.FILE_SIZE)
+    data[:4] = b"BND4"
+    (acct / "ER0000.sl2").write_bytes(bytes(data))
+    e = library.add(acct, acct / "ER0000.sl2", "first run", games.ELDEN_RING)
+    home = library.entry_path(acct, e)
+    moved = library.folder_for(acct) / save_backups.LIBRARY_REMOVED / e["file"]
+    moved.parent.mkdir()
+    (moved.parent / (moved.name + ".json")).write_text(json.dumps({**e, "library_path": str(home)}))
+    home.rename(moved)  # what a removal leaves when it can neither finish nor move the copy back
+    w = sandbox
+    monkeypatch.setattr(w, "refresh_saves", lambda: w._fill_library({str(acct): library.load(acct)}))
+    w.refresh_saves()
+    buttons = {b.text(): b for b in w.library_card.findChildren(QAbstractButton) if b.text()}
+    assert "Put back" in buttons and "Finish removing" in buttons and "Swap in" not in buttons
+    buttons["Put back"].click()
+    assert home.is_file() and not moved.exists()
+    assert "Swap in" in {b.text() for b in w.library_card.findChildren(QAbstractButton)}
+
+
 def test_a_failed_backup_before_play_asks_and_never_starts_unasked(sandbox, monkeypatch):
     from pathlib import Path
 
