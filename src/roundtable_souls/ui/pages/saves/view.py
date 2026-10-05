@@ -70,8 +70,8 @@ from roundtable_souls.ui.dialogs.common import (
     TextDialog,
     confirm,
 )
+from roundtable_souls.ui.dialogs.saves import CopyCharacterDialog, CopyFileDialog, SwapDialog
 from roundtable_souls.ui.notes import _save_note_widget, save_check_notes
-from roundtable_souls.ui.save_dialogs import CopyCharacterDialog, CopyFileDialog, SwapDialog
 from roundtable_souls.ui.theme import (
     ghost_btn,
     hint,
