@@ -68,7 +68,7 @@ from roundtable_souls.services.settings import (
     save_settings,
 )
 from roundtable_souls.ui.config_files import ConfigFilesDialog
-from roundtable_souls.ui.dialogs import (
+from roundtable_souls.ui.dialogs.common import (
     ChoiceListDialog,
     ConfirmDialog,
     ModOptionsDialog,

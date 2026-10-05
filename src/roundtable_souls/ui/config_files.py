@@ -10,7 +10,7 @@ from qfluentwidgets import ComboBox, SubtitleLabel
 from qfluentwidgets import FluentIcon as FI
 
 from roundtable_souls.mods import configs
-from roundtable_souls.ui.dialogs import Dialog, ask_unsaved
+from roundtable_souls.ui.dialogs.common import Dialog, ask_unsaved
 from roundtable_souls.ui.theme import ghost_btn, hint
 from roundtable_souls.ui.widgets.panels import EditorPanel
 

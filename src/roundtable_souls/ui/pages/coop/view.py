@@ -54,7 +54,7 @@ from roundtable_souls.services.play import (
     read_scaling,
     scaling_spec,
 )
-from roundtable_souls.ui.dialogs import (
+from roundtable_souls.ui.dialogs.common import (
     confirm,
 )
 from roundtable_souls.ui.theme import (

@@ -64,7 +64,7 @@ from roundtable_souls.services.saves import (
     restore_vanilla,
     save_summary,
 )
-from roundtable_souls.ui.dialogs import (
+from roundtable_souls.ui.dialogs.common import (
     WRITE_SAFETY,
     WRITE_WARNING,
     TextDialog,

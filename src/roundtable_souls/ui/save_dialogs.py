@@ -12,7 +12,7 @@ from PySide6.QtWidgets import QHeaderView, QTableWidgetItem, QVBoxLayout, QWidge
 from qfluentwidgets import BodyLabel, ComboBox, LineEdit, RadioButton, SubtitleLabel, TableWidget
 
 from roundtable_souls.saves import library, transfer
-from roundtable_souls.ui.dialogs import Dialog
+from roundtable_souls.ui.dialogs.common import Dialog
 from roundtable_souls.ui.theme import hint
 
 

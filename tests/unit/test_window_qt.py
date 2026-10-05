@@ -616,7 +616,7 @@ def test_an_install_that_asked_for_it_rebuilds_afterwards(sandbox, monkeypatch, 
 def test_options_offer_the_parameter_overlay_switch_for_packages_only(app):
     from PySide6.QtWidgets import QWidget
 
-    from roundtable_souls.ui.dialogs import ModOptionsDialog
+    from roundtable_souls.ui.dialogs.common import ModOptionsDialog
 
     parent = QWidget()
     parent.resize(1000, 800)

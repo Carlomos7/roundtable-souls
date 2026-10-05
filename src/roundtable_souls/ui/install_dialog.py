@@ -9,7 +9,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QVBoxLayout, QWidget
 from qfluentwidgets import BodyLabel, CheckBox, ComboBox, LineEdit, ScrollArea, SubtitleLabel
 
-from roundtable_souls.ui.dialogs import Dialog
+from roundtable_souls.ui.dialogs.common import Dialog
 from roundtable_souls.ui.theme import hint, tone_label
 
 # what each kind of file is, and (for the ones left unticked) why it is not needed

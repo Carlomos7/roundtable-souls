@@ -32,7 +32,7 @@ from qfluentwidgets import (
     TransparentToolButton,
 )
 
-from roundtable_souls.ui.dialogs import InfoDialog
+from roundtable_souls.ui.dialogs.common import InfoDialog
 from roundtable_souls.ui.theme import (
     RADIUS,
     hint,

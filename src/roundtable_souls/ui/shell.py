@@ -78,7 +78,7 @@ from roundtable_souls.services.settings import (
     save_settings,
 )
 from roundtable_souls.ui.activity import ActivityView
-from roundtable_souls.ui.dialogs import (
+from roundtable_souls.ui.dialogs.common import (
     ask_unsaved,
     confirm,
 )
