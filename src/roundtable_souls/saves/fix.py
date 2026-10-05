@@ -35,19 +35,22 @@ def plan_checksum_fixes(parsed: dict) -> dict:
 
 def backup(save: Path, manifest: dict | None = None) -> Path:
     """Copy the save into its account's backups folder (save_backups.backups). A note (what it was taken before, when,
-    which save, what changed) is written beside it as <backup>.json, then older backups of that save are pruned."""
+    which save, what changed) is written beside it as <backup>.json, then older backups of that save are pruned. All
+    of it runs under the account's backups lock (save_backups.account_lock); BackupsBusy means no backup was taken,
+    so the caller's change must not go ahead."""
     save = Path(save)
     folder = save_backups.backups(save.parent)
     folder.mkdir(parents=True, exist_ok=True)
-    stamp = time.strftime("%Y%m%d-%H%M%S")
-    dest = folder / f"{save.name}.{stamp}.bak"
-    n = 1
-    while dest.exists():
-        n += 1
-        dest = folder / f"{save.name}.{stamp}-{n}.bak"
-    shutil.copy2(save, dest)
-    write_manifest(dest, manifest or {"action": "Before a change"}, save)
-    save_backups.prune(folder, save.name)
+    with save_backups.account_lock(folder):
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        dest = folder / f"{save.name}.{stamp}.bak"
+        n = 1
+        while dest.exists():
+            n += 1
+            dest = folder / f"{save.name}.{stamp}-{n}.bak"
+        shutil.copy2(save, dest)
+        write_manifest(dest, manifest or {"action": "Before a change"}, save)
+        save_backups.prune(folder, save.name)
     return dest
 
 
@@ -58,10 +61,11 @@ def write_manifest(bak: Path, manifest: dict, save: Path | None = None) -> None:
         "save": str(save) if save else "",
         "changes": list(manifest.get("changes") or []),
     }
-    try:
-        save_backups.write_note(bak, doc)
-    except OSError:
-        pass
+    with save_backups.account_lock(Path(bak).parent):
+        try:
+            save_backups.write_note(bak, doc)
+        except OSError:
+            pass
 
 
 def read_manifest(bak: Path) -> dict | None:

@@ -23,12 +23,16 @@ from __future__ import annotations
 
 import datetime
 import json
+import os
 import re
+import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from roundtable_souls.game import catalog as games
-from roundtable_souls.platform import data_folder
+from roundtable_souls.platform import data_folder, filelock
 from roundtable_souls.platform.files import atomic_write, move_into
 
 BACKUPS = "backups"
@@ -113,23 +117,73 @@ def _note_backups(folder: Path, save_dir: Path, legacy: str) -> None:
 
 def adopt_legacy_save_folders(save_dir: Path, game: games.Game | None = None, again: bool = False) -> None:
     """Move an account folder's older launcher folders into the data folder. Checked once per session unless
-    again (the Saves page asks again on Refresh, for folders older tools still write)."""
+    again (the Saves page asks again on Refresh, for folders older tools still write). Backups move under the account
+    lock; when it is busy they stay where they are for the next call."""
     save_dir = Path(save_dir)
     key = str(save_dir).lower()
     if key in _adopted and not again:
         return
     _adopted.add(key)
     dest = account_dir(save_dir, game)
-    for legacy in _LEGACY_BACKUPS:
-        old = save_dir / legacy
-        if old.is_dir():
-            _note_backups(old, save_dir, legacy)
-            move_into(old, dest / BACKUPS)
+    legacy_dirs = [legacy for legacy in _LEGACY_BACKUPS if (save_dir / legacy).is_dir()]
+    if legacy_dirs:
+        try:
+            with account_lock(dest / BACKUPS):
+                for legacy in legacy_dirs:
+                    _note_backups(save_dir / legacy, save_dir, legacy)
+                    move_into(save_dir / legacy, dest / BACKUPS)
+        except BackupsBusy:
+            _adopted.discard(key)
     old_lib = save_dir / "roundtable-saves"
     if old_lib.is_dir():
         if (old_lib / "deleted").is_dir():
             move_into(old_lib / "deleted", dest / LIBRARY / LIBRARY_REMOVED)
         move_into(old_lib, dest / LIBRARY)
+
+
+# ----------------------------------------------------------------------------- the account lock
+LOCK_TIMEOUT = 10.0  # seconds to wait for another process (the window, a Play from a shortcut, a repair)
+
+_held = threading.local()  # per thread: lock key -> how deep this thread is inside account_lock
+
+
+class BackupsBusy(OSError):
+    """Another launcher process or thread held one account's backups lock past the timeout. Nothing was changed."""
+
+
+def _held_counts() -> dict[str, int]:
+    counts = getattr(_held, "counts", None)
+    if counts is None:
+        counts = _held.counts = {}
+    return counts
+
+
+@contextmanager
+def account_lock(folder: Path, timeout: float | None = None) -> Iterator[None]:
+    """Hold the lock on one account's backups folder (<folder>.lock beside it) while the block runs, shared by every
+    launcher process and thread. Every change to backups and their notes runs under it: taking one, keep, prune,
+    delete, adopting older folders. A call inside another on the same thread (fix.backup pruning) just enters.
+    Raises BackupsBusy when the lock isn't free within timeout (LOCK_TIMEOUT): unlike the settings lock, the block
+    never runs without it. A process that dies holding it releases it with its handles."""
+    key = os.path.normcase(os.path.abspath(folder))
+    counts = _held_counts()
+    if counts.get(key):
+        counts[key] += 1
+        try:
+            yield
+        finally:
+            counts[key] -= 1
+        return
+    with filelock.locked(Path(folder), LOCK_TIMEOUT if timeout is None else timeout) as got:
+        if not got:
+            raise BackupsBusy(
+                f"Another Roundtable Souls window or Play is changing these backups ({folder}). Try again."
+            )
+        counts[key] = 1
+        try:
+            yield
+        finally:
+            counts.pop(key, None)
 
 
 # ----------------------------------------------------------------------------- backup notes and retention
@@ -216,40 +270,70 @@ def set_keep(bak: Path, keep: bool) -> None:
     be read (protection() is UNREADABLE), the note's bytes are first copied to <backup>.json.unreadable. The note
     is only ever replaced atomically, so a write that fails leaves it, and the protection it gives, as it was."""
     note_path = Path(str(bak) + ".json")
+    with account_lock(Path(bak).parent):
+        try:
+            note = read_note(bak) or {}
+        except UnreadableNote:
+            note = None
+        if note is None or not isinstance(note.get("keep", False), bool):
+            _copy_aside(note_path)
+        note = note or {}
+        note["keep"] = bool(keep)
+        write_note(bak, note)
+
+
+def _remove(bak: Path) -> bool:
+    """Remove a backup, then its note and set-aside notes. A backup that can't be removed (in use) keeps its notes."""
     try:
-        note = read_note(bak) or {}
-    except UnreadableNote:
-        note = None
-    if note is None or not isinstance(note.get("keep", False), bool):
-        _copy_aside(note_path)
-    note = note or {}
-    note["keep"] = bool(keep)
-    write_note(bak, note)
+        bak.unlink()
+    except FileNotFoundError:
+        pass
+    except OSError:
+        return False
+    for p in note_files(bak):
+        try:
+            p.unlink()
+        except OSError:
+            pass
+    return True
+
+
+def delete(bak: Path) -> None:
+    """Delete one backup and its notes (the Saves page's Delete), under the account lock."""
+    bak = Path(bak)
+    with account_lock(bak.parent):
+        bak.unlink(missing_ok=True)
+        for p in note_files(bak):
+            p.unlink(missing_ok=True)
 
 
 def prune(folder: Path, save_name: str, now: float | None = None) -> list[Path]:
     """Remove backups of one save beyond the newest KEEP_NEWEST, unless younger than KEEP_DAYS, marked keep or
-    with protection that can't be read (is_kept). Returns what was removed."""
+    with protection that can't be read (is_kept). Runs under the account lock and reads each backup's protection
+    again just before removing it, so a keep set by another process is seen. When the lock is busy nothing is
+    removed (it is retried with the next backup). Returns what was removed."""
     folder = Path(folder)
     if not folder.is_dir():
         return []
     now = time.time() if now is None else now
-    mine = []
-    for f in folder.iterdir():
-        if f.suffix in (".bak", ".src") and _saved_name(f.name).lower() == save_name.lower():
-            try:
-                mine.append((f.stat().st_mtime, f))
-            except OSError:
-                pass
-    mine.sort(reverse=True)
-    removed = []
-    for rank, (mtime, f) in enumerate(mine):
-        if rank < KEEP_NEWEST or now - mtime < KEEP_DAYS * 86400 or is_kept(f):
-            continue
-        for p in [f, *note_files(f)]:
-            try:
-                p.unlink()
-            except FileNotFoundError:
-                pass
-        removed.append(f)
-    return removed
+    try:
+        with account_lock(folder):
+            mine = []
+            for f in folder.iterdir():
+                if f.suffix in (".bak", ".src") and _saved_name(f.name).lower() == save_name.lower():
+                    try:
+                        mine.append((f.stat().st_mtime, f))
+                    except OSError:
+                        pass
+            mine.sort(reverse=True)
+            removed = []
+            for rank, (mtime, f) in enumerate(mine):
+                if rank < KEEP_NEWEST or now - mtime < KEEP_DAYS * 86400:
+                    continue
+                if is_kept(f):  # read now, under the lock, right before removing
+                    continue
+                if _remove(f):
+                    removed.append(f)
+            return removed
+    except BackupsBusy:
+        return []

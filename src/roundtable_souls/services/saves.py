@@ -502,9 +502,10 @@ def restore_backup(bak: Path, save: Path | None = None, *, loc: Locations) -> Pa
     bak = Path(bak)
     save = Path(save) if save else save_for_backup(bak, loc=loc)
     assert_writable(save, loc=loc)
-    if not bak.is_file():
-        raise RuntimeError(f"Backup not found: {bak}")
-    data = bak.read_bytes()
+    with save_backups.account_lock(bak.parent):  # not pruned or deleted while it is read
+        if not bak.is_file():
+            raise RuntimeError(f"Backup not found: {bak}")
+        data = bak.read_bytes()
     game = games.for_save(save) or games.ELDEN_RING
     if game.save_reader == "eldenring":
         if not repair_regulation.is_pc_save(data):
@@ -531,12 +532,7 @@ def restore_backup(bak: Path, save: Path | None = None, *, loc: Locations) -> Pa
 
 
 def delete_backup(bak: Path) -> None:
-    bak = Path(bak)
-    for p in [bak, *save_backups.note_files(bak)]:
-        try:
-            p.unlink()
-        except FileNotFoundError:
-            pass
+    save_backups.delete(Path(bak))
 
 
 def repair_save(path: Path, *, loc: Locations) -> bool:
