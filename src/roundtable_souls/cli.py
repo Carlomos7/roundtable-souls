@@ -1,5 +1,5 @@
 """The command line: `roundtable-souls` opens the window; --play, --check and --update run without one, and --game
-picks the game. Each mode imports only what it needs, so a Play from a Steam shortcut never loads the window."""
+picks the game. --play --allow-without-backup starts the game even when 'back up saves before Play' fails. Each mode imports only what it needs, so a Play from a Steam shortcut never loads the window."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ def main() -> int:
             print(f"Unknown game. --game takes one of: {games.names_help()}", file=sys.stderr)
             return 2
         if "--play" in sys.argv:
-            return play_from_shortcut(game)
+            return play_from_shortcut(game, allow_without_backup="--allow-without-backup" in sys.argv)
         if "--check" in sys.argv:
             from roundtable_souls.app import create_app
 
@@ -56,9 +56,10 @@ def main() -> int:
     return int(window_main(create_app(game)) or 0)
 
 
-def play_from_shortcut(game) -> int:
+def play_from_shortcut(game, allow_without_backup: bool = False) -> int:
     """--play: when the window is open, it runs Play itself (one launcher manages the session); otherwise Play runs
-    here, holding the PLAY name so a second shortcut start, or a silent update, waits for it to end."""
+    here, holding the PLAY name so a second shortcut start, or a silent update, waits for it to end.
+    allow_without_backup (--allow-without-backup): start even when 'back up saves before Play' fails."""
     from roundtable_souls.app import create_app
     from roundtable_souls.platform import instance
     from roundtable_souls.platform import logging as run_logging
@@ -66,7 +67,8 @@ def play_from_shortcut(game) -> int:
     from roundtable_souls.updates import apply as updates
 
     updates.mark_ready("play")  # this version starts and runs: an update's watchdog can stand down
-    if instance.held(instance.WINDOW) and instance.send(f"play {game.key}"):
+    message = f"play {game.key}" + (" allow-without-backup" if allow_without_backup else "")
+    if instance.held(instance.WINDOW) and instance.send(message):
         run_logging.start_log("launcher: play (no window)", game.key)
         run_logging.log("Roundtable Souls is open: Play was handed to its window")
         return 0
@@ -77,12 +79,14 @@ def play_from_shortcut(game) -> int:
         return 1
     try:
         ctx = create_app(game)
+        if allow_without_backup:
+            return core.play_headless(ctx.settings, ctx.locations, notice=not_started_notice, allow_without_backup=True)
         return core.play_headless(ctx.settings, ctx.locations, notice=not_started_notice)
     finally:
         hold.release()
 
 
-def not_started_notice(game: Game, why: str) -> None:
+def not_started_notice(game: Game, why: str, headline: str | None = None) -> None:
     """--play without the window, when the game was not started: a small window saying why, with a way to open the
     launcher (a Steam shortcut or Gaming Mode has nowhere else to show it). Nothing happens without a display."""
     from roundtable_souls.services import play as core
@@ -96,11 +100,15 @@ def not_started_notice(game: Game, why: str) -> None:
         box = QMessageBox()
         box.setIcon(QMessageBox.Icon.Warning)
         box.setWindowTitle(core.TITLE)
-        box.setText(f"{game.name} was not started: your mods need a rebuild")
-        box.setInformativeText(
-            f"{why}\n\nThe game does not start with merged mods that no longer match your mods, so it cannot run "
-            "with a removed or changed mod still inside them."
-        )
+        if headline:  # another reason than the merged mods (a failed backup before Play)
+            box.setText(headline)
+            box.setInformativeText(why)
+        else:
+            box.setText(f"{game.name} was not started: your mods need a rebuild")
+            box.setInformativeText(
+                f"{why}\n\nThe game does not start with merged mods that no longer match your mods, so it cannot "
+                "run with a removed or changed mod still inside them."
+            )
         open_btn = box.addButton("Open Roundtable Souls", QMessageBox.ButtonRole.AcceptRole)
         box.addButton("Close", QMessageBox.ButtonRole.RejectRole)
         box.exec()

@@ -513,8 +513,10 @@ class Launcher(PlayView, CoopView, ModsView, SavesView, ToolsView, FluentWindow)
         self.raise_()
         self.activateWindow()
 
-    def _play_requested(self, key):
-        """A Steam shortcut (--play) started while this window is open: Play here, for that game."""
+    def _play_requested(self, arg):
+        """A Steam shortcut (--play) started while this window is open: Play here, for that game. "<key>
+        allow-without-backup" (--allow-without-backup): a failed backup before Play doesn't stop it."""
+        key, _, flag = arg.partition(" ")
         g = games.get(key)
         if self.busy or self.game_running:
             self._toast("Play from Steam ignored", f"{self.game.name} or a job is already running here.", error=True)
@@ -523,6 +525,7 @@ class Launcher(PlayView, CoopView, ModsView, SavesView, ToolsView, FluentWindow)
             if not self._settle_unsaved(f"switching to {g.name}"):
                 return
             self._set_game(g, remember=True)
+        self._allow_without_backup_once = flag == "allow-without-backup"
         self.launch()
 
     def after_show(self):

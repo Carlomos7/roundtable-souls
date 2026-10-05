@@ -305,16 +305,49 @@ def play_options(settings: LauncherSettings | None = None) -> dict:
     return {k: bool(getattr(s, k)) for k in PLAY_DEFAULTS}  # a null in the file is the default (LauncherSettings)
 
 
-def backup_saves_before_play(loc: Locations) -> list:
-    """One dated copy of every save of loc's game, tagged 'Backup before Play'."""
-    made = []
+class BackupBeforePlayFailed(RuntimeError):
+    """'Back up saves before Play' is on and a save could not be backed up, so the game was not started.
+    failed: [(save, why)]."""
+
+    def __init__(self, failed: list[tuple[Path, str]]):
+        self.failed = failed
+        super().__init__("; ".join(f"{p.name}: {why}" for p, why in failed))
+
+
+def backup_saves_before_play(loc: Locations, required: bool = False) -> list:
+    """One dated copy of every save of loc's game, tagged 'Backup before Play'. required: raise
+    BackupBeforePlayFailed when any save could not be backed up (the others are kept)."""
+    made, failed = [], []
     for p in loc.save_files():
         try:
             made.append(save_fix.backup(p, {"action": "Before playing", "changes": []}))
             run_logging.log(f"backup: {made[-1]}")
         except OSError as e:
             run_logging.log(f"backup failed for {p.name}: {e}")
+            failed.append((Path(p), str(e)))
+    if failed and required:
+        raise BackupBeforePlayFailed(failed)
     return made
+
+
+# How Play treats 'Back up saves before Play' (when it is on). A failed backup never launches the game silently:
+BACKUP_REQUIRED = "required"  # back up; when it fails, raise BackupBeforePlayFailed and don't start the game
+BACKUP_ALLOW_FAILURE = "allow-failure"  # back up; when it fails, log it and start anyway (--allow-without-backup)
+BACKUP_SKIP = "skip"  # the caller dealt with it: the window backed up already, or the player chose to go without
+
+
+def _backup_before_play(opts: dict, loc: Locations, backup: str) -> None:
+    if not opts["play_backup_before"]:
+        return
+    if backup == BACKUP_SKIP:
+        return
+    try:
+        backup_saves_before_play(loc, required=True)
+    except BackupBeforePlayFailed as e:
+        if backup != BACKUP_ALLOW_FAILURE:
+            run_logging.log(f"error: the game was not started: a backup before Play failed ({e})")
+            raise
+        run_logging.log(f"warning: starting without a backup of every save, as asked ({e})")
 
 
 def places(setup, loc: Locations) -> dict:
@@ -371,13 +404,13 @@ def _after_play(opts, loc: Locations):
         run_logging.log("clearing leftover processes after quitting is off (Tools > Play session)")
 
 
-def job_play(setup: Setup, loc: Locations | None = None):
-    """Play online. loc: the game's locations (default: the setup's, with the saves it uses)."""
+def job_play(setup: Setup, loc: Locations | None = None, backup: str = BACKUP_REQUIRED):
+    """Play online. loc: the game's locations (default: the setup's, with the saves it uses). backup: how a failed
+    'back up saves before Play' is handled (BACKUP_*)."""
     loc = loc or setup.locations()
     run_logging.start_log("launcher: play", loc.game.key)
     opts = play_options()
-    if opts["play_backup_before"]:
-        backup_saves_before_play(loc)
+    _backup_before_play(opts, loc, backup)
     me3_session.ensure_steam(120)
     if opts["play_clear_before"]:
         me3_session.clear_dead_shells(loc.game_exe_name(), "before launch")
@@ -503,12 +536,13 @@ def steam_state():
     return running, signed
 
 
-def job_play_offline(setup, loc: Locations | None = None, strip_revive=False, start_steam=True):
+def job_play_offline(
+    setup, loc: Locations | None = None, strip_revive=False, start_steam=True, backup: str = BACKUP_REQUIRED
+):
     loc = loc or setup.locations()
     run_logging.start_log("launcher: play offline", loc.game.key)
     opts = play_options()
-    if opts["play_backup_before"]:
-        backup_saves_before_play(loc)
+    _backup_before_play(opts, loc, backup)
     if start_steam:
         me3_session.ensure_steam_running(60)
     if opts["play_clear_before"]:
@@ -559,12 +593,17 @@ def game_from_args(argv: list[str], settings: LauncherSettings | None = None) ->
 
 
 def play_headless(
-    settings: LauncherSettings, loc: Locations, notice: Callable[[games.Game, str], None] | None = None
+    settings: LauncherSettings,
+    loc: Locations,
+    notice: Callable[..., None] | None = None,
+    allow_without_backup: bool = False,
 ) -> int:
     """`roundtable-souls --game <name> --play`: the Play button without the window, for one game. Uses the setup
     Play last used for that game (or the only one), runs the same session (Steam, me3, wait, save repair, cleanup)
-    and exits. For Steam shortcuts and Gaming Mode. notice(game, why) tells the player when the game was not
-    started (the command line passes one that shows a small window). loc: where the game to play is."""
+    and exits. For Steam shortcuts and Gaming Mode. notice(game, why[, headline]) tells the player when the game was
+    not started (the command line passes one that shows a small window). loc: where the game to play is. With
+    'back up saves before Play' on, a failed backup stops here (nothing can ask) unless allow_without_backup
+    (--allow-without-backup): then it is logged and the game starts."""
     game = loc.game
     if not game.ready:
         run_logging.start_log("launcher: play (no window)", game.key)
@@ -587,7 +626,18 @@ def play_headless(
             notice(game, why)
         return 1
     try:
-        job_play(setup)
+        if allow_without_backup:
+            job_play(setup, backup=BACKUP_ALLOW_FAILURE)
+        else:
+            job_play(setup)
+    except BackupBeforePlayFailed as e:
+        why = (
+            f"Backing up your saves before Play failed: {e}. Fix that, turn 'back up saves before Play' off on the "
+            "Tools page, or start with --allow-without-backup to play anyway."
+        )
+        if notice is not None:
+            notice(game, why, f"{game.name} was not started: a backup before Play failed")
+        return 1
     except SystemExit as e:
         return int(e.code or 1) if isinstance(e.code, int) else 1
     return 0

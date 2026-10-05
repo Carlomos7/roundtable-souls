@@ -262,7 +262,7 @@ class ToolsView:
                 "play_backup_before",
                 "Back up saves before Play",
                 "A backup of every save before each session, listed under Backups on the Saves page.",
-                "Off by default: the game keeps its own .bak, and each repair makes a copy anyway. Turn it on for a copy before every session.",
+                "Off by default: the game keeps its own .bak, and each repair makes a copy anyway. Turn it on for a copy before every session. When a backup fails, the game waits: you choose Retry, Launch without backup or Cancel (a Steam shortcut stops unless it has --allow-without-backup).",
             ),
             (
                 "play_clear_before",

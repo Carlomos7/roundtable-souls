@@ -405,7 +405,71 @@ class PlayView:
         wrote = self.save_seamless()
         if wrote is None or not self._announce_saved(wrote, "play"):
             return
-        self.start(job_play, "Starting...")
+        self._start_play(job_play, "Starting...")
+
+    def _start_play(self, job, status):
+        """Start a Play job (job(setup, loc, backup=...)). With 'back up saves before Play' on, the saves are backed
+        up first; when that fails the player chooses Retry, Launch without backup or Cancel, so the game never
+        starts without its backup unasked. A Play handed over with --allow-without-backup starts anyway."""
+        allow = getattr(self, "_allow_without_backup_once", False)
+        self._allow_without_backup_once = False
+        if not play_options()["play_backup_before"] or self.setup is None:
+            self.start(job, status)
+        elif allow:
+            self.start(lambda s, loc: job(s, loc, backup=core.BACKUP_ALLOW_FAILURE), status)
+        else:
+            self._backup_then_play(job, status)
+
+    def _backup_then_play(self, job, status):
+        if self.busy or self.setup is None:
+            return
+        if self.game_running:
+            self._toast(f"{self.game.name} is already running", "Close it first.", error=True)
+            return
+        loc = self.setup.locations()
+        self.set_busy(True, "Backing up saves...")
+
+        def work(_progress):
+            try:
+                core.backup_saves_before_play(loc, required=True)
+            except core.BackupBeforePlayFailed as e:
+                return e
+            except Exception as e:  # anything else is a failed backup too
+                return core.BackupBeforePlayFailed([(Path(loc.game.save_dir), str(e))])
+            return None
+
+        def done(failed):
+            self.set_busy(False, "")
+            if failed is None:
+                self.start(lambda s, loc: job(s, loc, backup=core.BACKUP_SKIP), status)  # backed up just now
+                return
+            choice = self._ask_backup_failed(failed)
+            if choice == "retry":
+                self._backup_then_play(job, status)
+            elif choice == "launch":
+                run_logging.log(f"warning: starting without a backup of every save, as chosen ({failed})")
+                self.start(lambda s, loc: job(s, loc, backup=core.BACKUP_SKIP), status)
+            else:
+                run_logging.log(f"Play cancelled: a backup before Play failed ({failed})")
+
+        self.jobs.start(work, on_result=done)
+
+    def _ask_backup_failed(self, failed):
+        """Retry / Launch without backup / Cancel after a failed backup before Play: "retry", "launch" or None."""
+        dlg = ConfirmDialog(
+            "Backing up your saves failed",
+            self,
+            changes=[f"{p.name}: {why}" for p, why in failed.failed],
+            warning="The game has not started: 'Back up saves before Play' is on.",
+            safety="Retry tries the backup again. Launch without backup starts the game without a fresh copy of "
+            "the saves listed above.",
+            apply_text="Retry",
+            second_text="Launch without backup",
+            cancel_text="Cancel",
+        )
+        if not dlg.exec():
+            return None
+        return "launch" if dlg.choice == "second" else "retry"
 
     def _remember_offline(self, *_):
         strip = self.off_revive.isChecked()
@@ -441,7 +505,7 @@ class PlayView:
             ):
                 return
 
-        def job(setup, loc):
-            job_play_offline(setup, loc, strip_revive=strip, start_steam=steam)
+        def job(setup, loc, backup=core.BACKUP_REQUIRED):
+            job_play_offline(setup, loc, strip_revive=strip, start_steam=steam, backup=backup)
 
-        self.start(job, "Starting offline...")
+        self._start_play(job, "Starting offline...")

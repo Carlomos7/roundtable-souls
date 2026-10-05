@@ -387,6 +387,76 @@ def test_an_unreadable_library_file_is_reported_not_shown_as_empty(sandbox, tmp_
     assert (folder / library.MANIFEST).read_bytes() == b'{"entries": [{"id": "ab'
 
 
+def test_a_failed_backup_before_play_asks_and_never_starts_unasked(sandbox, monkeypatch):
+    from pathlib import Path
+
+    from PySide6.QtCore import QEventLoop, QTimer
+
+    from roundtable_souls.services import play as core
+    from roundtable_souls.ui.dialogs.common import ConfirmDialog
+
+    w = sandbox
+    assert w.setup is not None
+    opts = {k: False for k in core.PLAY_DEFAULTS} | {"play_backup_before": True}
+    patch_ui(monkeypatch, "play_options", lambda settings=None: opts)
+    failures = []  # how many backups in a row fail from here on
+
+    def backup(loc, required=False):
+        if failures and failures.pop():
+            raise core.BackupBeforePlayFailed([(Path("ER0000.co2"), "in use")])
+        return []
+
+    monkeypatch.setattr(core, "backup_saves_before_play", backup)
+    started, asked, choices = [], [], []
+    monkeypatch.setattr(w, "start", lambda job, status: started.append(job))
+    monkeypatch.setattr(w, "_ask_backup_failed", lambda failed: asked.append(failed) or choices.pop(0))
+    runs = []
+
+    def job(setup, loc, backup=core.BACKUP_REQUIRED):
+        runs.append(backup)
+
+    def play_and_wait(expect_asked):
+        w._start_play(job, "Starting...")
+        loop = QEventLoop()
+        for _ in range(100):  # the backup runs on a worker thread
+            if not w.busy and len(asked) >= expect_asked:
+                break
+            QTimer.singleShot(20, loop.quit)
+            loop.exec()
+        QTest.qWait(50)
+        for j in started:
+            j(w.setup, None)
+        started.clear()
+
+    failures[:], choices[:] = [True], [None]  # Cancel
+    play_and_wait(1)
+    assert len(asked) == 1 and runs == []
+    failures[:], choices[:] = [True, True], ["retry", "launch"]  # Retry fails again, then Launch without backup
+    play_and_wait(3)
+    assert len(asked) == 3 and runs == [core.BACKUP_SKIP]
+    failures[:] = [False]  # the backup works: Play starts without asking, its backup already taken
+    play_and_wait(3)
+    assert len(asked) == 3 and runs == [core.BACKUP_SKIP, core.BACKUP_SKIP]
+    w._allow_without_backup_once = True  # handed over with --allow-without-backup
+    play_and_wait(3)
+    assert runs[-1] == core.BACKUP_ALLOW_FAILURE and len(asked) == 3
+
+    seen = []
+
+    def exec_(dlg, pick):
+        seen.append((dlg.yesButton.text(), dlg.secondButton.text(), dlg.cancelButton.text()))
+        if pick:
+            dlg.choice = pick
+        return 1 if pick else 0
+
+    failed = core.BackupBeforePlayFailed([(Path("ER0000.co2"), "in use")])
+    monkeypatch.delattr(w, "_ask_backup_failed")  # the real dialog from here on (the class's method)
+    for pick, expected in (("second", "launch"), ("apply", "retry"), (None, None)):
+        monkeypatch.setattr(ConfirmDialog, "exec", lambda dlg, p=pick: exec_(dlg, p))
+        assert w._ask_backup_failed(failed) == expected
+    assert seen[0] == ("Retry", "Launch without backup", "Cancel")
+
+
 def test_folder_of_mods_entry_shows_as_its_folder_and_can_be_removed(sandbox, monkeypatch):
     from roundtable_souls.mods import profile_edit as manage
 
