@@ -81,3 +81,46 @@ The build runs in a staging folder beside the output and replaces it by renaming
 source's path and sha256, so the launcher's checks and the mod's installer keep working. The inputs are only read
 and the profile is never written. A build is accepted when its output matches the mod's own installer's for the same
 inputs, file for file.
+
+## Installing it into a profile
+
+A build may also say what installing that edition does to the player's me3 profile (`[builds.install]`). The
+launcher works the changes out from it without writing anything (`overhauls/install_plan.py`); applying them is a
+later step, through the launcher's journaled install and its profile writer. Editions the mod's installer knows but
+the launcher does not install are listed with the reason in `install_unsupported` (edition -> why) at the top.
+
+```toml
+[builds.install]
+profile_settings = { profileVersion = "v1", start_online = false }  # top-level keys set
+owned_package_ids = ["my-overhaul"]          # an earlier install's packages, removed first
+owned_dlls = ["myoverhaul.dll"]              # an earlier install's DLLs (file names, lower-case), removed first
+required_files = ["MyOverhaul.dll", "mod/regulation.bin"]   # in its folder: the check after an install
+required_folders = ["ui"]                    # in its folder, not empty
+
+[builds.install.seamless]                    # Seamless Co-op must be switched on
+dll = "ersc.dll"
+candidates = ["{profile_dir}/SeamlessCoop/ersc.dll", "{game_dir}/SeamlessCoop/ersc.dll"]
+
+[[builds.install.set_initializers]]          # other mods' DLLs that get an initializer when they have none
+name_prefix = "companionmod"
+function = "CompanionInitialize"
+
+[[builds.install.natives]]                   # its DLLs, added after the profile's own, in this order
+file = "MyOverhaul.dll"                      # in its own folder
+load_early = true                            # optional
+initializer = { function = "MyInitialize" }  # optional
+after_enabled_natives = true                 # load_after every enabled DLL already there, each optional
+
+[builds.install.package]                     # its package, added after the profile's own
+id = "my-overhaul"
+folder = "mod"
+after_enabled_packages = true                # load_after every enabled package already there, each optional
+```
+
+The plan removes an earlier install's own entries, sets the settings that differ, switches Seamless Co-op on (an
+entry switched off is switched on and pointed at the Seamless found; with none, the first candidate that exists is
+added; with no Seamless at all the install stops), gives the matching DLLs their initializer, and adds the
+overhaul's DLLs and package last with the load settings written here. The player's other entries are left as they
+are. It stops for a profile me3 cannot use (two enabled packages with one id, a circle of `load_after`), an enabled
+package whose folder is missing, or an unreadable profile. Nightreign Revive's LITE description is the one its own
+installer (0.1.33-rc3) applies; the plan gives the same profile as that installer on the profiles compared.
