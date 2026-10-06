@@ -34,7 +34,7 @@ from roundtable_souls.mods import profile_edit as mod_manage
 if TYPE_CHECKING:
     from roundtable_souls.game.locate import Locations
 
-REGULATION = "regulation.bin"
+REGULATION = games.ELDEN_RING.regulation
 TALK = "script/talk/m00_00_00_00.talkesdbnd.dcx"
 STATE_TEXT = {
     "single": "One package ships parameters",

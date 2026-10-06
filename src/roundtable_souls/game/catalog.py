@@ -23,6 +23,7 @@ class Game:
     save_stem: str  # save file name without extension
     coop_dll: str | None = None  # Seamless Co-op dll for this game, if one exists
     coop_ini: str | None = None
+    regulation: str = "regulation.bin"  # the parameter file in the game folder, which a package may replace
     save_reader: str | None = None  # "eldenring": characters; "nightreign": checksums; "container": structure only
     save_sections: int | None = None  # sections the game writes into a save, for the structure check
     regulation_repair: bool = False  # me3 leaves the save's regulation block dirty; repaired after play

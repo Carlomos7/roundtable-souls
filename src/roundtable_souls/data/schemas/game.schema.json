@@ -85,7 +85,7 @@
   }
  },
  "additionalProperties": false,
- "description": "One game's files: its archives (names and the RSA public keys of their headers), the Oodle library it ships,\nthe DCX layouts the launcher writes for it, and the file types it loads as DFLT in place of KRAK.",
+ "description": "One game's files: its archives (names and the RSA public keys of their headers), the Oodle library it ships,\nthe DCX layouts the launcher writes for it, the file types it loads as DFLT in place of KRAK, and how its mods are\nlaid out (the folders a package serves game files from, the DLLs in a download that are not mods).",
  "properties": {
   "game": {
    "title": "Game",
@@ -123,6 +123,20 @@
    },
    "title": "Dflt Fallback",
    "type": "array"
+  },
+  "mod_folders": {
+   "items": {
+    "type": "string"
+   },
+   "title": "Mod Folders",
+   "type": "array"
+  },
+  "ignored_dlls": {
+   "items": {
+    "type": "string"
+   },
+   "title": "Ignored Dlls",
+   "type": "array"
   }
  },
  "required": [
@@ -131,7 +145,9 @@
   "archives",
   "oodle_library",
   "dcx_writer",
-  "dflt_fallback"
+  "dflt_fallback",
+  "mod_folders",
+  "ignored_dlls"
  ],
  "title": "GameConfig",
  "type": "object"

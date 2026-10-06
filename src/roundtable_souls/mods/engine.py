@@ -44,6 +44,7 @@ from typing import TYPE_CHECKING
 
 from roundtable_souls import formats, overhauls
 from roundtable_souls.formats import FormatError
+from roundtable_souls.game import catalog as games
 from roundtable_souls.game import config as game_config
 from roundtable_souls.game import oodle as game_oodle
 
@@ -163,7 +164,11 @@ def _seamless(profile: Path) -> Path | None:
     from roundtable_souls.mods import profile_edit as mod_manage
 
     for e in mod_manage.entries(profile):
-        if e["kind"] == "native" and e.get("enabled", True) and Path(e.get("path") or "").name.lower() == "ersc.dll":
+        if (
+            e["kind"] == "native"
+            and e.get("enabled", True)
+            and Path(e.get("path") or "").name.lower() == games.ELDEN_RING.coop_dll
+        ):
             return mod_manage.resolve(profile, e["path"])
     return None
 
@@ -261,7 +266,9 @@ def build(
     if game_dir is None or not game_dir.is_dir():
         raise EngineError("The game folder was not found.")
     if _seamless(profile) is None:
-        raise EngineError(f"{recipe['label']} needs Seamless Co-op (ersc.dll) switched on in the profile.")
+        raise EngineError(
+            f"{recipe['label']} needs Seamless Co-op ({games.ELDEN_RING.coop_dll}) switched on in the profile."
+        )
     inputs = layers(profile, target_folder)
     stage = own.parent / f".{own.name}.building-{int(started)}"
     if stage.exists():
@@ -491,7 +498,7 @@ def _manifest(own, stage, out_cfg, recipe, version, sources, profile, setup, gam
     return {
         **old,
         "version": version or old.get("version"),
-        "game": old.get("game") or str(game_dir / "eldenring.exe"),
+        "game": old.get("game") or str(game_dir / games.ELDEN_RING.exe),
         "profile": old.get("profile") or str(profile),
         "sources": rows,
         "refreshProtocol": old.get("refreshProtocol", 1),

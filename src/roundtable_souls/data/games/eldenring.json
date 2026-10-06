@@ -1,6 +1,6 @@
 {
  "game": "eldenring",
- "note": "What the launcher knows about the game's files. archives: RSA public keys of the game's archive headers (Data0-3.bhd, DLC.bhd), as published by the modding community (UXM). dcx_writer: the layouts the launcher writes, each loaded in game (docs/decisions). dflt_fallback: file types the game has loaded as DFLT in place of KRAK, written so only when the game's Oodle library is not there.",
+ "note": "What the launcher knows about the game's files. archives: RSA public keys of the game's archive headers (Data0-3.bhd, DLC.bhd), as published by the modding community (UXM). dcx_writer: the layouts the launcher writes, each loaded in game (docs/decisions). dflt_fallback: file types the game has loaded as DFLT in place of KRAK, written so only when the game's Oodle library is not there. mod_folders: the top-level folders of a package that me3 serves game files from. ignored_dlls: DLLs a mod download may carry that are not mods (mod loaders and runtimes).",
  "archive_names": [
   "Data0",
   "Data1",
@@ -35,5 +35,41 @@
   ".msgbnd.dcx",
   ".anibnd.dcx",
   ".ffxbnd.dcx"
+ ],
+ "mod_folders": [
+  "action",
+  "asset",
+  "chr",
+  "cutscene",
+  "event",
+  "font",
+  "map",
+  "material",
+  "menu",
+  "movie",
+  "msg",
+  "other",
+  "param",
+  "parts",
+  "script",
+  "sd",
+  "sfx",
+  "shader",
+  "sound",
+  "expression",
+  "facegen",
+  "obj",
+  "mtd",
+  "model",
+  "sfxbnd"
+ ],
+ "ignored_dlls": [
+  "dinput8.dll",
+  "modengine2.dll",
+  "mod_loader.dll",
+  "lua.dll",
+  "zlib1.dll",
+  "me3-mod-host.dll",
+  "me3_mod_host.dll"
  ]
 }

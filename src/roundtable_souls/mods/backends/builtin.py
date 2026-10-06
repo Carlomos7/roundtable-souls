@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from roundtable_souls import formats
+from roundtable_souls.game import catalog as games
 from roundtable_souls.game import config as game_config
 from roundtable_souls.game import oodle as game_oodle
 from roundtable_souls.merging import record as merge_record
@@ -28,7 +29,7 @@ if TYPE_CHECKING:
 
 RECORD = "combined-parameters.json"
 FOLDER = "combined-parameters"
-REGULATION = "regulation.bin"
+REGULATION = games.ELDEN_RING.regulation
 
 
 def _sha(p: Path) -> str:
@@ -160,7 +161,7 @@ class CombineTool:
 
     def problem(self) -> str | None:
         if game_regulation(self.loc) is None:
-            return "The game's own regulation.bin was not found (it is the base every pack is compared with)."
+            return f"The game's own {REGULATION} was not found (it is the base every pack is compared with)."
         return None
 
     def approval_key(self) -> str:
@@ -251,7 +252,7 @@ class CombineTool:
             if k not in was:
                 out.append(f"{l['name']} ships parameters now but was not combined")
             elif _sha(Path(k)) != was[k].get("sha256"):
-                out.append(f"{l['name']}'s regulation.bin changed since it was combined")
+                out.append(f"{l['name']}'s {REGULATION} changed since it was combined")
         for k, p in was.items():
             if k not in have:
                 out.append(f"{p.get('name') or Path(k).parent.name} was combined but is no longer loaded before it")
@@ -259,7 +260,7 @@ class CombineTool:
             out.append("the packs' load order changed; where two change the same row, the later one wins")
         base = game_regulation(self.loc)
         if base is not None and rec.get("base_sha256") and _sha(base) != rec["base_sha256"]:
-            out.append("the game's own regulation.bin changed since the last combine (a game update?)")
+            out.append(f"the game's own {REGULATION} changed since the last combine (a game update?)")
         order = [l["index"] for l in all_layers]
         if self.package["index"] in order:
             at = order.index(self.package["index"])
@@ -296,7 +297,7 @@ class CombineTool:
         if base is None:
             raise BackendError(self.problem() or "no base regulation")
         log(
-            f"combine: {len(packs)} packs onto the game's regulation.bin: {', '.join(p['name'] for p in packs) or 'none'}"
+            f"combine: {len(packs)} packs onto the game's {REGULATION}: {', '.join(p['name'] for p in packs) or 'none'}"
         )
         start = time.time()
         game_dir = self.loc.game_dir()
