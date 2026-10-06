@@ -175,9 +175,9 @@ def overview(profile: Path, *, loc: Locations) -> dict:
     except Exception:
         out["problems"] = []
     try:
-        from roundtable_souls.mods import stay_last
+        from roundtable_souls.mods import order as mod_order
 
-        out["stay_last"] = stay_last.status(profile, loc=loc)
+        out["stay_last"] = mod_order.status(profile, loc=loc)
     except Exception:
         out["stay_last"] = None
     try:

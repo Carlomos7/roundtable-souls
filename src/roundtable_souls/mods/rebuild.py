@@ -580,7 +580,7 @@ def ensure_combined(profile: Path, target: dict | None, *, loc: Locations):
     """The combined-parameters package: made (an empty folder with its record, and an entry right before the
     overlay, or after the last package with parameters) when the profile has none, and moved there when a pack
     ended up after it. Returns its CombineTool."""
-    from roundtable_souls.mods import stay_last
+    from roundtable_souls.mods import order as mod_order
     from roundtable_souls.mods.backends import builtin
 
     profile = Path(profile)
@@ -588,7 +588,7 @@ def ensure_combined(profile: Path, target: dict | None, *, loc: Locations):
     def _write_keeping_last(profile: Path, text: str) -> None:
         # The entry has to be in the overlay's load_after too: me3 orders by load_after runs, so a package the
         # overlay does not list loads after it (and the overlay would win the files the combine made).
-        mod_manage._write_ordered(profile, text, "combined parameters", stay_last.target(profile, loc))
+        mod_manage._write_ordered(profile, text, "combined parameters", mod_order.target(profile, loc))
 
     all_layers = layers(profile)
     combine = builtin.find(profile, all_layers, loc=loc)

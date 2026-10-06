@@ -40,7 +40,7 @@ from roundtable_souls.mods import conflicts as mod_overview
 from roundtable_souls.mods import extract as mod_extract
 from roundtable_souls.mods import history as mod_history
 from roundtable_souls.mods import install as mod_install
-from roundtable_souls.mods import stay_last as mod_stay_last
+from roundtable_souls.mods import order as mod_order
 from roundtable_souls.mods import undo as mod_undo
 from roundtable_souls.platform import desktop, trash
 from roundtable_souls.platform import logging as run_logging
@@ -562,7 +562,7 @@ class ModsView:
             return
         prof = Path(self.setup.profile)
         try:
-            problem = mod_stay_last.fix(prof, loc=self.ctx.locations)
+            problem = mod_order.fix(prof, loc=self.ctx.locations)
         except OSError as e:
             problem = str(e)
         if problem:
@@ -581,12 +581,12 @@ class ModsView:
         if not names:
             return
         try:
-            mod_stay_last.keep_after(prof, list(names), keep)
+            mod_order.keep_after(prof, list(names), keep)
             if not keep:
-                problem = mod_stay_last.fix(prof, loc=self.ctx.locations)
+                problem = mod_order.fix(prof, loc=self.ctx.locations)
                 if problem:
                     self._toast("Could not fix the load order", problem, error=True)
-        except (OSError, mod_stay_last.Unreadable) as e:
+        except (OSError, mod_order.Unreadable) as e:
             self._toast("Could not save that", str(e), error=True)
             return
         self._after_profile_change(
