@@ -739,11 +739,7 @@ class Launcher(PlayView, CoopView, ModsView, SavesView, ToolsView, FluentWindow)
             self._load_profile_editor(force=True)
             self._fill_mods()
             self._update_plan()
-            after = getattr(self, "_merge_after", None)
-            self._merge_after = None
-            if ok and after is not None and label.startswith("Installing"):
-                QTimer.singleShot(0, lambda p=after: self._rebuild_merge(p))  # asked for in the install dialog
-            elif getattr(self, "_install_queue", None):
+            if getattr(self, "_install_queue", None):
                 QTimer.singleShot(0, self._install_next)  # the next dropped mod
         undo = self._undo if ok else None
         undo_btn = ghost_btn("Undo", FI.RETURN) if undo else None

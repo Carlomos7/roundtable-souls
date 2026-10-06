@@ -52,6 +52,7 @@ from roundtable_souls.services.mods import (
     plan_mod_install,
     profile_entries,
     read_profile_settings,
+    recover_interrupted,
     replan_mod_install,
     set_mod_options,
     uninstall_mod,
@@ -594,6 +595,9 @@ class ModsView:
 
     def _fill_mods(self):
         keep_p, keep_n = self.pack_exp.isExpand, self.nat_exp.isExpand
+        if self.setup and not self.busy and Path(self.setup.profile).is_file():
+            for line in recover_interrupted(self.setup.profile, timeout=0.5):  # the window closed during one
+                self._toast("An interrupted change was put right", line[:1].upper() + line[1:] + ".")
         self._load_profile_settings()
         self._scan_conflicts()  # the Load order card and the pill, from one scan
         first = not getattr(self, "_mods_seen", False)
@@ -1488,6 +1492,27 @@ class ModsView:
             if not ok:
                 return
             name = "the rebuild"
+        elif u.get("type") in mod_undo.OPERATIONS:
+            name = u.get("name") or "the mod"
+            fresh = u.get("type") == "install"
+            ok = confirm(
+                self,
+                f"Undo the install of {name}" if fresh else f"Roll {name} back",
+                changes=[
+                    f"{prof.name} goes back to exactly what it was before the install"
+                    if fresh
+                    else f"{name}'s folder and its entries go back to the version before",
+                    "The files the install added are removed; any you changed since stay, and are listed"
+                    if fresh
+                    else "The version it replaces is kept aside, with any changes you made to it",
+                    "The merged mods are rebuilt for it" if u.get("rebuild") and not fresh else "",
+                ],
+                safety="Seamless Co-op and your other mods are not touched. If the profile changed since, only "
+                f"{name}'s entries are taken out of it.",
+                apply_text="Undo install" if fresh else "Roll back",
+            )
+            if not ok:
+                return
         else:
             name = u.get("name") or "it"
             in_bin = trash.exists(u.get("trash"))
@@ -1512,6 +1537,8 @@ class ModsView:
             run_logging.start_log(
                 f"launcher: {'redo' if u.get('redo') else 'undo'} the rebuild"
                 if u.get("type") == "rebuild"
+                else f"launcher: {mod_undo.label(u).lower()} {name}"
+                if u.get("type") in mod_undo.OPERATIONS
                 else f"launcher: restore {name}",
                 loc.game.key,
             )
@@ -1625,13 +1652,21 @@ class ModsView:
             QTimer.singleShot(0, self._install_next)
             return
         plan = dlg.plan
-        self._merge_after = Path(prof) if plan.get("merge") else None
 
         def job(_setup, loc):
             run_logging.start_log(f"launcher: install mod {plan['name']}", loc.game.key)
             try:
-                install_mod(prof, plan, overwrite=bool(plan.get("exists")))
-                run_logging.log(f"done: installed {plan['name']}")
+                out = install_mod(prof, plan, overwrite=bool(plan.get("exists")), rebuild=bool(plan.get("merge")))
+                core.run_logging.set_undo(
+                    {
+                        "type": "update" if out["update"] else "install",
+                        "profile": str(prof),
+                        "name": plan["name"],
+                        "operation": out["operation"],
+                        "rebuild": bool(plan.get("merge")),
+                    }
+                )
+                run_logging.log(f"done: {'updated' if out['update'] else 'installed'} {plan['name']}")
             except Exception as e:
                 run_logging.log(f"error: {e}")
                 raise SystemExit(1) from e

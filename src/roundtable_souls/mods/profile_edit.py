@@ -367,12 +367,32 @@ def _write_ordered(
 ) -> tuple[Path, str | None]:
     """_write, with the mod that must stay last kept after everything else (see mods.stay_last). tgt is what
     stay_last.target() said before the change. Returns (backup, why it could not be kept last, or None)."""
+    new_text, problem = _ordered(profile, new_text, tgt, renamed)
+    return _write(profile, new_text, why), problem
+
+
+def _ordered(
+    profile: Path, new_text: str, tgt: dict | None, renamed: dict[str, str] | None = None
+) -> tuple[str, str | None]:
+    """The text with the mod that must stay last kept after everything else, and why it could not be (or None)."""
     from roundtable_souls.mods import stay_last
 
-    problem = None
-    if tgt:
-        new_text, problem = stay_last.reconcile(profile, new_text, tgt, renamed)
-    return _write(profile, new_text, why), problem
+    if not tgt:
+        return new_text, None
+    return stay_last.reconcile(profile, new_text, tgt, renamed)
+
+
+def _stage_write(op, profile: Path, new_text: str, why: str) -> Path:
+    """_write for an operation (merging.build.Operation): the history copy and the .bak now, the new text as one of
+    its steps, so it changes together with the rest. Returns the .bak."""
+    from roundtable_souls.mods import history
+
+    profile = Path(profile)
+    history.snapshot(profile, why)
+    bak = profile.with_name(profile.name + ".bak")
+    shutil.copy2(profile, bak)
+    op.write_file(profile, new_text.encode("utf-8"))
+    return bak
 
 
 def _last_place(profile: Path, text: str, kind: str, tgt: dict | None) -> int | None:

@@ -36,6 +36,7 @@ from roundtable_souls.coop.scaling import (
 )
 from roundtable_souls.game import catalog as games
 from roundtable_souls.game.locate import Locations, installed_dir
+from roundtable_souls.mods import operations as mod_operations
 from roundtable_souls.mods import profile as profile_tools
 from roundtable_souls.mods import profile_edit as mod_manage
 from roundtable_souls.mods import rebuild as mod_merge
@@ -135,6 +136,10 @@ class Setup:
             if named and self.game.key not in named:
                 other = ", ".join(games.get(k).name if k in games.BY_KEY else k for k in named)
                 out.append(f"this profile is for {other}, not {self.game.name}")
+        if Path(self.profile).is_file():
+            unfinished = mod_operations.problem(Path(self.profile))  # an incomplete managed setup: no Play anyway
+            if unfinished:
+                out.append(unfinished)
         if self.me3 and not Path(self.me3).is_file():
             out.append(f"me3 missing: {self.me3}")
         if not self.me3 and not self.loc.me3_exe():
@@ -641,6 +646,11 @@ def play_headless(
         run_logging.log(f"error: Roundtable Souls cannot launch {game.name} yet")
         return 1
     remembered = remembered_setup(settings, game)
+    if remembered and Path(remembered).is_file():
+        try:
+            mod_operations.recover(Path(remembered))  # an install the window left half done: undone first
+        except Exception:
+            pass  # then problems() says why Play cannot start
     setups = [s for s in discover(remembered, loc) if not s.problems()]
     setup = next((s for s in setups if same_source(s.source, remembered)), setups[0] if setups else None)
     if setup is None:

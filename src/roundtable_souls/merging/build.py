@@ -236,6 +236,12 @@ class Operation:
         tmp.write_text(json.dumps(data, indent=1), encoding="utf-8")
         os.replace(tmp, self.dir / OP_JOURNAL)
 
+    def gone_when(self, path: Path) -> None:
+        """then()'s last action removes path (sends a folder to the Recycle Bin, say): once every step is applied and
+        path is gone, an interruption is finished, not undone."""
+        self.info["gone_when"] = str(path)
+        self._save()
+
     def note(self, **info) -> None:
         """Keep the caller's notes in the journal."""
         self.info.update(info)
@@ -281,16 +287,18 @@ class Operation:
         shutil.rmtree(self.dir, ignore_errors=True)
 
     # -------------------------------------------------------------- applying
-    def commit(self, refuse: Callable[[], str | None] | None = None) -> None:
-        """Apply every step in order. On a failure the applied steps are undone and the error raised: the previous
-        state stands."""
+    def commit(self, refuse: Callable[[], str | None] | None = None, then: Callable[[], object] | None = None) -> None:
+        """Apply every step in order, then run then() (work that needs the applied state, a rebuild say) before the
+        operation counts as done. On a failure of either, the applied steps are undone and the error raised: the
+        previous state stands. A last action then() takes outside the journal is named by gone_when(): recovery
+        finishes the operation when that path is gone, rather than undoing it."""
         why = refuse() if refuse else None
         if why:
             self.discard()
             raise BuildError(why)
-        if any(s["type"] == "build" for s in self.steps[:-1]):
+        if any(s["type"] == "build" for s in self.steps[:-1]) or (then is not None and self._builds):
             self.discard()
-            raise BuildError("a build can only be the last step of an operation")
+            raise BuildError("a build can only be the last step of an operation, with nothing run after it")
         self.state, self.done = ACTIVATING, 0
         self._save()
         builds = iter(self._builds)
@@ -310,6 +318,8 @@ class Operation:
                     return
                 self.done += 1
                 self._save()
+            if then is not None:
+                then()
         except BaseException:
             _undo(self)
             raise
@@ -352,7 +362,7 @@ def _undo(op: Operation) -> None:
     op.discard()
 
 
-def recover_operations(root: Path) -> list[str]:
+def recover_operations(root: Path, timeout: float = 30.0) -> list[str]:
     """Finish or undo the operations under root that were interrupted: one still activating is undone as a whole
     (the previous state stands), one only prepared is discarded. Active ones are left for a rollback. Returns what
     was done, one line each."""
@@ -360,7 +370,7 @@ def recover_operations(root: Path) -> list[str]:
     base = Path(root) / OPS
     if not base.is_dir():
         return out
-    with ops_lock(root):
+    with ops_lock(root, timeout):
         _recover_all(base, out)
     return out
 
@@ -377,7 +387,11 @@ def _recover_all(base: Path, out: list[str]) -> None:
             shutil.rmtree(op_dir, ignore_errors=True)  # never got a journal: nothing was staged under it
             continue
         op = Operation.load(op_dir)
-        if state == ACTIVATING:
+        gone = op.info.get("gone_when")
+        if state == ACTIVATING and op.done >= len(op.steps) and gone and not Path(gone).exists():
+            op._done()  # its last action happened: finish it
+            out.append(f"an interrupted {op.what} was finished")
+        elif state == ACTIVATING:
             _undo(op)
             out.append(f"an interrupted {op.what} was undone: the previous state is back")
         else:

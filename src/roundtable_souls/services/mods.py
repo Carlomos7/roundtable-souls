@@ -163,10 +163,35 @@ def replan_mod_install(profile, plan, name=None, pkg_id=None, variant=None) -> d
     return new
 
 
-def install_mod(profile, plan, overwrite=False) -> dict:
-    out = install.install(Path(profile), plan, overwrite=overwrite)
-    run_logging.log(f"installed {plan['kind']} {plan['name']} -> {out['dest']}")
+def install_mod(profile, plan, overwrite=False, rebuild=False) -> dict:
+    """Install (or update) as one recoverable operation (mods.operations); with rebuild, the merged mods are rebuilt
+    inside it, so a failed rebuild leaves the previous installation as it was."""
+    from roundtable_souls.mods import rebuild as merge
+
+    def then():
+        merge.rebuild(Path(profile), run_logging.log)
+
+    out = install.install(Path(profile), plan, overwrite=overwrite, then=then if rebuild else None)
+    run_logging.log(f"{'updated' if out['update'] else 'installed'} {plan['kind']} {plan['name']} -> {out['dest']}")
+    for rel in out.get("kept") or []:
+        run_logging.log(f"kept your changed {rel} (the new version's copy is beside it as .new)")
     return out
+
+
+def recover_interrupted(profile, timeout: float = 30.0) -> list[str]:
+    """Finish or undo an install, update or removal in this profile's folder that was interrupted (the window or
+    the PC closed during it). Returns what was done; [] when there was nothing, or the folder is busy."""
+    from roundtable_souls.merging.build import BuildError
+    from roundtable_souls.mods import operations
+
+    try:
+        said = operations.recover(Path(profile), timeout)
+    except (BuildError, OSError) as e:
+        run_logging.log(f"warning: could not check for an interrupted install: {e}")
+        return []
+    for line in said:
+        run_logging.log(f"mods: {line}")
+    return said
 
 
 def uninstall_mod(profile, index: int, delete_folder=True) -> dict:
