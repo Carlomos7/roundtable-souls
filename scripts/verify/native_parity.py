@@ -40,7 +40,7 @@ def main() -> int:
     args = p.parse_args()
     game = _common.game_dir(args.game)
     out = _common.output_dir(args.out, "native-parity", game)
-    _common.sandbox_launcher(out, game)
+    loc = _common.sandbox_launcher(out, game)
 
     from roundtable_souls import overhauls
     from roundtable_souls.game import oodle as game_oodle
@@ -78,7 +78,9 @@ def main() -> int:
     copy = write_profile(out / "input" / "profile.me3", profile, rows, row, out / "native" / reference.name / "mod")
     log: list[str] = []
     print(f"building {recipe['label']} {version} with the launcher into {out / 'native'}")
-    engine.build(copy, out / "native" / reference.name / "mod", setup, recipe, version, log.append, game_dir=game)
+    engine.build(
+        copy, out / "native" / reference.name / "mod", setup, recipe, version, log.append, game_dir=game, loc=loc
+    )
     native = out / "native" / reference.name
 
     dec = game_oodle.find_oodle(game)
