@@ -2,7 +2,7 @@
 
 Hand-written profiles use [[packages]] / [[natives]] blocks; Nightreign Revive's installer writes packages = [ { ... } ]
 and natives = [ { ... } ] instead. Text surgery on a profile (adding, removing, rewriting entries) is mods.profile_edit's;
-this module only reads.
+this module reads, and renders one entry as a block (entry_lines, to_blocks).
 """
 
 from __future__ import annotations
@@ -38,6 +38,80 @@ def blocks(text: str) -> list[dict]:
 
 def is_array_form(text: str) -> bool:
     return not any(_BLOCK.match(l) for l in text.splitlines()) and any(_ARRAY_KEY.match(l) for l in text.splitlines())
+
+
+def quote(s: str) -> str:
+    return '"' + str(s).replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _path_lit(p: str) -> str:
+    p = str(p).replace("\\", "/")
+    return "'" + p + "'" if "'" not in p else quote(p)
+
+
+def dep_list(deps, nl: str = "", tall: bool = False) -> str:
+    """A load order list; with nl, written one entry per line when tall or longer than two entries."""
+    items = []
+    for d in deps or []:
+        if isinstance(d, str):
+            d = {"id": d, "optional": True}
+        items.append(
+            "{ id = " + quote(d["id"]) + ", optional = " + ("true" if d.get("optional", True) else "false") + " }"
+        )
+    if nl and items and (tall or len(items) > 2):
+        return "[" + nl + "".join(f"  {i},{nl}" for i in items) + "]"
+    return "[" + ", ".join(items) + "]"
+
+
+def entry_lines(kind: str, row: dict, nl: str) -> list[str]:
+    out = [f"[[{'packages' if kind == 'package' else 'natives'}]]{nl}"]
+    if kind == "package" and row.get("id"):
+        out.append(f"id = {quote(row['id'])}{nl}")
+    out.append(f"path = {_path_lit(row['path'])}{nl}")
+    if row.get("enabled") is False:
+        out.append(f"enabled = false{nl}")
+    if kind == "native":
+        if row.get("optional"):
+            out.append(f"optional = true{nl}")
+        if row.get("load_early"):
+            out.append(f"load_early = true{nl}")
+        init = row.get("initializer")
+        if isinstance(init, dict):
+            if init.get("function"):
+                out.append(f"initializer = {{ function = {quote(init['function'])} }}{nl}")
+            elif isinstance(init.get("delay"), dict) and init["delay"].get("ms") is not None:
+                out.append(f"initializer = {{ delay = {{ ms = {int(init['delay']['ms'])} }} }}{nl}")
+        if row.get("finalizer"):
+            out.append(f"finalizer = {quote(row['finalizer'])}{nl}")
+    if row.get("load_after"):
+        out.append(f"load_after = {dep_list(row['load_after'])}{nl}")
+    if row.get("load_before"):
+        out.append(f"load_before = {dep_list(row['load_before'])}{nl}")
+    return out
+
+
+def to_blocks(text: str) -> str:
+    """Rewrite an inline-array profile (Revive's shape) as [[packages]] / [[natives]] blocks."""
+    data = tomllib.loads(text)
+    nl = "\r\n" if "\r\n" in text else "\n"
+    out = []
+    for key in ("profileVersion", "savefile", "start_online", "disable_arxan", "mem_patch", "mem_patch_heap_size"):
+        if key in data:
+            v = data[key]
+            lit = "true" if v is True else "false" if v is False else str(v) if isinstance(v, int) else quote(v)
+            out.append(f"{key} = {lit}{nl}")
+    for sup in data.get("supports") or []:
+        if isinstance(sup, dict) and sup.get("game"):
+            out.append(f"{nl}[[supports]]{nl}game = {quote(sup['game'])}{nl}")
+    for key, kind in (("natives", "native"), ("packages", "package")):
+        rows = data.get(key) or []
+        if isinstance(rows, dict):
+            rows = [rows]
+        for row in rows:
+            if isinstance(row, dict) and row.get("path"):
+                out.append(nl)
+                out.extend(entry_lines(kind, row, nl))
+    return "".join(out)
 
 
 def block_options(text: str, index: int) -> dict:
