@@ -6,9 +6,13 @@ event groups): two mods changing the same animation differently is a clash, and 
 Events inside one animation are not merged. The file header (ID, event bank, flags, skeleton and sib names) is
 merged the same way, as one part.
 
-Copies a tool rewrote store an empty file name where the game's files store none; the two are the same here. A copy
-the format code cannot read, or a merged file that does not read back to what was merged, is not merged: the later
-mod's copy is used whole, with the reason recorded.
+Animations are compared exactly (formats.tae.animation_key), event parameters byte for byte with their padding:
+a copy whose events differ from the game's only in trailing zero bytes counts as changed, because without the event
+type's parameter size padding cannot be told from parameters that are zero. Copies a tool rewrote store an empty file
+name where the game's files store none; both mean no name, and are the same here.
+
+A copy the format code cannot read, or a merged file that does not read back exactly to what was merged (every
+animation's parameter bytes included), is not merged: the later mod's copy is used whole, with the reason recorded.
 """
 
 from __future__ import annotations

@@ -6,9 +6,9 @@ else the launcher's own, and the report says so), works out the intended result,
 disk: inner file names, IDs, flags and contents, and text entry by entry where several mods changed one text table.
 
 Animation events (TAE) that several mods changed are checked animation by animation: the intended file header and
-animations (by ID) are worked out here from the documented rule, and compared with the output by meaning. There is no
-independent reader of Elden Ring's TAE format, so these files are read with the launcher's own (formats.tae) whatever
-reader the rest uses: that part of the check shares the launcher's reading, and the report says so.
+animations (by ID) are worked out here from the documented rule and compared with the output exactly (parameter bytes
+included). This part uses our own reader (formats.tae), whatever reader the rest uses; it is not independently
+validated, and the report says so.
 
 The intended result follows the merge rules as documented: a part a mod changed or added is taken from the last mod
 that changed it; a part missing from a mod's copy counts as removed. That last rule is an unvalidated assumption (a
@@ -96,8 +96,8 @@ def intended_parts(van: _readers.Parts, layers: list[tuple[str, _readers.Parts]]
 
 
 def tae_meaning(data: bytes) -> tuple:
-    """A TAE as the merge sees it: the file header, then each animation in stored order (formats.tae, the launcher's
-    own reader: not independent)."""
+    """A TAE as the merge sees it: the file header, then each animation in stored order. Uses our own reader
+    (formats.tae); not independently validated."""
     t = formats.tae.read_tae(data)
     return formats.tae.header_key(t), [(a.id, formats.tae.animation_key(a)) for a in t.animations]
 
@@ -201,8 +201,8 @@ def check_file(entry: dict, pkg: Path, game: Path, dec, read, fmg, failures: lis
         failures.append(f"{rel}: {len(diff)} parts differ from the intended result, e.g. {diff[0]}")
     if taes:
         notes.append(
-            f"{rel}: {len(taes)} animation-event files (TAE) checked by meaning with the launcher's own TAE reader "
-            "(no independent reader exists): this part is not independent"
+            f"{rel}: {len(taes)} animation-event files (TAE) checked animation by animation: uses our own reader; "
+            "not independently validated"
         )
     if removals:
         by: dict[str, int] = {}

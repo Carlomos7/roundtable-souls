@@ -20,6 +20,7 @@ from roundtable_souls.formats.tae import (
     is_tae,
     read_tae,
     write_tae,
+    written_as,
 )
 from roundtable_souls.merging import merger
 from roundtable_souls.merging.rules import tae as rule
@@ -42,7 +43,13 @@ def anim(anim_id: int, *events: Event, name: str | None = "a000.hkt", groups=(),
     return Animation(anim_id, STANDARD, header or standard(), name, list(events), list(groups))
 
 
-def game_tae() -> TAE:
+def stored(t: TAE) -> TAE:
+    """t as a file stores it: written once and read back. Parameters then carry the padding their place gives them, so
+    models built here compare exactly with what comes back from a file."""
+    return read_tae(write_tae(t))
+
+
+def built_game_tae() -> TAE:
     return TAE(
         2000,
         37,
@@ -66,6 +73,10 @@ def game_tae() -> TAE:
     )
 
 
+def game_tae() -> TAE:
+    return stored(built_game_tae())
+
+
 def tae_bytes(t: TAE) -> bytes:
     return write_tae(t)
 
@@ -79,7 +90,7 @@ def with_anims(t: TAE, *changes: Animation, drop: tuple[int, ...] = (), **header
     t.animations = [by_id[i] for i in sorted(by_id) if i not in drop]
     for k, v in header.items():
         setattr(t, k, v)
-    return t
+    return stored(t)
 
 
 def keys(t: TAE) -> list:
@@ -88,13 +99,15 @@ def keys(t: TAE) -> list:
 
 # ----------------------------------------------------------------------------- the format
 def test_a_written_file_reads_back_to_the_same_model_and_the_same_bytes():
-    t = game_tae()
-    data = write_tae(t)
+    built = built_game_tae()
+    data = write_tae(built)
     assert is_tae(data) and len(data) == struct.unpack_from("<i", data, 12)[0]
     back = read_tae(data)
-    assert header_key(back) == header_key(t) and keys(back) == keys(t)
-    assert [a.file_name for a in back.animations] == [a.file_name for a in t.animations]
-    assert write_tae(back) == data and read_tae(write_tae(back)) == back  # once read, every field as stored
+    differences, padded = written_as(built, back)
+    assert differences == []
+    # params(1) is 16 bytes; animation 0 has one event, whose data starts 8 bytes past a 16-byte boundary
+    assert padded == ["animation 0 event 0: 8 zero bytes of padding added", *padded[1:]]
+    assert back == read_tae(write_tae(back)) and write_tae(back) == data  # once stored, every field exactly
     assert back.animations[3].source_id == 23031900 and back.animations[4].source_id == 1
     assert back.animations[1].source_id is None
 
@@ -126,12 +139,31 @@ def test_an_edited_file_reads_back_as_edited():
     t = game_tae()
     e = copy.deepcopy(t)
     e.event_bank = -1
-    e.animations[1].events.pop(0)  # moves the other events' data: their padding may change, not their meaning
+    e.animations[1].events.pop(0)  # 3 events become 2: the new first event's data moves onto a 16-byte boundary
     e.animations[1].groups = [EventGroup(129, [0]), EventGroup(700, [1])]
-    e.animations[0].events[0].params = params(42)
-    e.animations.append(anim(12, Event(0.25, 0.75, 5, 0, params(1, 2, 3, 4, 5))))
+    e.animations[2].events[0].params = b"\x05" + bytes(23)  # same length, a changed value
     back = read_tae(write_tae(e))
+    assert written_as(e, back) == ([], [])  # exactly as edited: no event's padding changed here
     assert header_key(back) == header_key(e) and keys(back) == keys(e)
+
+
+def test_padding_that_grows_on_rewriting_is_reported_not_hidden():
+    t = game_tae()
+    e = copy.deepcopy(t)
+    e.animations[1].events.pop()  # 3 events become 2: the first event's data now starts on a 16-byte boundary
+    e.animations[1].groups = [EventGroup(129, [1, 0])]
+    e.animations[1].events.pop()  # and 1: it starts 8 bytes past one again, so its stored bytes get 8 more
+    e.animations[1].groups = [EventGroup(129, [0])]
+    e.animations[1].events[0].params = params(7, 8, 9)  # 16 bytes written where 8 bytes of padding follow
+    back = read_tae(write_tae(e))
+    assert written_as(e, back) == ([], ["animation 1 event 0: 8 zero bytes of padding added"])
+    assert keys(back) != keys(e)  # an exact comparison sees the difference; only written_as names it padding
+    changed = copy.deepcopy(back)
+    changed.animations[1].events[0].params = back.animations[1].events[0].params[:-1] + b"\x01"
+    assert written_as(e, changed)[0] == ["animation 1 event 0: parameters"]  # a non-zero byte is never padding
+    shorter = copy.deepcopy(back)
+    shorter.animations[1].events[0].params = e.animations[1].events[0].params[:-4]
+    assert written_as(e, shorter)[0] == ["animation 1 event 0: parameters"]  # neither is a missing zero field
 
 
 def test_layouts_this_code_does_not_know_are_refused():
@@ -165,6 +197,35 @@ def test_event_groups_must_hold_the_animations_own_events_once():
 
 
 # ----------------------------------------------------------------------------- the rule
+def test_parameters_differing_only_in_trailing_zero_bytes_are_a_change():
+    """Without the event type's parameter size, zero padding cannot be told from parameters that are zero, so such a
+    copy counts as changed: taken when it is the only change, a clash when another mod changed the animation too."""
+    game = game_tae()
+    base = game.animations[4].events[0].params  # animation 10's single event: 24 bytes as stored
+    longer = with_anims(game, anim(10, Event(0.0, 1.0, 1, 0, base + bytes(16)), header=standard(1)))
+    assert longer.animations[4].events[0].params == base + bytes(16)
+    assert animation_key(longer.animations[4]) != animation_key(game.animations[4])
+    r = rule.merge(tae_bytes(game), [("zeros", tae_bytes(longer))], "a00.tae")
+    assert r.changed == {"a00.tae": ["zeros"]} and r.notes["a00.tae"] == ["zeros: changed 1 (10)"]
+    assert read_tae(r.data).animations[4].events[0].params == base + bytes(16)
+    other = with_anims(game, anim(10, Event(0.0, 1.0, 1, 0, params(3)), header=standard(1)))
+    r = rule.merge(tae_bytes(game), [("zeros", tae_bytes(longer)), ("other", tae_bytes(other))], "a00.tae")
+    assert r.clashes == {"a00.tae#10": ["zeros", "other"]}
+
+
+def test_merged_animations_keep_their_parameter_bytes_exactly():
+    """Every animation starts on a 16-byte boundary and moves by multiples of 16 when others are added, so its
+    events' padding, and so their stored bytes, stay as in the copy it came from."""
+    game = game_tae()
+    added = [anim(i, *(Event(0.0, 0.1 * k, 16, 0, params(k)) for k in range(1, i % 4 + 2))) for i in range(4, 9)]
+    many = with_anims(game, *added)
+    dash = with_anims(game, anim(1, Event(0.0, 0.3, 129, 0, params(1, 2, 3))))
+    r = rule.merge(tae_bytes(game), [("many", tae_bytes(many)), ("dash", tae_bytes(dash))], "a00.tae")
+    out = {a.id: a for a in read_tae(r.data).animations}
+    sources = {a.id: a for a in [*game.animations, *many.animations]} | {1: dash.animations[1]}
+    assert all([e.params for e in out[i].events] == [e.params for e in a.events] for i, a in sources.items())
+
+
 def test_independent_changes_of_two_mods_all_apply():
     game = game_tae()
     dash = with_anims(game, anim(1, Event(0.0, 0.3, 129, 0, params(1))), event_bank=-1)

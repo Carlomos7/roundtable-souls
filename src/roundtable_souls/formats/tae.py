@@ -8,7 +8,8 @@
 #   - translated from C# to Python; one layout only, Elden Ring's (version 0x1000D, 64-bit, little-endian); the
 #     other games' layouts (Demon's Souls, Dark Souls 1 to 3, Bloodborne, Sekiro) are refused;
 #   - event parameters are kept as raw bytes (with their padding): event templates (Template.cs) and the parameter
-#     container were not taken;
+#     container were not taken; parameters are compared byte for byte, padding included (2026-10-05, after review:
+#     a first version compared them without trailing zero bytes, which cannot tell padding from zero-valued fields);
 #   - an event's parameters run to the next structure in the file (the reference reads up to the next event's data,
 #     the group headers or the next animation's data);
 #   - kept as stored, where the reference normalized: an event's end time (the reference read float.MaxValue as 100
@@ -32,15 +33,34 @@ imports another animation's motion and events whole), a file name, its events in
 type and raw parameter bytes) and event groups (a type and the events in it). Writing lays the file out as the game's
 own files are, so those come back byte for byte.
 
-An event's parameters are kept with the zero padding that follows them (their size is set by the event type, which
-this code does not know). Where an event's data starts decides how much padding there is, so an edit that moves it
-(adding or removing an event before it) can change the padding: comparisons (animation_key) leave trailing zero bytes
-of the parameters out.
+An event's parameters are the bytes from just after its 16-byte data header up to the next structure the file
+points to (another event's data, the event group headers, the next animation, the end of the file). Their real size
+is set by the event type, which this code does not know, so the zero padding to the next 16-byte boundary is part of
+them and cannot be told apart from parameters that happen to be zero. They are compared byte for byte, padding
+included (animation_key): two copies that differ only in trailing zero bytes are different copies.
+
+How much padding there is depends on where the event's data starts. Every animation's data starts on a 16-byte
+boundary, and its event headers follow the padded times table, so the first event's data starts 8 bytes past a
+boundary when the animation has an odd number of events and every other event's on one. Rewriting an animation
+elsewhere in a file moves it by a multiple of 16 and keeps its padding; an edit that changes its number of events can
+make the first event's padding longer or shorter. written_as tells such a read-back (the written bytes followed by
+added zero bytes) from a real difference, and reports it.
 """
 
 from __future__ import annotations
 
-__all__ = ["TAE", "Animation", "Event", "EventGroup", "animation_key", "header_key", "is_tae", "read_tae", "write_tae"]
+__all__ = [
+    "TAE",
+    "Animation",
+    "Event",
+    "EventGroup",
+    "animation_key",
+    "header_key",
+    "is_tae",
+    "read_tae",
+    "write_tae",
+    "written_as",
+]
 
 import bisect
 import struct
@@ -135,15 +155,45 @@ def header_key(t: TAE) -> tuple:
 
 
 def animation_key(a: Animation) -> tuple:
-    """Everything an animation is, for comparing two copies of it. An empty file name and none stored are the same
-    (the game's files store none; tools that rewrite a TAE store an empty one); times are compared bit for bit, and
-    parameters without their trailing zero bytes (the padding)."""
+    """Everything an animation is, for comparing two copies of it: times bit for bit and parameters byte for byte,
+    padding included. An empty file name and none stored are the same (both mean no name: the game's files store none,
+    tools that rewrite a TAE store an empty one)."""
+    return (*_without_params(a), tuple(e.params for e in a.events))
+
+
+def written_as(written: TAE, back: TAE) -> tuple[list[str], list[str]]:
+    """How a file read back after writing differs from the model it was written from: (differences, padded). An
+    event whose parameters came back as the written bytes followed by zero bytes is listed in padded, not in
+    differences: its data starts at another offset within the 16-byte boundary, so its padding changed (see the
+    module's description). Everything else must come back exactly."""
+    differences, padded = [], []
+    if header_key(back) != header_key(written):
+        differences.append("file header")
+    if [a.id for a in back.animations] != [a.id for a in written.animations]:
+        return [*differences, "animation IDs or their order"], padded
+    for a, b in zip(written.animations, back.animations, strict=True):
+        if _without_params(a) != _without_params(b) or a.file_name != b.file_name:
+            differences.append(f"animation {a.id}")
+            continue
+        for j, (x, y) in enumerate(zip(a.events, b.events, strict=True)):
+            if x.params == y.params:
+                continue
+            if y.params.startswith(x.params) and not y.params[len(x.params) :].strip(b"\0"):
+                padded.append(
+                    f"animation {a.id} event {j}: {len(y.params) - len(x.params)} zero bytes of padding added"
+                )
+            else:
+                differences.append(f"animation {a.id} event {j}: parameters")
+    return differences, padded
+
+
+def _without_params(a: Animation) -> tuple:
     return (
         a.id,
         a.header_type,
         a.header,
         a.file_name or "",
-        tuple((_f32(e.start), _f32(e.end), e.type, e.unk04, e.params.rstrip(b"\0")) for e in a.events),
+        tuple((_f32(e.start), _f32(e.end), e.type, e.unk04) for e in a.events),
         tuple((g.type, tuple(g.members)) for g in a.groups),
     )
 

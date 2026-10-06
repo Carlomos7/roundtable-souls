@@ -8,8 +8,10 @@ For every TAE inside the animation archives checked (the game's own chr/c0000.an
      reported per file, not a failure on its own;
   3. an edited copy reads back as edited: an event's parameters changed, an event removed, an animation added (a copy
      of the first, under a free ID) and the event bank changed, in one file per archive.
-No independent reader of this format is used: there is none for Elden Ring's TAE in Python (Soulstruct reads only
-the older 0x1000C layout and has no writer).
+Uses our own reader; not independently validated (there is no other reader of Elden Ring's TAE in Python:
+Soulstruct reads only the older 0x1000C layout and has no writer). An edited copy's events whose data moved within
+a 16-byte boundary may come back with more zero padding after their parameters; that is listed, never counted as
+the same.
 
     uv run python scripts/verify/tae_roundtrip.py [--game DIR] [--out DIR] [--chr c2010 ...] [--all-chr] [--file ANIBND ...]
 """
@@ -96,9 +98,12 @@ def main() -> int:
                     verdict = "failed: written file reads back differently"
                 if i == 0:
                     ed = edited(t)
-                    if model(formats.tae.read_tae(formats.tae.write_tae(ed))) != model(ed):
-                        verdict = "failed: an edited copy reads back differently"
-                    files[f"{name} (edited)"] = "reads back as edited"
+                    differ, padded = formats.tae.written_as(ed, formats.tae.read_tae(formats.tae.write_tae(ed)))
+                    if differ:
+                        verdict = f"failed: an edited copy reads back differently: {differ[:3]}"
+                    files[f"{name} (edited)"] = "reads back as edited" + (
+                        f"; padding added after {len(padded)} events' parameters: {padded[:3]}" if padded else ""
+                    )
             except formats.FormatError as err:
                 verdict = f"failed: {err}"
             files[name] = verdict

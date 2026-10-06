@@ -8,10 +8,10 @@ Nothing given is changed: the result goes to the output folder.
 
     uv run python scripts/verify/tae_merge.py --input bbdash=DIR --input revive=DIR [--compare FILE] [--package]
 
---compare FILE: an animation archive another tool merged from the same mods. Each TAE is compared with the result by
-meaning (the file header, and every animation: header, file name, events in stored order, event groups; an empty
-file name and none stored are the same), and every other inner file byte for byte. The comparison uses the
-launcher's own TAE reader on both sides; it is not an independent reading of the format.
+--compare FILE: an animation archive another tool merged from the same mods. Each TAE is compared with the result
+animation by animation (the file header, and every animation: header, file name, events in stored order with their
+parameter bytes exactly, event groups; an empty file name and none stored are the same), and every other inner file
+byte for byte. The TAE comparison uses our own reader on both sides; it is not independently validated.
 --package: also a package to play: the profile's packages (asset mods only, from their own folders; no DLL mods) with
 the merged archive loaded last, a separate save (RoundtableTest.sl2), launch.cmd and CHECK.txt.
 """
@@ -123,7 +123,7 @@ def main() -> int:
             "differences": differ,
         }
         ok = not differ
-        verdict = "the same by meaning" if ok else f"{len(differ)} inner files differ"
+        verdict = "the same, animation by animation" if ok else f"{len(differ)} inner files differ"
         print(f"compared with {args.compare.name}: {verdict} ({same_tae} TAE, {same_other} other inner files)")
         for name, lines in differ.items():
             print(f"  {name}: {lines[:8]}")
@@ -141,7 +141,7 @@ def main() -> int:
 
 
 def compare(tae, mine: bytes, theirs: bytes) -> list[str]:
-    """What differs by meaning between two TAE files: the file header, and animations by ID (and their order)."""
+    """What differs between two TAE files: the file header, and animations by ID (exactly) and their order."""
     a, b = tae.read_tae(mine), tae.read_tae(theirs)
     out = []
     if tae.header_key(a) != tae.header_key(b):
