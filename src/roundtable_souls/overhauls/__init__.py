@@ -2,6 +2,7 @@
 used to recognise it (Play-page detection, the offline launch's strip) and to build it (mods.engine)."""
 
 from roundtable_souls.overhauls.config import (
+    RECIPE_VERSION,
     Build,
     OverhaulConfig,
     Recognise,
@@ -15,6 +16,7 @@ from roundtable_souls.overhauls.config import (
 )
 
 __all__ = [
+    "RECIPE_VERSION",
     "Build",
     "OverhaulConfig",
     "Recognise",

@@ -143,8 +143,8 @@ class _Build:
     def __init__(self, profile: Path, layer: dict, setup: Path, recipe: dict, version: str):
         self.profile, self.layer, self.setup, self.recipe, self.version = profile, layer, setup, recipe, version
         self.describe = (
-            f"The launcher builds {recipe['label']} {version} itself from its download in {setup.name}, with the "
-            f"recipe {recipe['id']}; it runs {recipe['tool']['path']} from there for the merges."
+            f"The launcher builds {recipe['label']} {version} itself from its download in {setup.name} "
+            f"({recipe['id']}); nothing from the download runs."
         )
 
     def __call__(self, log):
@@ -166,11 +166,7 @@ def _engine(profile: Path, layer: dict, setup: Path | None):
         return None
     game_dir = locations.get().game_dir()
     problem = None if game_dir and Path(game_dir).is_dir() else "The game was not found."
-    try:
-        tool = hashlib.sha256((setup / recipe["tool"]["path"]).read_bytes()).hexdigest()
-    except OSError:
-        tool = ""
-    return problem, _Build(profile, layer, setup, recipe, version or ""), f"engine|{setup}|{recipe['id']}|{tool}"
+    return problem, _Build(profile, layer, setup, recipe, version or ""), f"engine|{setup}|{recipe['id']}"
 
 
 def missing_text(name: str, missing: list[str]) -> str:

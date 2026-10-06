@@ -1,4 +1,5 @@
-"""The launcher's own build of a mod that must stay last, from a recipe instead of the mod's installer.
+"""The launcher's own build of a mod that must stay last, from a recipe instead of the mod's installer: nothing of
+the mod's (its installer, its merge tool) runs.
 
 A recipe (one build of an overhaul config, data/overhauls/*.toml, see docs/Overhaul configs.md) says how to
 recognise the mod's download (its setup folder: files that must be there, values in its JSON files, the versions it
@@ -14,13 +15,15 @@ was written for) and the steps that build its output folder from the packages be
                        tables (`table`) of the game's copy, then merged like `merge`
     params             the parameters (regulation.bin): the launcher's row-by-row combine of that package's and the
                        mod's copy against the game's
-    tool               one file merged by the mod's own tool, where the launcher cannot merge it yet: {source} is
-                       that file from the last package before it that ships it (else what `missing` says: the game's
-                       copy, the download's vanilla copy, or the patch copied as it is), {patch}, {out}, {setup},
-                       {text}; `each` repeats any step per folder
     script_append      a script: the packages' own script folders copied in load order, then the mod's text appended
-                       to the entry file (or to the download's base when no package has one)
-    remove             leftovers of the tool (a glob below the output's mod folder)
+                       to the entry file (the last package's copy, or the download's base when no package has one);
+                       refused when that already holds the mod's text or is compiled (bytecode), and packages
+                       shipping different entry files are a clash, recorded
+    remove             leftovers (a glob below the output's mod folder)
+
+`each` repeats a merge, text or params step per folder. Files a format rule does not cover (behaviour and animation
+data, .hkx) are taken whole, three-way, as everywhere (merging.merger): changed by one package, its copy; changed
+differently by several, the later one's, and a clash. Clashes are written to the build's report (merge-report.txt).
 
 The inputs are only read: the packages' folders and the download. The build happens in a staging folder beside the
 output, is checked (every output there and not empty), then swapped in by renaming. The build it replaced is kept in
@@ -35,7 +38,6 @@ import hashlib
 import json
 import os
 import shutil
-import subprocess
 import time
 from pathlib import Path
 
@@ -45,7 +47,8 @@ from roundtable_souls.game import config as game_config
 from roundtable_souls.game import oodle as game_oodle
 
 WORK = ".roundtable-build"  # beside the output: the previous build and its restore.json
-STEPS = {"copy_tree", "copy", "config", "tool", "merge", "text", "params", "script_append", "remove"}
+STEPS = {"copy_tree", "copy", "config", "merge", "text", "params", "script_append", "remove"}
+COMPILED_LUA = b"\x1bLua"  # a compiled script starts with this; text cannot be appended to it
 
 
 class EngineError(RuntimeError):
@@ -64,16 +67,14 @@ def _sha(p: Path) -> str:
 def validate(recipe: dict) -> list[str]:
     """What is wrong with a recipe (empty when it can be used)."""
     out = []
-    if recipe.get("recipe") != 1:
-        out.append("not a version 1 recipe")
-    for key in ("id", "label", "match", "tool", "output", "steps"):
+    if recipe.get("recipe") != overhauls.RECIPE_VERSION:
+        out.append(f"not a version {overhauls.RECIPE_VERSION} recipe")
+    for key in ("id", "label", "match", "output", "steps"):
         if key not in recipe:
             out.append(f"no {key}")
     for i, s in enumerate(recipe.get("steps") or []):
         if s.get("do") not in STEPS:
             out.append(f"step {i + 1}: unknown step {s.get('do')!r}")
-        elif s["do"] == "tool" and not (s.get("file") and s.get("args")):
-            out.append(f"step {i + 1}: a tool step needs file and args")
     return out
 
 
@@ -161,30 +162,6 @@ def _seamless(profile: Path) -> Path | None:
         if e["kind"] == "native" and e.get("enabled", True) and Path(e.get("path") or "").name.lower() == "ersc.dll":
             return mod_manage.resolve(profile, e["path"])
     return None
-
-
-# ----------------------------------------------------------------------------- the tool
-def run_tool(exe: Path, args: list[str], env: dict, timeout: int, cwd: Path) -> tuple[int, str]:
-    """Run the mod's tool once: (exit code, its output)."""
-    from roundtable_souls.platform import proc
-
-    try:
-        p = subprocess.run(
-            [str(exe), *args],
-            env={**os.environ, **env},
-            cwd=str(cwd),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-            creationflags=proc.NO_WINDOW,
-        )
-    except subprocess.TimeoutExpired as e:
-        raise EngineError(f"{Path(exe).name} took longer than {timeout // 60} minutes and was stopped.") from e
-    except OSError as e:
-        raise EngineError(f"{Path(exe).name} could not start: {e}") from e
-    return p.returncode, (p.stdout or "") + (p.stderr or "")
 
 
 # ----------------------------------------------------------------------------- settings files
@@ -281,10 +258,6 @@ def build(
     if _seamless(profile) is None:
         raise EngineError(f"{recipe['label']} needs Seamless Co-op (ersc.dll) switched on in the profile.")
     inputs = layers(profile, target_folder)
-    tool = recipe["tool"]
-    exe = setup / tool["path"]
-    env = {k: _fill(v, {"game_dir": game_dir}) for k, v in (tool.get("env") or {}).items()}
-    timeout = int(tool.get("timeout") or 900)
     stage = own.parent / f".{own.name}.building-{int(started)}"
     if stage.exists():
         shutil.rmtree(stage)
@@ -329,23 +302,12 @@ def build(
                 names = _each(step, setup)
                 for each in names:
                     try:
-                        made.append(_launcher_step(step, each, setup, inputs, game_dir, mod, sources, log))
+                        made.append(_launcher_step(step, each, setup, inputs, game_dir, mod, sources, report, log))
                     except FormatError as e:
                         where = _fill(step["file"], {"each": each or ""})
                         raise EngineError(f"{where} could not be merged: {e}") from e
-            elif kind == "tool":
-                if step.get("each"):
-                    base = setup / step["each"]["folders_in"]
-                    skip = set(step["each"].get("except") or [])
-                    names = sorted(p.name for p in base.iterdir() if p.is_dir() and p.name not in skip)
-                else:
-                    names = [None]
-                for each in names:
-                    made.append(
-                        _tool_step(step, each, setup, inputs, game_dir, mod, exe, env, timeout, sources, report, log)
-                    )
             elif kind == "script_append":
-                _script_step(step, setup, inputs, mod, sources)
+                _script_step(step, setup, inputs, mod, sources, report, log)
                 made.append(mod / step["folder"] / step["entry"])
             elif kind == "remove":
                 for p in sorted(mod.glob(step["glob"]), reverse=True):
@@ -354,7 +316,10 @@ def build(
                     elif p.is_file():
                         p.unlink()
         (stage / out_cfg.get("report", "merge-report.txt")).write_text(
-            "\n".join(report), encoding="utf-8", newline="\n"
+            f"{recipe['label']} {version}, built by Roundtable Souls {__version__} from {len(inputs)} package(s).\n"
+            + ("".join(f"{line}\n" for line in report) or "No clashes.\n"),
+            encoding="utf-8",
+            newline="\n",
         )
         empty = [p for p in made if not p.is_file() or p.stat().st_size == 0]
         if empty:
@@ -397,7 +362,7 @@ def _codecs(game_dir: Path):
     return _oodle[key]
 
 
-def _launcher_step(step, each, setup, inputs, game_dir, mod, sources, log) -> Path:
+def _launcher_step(step, each, setup, inputs, game_dir, mod, sources, report, log) -> Path:
     from roundtable_souls.game import archives as gamearchive
     from roundtable_souls.merging import merger
     from roundtable_souls.merging.rules import fmg as fmg_rule
@@ -448,49 +413,19 @@ def _launcher_step(step, each, setup, inputs, game_dir, mod, sources, log) -> Pa
     result = merger.merge(vanilla, layers, dec, comp, game_config.load().dflt_fallback_for(rel))
     if result.clashes:
         log(f"  {rel}: {result.summary()}")
+        for where, who in sorted(result.clashes.items()):
+            report.append(f"clash: {rel} {where}: changed differently by {', '.join(who)}; the last one's is used")
+    for where, said in sorted(result.notes.items()):
+        report += [f"note: {rel} {where}: {n}" for n in said]
+    if not result.merged:
+        report.append(f"note: {rel}: could not be merged; the last copy is used whole")
     out.write_bytes(result.data)
     return out
 
 
-def _tool_step(step, each, setup, inputs, game_dir, mod, exe, env, timeout, sources, report, log) -> Path:
-    values = {"each": each or ""}
-    rel = _fill(step["file"], values)
-    out = mod / rel
-    out.parent.mkdir(parents=True, exist_ok=True)
-    source = _effective(inputs, rel)
-    missing = step.get("missing", "copy_patch")
-    patch = setup / _fill(step["patch"], values) if step.get("patch") else None
-    if source is None:
-        if missing == "game":
-            source = game_dir / rel
-            if not source.is_file():
-                raise EngineError(f"The game's own {rel} was not found.")
-        elif missing == "copy_patch":
-            if patch is None:
-                raise EngineError(f"The recipe's step for {rel} has no patch to copy.")
-            log(f"  {rel}: no package ships it; the mod's own copy is used")
-            shutil.copy2(patch, out)
-            return out
-        else:
-            source = setup / _fill(missing, values)
-    sources.append({"path": str(source), "sha256": _sha(source)})
-    text = ""
-    if step.get("text"):
-        text_map = step["text"]
-        text = str(setup / text_map.get(each or "", text_map.get("*", "")))
-    args = [
-        _fill(a, {"source": source, "patch": patch or "", "out": out, "setup": setup, "text": text, "each": each or ""})
-        for a in step["args"]
-    ]
-    log(f"  merging {rel}")
-    code, said = run_tool(exe, args, env, timeout, setup)
-    report.append(said)
-    if code != 0:
-        raise EngineError(f"{Path(exe).name} could not merge {rel} (exit {code}): {said.strip()[-300:]}")
-    return out
-
-
-def _script_step(step, setup, inputs, mod, sources) -> None:
+def _script_step(step, setup, inputs, mod, sources, report, log) -> None:
+    """The packages' script folders in load order (a later file of the same name replaces an earlier one), then the
+    mod's text appended to the entry script: the last package's copy, else the download's base."""
     dest = mod / step["folder"]
     for layer in inputs:
         src = layer / step["folder"]
@@ -499,13 +434,32 @@ def _script_step(step, setup, inputs, mod, sources) -> None:
                 target = dest / p.relative_to(src)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(p, target)
+    shipped = [
+        (layer, (layer / step["folder"] / step["entry"]).read_bytes())
+        for layer in inputs
+        if (layer / step["folder"] / step["entry"]).is_file()
+    ]
+    if len({data for _layer, data in shipped}) > 1:
+        names = ", ".join(layer.name for layer, _data in shipped)
+        line = f"clash: {step['folder']}/{step['entry']}: {names} ship different copies; the last one's is used"
+        report.append(line)
+        log(f"  {line}")
     entry = dest / step["entry"]
-    if entry.is_file():
-        original = entry.read_text(encoding="utf-8-sig")
-    else:
-        original = (setup / step["base"]).read_text(encoding="utf-8-sig")
-        if step.get("base_until"):
-            original = original.split(step["base_until"])[0]
+    raw = entry.read_bytes() if entry.is_file() else (setup / step["base"]).read_bytes()
+    if raw.startswith(COMPILED_LUA):
+        whose = shipped[-1][0].name if shipped else "the download"
+        raise EngineError(
+            f"{step['folder']}/{step['entry']} from {whose} is compiled (bytecode), so the mod's script cannot be "
+            "added to it. A package with the script as text is needed."
+        )
+    try:  # read as text: line endings become \n, as the mod's installer reads it
+        original = raw.decode("utf-8-sig").replace("\r\n", "\n").replace("\r", "\n")
+    except UnicodeDecodeError as e:
+        raise EngineError(
+            f"{step['folder']}/{step['entry']} is not UTF-8 text, so the mod's script cannot be added."
+        ) from e
+    if not entry.is_file() and step.get("base_until"):
+        original = original.split(step["base_until"])[0]
     if any(m in original for m in step.get("refuse") or []):
         raise EngineError(step.get("refuse_text") or "A package before it already contains its script.")
     extension = (setup / step["append"]).read_text(encoding="utf-8-sig")

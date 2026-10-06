@@ -67,9 +67,6 @@
     "match": {
      "$ref": "#/$defs/Match"
     },
-    "tool": {
-     "$ref": "#/$defs/Tool"
-    },
     "output": {
      "$ref": "#/$defs/Output"
     },
@@ -84,8 +81,7 @@
         "params": "#/$defs/Params",
         "remove": "#/$defs/Remove",
         "script_append": "#/$defs/ScriptAppend",
-        "text": "#/$defs/AddText",
-        "tool": "#/$defs/RunTool"
+        "text": "#/$defs/AddText"
        },
        "propertyName": "do"
       },
@@ -109,9 +105,6 @@
         "$ref": "#/$defs/AddText"
        },
        {
-        "$ref": "#/$defs/RunTool"
-       },
-       {
         "$ref": "#/$defs/ScriptAppend"
        },
        {
@@ -126,7 +119,6 @@
    "required": [
     "id",
     "match",
-    "tool",
     "output",
     "steps"
    ],
@@ -461,84 +453,6 @@
    "title": "Remove",
    "type": "object"
   },
-  "RunTool": {
-   "additionalProperties": false,
-   "properties": {
-    "do": {
-     "const": "tool",
-     "title": "Do",
-     "type": "string"
-    },
-    "file": {
-     "title": "File",
-     "type": "string"
-    },
-    "args": {
-     "items": {
-      "type": "string"
-     },
-     "title": "Args",
-     "type": "array"
-    },
-    "missing": {
-     "anyOf": [
-      {
-       "type": "string"
-      },
-      {
-       "type": "null"
-      }
-     ],
-     "default": null,
-     "title": "Missing"
-    },
-    "patch": {
-     "anyOf": [
-      {
-       "type": "string"
-      },
-      {
-       "type": "null"
-      }
-     ],
-     "default": null,
-     "title": "Patch"
-    },
-    "text": {
-     "anyOf": [
-      {
-       "additionalProperties": {
-        "type": "string"
-       },
-       "type": "object"
-      },
-      {
-       "type": "null"
-      }
-     ],
-     "default": null,
-     "title": "Text"
-    },
-    "each": {
-     "anyOf": [
-      {
-       "$ref": "#/$defs/Each"
-      },
-      {
-       "type": "null"
-      }
-     ],
-     "default": null
-    }
-   },
-   "required": [
-    "do",
-    "file",
-    "args"
-   ],
-   "title": "RunTool",
-   "type": "object"
-  },
   "ScriptAppend": {
    "additionalProperties": false,
    "properties": {
@@ -603,32 +517,6 @@
     "append"
    ],
    "title": "ScriptAppend",
-   "type": "object"
-  },
-  "Tool": {
-   "additionalProperties": false,
-   "properties": {
-    "path": {
-     "title": "Path",
-     "type": "string"
-    },
-    "env": {
-     "additionalProperties": {
-      "type": "string"
-     },
-     "title": "Env",
-     "type": "object"
-    },
-    "timeout": {
-     "default": 900,
-     "title": "Timeout",
-     "type": "integer"
-    }
-   },
-   "required": [
-    "path"
-   ],
-   "title": "Tool",
    "type": "object"
   },
   "VersionKey": {

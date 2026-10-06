@@ -234,8 +234,9 @@ class ToolsView:
                 "Build Nightreign Revive in the launcher (preview)",
                 "For a mod the launcher has a config for (Nightreign Revive LITE 0.1.33), a rebuild merges it from its "
                 "own download instead of running its installer: the launcher merges its animations, effects, menu "
-                "text and parameters itself; only the grace menu still uses the mod's own tool.",
-                "The same content as its installer makes (checked on a real profile). Your profile is never rewritten, "
+                "text, grace menu and parameters itself, and runs nothing from the download.",
+                "Still being compared with what its installer makes, and not yet checked in game: a preview. Your "
+                "profile is never rewritten, "
                 "RevivePrototype.ini keeps your values (a new version only adds its new settings), and one previous "
                 "build is kept in .roundtable-build for Undo rebuild instead of a full backup on every run. Other "
                 "versions still use their own installer. Off: the installer runs, as before.",

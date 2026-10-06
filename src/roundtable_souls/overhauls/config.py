@@ -9,7 +9,7 @@ An overhaul is a mod that must load after the others and ships merged copies of 
                 text that marks its profile entries (an offline launch can switch those off)
     builds      what the launcher can build itself, one per edition: how to recognise that edition's download and
                 which versions it was written for, and the steps that build its output from the packages before it
-                (the steps mods.engine runs; docs/Overhaul configs.md lists them)
+                (the steps mods.engine runs, none of them a program of the mod's; docs/Overhaul configs.md)
 
 The shipped configs are in data/overhauls; a file in the local folder (overhauls/ in the launcher's data folder) with
 the same id replaces the shipped one, and one with a new id adds an overhaul. A file that does not read or does not
@@ -28,7 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from roundtable_souls.resources import DATA_DIR
 
 SHIPPED_DIR = DATA_DIR / "overhauls"
-RECIPE_VERSION = 1  # the step format mods.engine reads (the former data/recipes JSON, version 1)
+RECIPE_VERSION = 2  # the step format mods.engine reads (1: the former data/recipes JSON, with the mod's tool)
 
 
 class _Strict(BaseModel):
@@ -60,12 +60,6 @@ class Match(_Strict):
     json_: list[JsonEquals] = Field(default_factory=list, alias="json")  # values its JSON files must have
     version: VersionKey | None = None  # where the download says its version
     versions: list[str] = Field(default_factory=list)  # the versions this build was written for (empty: any)
-
-
-class Tool(_Strict):
-    path: str  # the mod's own merge tool, in the download
-    env: dict[str, str] = Field(default_factory=dict)  # {game_dir} is filled in
-    timeout: int = 900  # seconds
 
 
 class Output(_Strict):
@@ -122,16 +116,6 @@ class AddText(_Strict):
     each: Each | None = None
 
 
-class RunTool(_Strict):
-    do: Literal["tool"]
-    file: str
-    args: list[str]
-    missing: str | None = None  # without a package shipping file: "game", "copy_patch" or a path in the download
-    patch: str | None = None
-    text: dict[str, str] | None = None
-    each: Each | None = None
-
-
 class ScriptAppend(_Strict):
     do: Literal["script_append"]
     folder: str
@@ -149,7 +133,7 @@ class Remove(_Strict):
 
 
 Step = Annotated[
-    CopyTree | Copy | KeepConfig | Params | Merge | AddText | RunTool | ScriptAppend | Remove,
+    CopyTree | Copy | KeepConfig | Params | Merge | AddText | ScriptAppend | Remove,
     Field(discriminator="do"),
 ]
 
@@ -159,7 +143,6 @@ class Build(_Strict):
 
     id: str  # written into the build's manifest (as "recipe") and its build key
     match: Match
-    tool: Tool
     output: Output
     steps: list[Step]
 
@@ -183,7 +166,6 @@ class OverhaulConfig(_Strict):
             "id": build.id,
             "label": self.label,
             "match": build.match.model_dump(by_alias=True, exclude_unset=True),
-            "tool": build.tool.model_dump(by_alias=True, exclude_unset=True),
             "output": build.output.model_dump(by_alias=True, exclude_unset=True),
             "steps": steps,
         }

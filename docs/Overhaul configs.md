@@ -27,15 +27,10 @@ profile_marks = ["myoverhaul"]   # text marking its profile entries (case aside)
 id = "my-overhaul-lite"          # written into the build's manifest as "recipe"
 
 [builds.match]
-files = ["edition.json", "tools/merge.exe"]
+files = ["edition.json", "payload/my-overhaul.dll"]
 json = [{ file = "edition.json", key = "edition", equals = "LITE" }]
 version = { file = "edition.json", key = "version" }
 versions = ["1.2.0"]
-
-[builds.tool]
-path = "tools/merge.exe"
-env = { GAME_DIR = "{game_dir}" }
-timeout = 900
 
 [builds.output]
 mod = "mod"
@@ -58,7 +53,8 @@ with **Skip Revive too** turns off the profile entries containing one of `profil
 ## Builds: the launcher builds it itself
 
 For a mod whose installer keeps its download in a setup folder, the launcher can do the installer's merge itself when
-the player turns on **Build Nightreign Revive in the launcher** on Settings.
+the player turns on **Build Nightreign Revive in the launcher** on Settings. Nothing from the download runs: every
+merge is the launcher's.
 
 `match` recognises the download (files that must be there, values in its JSON files) and the versions the build was
 written for; another version runs the mod's own installer. The output is the folder holding the package's `mod`
@@ -71,9 +67,14 @@ folder. Steps, in order:
 | `merge` | One file merged by the launcher: the last package before it that ships `file`, then the mod's copy (`patch`), against the game's copy (archives file by file, text entry by entry); with no package shipping it, the mod's copy as it is. |
 | `text` | A text archive: the mod's strings (`texts`, a JSON object of text ID to string, by `each` folder, `*` for the rest) set in its `table` of the game's copy (or `vanilla` from the download), then merged like `merge`. |
 | `params` | `regulation.bin`: the launcher's row-by-row combine of that package's copy and the mod's (`patch`) against the game's. |
-| `tool` | One file merged by the mod's tool, where the launcher cannot merge it itself yet: `{source}` is `file` from the last enabled package before it that ships it, else what `missing` says (`game`, `copy_patch`, or a path in the download). Also `{patch}`, `{out}`, `{setup}`, `{text}` (from a `text` map by `each`, `*` for the rest). `each = { folders_in, except }` repeats it per folder. |
-| `script_append` | The packages' own `folder` (for example `action/script`) copied in load order, then `append` added to `entry` (or to `base` up to `base_until` when no package has one); `refuse` lists text that means a package already contains it. |
-| `remove` | Leftovers of the tool, a `glob` below the output's `mod` folder. |
+| `script_append` | The packages' own `folder` (for example `action/script`) copied in load order, then `append` added to `entry` (or to `base` up to `base_until` when no package has one); `refuse` lists text that means a package already contains it. A compiled entry script (Lua bytecode) is refused; packages shipping different entry scripts are a clash, recorded in the report. |
+| `remove` | Leftovers, a `glob` below the output's `mod` folder. |
+
+`merge`, `text` and `params` take `each = { folders_in, except }` to repeat per folder (`{each}` in their paths).
+As the mod's own installer does, only the **last** enabled package before it that ships a file is merged with the
+mod's copy. Files no format rule covers (behaviour and animation data, `.hkx`) are taken whole, three-way: changed
+by one side, its copy; changed differently by both, the mod's copy and a clash. Clashes and the rules' notes are
+written to the build's report (`merge-report.txt`).
 
 The build runs in a staging folder beside the output and replaces it by renaming; the build it replaced is kept in
 `.roundtable-build/previous` for Undo rebuild. The manifest is written as the mod's installer writes it, with each

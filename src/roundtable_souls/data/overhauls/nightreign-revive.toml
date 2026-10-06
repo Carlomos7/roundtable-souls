@@ -1,6 +1,6 @@
 # Nightreign Revive: how the launcher recognises it and builds it. Format: docs/Overhaul configs.md;
-# schema: data/schemas/overhaul.schema.json. The build below is the former data/recipes/nightreign-revive-lite.json,
-# translated one to one (S3a, 2026-10-06).
+# schema: data/schemas/overhaul.schema.json. The build below was data/recipes/nightreign-revive-lite.json (S3a,
+# 2026-10-06); since S3b it runs nothing from the download: the grace menu is merged by the launcher too.
 
 overhaul = 1
 id = "nightreign-revive"
@@ -20,20 +20,16 @@ mod_ids = ["nightreign-revive", "reviveprototype.dll"]
 profile_marks = ["nightreign-revive", "reviveprototype", "revivehud", "reviveerss", "nrrinitialize", "nrrhud"]
 
 # ---------------------------------------------------------------------------------------------------------------------
-# LITE 0.1.33-rc3: the launcher's own build (Settings: "Build Nightreign Revive in the launcher (preview)").
+# LITE 0.1.33-rc3: the launcher's own build (Settings: "Build Nightreign Revive in the launcher (preview)"). Revive's
+# own installer and its merge tool (tools/merge/Assets.exe) are not run.
 [[builds]]
 id = "nightreign-revive-lite"
 
 [builds.match]
-files = ["edition.json", "revive-maintenance.json", "tools/merge/Assets.exe", "payload/RevivePrototype.dll"]
+files = ["edition.json", "revive-maintenance.json", "payload/RevivePrototype.dll"]
 json = [{ file = "edition.json", key = "edition", equals = "LITE" }]
 version = { file = "revive-maintenance.json", key = "version" }
 versions = ["0.1.33-rc3"]
-
-[builds.tool]
-path = "tools/merge/Assets.exe"
-env = { NRR_GAME_DIRECTORY = "{game_dir}" }
-timeout = 900
 
 [builds.output]
 mod = "mod"
@@ -100,11 +96,12 @@ do = "merge"
 file = "sfx/sfxbnd_commoneffects.ffxbnd.dcx"
 patch = "payload/mod/sfx/sfxbnd_commoneffects.ffxbnd.dcx"
 
+# the grace menu: Revive's talk scripts merged state by state with the last package's (the ESD rule); with no
+# package shipping it, Revive's own copy
 [[builds.steps]]
-do = "tool"
+do = "merge"
 file = "script/talk/m00_00_00_00.talkesdbnd.dcx"
-missing = "payload/settings/vanilla/script/talk/m00_00_00_00.talkesdbnd.dcx"
-args = ["merge-grace", "{source}", "{setup}/payload/settings/m00_00_00_00.talkesdbnd.dcx", "{out}"]
+patch = "payload/settings/m00_00_00_00.talkesdbnd.dcx"
 
 [[builds.steps]]
 do = "text"

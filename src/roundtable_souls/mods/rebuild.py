@@ -263,11 +263,11 @@ def set_overlay_override(profile: Path, folder: Path | None, rebuild_file: Path 
 
 
 def approved(tool) -> bool:
-    """Whether the user allowed this rebuild tool (this version of it) to run. The launcher's own combine needs no
-    permission."""
+    """Whether the user allowed this rebuild tool (this version of it) to run. The launcher's own combine, and its own
+    build of an overhaul (mods.engine: nothing of the mod's runs), need no permission."""
     from roundtable_souls.config.settings import load_settings
 
-    if getattr(tool, "builtin", False):
+    if getattr(tool, "builtin", False) or getattr(getattr(tool, "recipe", None), "engine", None) is not None:
         return True
     return tool.approval_key() in load_settings().rebuild_approved
 

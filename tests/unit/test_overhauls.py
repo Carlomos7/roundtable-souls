@@ -1,5 +1,5 @@
-"""Overhaul configs (data/overhauls/*.toml): the shipped Nightreign Revive config is the former recipe one to one, a
-local file replaces or adds one, a bad one is left out and said why, and the Play page's detection and the offline
+"""Overhaul configs (data/overhauls/*.toml): the shipped Nightreign Revive config builds without anything of the
+mod's (since S3b), a local file replaces or adds one, a bad one is left out and said why, and the Play page's detection and the offline
 launch's strip read the configs and still do what they did."""
 
 import json
@@ -10,8 +10,6 @@ from roundtable_souls.game import catalog as games
 from roundtable_souls.game.locate import Locations, Overrides
 from roundtable_souls.overhauls import config as overhaul_config
 from roundtable_souls.services import play
-
-FROZEN = Path(__file__).parent / "data" / "nightreign-revive-lite.recipe.json"
 
 TOY = """overhaul = 1
 id = "toy"
@@ -35,10 +33,14 @@ def local(name: str, text: str) -> Path:
     return folder / name
 
 
-def test_the_shipped_config_is_the_former_recipe():
+def test_the_shipped_config_runs_nothing_of_the_mods():
     (revive,) = overhauls.load()
     assert (revive.id, revive.game, revive.short_label) == ("nightreign-revive", "eldenring", "Revive")
-    assert [revive.recipe(b) for b in revive.builds] == [json.loads(FROZEN.read_text(encoding="utf-8"))]
+    (lite,) = [revive.recipe(b) for b in revive.builds]
+    assert lite["id"] == "nightreign-revive-lite" and lite["recipe"] == overhauls.RECIPE_VERSION and "tool" not in lite
+    grace = [s for s in lite["steps"] if s.get("file") == "script/talk/m00_00_00_00.talkesdbnd.dcx"]
+    assert [s["do"] for s in grace] == ["merge"]  # the ESD rule, not the mod's tool
+    assert not any("Assets.exe" in json.dumps(s) for s in lite["steps"]) and "Assets.exe" not in json.dumps(lite)
     assert overhauls.problems() == []
 
 
