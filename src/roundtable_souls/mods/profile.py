@@ -12,6 +12,7 @@ import re
 import tomllib
 from pathlib import Path
 
+from roundtable_souls.formats import me3_profile
 from roundtable_souls.formats.me3_profile import resolve
 from roundtable_souls.mods.checks import ACCEPTABLE_FOLDERS, NOT_GAME_FOLDERS
 
@@ -129,36 +130,32 @@ def _dependents(raw) -> list:
 
 
 def package_rows(text: str, include_disabled: bool = False) -> list[dict]:
-    """Packages with id, path, load_after / load_before ids, in file order. Both me3 shapes. id is the name the
-    launcher uses (the id, else the folder name); me3_id is the id me3 uses (None: me3 uses the path); after and
-    before keep each dependency's optional flag. include_disabled: switched-off packages too (me3 orders them, then
-    leaves them out)."""
-    try:
-        data = tomllib.loads(text)
-    except tomllib.TOMLDecodeError:
+    """Packages with id, path, load_after / load_before ids, in file order. Both me3 shapes. index is the entry's
+    block number (as mods.profile_edit numbers them); id is the name the launcher uses (the id, else the folder name);
+    me3_id is the id me3 uses (None: me3 uses the path); after and before keep each dependency's optional flag.
+    include_disabled: switched-off packages too (me3 orders them, then leaves them out). Empty when the file is not
+    valid TOML (me3 does not read it)."""
+    if not me3_profile.parses(text):
         return []
-    rows = data.get("packages") or []
-    if isinstance(rows, dict):
-        rows = [rows]
     out = []
-    for i, row in enumerate(rows):
-        if not isinstance(row, dict):
+    for e in me3_profile.entries(text):
+        row = e["row"]
+        if e["kind"] != "package" or row is None:
             continue
-        enabled = row.get("enabled", True) is not False
-        if not enabled and not include_disabled:
+        if not e["enabled"] and not include_disabled:
             continue
-        path = str(row.get("path") or row.get("source") or "")
+        path = e["path"]
         if not path:
             continue
         after = _dependents(row.get("load_after"))
         before = _dependents(row.get("load_before"))
         out.append(
             {
-                "index": i,
+                "index": e["index"],
                 "id": str(row.get("id") or Path(path).name),
                 "me3_id": str(row["id"]) if row.get("id") else None,
                 "path": path,
-                "enabled": enabled,
+                "enabled": e["enabled"],
                 "load_after": [d.id for d in after],
                 "load_before": [d.id for d in before],
                 "after": after,

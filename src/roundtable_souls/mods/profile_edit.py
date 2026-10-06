@@ -17,6 +17,7 @@ import shutil
 import time
 from pathlib import Path
 
+from roundtable_souls.formats import me3_profile
 from roundtable_souls.formats.me3_profile import (  # the one profile reader; re-exported for the mods layer
     block_options,
     blocks,
@@ -412,16 +413,7 @@ def set_options(profile: Path, index: int, opts: dict) -> Path:
 
 def entries(profile: Path) -> list[dict]:
     """Every block, enabled or not, with its options; 'index' addresses it for the other operations."""
-    text = read_text(Path(profile))
-    if is_array_form(text):
-        text = to_blocks(text)
-    out = []
-    for b in blocks(text):
-        o = block_options(text, b["index"])
-        o["index"] = b["index"]
-        o["name"] = o["id"] or Path(o["path"]).name or f"entry {b['index'] + 1}"
-        out.append(o)
-    return out
+    return me3_profile.entries(read_text(Path(profile)))
 
 
 # ----------------------------------------------------------------------------- package folders in a profile

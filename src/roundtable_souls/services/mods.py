@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import re
 import time
+import tomllib
 from pathlib import Path
 
 from roundtable_souls.config.settings import load_settings, save_settings
-from roundtable_souls.coop.ini import _profile_rows, _read
+from roundtable_souls.formats import me3_profile
 from roundtable_souls.game.locate import Locations
 from roundtable_souls.mods import install, models, remove
 from roundtable_souls.mods import profile as profile_tools
@@ -16,54 +17,9 @@ from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.platform import me3_info
 from roundtable_souls.platform.files import atomic_write
 
-_BLOCK_HEADER = re.compile(r"^[ \t]*\[\[(packages|natives)\]\][ \t]*$", re.I)
-_TOML_BODY = re.compile(r"^(?:\[\[|#?\s*[A-Za-z0-9_]+\s*=|\{|\}|\])")
-
 
 def _plain_line(line: str) -> str:
     return re.sub(r"^[ \t]*#[ \t]?", "", line.rstrip("\r\n")).strip()
-
-
-def _profile_blocks(text: str):
-    """(start, end, kind) for each real [[packages]] / [[natives]] block, in file order. Commented lines are comments, not mods."""
-    lines = text.splitlines(keepends=True)
-    starts = [
-        (i, "package" if m.group(1).lower() == "packages" else "native")
-        for i, line in enumerate(lines)
-        if (m := _BLOCK_HEADER.match(line.rstrip("\r\n")))
-    ]
-    blocks = []
-    for n, (i, kind) in enumerate(starts):
-        j = starts[n + 1][0] if n + 1 < len(starts) else len(lines)
-        blocks.append((i, j, kind, lines))
-    return blocks
-
-
-def _toml_lines(lines) -> str:
-    """Real keys only. A line whose first character is # is a comment, whatever it says."""
-    kept = []
-    for ln in lines:
-        body = ln.rstrip("\r\n").strip()
-        if body and not body.startswith("#"):
-            kept.append(body)
-    return "\n".join(kept)
-
-
-def _mods_from_blocks(text: str):
-    out = []
-    for index, (i, j, kind, lines) in enumerate(_profile_blocks(text)):
-        body = _toml_lines(lines[i:j])
-        en_m = re.search(r"(?m)^enabled\s*=\s*(true|false)\b", body, re.I)
-        if en_m and en_m.group(1).lower() == "false":
-            continue
-        id_m = re.search(r"(?m)^id\s*=\s*['\"]([^'\"]+)['\"]", body)
-        path_m = re.search(r"(?m)^path\s*=\s*['\"]([^'\"]+)['\"]", body)
-        path = path_m.group(1) if path_m else ""
-        if not id_m and not path:
-            continue
-        ident = id_m.group(1) if id_m else Path(path).name
-        out.append(dict(index=index, kind=kind, id=ident, path=path, name=ident))
-    return out
 
 
 def read_profile_mods(profile):
@@ -74,23 +30,15 @@ def read_profile_mods(profile):
     [[packages]] blocks, and the packages = [ { ... } ] form Revive's installer writes.
     """
     try:
-        text = _read(Path(profile))
-    except OSError:
-        return []
-    if _profile_blocks(text):
-        return _mods_from_blocks(text)
-    rows = _profile_rows(text)
-    if rows is None:
+        text = me3_profile.read_text(Path(profile))
+        found = me3_profile.entries(text)
+    except OSError, tomllib.TOMLDecodeError:
         return []
     out = []
-    for index, (kind, row) in enumerate(rows):
-        if row.get("enabled", True) is False:
-            continue
-        path = str(row.get("path") or "")
-        ident = str(row.get("id") or (Path(path).name if path else ""))
-        if not ident and not path:
-            continue
-        out.append(dict(index=index, kind=kind, id=ident, path=path, name=ident))
+    for e in found:
+        ident = e["id"] or Path(e["path"]).name
+        if e["enabled"] and ident:
+            out.append(dict(index=e["index"], kind=e["kind"], id=ident, path=e["path"], name=ident))
     return out
 
 
@@ -118,11 +66,12 @@ def _rewrite_block(block_lines, enabled: bool):
 def set_profile_mod_enabled(profile, index: int, enabled: bool) -> bool:
     """Turn one package or native on or off. Commented-out blocks are uncommented when turned on. Returns whether it changed."""
     path = Path(profile)
-    text = _read(path)
-    blocks = _profile_blocks(text)
+    text = me3_profile.read_text(path)
+    blocks = me3_profile.blocks(text)
     if index < 0 or index >= len(blocks):
         raise IndexError(index)
-    i, j, _kind, lines = blocks[index]
+    i, j = blocks[index]["start"], blocks[index]["end"]
+    lines = text.splitlines(keepends=True)
     new_block = _rewrite_block(lines[i:j], enabled)
     if new_block == lines[i:j]:
         return False
@@ -170,7 +119,7 @@ def me3_facts(setup, loc: Locations) -> dict:
 
 def read_profile_settings(profile) -> dict:
     try:
-        return profile_tools.read_settings(_read(Path(profile)))
+        return profile_tools.read_settings(me3_profile.read_text(Path(profile)))
     except OSError:
         return {}
 
@@ -178,7 +127,7 @@ def read_profile_settings(profile) -> dict:
 def write_profile_setting(profile, key: str, value) -> bool:
     """Set (or None: remove) one top-level me3 setting in the profile text, keeping comments; one .bak. Returns whether it changed."""
     path = Path(profile)
-    text = _read(path)
+    text = me3_profile.read_text(path)
     new = profile_tools.set_setting(text, key, value)
     if new == text:
         return False

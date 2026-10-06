@@ -108,22 +108,34 @@ def to_blocks(text: str) -> str:
         if isinstance(rows, dict):
             rows = [rows]
         for row in rows:
-            if isinstance(row, dict) and row.get("path"):
+            if isinstance(row, dict) and _path_of(row):
                 out.append(nl)
-                out.extend(entry_lines(kind, row, nl))
+                out.extend(entry_lines(kind, {**row, "path": _path_of(row)}, nl))
     return "".join(out)
+
+
+def _block_row(b: dict) -> dict | None:
+    """One block's own table, parsed on its own (a broken block does not hide the others); None when it does not
+    parse."""
+    try:
+        data = tomllib.loads("".join(b["lines"]))
+    except tomllib.TOMLDecodeError:
+        return None
+    rows = data.get("packages") or data.get("natives") or [{}]
+    row = rows[0] if isinstance(rows, list) else rows
+    return row if isinstance(row, dict) else {}
 
 
 def block_options(text: str, index: int) -> dict:
     """Parsed options of one block (via tomllib on that block alone)."""
     b = blocks(text)[index]
-    body = "".join(b["lines"])
-    try:
-        data = tomllib.loads(body)
-    except tomllib.TOMLDecodeError:
-        return {"kind": b["kind"], "path": "", "id": "", "enabled": True}
-    rows = data.get("packages") or data.get("natives") or [{}]
-    row = rows[0] if isinstance(rows, list) else rows
+    row = _block_row(b)
+    return _options(b["kind"], row)
+
+
+def _options(kind: str, row: dict | None) -> dict:
+    if row is None:
+        return {"kind": kind, "path": "", "id": "", "enabled": True}
     deps = lambda v: [
         {"id": d["id"], "optional": bool(d.get("optional", False))}
         if isinstance(d, dict)
@@ -131,8 +143,8 @@ def block_options(text: str, index: int) -> dict:
         for d in (v or [])
     ]
     return {
-        "kind": b["kind"],
-        "path": str(row.get("path") or ""),
+        "kind": kind,
+        "path": _path_of(row),
         "id": str(row.get("id") or ""),
         "enabled": row.get("enabled", True) is not False,
         "optional": bool(row.get("optional", False)),
@@ -142,6 +154,39 @@ def block_options(text: str, index: int) -> dict:
         "load_after": deps(row.get("load_after")),
         "load_before": deps(row.get("load_before")),
     }
+
+
+def _path_of(row: dict) -> str:
+    """An entry's path; me3 also takes it under the older name source."""
+    return str(row.get("path") or row.get("source") or "")
+
+
+def parses(text: str) -> bool:
+    """Whether the whole file is valid TOML: me3 refuses a profile that is not, however readable its entries are."""
+    try:
+        tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return False
+    return True
+
+
+def entries(text: str) -> list[dict]:
+    """Every [[packages]] / [[natives]] entry, enabled or not, in file order: its options (block_options), 'index'
+    (the block number the edits in mods.profile_edit address), 'name' (its id, else its file or folder name) and
+    'row' (its own table as written; None when that block does not parse). enabled defaults to true. A commented-out
+    entry is a comment, not an entry. An inline-array profile is read as to_blocks writes it, so its indexes are the
+    ones an edit sees after converting it; it raises tomllib.TOMLDecodeError when it does not parse."""
+    if is_array_form(text):
+        text = to_blocks(text)
+    out = []
+    for b in blocks(text):
+        row = _block_row(b)
+        o = _options(b["kind"], row)
+        o["index"] = b["index"]
+        o["name"] = o["id"] or Path(o["path"]).name or f"entry {b['index'] + 1}"
+        o["row"] = row
+        out.append(o)
+    return out
 
 
 def read_text(path: Path) -> str:
