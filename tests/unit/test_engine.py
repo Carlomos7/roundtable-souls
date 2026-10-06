@@ -10,6 +10,7 @@ import pytest
 from fakegame import bnd, dcx, files_of, fmg, texts_of
 from test_param_merge import pack, rows_of, set_word, vanilla
 
+from roundtable_souls import overhauls
 from roundtable_souls.config import settings
 from roundtable_souls.game import locate
 from roundtable_souls.mods import backends, engine
@@ -17,7 +18,8 @@ from roundtable_souls.mods import rebuild as merge
 from roundtable_souls.mods.backends import manifest_refresh
 from roundtable_souls.platform import paths as common
 
-RECIPE = json.loads((engine.RECIPES_DIR / "nightreign-revive-lite.json").read_text(encoding="utf-8"))
+# the former data/recipes/nightreign-revive-lite.json, frozen: the shipped overhaul config must still give exactly this
+RECIPE = json.loads((Path(__file__).parent / "data" / "nightreign-revive-lite.recipe.json").read_text(encoding="utf-8"))
 PROFILE = """profileVersion = "v1"
 
 [[packages]]
@@ -176,6 +178,23 @@ def test_the_bundled_recipe_is_valid_and_fits_the_download(world):
     assert recipe["id"] == "nightreign-revive-lite" and version == "0.1.33-rc3" and why is None
 
 
+def test_the_overhaul_config_builds_exactly_what_the_old_recipe_built(world):
+    """S3a moved the recipe into data/overhauls/nightreign-revive.toml: the same recipe, so the same build key, output
+    files and manifest as the frozen JSON. (regulation.bin is encrypted with a fresh IV each time: compared by rows.)"""
+
+    def build(recipe):
+        version = engine.match(world.setup)[1]
+        engine.build(world.profile, world.own / "mod", world.setup, recipe, version, lambda s: None)
+        files = sorted(f for f in world.own.rglob("*") if f.is_file() and ".roundtable-build" not in f.parts)
+        out = {f.relative_to(world.own).as_posix(): f.read_bytes() for f in files}
+        reg = out.pop("mod/regulation.bin")
+        return out, {i: r.data for i, r in rows_of(reg, "EquipParamWeapon").items()}
+
+    toml = engine.match(world.setup)[0]
+    assert toml == RECIPE
+    assert build(toml) == build(RECIPE)
+
+
 def test_a_newer_version_is_not_built_and_says_why(world):
     (world.setup / "revive-maintenance.json").write_text('{"protocol": 1, "version": "0.2.0"}')
     recipe, version, why = engine.match(world.setup)
@@ -328,29 +347,42 @@ def test_a_whole_rebuild_through_the_engine_is_current_and_can_be_undone(world):
     assert world.profile.read_text(encoding="utf-8") == PROFILE  # never rewritten
 
 
-def test_a_second_recipe_needs_no_code(world, tmp_path, monkeypatch):
-    """Nothing about Revive is in the engine: a made-up mod with other names builds from its recipe alone."""
-    other = tmp_path / "recipes"
-    other.mkdir()
-    toy = {
-        "recipe": 1,
-        "id": "toy",
-        "label": "Toy",
-        "match": {"files": ["toy.json"]},
-        "tool": {"path": "bin/merge.exe"},
-        "output": {"mod": "mod"},
-        "steps": [
-            {"do": "copy", "from": "payload/toy.dll", "to": "toy.dll"},
-            {
-                "do": "tool",
-                "file": "regulation.bin",
-                "missing": "game",
-                "args": ["merge-regulation", "{source}", "{setup}/x", "{out}"],
-            },
-        ],
-    }
-    (other / "toy.json").write_text(json.dumps(toy))
-    monkeypatch.setattr(engine, "RECIPES_DIR", other)
+TOY_CONFIG = """overhaul = 1
+id = "toy"
+label = "Toy"
+short_label = "Toy"
+game = "eldenring"
+
+[recognise]
+folder = "Toy"
+manifest = "installation.json"
+
+[[builds]]
+id = "toy"
+match = { files = ["toy.json"] }
+tool = { path = "bin/merge.exe" }
+output = { mod = "mod" }
+
+[[builds.steps]]
+do = "copy"
+from = "payload/toy.dll"
+to = "toy.dll"
+
+[[builds.steps]]
+do = "tool"
+file = "regulation.bin"
+missing = "game"
+args = ["merge-regulation", "{source}", "{setup}/x", "{out}"]
+"""
+
+
+def test_a_second_recipe_needs_no_code(world, tmp_path):
+    """Nothing about Revive is in the engine: a made-up mod with other names builds from its config alone, a file in
+    the local overhauls folder."""
+    local = overhauls.local_dir()
+    assert local is not None
+    local.mkdir(parents=True)
+    (local / "toy.toml").write_text(TOY_CONFIG, encoding="utf-8")
     setup = tmp_path / "toysetup"
     (setup / "payload").mkdir(parents=True)
     (setup / "toy.json").write_text("{}")

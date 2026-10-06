@@ -13,7 +13,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from roundtable_souls import __version__
+from roundtable_souls import __version__, overhauls
 from roundtable_souls.config.settings import (
     FROZEN,
     LauncherSettings,
@@ -173,20 +173,23 @@ def same_source(a, b) -> bool:
 
 
 def setup_from_path(p: str | Path, loc: Locations) -> Setup | None:
-    """A setup for a picked file: a .me3 profile, or (Elden Ring only) a launcher's installation.json."""
+    """A setup for a picked file: a .me3 profile, or an overhaul's installer manifest (installation.json) for a game
+    it has a config for."""
     p = Path(p)
-    if p.name.lower() == "installation.json":
-        return setup_from_installation(p, loc) if loc.game is games.ELDEN_RING else None
+    if p.name.lower() in {o.recognise.manifest.lower() for o in overhauls.load()}:
+        manifests = {o.recognise.manifest.lower() for o in overhauls.load(loc.game.key)}
+        return setup_from_installation(p, loc) if p.name.lower() in manifests else None
     if p.suffix.lower() == ".me3" and p.is_file():
         return Setup("me3", p, loc=loc)
     return None
 
 
 def discover(remembered: str | None, loc: Locations):
-    """loc's game's me3 profiles (+ the remembered one). For Elden Ring, also every Nightreign Revive
-    installation next to them; Revive is an Elden Ring mod despite its name."""
-    game = loc.game
+    """loc's game's me3 profiles (+ the remembered one), and every installation of an overhaul with a config for the
+    game (data/overhauls) in its folder next to them or in the game folder (Nightreign Revive is an Elden Ring mod
+    despite its name)."""
     found, seen = [], set()
+    places = [(o.recognise.folder, o.recognise.manifest) for o in overhauls.load(loc.game.key)]
 
     def add(s):
         key = os.path.normcase(s.source) if s else None
@@ -200,21 +203,43 @@ def discover(remembered: str | None, loc: Locations):
         if prof.name.lower().endswith(".offline.me3"):
             continue  # our own generated copies
         add(Setup("me3", prof, loc=loc))
-        inst = prof.parent / "NightreignRevive" / "installation.json"
-        if game is games.ELDEN_RING and inst.is_file():
-            add(setup_from_installation(inst, loc))
-    if game is not games.ELDEN_RING:
+        for folder, manifest in places:
+            inst = prof.parent / folder / manifest
+            if inst.is_file():
+                add(setup_from_installation(inst, loc))
+    if not places:
         return found
-    # Revive's Standalone edition installs into the game folder itself (Launch.cmd next to eldenring.exe)
+    # an edition may install into the game folder itself (Revive's Standalone: Launch.cmd next to eldenring.exe)
     try:
         gd = loc.game_dir()
     except Exception:
         gd = None
     if gd:
-        inst = Path(gd) / "NightreignRevive" / "installation.json"
-        if inst.is_file():
-            add(setup_from_installation(inst, loc))
+        for folder, manifest in places:
+            inst = Path(gd) / folder / manifest
+            if inst.is_file():
+                add(setup_from_installation(inst, loc))
     return found
+
+
+def overhauls_in(setup: Setup) -> list[str]:
+    """The short labels of the overhauls a setup includes: launched from one's manifest, its folder beside the
+    profile, or one of its entries in the profile. Every config is asked, whatever the setup's game, as before S3a."""
+    from roundtable_souls.services.mods import read_profile_mods
+
+    profile = Path(setup.profile)
+    ids = {m["id"].lower() for m in read_profile_mods(profile)} if profile.is_file() else set()
+    source = Path(setup.source).name.lower() if setup.source else ""
+    out = []
+    for o in overhauls.load():
+        r = o.recognise
+        if (
+            (setup.kind == "revive" and source == r.manifest.lower())
+            or (profile.parent / r.folder).is_dir()
+            or ids & {i.lower() for i in r.mod_ids}
+        ):
+            out.append(o.short_label)
+    return out
 
 
 def remembered_setup(settings: LauncherSettings | None, game: games.Game) -> str | None:
@@ -428,7 +453,12 @@ def job_play(setup: Setup, loc: Locations | None = None, backup: str = BACKUP_RE
 
 NATIVE_BLOCK_RE = re.compile(r"(^[ \t]*\[\[natives\]\].*?)(?=^[ \t]*\[\[|\Z)", re.M | re.S)
 PACKAGE_BLOCK_RE = re.compile(r"(^[ \t]*\[\[packages\]\].*?)(?=^[ \t]*\[\[|\Z)", re.M | re.S)
-REVIVE_MARK = re.compile(r"nightreign-revive|reviveprototype|revivehud|reviveerss|nrrinitialize|nrrhud", re.I)
+
+
+def overhaul_mark() -> re.Pattern | None:
+    """Text marking a profile entry as an overhaul's own (its config's profile_marks), or None when none has marks."""
+    marks = [m for o in overhauls.load() for m in o.recognise.profile_marks if m]
+    return re.compile("|".join(re.escape(m) for m in marks), re.I) if marks else None
 
 
 def _comment_block(block: str) -> str:
@@ -493,17 +523,18 @@ def offline_profile_text(text: str, strip_revive: bool = False, coop_dll: str | 
             out,
             flags=re.I,
         )
-    if strip_revive:
+    mark = overhaul_mark() if strip_revive else None
+    if mark:
 
         def strip_rev(m):
             block = m.group(1)
-            if not REVIVE_MARK.search(block):
+            if not mark.search(block):
                 return block
             return _comment_block(block)
 
         out = NATIVE_BLOCK_RE.sub(strip_rev, out)
         out = PACKAGE_BLOCK_RE.sub(strip_rev, out)
-        out = _disable_objects_matching(out, REVIVE_MARK)
+        out = _disable_objects_matching(out, mark)
     note = "Seamless Co-op disabled."
     if strip_revive:
         note += " Revive disabled."

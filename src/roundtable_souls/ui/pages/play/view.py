@@ -28,9 +28,6 @@ from roundtable_souls.config.settings import exe_dir
 from roundtable_souls.game import catalog as games
 from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.services import play as core
-from roundtable_souls.services.mods import (
-    read_profile_mods,
-)
 from roundtable_souls.services.play import (
     job_play,
     job_play_offline,
@@ -202,15 +199,7 @@ class PlayView:
         bits = ["me3"]
         if self.ini:
             bits.append("Seamless Co-op")
-        ids = {m["id"].lower() for m in read_profile_mods(s.profile)} if Path(s.profile).is_file() else set()
-        revive = (
-            s.kind == "revive"
-            or (Path(s.profile).parent / "NightreignRevive").is_dir()
-            or "nightreign-revive" in ids
-            or "reviveprototype.dll" in ids
-        )
-        if revive:
-            bits.append("Revive")
+        bits += core.overhauls_in(s)
         f = getattr(self, "_me3", None) or {}
         if f.get("update") and (f.get("latest") or {}).get("version"):
             bits.append(f"me3 {f['latest']['version']} available (Tools)")

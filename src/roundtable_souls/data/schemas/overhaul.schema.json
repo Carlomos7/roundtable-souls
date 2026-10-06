@@ -1,0 +1,698 @@
+{
+ "$defs": {
+  "AddText": {
+   "additionalProperties": false,
+   "properties": {
+    "do": {
+     "const": "text",
+     "title": "Do",
+     "type": "string"
+    },
+    "file": {
+     "title": "File",
+     "type": "string"
+    },
+    "table": {
+     "title": "Table",
+     "type": "string"
+    },
+    "texts": {
+     "additionalProperties": {
+      "type": "string"
+     },
+     "title": "Texts",
+     "type": "object"
+    },
+    "vanilla": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Vanilla"
+    },
+    "each": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/Each"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null
+    }
+   },
+   "required": [
+    "do",
+    "file",
+    "table",
+    "texts"
+   ],
+   "title": "AddText",
+   "type": "object"
+  },
+  "Build": {
+   "additionalProperties": false,
+   "description": "One edition the launcher builds itself.",
+   "properties": {
+    "id": {
+     "title": "Id",
+     "type": "string"
+    },
+    "match": {
+     "$ref": "#/$defs/Match"
+    },
+    "tool": {
+     "$ref": "#/$defs/Tool"
+    },
+    "output": {
+     "$ref": "#/$defs/Output"
+    },
+    "steps": {
+     "items": {
+      "discriminator": {
+       "mapping": {
+        "config": "#/$defs/KeepConfig",
+        "copy": "#/$defs/Copy",
+        "copy_tree": "#/$defs/CopyTree",
+        "merge": "#/$defs/Merge",
+        "params": "#/$defs/Params",
+        "remove": "#/$defs/Remove",
+        "script_append": "#/$defs/ScriptAppend",
+        "text": "#/$defs/AddText",
+        "tool": "#/$defs/RunTool"
+       },
+       "propertyName": "do"
+      },
+      "oneOf": [
+       {
+        "$ref": "#/$defs/CopyTree"
+       },
+       {
+        "$ref": "#/$defs/Copy"
+       },
+       {
+        "$ref": "#/$defs/KeepConfig"
+       },
+       {
+        "$ref": "#/$defs/Params"
+       },
+       {
+        "$ref": "#/$defs/Merge"
+       },
+       {
+        "$ref": "#/$defs/AddText"
+       },
+       {
+        "$ref": "#/$defs/RunTool"
+       },
+       {
+        "$ref": "#/$defs/ScriptAppend"
+       },
+       {
+        "$ref": "#/$defs/Remove"
+       }
+      ]
+     },
+     "title": "Steps",
+     "type": "array"
+    }
+   },
+   "required": [
+    "id",
+    "match",
+    "tool",
+    "output",
+    "steps"
+   ],
+   "title": "Build",
+   "type": "object"
+  },
+  "Copy": {
+   "additionalProperties": false,
+   "properties": {
+    "do": {
+     "const": "copy",
+     "title": "Do",
+     "type": "string"
+    },
+    "from": {
+     "title": "From",
+     "type": "string"
+    },
+    "to": {
+     "title": "To",
+     "type": "string"
+    }
+   },
+   "required": [
+    "do",
+    "from",
+    "to"
+   ],
+   "title": "Copy",
+   "type": "object"
+  },
+  "CopyTree": {
+   "additionalProperties": false,
+   "properties": {
+    "do": {
+     "const": "copy_tree",
+     "title": "Do",
+     "type": "string"
+    },
+    "from": {
+     "title": "From",
+     "type": "string"
+    },
+    "to": {
+     "title": "To",
+     "type": "string"
+    }
+   },
+   "required": [
+    "do",
+    "from",
+    "to"
+   ],
+   "title": "CopyTree",
+   "type": "object"
+  },
+  "Each": {
+   "additionalProperties": false,
+   "properties": {
+    "folders_in": {
+     "title": "Folders In",
+     "type": "string"
+    },
+    "except": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Except",
+     "type": "array"
+    }
+   },
+   "required": [
+    "folders_in"
+   ],
+   "title": "Each",
+   "type": "object"
+  },
+  "JsonEquals": {
+   "additionalProperties": false,
+   "properties": {
+    "file": {
+     "title": "File",
+     "type": "string"
+    },
+    "key": {
+     "title": "Key",
+     "type": "string"
+    },
+    "equals": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "integer"
+      },
+      {
+       "type": "boolean"
+      }
+     ],
+     "title": "Equals"
+    }
+   },
+   "required": [
+    "file",
+    "key",
+    "equals"
+   ],
+   "title": "JsonEquals",
+   "type": "object"
+  },
+  "KeepConfig": {
+   "additionalProperties": false,
+   "properties": {
+    "do": {
+     "const": "config",
+     "title": "Do",
+     "type": "string"
+    },
+    "from": {
+     "title": "From",
+     "type": "string"
+    },
+    "to": {
+     "title": "To",
+     "type": "string"
+    }
+   },
+   "required": [
+    "do",
+    "from",
+    "to"
+   ],
+   "title": "KeepConfig",
+   "type": "object"
+  },
+  "Match": {
+   "additionalProperties": false,
+   "properties": {
+    "files": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Files",
+     "type": "array"
+    },
+    "json": {
+     "items": {
+      "$ref": "#/$defs/JsonEquals"
+     },
+     "title": "Json",
+     "type": "array"
+    },
+    "version": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/VersionKey"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null
+    },
+    "versions": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Versions",
+     "type": "array"
+    }
+   },
+   "title": "Match",
+   "type": "object"
+  },
+  "Merge": {
+   "additionalProperties": false,
+   "properties": {
+    "do": {
+     "const": "merge",
+     "title": "Do",
+     "type": "string"
+    },
+    "file": {
+     "title": "File",
+     "type": "string"
+    },
+    "patch": {
+     "title": "Patch",
+     "type": "string"
+    },
+    "vanilla": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Vanilla"
+    },
+    "each": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/Each"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null
+    }
+   },
+   "required": [
+    "do",
+    "file",
+    "patch"
+   ],
+   "title": "Merge",
+   "type": "object"
+  },
+  "Output": {
+   "additionalProperties": false,
+   "properties": {
+    "mod": {
+     "default": "mod",
+     "title": "Mod",
+     "type": "string"
+    },
+    "report": {
+     "default": "merge-report.txt",
+     "title": "Report",
+     "type": "string"
+    },
+    "manifest": {
+     "default": "installation.json",
+     "title": "Manifest",
+     "type": "string"
+    }
+   },
+   "title": "Output",
+   "type": "object"
+  },
+  "Params": {
+   "additionalProperties": false,
+   "properties": {
+    "do": {
+     "const": "params",
+     "title": "Do",
+     "type": "string"
+    },
+    "file": {
+     "title": "File",
+     "type": "string"
+    },
+    "patch": {
+     "title": "Patch",
+     "type": "string"
+    },
+    "each": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/Each"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null
+    }
+   },
+   "required": [
+    "do",
+    "file",
+    "patch"
+   ],
+   "title": "Params",
+   "type": "object"
+  },
+  "Recognise": {
+   "additionalProperties": false,
+   "properties": {
+    "folder": {
+     "title": "Folder",
+     "type": "string"
+    },
+    "manifest": {
+     "title": "Manifest",
+     "type": "string"
+    },
+    "mod_ids": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Mod Ids",
+     "type": "array"
+    },
+    "profile_marks": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Profile Marks",
+     "type": "array"
+    }
+   },
+   "required": [
+    "folder",
+    "manifest"
+   ],
+   "title": "Recognise",
+   "type": "object"
+  },
+  "Remove": {
+   "additionalProperties": false,
+   "properties": {
+    "do": {
+     "const": "remove",
+     "title": "Do",
+     "type": "string"
+    },
+    "glob": {
+     "title": "Glob",
+     "type": "string"
+    }
+   },
+   "required": [
+    "do",
+    "glob"
+   ],
+   "title": "Remove",
+   "type": "object"
+  },
+  "RunTool": {
+   "additionalProperties": false,
+   "properties": {
+    "do": {
+     "const": "tool",
+     "title": "Do",
+     "type": "string"
+    },
+    "file": {
+     "title": "File",
+     "type": "string"
+    },
+    "args": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Args",
+     "type": "array"
+    },
+    "missing": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Missing"
+    },
+    "patch": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Patch"
+    },
+    "text": {
+     "anyOf": [
+      {
+       "additionalProperties": {
+        "type": "string"
+       },
+       "type": "object"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Text"
+    },
+    "each": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/Each"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null
+    }
+   },
+   "required": [
+    "do",
+    "file",
+    "args"
+   ],
+   "title": "RunTool",
+   "type": "object"
+  },
+  "ScriptAppend": {
+   "additionalProperties": false,
+   "properties": {
+    "do": {
+     "const": "script_append",
+     "title": "Do",
+     "type": "string"
+    },
+    "folder": {
+     "title": "Folder",
+     "type": "string"
+    },
+    "entry": {
+     "title": "Entry",
+     "type": "string"
+    },
+    "base": {
+     "title": "Base",
+     "type": "string"
+    },
+    "base_until": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Base Until"
+    },
+    "append": {
+     "title": "Append",
+     "type": "string"
+    },
+    "refuse": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Refuse",
+     "type": "array"
+    },
+    "refuse_text": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Refuse Text"
+    }
+   },
+   "required": [
+    "do",
+    "folder",
+    "entry",
+    "base",
+    "append"
+   ],
+   "title": "ScriptAppend",
+   "type": "object"
+  },
+  "Tool": {
+   "additionalProperties": false,
+   "properties": {
+    "path": {
+     "title": "Path",
+     "type": "string"
+    },
+    "env": {
+     "additionalProperties": {
+      "type": "string"
+     },
+     "title": "Env",
+     "type": "object"
+    },
+    "timeout": {
+     "default": 900,
+     "title": "Timeout",
+     "type": "integer"
+    }
+   },
+   "required": [
+    "path"
+   ],
+   "title": "Tool",
+   "type": "object"
+  },
+  "VersionKey": {
+   "additionalProperties": false,
+   "properties": {
+    "file": {
+     "title": "File",
+     "type": "string"
+    },
+    "key": {
+     "title": "Key",
+     "type": "string"
+    }
+   },
+   "required": [
+    "file",
+    "key"
+   ],
+   "title": "VersionKey",
+   "type": "object"
+  }
+ },
+ "additionalProperties": false,
+ "properties": {
+  "overhaul": {
+   "const": 1,
+   "title": "Overhaul",
+   "type": "integer"
+  },
+  "id": {
+   "title": "Id",
+   "type": "string"
+  },
+  "label": {
+   "title": "Label",
+   "type": "string"
+  },
+  "short_label": {
+   "title": "Short Label",
+   "type": "string"
+  },
+  "game": {
+   "title": "Game",
+   "type": "string"
+  },
+  "recognise": {
+   "$ref": "#/$defs/Recognise"
+  },
+  "builds": {
+   "items": {
+    "$ref": "#/$defs/Build"
+   },
+   "title": "Builds",
+   "type": "array"
+  }
+ },
+ "required": [
+  "overhaul",
+  "id",
+  "label",
+  "short_label",
+  "game",
+  "recognise"
+ ],
+ "title": "OverhaulConfig",
+ "type": "object"
+}

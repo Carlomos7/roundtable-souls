@@ -1,8 +1,8 @@
 """The launcher's own build of a mod that must stay last, from a recipe instead of the mod's installer.
 
-A recipe (data/recipes/*.json, see docs/Rebuild tools.md) says how to recognise the mod's download (its setup folder:
-files that must be there, values in its JSON files, the versions it was written for) and the steps that build its
-output folder from the packages before it:
+A recipe (one build of an overhaul config, data/overhauls/*.toml, see docs/Overhaul configs.md) says how to
+recognise the mod's download (its setup folder: files that must be there, values in its JSON files, the versions it
+was written for) and the steps that build its output folder from the packages before it:
 
     copy_tree / copy   files of the download, as they are
     config             a settings file of the player's: kept when it is there (new keys of a newer default are added,
@@ -39,13 +39,11 @@ import subprocess
 import time
 from pathlib import Path
 
-from roundtable_souls import formats
+from roundtable_souls import formats, overhauls
 from roundtable_souls.formats import FormatError
 from roundtable_souls.game import config as game_config
 from roundtable_souls.game import oodle as game_oodle
-from roundtable_souls.resources import DATA_DIR
 
-RECIPES_DIR = DATA_DIR / "recipes"
 WORK = ".roundtable-build"  # beside the output: the previous build and its restore.json
 STEPS = {"copy_tree", "copy", "config", "tool", "merge", "text", "params", "script_append", "remove"}
 
@@ -80,15 +78,13 @@ def validate(recipe: dict) -> list[str]:
 
 
 def recipes() -> list[dict]:
-    """Every usable recipe the launcher ships."""
+    """Every usable recipe: each build of each overhaul config (overhauls.load), shipped or local."""
     out = []
-    for f in sorted(RECIPES_DIR.glob("*.json")) if RECIPES_DIR.is_dir() else []:
-        try:
-            r = json.loads(f.read_text(encoding="utf-8"))
-        except OSError, ValueError:
-            continue
-        if isinstance(r, dict) and not validate(r):
-            out.append(r)
+    for o in overhauls.load():
+        for b in o.builds:
+            r = o.recipe(b)
+            if not validate(r):
+                out.append(r)
     return out
 
 

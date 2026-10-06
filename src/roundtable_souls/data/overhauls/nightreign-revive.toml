@@ -1,0 +1,129 @@
+# Nightreign Revive: how the launcher recognises it and builds it. Format: docs/Overhaul configs.md;
+# schema: data/schemas/overhaul.schema.json. The build below is the former data/recipes/nightreign-revive-lite.json,
+# translated one to one (S3a, 2026-10-06).
+
+overhaul = 1
+id = "nightreign-revive"
+label = "Nightreign Revive"
+short_label = "Revive"
+game = "eldenring"  # an Elden Ring mod despite its name
+
+[recognise]
+# Its installer puts it in this folder beside the me3 profile (the Standalone edition: in the game folder), with
+# this manifest, which the Play page offers as a setup of its own.
+folder = "NightreignRevive"
+manifest = "installation.json"
+# A profile with one of these entries includes it (the Play page says so).
+mod_ids = ["nightreign-revive", "reviveprototype.dll"]
+# Profile entries containing one of these (case aside) are its own: an offline launch with "Skip Revive too" turns
+# them off.
+profile_marks = ["nightreign-revive", "reviveprototype", "revivehud", "reviveerss", "nrrinitialize", "nrrhud"]
+
+# ---------------------------------------------------------------------------------------------------------------------
+# LITE 0.1.33-rc3: the launcher's own build (Settings: "Build Nightreign Revive in the launcher (preview)").
+[[builds]]
+id = "nightreign-revive-lite"
+
+[builds.match]
+files = ["edition.json", "revive-maintenance.json", "tools/merge/Assets.exe", "payload/RevivePrototype.dll"]
+json = [{ file = "edition.json", key = "edition", equals = "LITE" }]
+version = { file = "revive-maintenance.json", key = "version" }
+versions = ["0.1.33-rc3"]
+
+[builds.tool]
+path = "tools/merge/Assets.exe"
+env = { NRR_GAME_DIRECTORY = "{game_dir}" }
+timeout = 900
+
+[builds.output]
+mod = "mod"
+report = "merge-report.txt"
+manifest = "installation.json"
+
+[[builds.steps]]
+do = "copy_tree"
+from = "payload/audio"
+to = "audio"
+
+[[builds.steps]]
+do = "copy_tree"
+from = "payload/ui"
+to = "ui"
+
+[[builds.steps]]
+do = "copy"
+from = "payload/RevivePrototype.dll"
+to = "RevivePrototype.dll"
+
+[[builds.steps]]
+do = "copy"
+from = "payload/ReviveHudBootstrap.dll"
+to = "ReviveHudBootstrap.dll"
+
+[[builds.steps]]
+do = "config"
+from = "payload/RevivePrototype.ini"
+to = "RevivePrototype.ini"
+
+[[builds.steps]]
+do = "params"
+file = "regulation.bin"
+patch = "payload/mod/regulation.bin"
+
+[[builds.steps]]
+do = "merge"
+file = "chr/c0000.anibnd.dcx"
+patch = "payload/mod/chr/c0000.anibnd.dcx"
+
+[[builds.steps]]
+do = "merge"
+file = "chr/c0000.behbnd.dcx"
+patch = "payload/mod/chr/c0000.behbnd.dcx"
+
+[[builds.steps]]
+do = "merge"
+file = "chr/c0000_a00_hi.anibnd.dcx"
+patch = "payload/mod/chr/c0000_a00_hi.anibnd.dcx"
+
+[[builds.steps]]
+do = "merge"
+file = "chr/c0000_a00_md.anibnd.dcx"
+patch = "payload/mod/chr/c0000_a00_md.anibnd.dcx"
+
+[[builds.steps]]
+do = "merge"
+file = "chr/c0000_a00_lo.anibnd.dcx"
+patch = "payload/mod/chr/c0000_a00_lo.anibnd.dcx"
+
+[[builds.steps]]
+do = "merge"
+file = "sfx/sfxbnd_commoneffects.ffxbnd.dcx"
+patch = "payload/mod/sfx/sfxbnd_commoneffects.ffxbnd.dcx"
+
+[[builds.steps]]
+do = "tool"
+file = "script/talk/m00_00_00_00.talkesdbnd.dcx"
+missing = "payload/settings/vanilla/script/talk/m00_00_00_00.talkesdbnd.dcx"
+args = ["merge-grace", "{source}", "{setup}/payload/settings/m00_00_00_00.talkesdbnd.dcx", "{out}"]
+
+[[builds.steps]]
+do = "text"
+each = { folders_in = "payload/settings/vanilla/msg", except = ["common"] }
+file = "msg/{each}/menu_dlc02.msgbnd.dcx"
+vanilla = "payload/settings/vanilla/msg/{each}/menu_dlc02.msgbnd.dcx"
+table = "eventtextfortalk.fmg"
+texts = { rusru = "payload/settings/rusru.json", "*" = "payload/settings/engus.json" }
+
+[[builds.steps]]
+do = "script_append"
+folder = "action/script"
+entry = "c0000.hks"
+base = "payload/mod/action/script/c0000.hks"
+base_until = "-- Wrap the current mod's Update;"
+append = "installer/revive.hks"
+refuse = ["local NrrOriginalUpdate = Update", "-- Nightreign Revive deferred adapter"]
+refuse_text = "A mod before it already contains Nightreign Revive's script; keep only the original mod in the profile."
+
+[[builds.steps]]
+do = "remove"
+glob = "**/*.graph-work"

@@ -76,39 +76,9 @@ folder. Whatever the tool, the launcher keeps your package's `load_after` naming
 naming every other DLL (not `load_early` ones), each optional, so it stays last however mods are added. It changes only
 those lists, never the player's other entries.
 
-## Recipes: the launcher builds it itself
+## Overhaul configs: the launcher builds it itself
 
 For a mod whose installer keeps its download in a setup folder, the launcher can do the installer's merge itself from
-a recipe (`src/roundtable_souls/data/recipes/*.json`), when the player turns on **Build Nightreign Revive in the
-launcher** on Settings. The recipe is data; nothing about a particular mod is in the launcher's code.
-
-```json
-{ "recipe": 1, "id": "my-overhaul", "label": "My Overhaul",
-  "match": { "files": ["edition.json", "tools/merge.exe"],
-             "json": [{ "file": "edition.json", "key": "edition", "equals": "LITE" }],
-             "version": { "file": "edition.json", "key": "version" }, "versions": ["1.2.0"] },
-  "tool": { "path": "tools/merge.exe", "env": { "GAME_DIR": "{game_dir}" }, "timeout": 900 },
-  "output": { "mod": "mod", "report": "merge-report.txt", "manifest": "installation.json" },
-  "steps": [ ... ] }
-```
-
-`match` recognises the download (files that must be there, values in its JSON files) and the versions the recipe was
-written for; another version runs the mod's own installer. The output is the folder holding the package's `mod`
-folder. Steps, in order:
-
-| `do` | What it does |
-|---|---|
-| `copy_tree`, `copy` | Files of the download (`from`) into the output (`to`) as they are. |
-| `config` | A settings file of the player's: kept when it is there, with only the keys a newer default adds; else the default. |
-| `merge` | One file merged by the launcher: the last package before it that ships `file`, then the mod's copy (`patch`), against the game's copy (archives file by file, text entry by entry); with no package shipping it, the mod's copy as it is. |
-| `text` | A text archive: the mod's strings (`texts`, a JSON object of text ID to string, by `each` folder, `*` for the rest) set in its `table` of the game's copy (or `vanilla` from the download), then merged like `merge`. |
-| `params` | `regulation.bin`: the launcher's row-by-row combine of that package's copy and the mod's (`patch`) against the game's. |
-| `tool` | One file merged by the mod's tool, where the launcher cannot merge it itself yet: `{source}` is `file` from the last enabled package before it that ships it, else what `missing` says (`game`, `copy_patch`, or a path in the download). Also `{patch}`, `{out}`, `{setup}`, `{text}` (from a `text` map by `each`, `*` for the rest). `each: {folders_in, except}` repeats it per folder. |
-| `script_append` | The packages' own `folder` (for example `action/script`) copied in load order, then `append` added to `entry` (or to `base` up to `base_until` when no package has one); `refuse` lists text that means a package already contains it. |
-| `remove` | Leftovers of the tool, a `glob` below the output's `mod` folder. |
-
-The build runs in a staging folder beside the output and replaces it by renaming; the build it replaced is kept in
-`.roundtable-build/previous` for Undo rebuild. The manifest is written as the mod's installer writes it, with each
-source's path and sha256, so the launcher's checks and the mod's installer keep working. The inputs are only read
-and the profile is never written. A recipe is accepted when its output matches the mod's own installer's for the same
-inputs, file for file.
+the mod's overhaul config (`src/roundtable_souls/data/overhauls/*.toml`), when the player turns on **Build Nightreign
+Revive in the launcher** on Settings. The config is data; nothing about a particular mod is in the launcher's code.
+[Overhaul configs](Overhaul%20configs.md) describes the format and its build steps.
