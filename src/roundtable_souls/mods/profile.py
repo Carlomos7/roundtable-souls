@@ -12,6 +12,7 @@ import re
 import tomllib
 from pathlib import Path
 
+from roundtable_souls.formats.me3_profile import resolve
 from roundtable_souls.mods.checks import ACCEPTABLE_FOLDERS, NOT_GAME_FOLDERS
 
 SETTING_KEYS = ("savefile", "start_online", "disable_arxan", "mem_patch", "mem_patch_heap_size")
@@ -177,11 +178,6 @@ def me3_order(profile: Path | None, text: str):
         return order.order_rows(rows)
     profile = Path(profile)
     return order.order_rows(rows, profile.parent, lambda r: resolve(profile, r["path"]).exists())
-
-
-def resolve(profile: Path, path: str) -> Path:
-    p = Path(path)
-    return p if p.is_absolute() else (Path(profile).parent / p)
 
 
 # ----------------------------------------------------------------------------- conflict scan (read-only)
