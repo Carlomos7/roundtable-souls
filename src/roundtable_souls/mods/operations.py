@@ -47,7 +47,16 @@ def lock(profile: Path):
 def recover(profile: Path, timeout: float = 30.0) -> list[str]:
     """Finish or undo what an interrupted operation in this profile's folder left (see merging.build). Raises
     merging.build.BuildError when another launcher process holds the folder past timeout."""
-    return build.recover_operations(_root(profile), timeout)
+    root = _root(profile)
+    if not (root / build.OPS).is_dir():
+        return []  # nothing ever ran here: not even the lock file is made
+    said = build.recover_operations(root, timeout)
+    with build.ops_lock(root, timeout):
+        for o in build.active(root):
+            if o.info.get("kind") == "remove":  # a removal recovery finished: nothing of it is kept, as after one
+                _release_others(o)
+                o.release()
+    return said
 
 
 def start(profile: Path, what: str) -> build.Operation:
@@ -60,6 +69,10 @@ def commit(op: build.Operation, then=None) -> None:
     """Apply op (then() run before it counts as done). An older operation on the same folder lets go of what it
     kept: the newest one is the one a rollback or an undo takes back."""
     op.commit(then=then)
+    _release_others(op)
+
+
+def _release_others(op: build.Operation) -> None:
     dest = op.info.get("dest")
     if not dest:
         return

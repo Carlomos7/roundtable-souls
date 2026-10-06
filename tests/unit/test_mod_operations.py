@@ -226,3 +226,69 @@ def test_activity_takes_an_install_and_an_update_back(profile, tmp_path):
     grass = profile.parent / "mod" / "grass"
     assert files(grass)["grass.ini"] == b"version = 1\n"
     assert profile.read_bytes() != before  # rolled back to version 1, not uninstalled
+
+
+def test_removal_interrupted_before_the_folder_went_is_undone(profile, tmp_path, monkeypatch):
+    from roundtable_souls.mods import remove
+
+    do_install(profile, source(tmp_path, "1"))
+    before = files(profile.parent)
+    index = next(e["index"] for e in install.entries(profile) if e["name"] == "grass")
+    with monkeypatch.context() as m:
+        real = B.os.replace
+
+        def dying(src, dst):
+            if Path(src).name == "grass":
+                raise Crash()  # the folder about to be taken aside
+            return real(src, dst)
+
+        m.setattr(B.os, "replace", dying)
+        m.setattr(B, "_undo", lambda op: None)
+        with pytest.raises(Crash):
+            remove.uninstall(profile, index, delete_folder=True, to_trash=False)
+    assert "mod/grass" not in profile.read_text()  # the profile was written, the folder not yet taken
+    assert operations.problem(profile)
+    assert operations.recover(profile) == ["an interrupted removal of grass was undone: the previous state is back"]
+    assert files(profile.parent) == before
+
+
+def test_removal_interrupted_after_the_folder_went_is_finished(profile, tmp_path, monkeypatch):
+    from roundtable_souls.mods import remove
+
+    do_install(profile, source(tmp_path, "1"))
+    index = next(e["index"] for e in install.entries(profile) if e["name"] == "grass")
+    with monkeypatch.context() as m:
+        m.setattr(remove.shutil, "rmtree", lambda *a, **k: (_ for _ in ()).throw(Crash()))  # after the rename
+        m.setattr(B, "_undo", lambda op: None)
+        with pytest.raises(Crash):
+            remove.uninstall(profile, index, delete_folder=True, to_trash=False)
+    assert not (profile.parent / "mod" / "grass").exists()
+    assert operations.recover(profile) == ["an interrupted removal of grass was finished"]
+    assert "mod/grass" not in profile.read_text() and operations.problem(profile) is None
+    assert operations.kept_versions(profile) == []  # the install's record went with the mod
+
+
+def test_failed_removal_leaves_the_mod_installed(profile, tmp_path, monkeypatch):
+    from roundtable_souls.mods import remove
+
+    do_install(profile, source(tmp_path, "1"))
+    before = files(profile.parent)
+    index = next(e["index"] for e in install.entries(profile) if e["name"] == "grass")
+    with monkeypatch.context() as m:
+        real = B.os.replace
+
+        def refused(src, dst):
+            if Path(src).name == "grass":
+                raise PermissionError("in use")
+            return real(src, dst)
+
+        m.setattr(B.os, "replace", refused)
+        with pytest.raises(PermissionError):
+            remove.uninstall(profile, index, delete_folder=True, to_trash=False)
+    assert files(profile.parent) == before and operations.problem(profile) is None
+
+
+def test_looking_for_interrupted_operations_writes_nothing(profile):
+    before = sorted(p.name for p in profile.parent.iterdir())
+    assert operations.recover(profile) == [] and operations.problem(profile) is None
+    assert sorted(p.name for p in profile.parent.iterdir()) == before
