@@ -58,7 +58,7 @@ def main() -> int:
     game = _common.game_dir(args.game)
     label = args.layout
     out = _common.output_dir(args.out, "ingame-" + label.replace("/", "-"), game)
-    _common.sandbox_launcher(out, game)
+    loc = _common.sandbox_launcher(out, game)
 
     from roundtable_souls.game import archives as gamearchive
     from roundtable_souls.game.oodle import find_oodle
@@ -171,9 +171,9 @@ def main() -> int:
 
     # ---------------------------------------------------------------- the launcher's own Combine
     t = time.time()
-    merge.rebuild(profile, lambda s: print("  " + s), combine=True)
+    merge.rebuild(profile, lambda s: print("  " + s), combine=True, loc=loc)
     combine_s = time.time() - t
-    tool = builtin.find(profile, merge.layers(profile))
+    tool = builtin.find(profile, merge.layers(profile), loc=loc)
     if tool is None:
         sys.exit("the combine made no package")
     combined = tool.folder

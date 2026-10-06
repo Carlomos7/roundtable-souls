@@ -89,9 +89,10 @@ def output_dir(given: Path | None, name: str, game: Path | None = None) -> Path:
     return out
 
 
-def sandbox_launcher(out: Path, game: Path) -> None:
+def sandbox_launcher(out: Path, game: Path):
     """Point the launcher's code at a data folder inside `out` and at `game`. Its settings, caches, history and logs
-    then live there (run from source, the launcher would otherwise keep them beside the code)."""
+    then live there (run from source, the launcher would otherwise keep them beside the code). Returns the Locations
+    to hand the mods code: Elden Ring in `game`."""
     from roundtable_souls.config import settings
 
     data = out / "launcher-data"
@@ -99,12 +100,11 @@ def sandbox_launcher(out: Path, game: Path) -> None:
     settings.data_dir = lambda: data
     from roundtable_souls.game import catalog
     from roundtable_souls.game.locate import Locations, Overrides
-    from roundtable_souls.mods import locations as mod_locations
     from roundtable_souls.platform import data_folder, paths
 
     data_folder.use(data)
-    mod_locations.use(Locations(catalog.ELDEN_RING, Overrides(game_exe=str(game / "eldenring.exe"))))
     paths.clear_detection_cache()
+    return Locations(catalog.ELDEN_RING, Overrides(game_exe=str(game / catalog.ELDEN_RING.exe)))
 
 
 def commit() -> str:

@@ -245,7 +245,7 @@ class PlayView:
             self._skip_update_once = False
             return False
         prof = Path(s.profile)
-        h = core.mod_merge.play_check(prof)
+        h = core.mod_merge.play_check(prof, loc=self.ctx.locations)
         if h is None:
             return False
         self._on_merge({**h, "profile": str(prof)})
@@ -279,7 +279,7 @@ class PlayView:
         def job(_setup, loc):
             run_logging.start_log("launcher: update merged mods before Play", loc.game.key)
             try:
-                out = core.mod_merge.update_before_play(prof, run_logging.log)
+                out = core.mod_merge.update_before_play(prof, run_logging.log, loc=loc)
                 if out is not None:
                     core.run_logging.set_undo(out.get("undo"))
                     run_logging.log(f"done: merged mods updated by {out['backend']}; {out['profile_note']}")

@@ -15,6 +15,7 @@ from roundtable_souls.mods import install, profile_settings, remove, stay_last
 from roundtable_souls.mods import profile as profile_tools
 from roundtable_souls.mods import profile_edit as M
 from roundtable_souls.mods import rebuild as merge
+from support import er
 
 PROFILE = """profileVersion = "v1"
 
@@ -106,7 +107,7 @@ def test_every_other_entry_is_listed_and_only_its_own_lists_change(world):
 
 
 def test_switching_a_mod_on_or_off_changes_only_that_line(world):
-    assert stay_last.fix(world.profile) is None
+    assert stay_last.fix(world.profile, loc=er()) is None
     before = world.profile.read_text(encoding="utf-8")
     off = next(e for e in M.entries(world.profile) if e.get("id") == "off")
     M.set_options(world.profile, off["index"], {"enabled": True})
@@ -144,19 +145,19 @@ def test_kept_after_on_purpose_when_installed_that_way(world, tmp_path):
     assert text.index(f'id = "{plan["id"]}"') > text.index('id = "last"')
     assert plan["id"] not in [i for i, _ in _after(text, "package", "last")]
     assert _after(text, "package", plan["id"]) == [("last", True)]
-    st = stay_last.status(world.profile)
+    st = stay_last.status(world.profile, loc=er())
     assert st["late"] == [] and plan["id"] in st["kept"]
 
 
 def test_removing_a_mod_drops_it_from_the_list(world):
-    stay_last.fix(world.profile)
+    stay_last.fix(world.profile, loc=er())
     parts = next(e for e in M.entries(world.profile) if e.get("id") == "parts")
     remove.uninstall(world.profile, parts["index"], delete_folder=False)
     assert _after(world.profile.read_text(encoding="utf-8"), "package", "last") == [("off", True)]
 
 
 def test_a_renamed_id_is_followed_where_it_was(world):
-    stay_last.fix(world.profile)
+    stay_last.fix(world.profile, loc=er())
     parts = next(e for e in M.entries(world.profile) if e.get("id") == "parts")
     M.set_options(world.profile, parts["index"], {"id": "body"})
     assert _after(world.profile.read_text(encoding="utf-8"), "package", "last") == [("body", True), ("off", True)]
@@ -173,11 +174,11 @@ def test_adding_an_existing_folder_puts_it_before_it(world):
 def test_a_hand_added_mod_after_it_is_reported_and_fixed(world):
     (world.base / "mod" / "hand").mkdir()
     world.profile.write_text(PROFILE + "\n[[packages]]\nid = \"hand\"\npath = 'mod/hand'\n", encoding="utf-8")
-    st = stay_last.status(world.profile)
+    st = stay_last.status(world.profile, loc=er())
     assert st["late"] == ["hand"] and st["can_fix"] and st["problem"] is None
-    assert stay_last.fix(world.profile) is None
+    assert stay_last.fix(world.profile, loc=er()) is None
     text = world.profile.read_text(encoding="utf-8")
-    assert stay_last.status(world.profile)["late"] == []
+    assert stay_last.status(world.profile, loc=er())["late"] == []
     assert text.endswith("id = \"hand\"\npath = 'mod/hand'\n")  # the user's own entry is where they put it
 
 
@@ -186,13 +187,13 @@ def test_keep_it_after_is_kept_in_roundtable_json_and_can_be_undone(world):
     world.profile.write_text(PROFILE + "\n[[packages]]\nid = \"hand\"\npath = 'mod/hand'\n", encoding="utf-8")
     stay_last.keep_after(world.profile, ["hand"])
     assert profile_settings.load(world.profile)["after_overlay"] == ["hand"]
-    st = stay_last.status(world.profile)
+    st = stay_last.status(world.profile, loc=er())
     assert st["late"] == [] and st["kept_setting"] == ["hand"]
     new, _ = stay_last.reconcile(world.profile, world.profile.read_text(encoding="utf-8"))
     assert "hand" not in [i for i, _ in _after(new, "package", "last")]
     stay_last.keep_after(world.profile, ["hand"], keep=False)
     assert "after_overlay" not in profile_settings.load(world.profile)
-    assert stay_last.status(world.profile)["late"] == ["hand"]
+    assert stay_last.status(world.profile, loc=er())["late"] == ["hand"]
 
 
 def test_a_change_that_would_loop_writes_nothing(world):
@@ -208,9 +209,9 @@ def test_a_change_that_would_loop_writes_nothing(world):
     new, problem = stay_last.reconcile(world.profile, text)
     assert new == text and "loop" in problem
     before = world.profile.read_bytes()
-    assert "loop" in stay_last.fix(world.profile)
+    assert "loop" in stay_last.fix(world.profile, loc=er())
     assert world.profile.read_bytes() == before
-    assert stay_last.status(world.profile)["late"] == ["y"]
+    assert stay_last.status(world.profile, loc=er())["late"] == ["y"]
 
 
 def test_without_a_mod_that_must_stay_last_nothing_is_touched(tmp_path):
@@ -220,7 +221,7 @@ def test_without_a_mod_that_must_stay_last_nothing_is_touched(tmp_path):
     prof = base / "p.me3"
     text = "[[packages]]\nid = \"a\"\npath = 'mod/a'\n\n[[packages]]\nid = \"b\"\npath = 'mod/b'\n"
     prof.write_text(text, encoding="utf-8")
-    assert stay_last.target(prof) is None and stay_last.status(prof) is None
+    assert stay_last.target(prof) is None and stay_last.status(prof, loc=er()) is None
     assert stay_last.reconcile(prof, text) == (text, None)
     (base / "mod" / "c").mkdir()
     install.add_existing(prof, [base / "mod" / "c"])
@@ -274,12 +275,12 @@ def test_random_profiles_keep_it_last_and_leave_every_other_entry_alone(tmp_path
 # ----------------------------------------------------------------------------- a missing setup is named
 def test_missing_setup_files_are_named_and_a_rebuild_changes_nothing(world):
     shutil.rmtree(world.setup)
-    h = merge.health(world.profile)
+    h = merge.health(world.profile, loc=er())
     assert "setup files are missing: its setup folder" in h["reasons"][0]
     assert not any("loads after the combined parameters" in r for r in h["reasons"])
     before = world.profile.read_bytes()
     with pytest.raises(merge.MergeError, match="setup files are missing"):
-        merge.rebuild(world.profile, lambda s: None)
+        merge.rebuild(world.profile, lambda s: None, loc=er())
     assert world.profile.read_bytes() == before
 
 
@@ -291,12 +292,12 @@ def test_a_package_that_lists_the_others_is_known_to_stay_last_without_its_files
     )
     world.profile.write_text(text, encoding="utf-8")
     (world.base / "Merger" / "installation.json").unlink()
-    h = merge.health(world.profile)
+    h = merge.health(world.profile, loc=er())
     assert h["overlay"] == "last" and "setup files are missing: installation.json" in h["reasons"][0]
     assert not any("combined parameters and replaces them" in r for r in h["reasons"])
     before = world.profile.read_bytes()
     with pytest.raises(merge.MergeError, match="installation.json"):
-        merge.rebuild(world.profile, lambda s: None, combine=True)
+        merge.rebuild(world.profile, lambda s: None, combine=True, loc=er())
     assert world.profile.read_bytes() == before
     assert not (world.base / "mod" / "combined-parameters").exists()  # stopped before making anything
 
@@ -311,5 +312,5 @@ def test_a_profile_without_it_still_combines(tmp_path, monkeypatch):
     prof = base / "p.me3"
     prof.write_text("[[packages]]\nid = \"a\"\npath = 'mod/a'\n\n[[packages]]\nid = \"b\"\npath = 'mod/b'\n")
     monkeypatch.setattr(locate, "installed_dir", lambda _game: None)
-    assert merge.setup_problem(prof) is None
+    assert merge.setup_problem(prof, loc=er()) is None
     assert Path(prof).is_file()

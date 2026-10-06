@@ -18,23 +18,28 @@ and its [Fix order]; fix() writes the reconciled profile.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from roundtable_souls.mods import checks
 from roundtable_souls.mods import profile_edit as mod_manage
 from roundtable_souls.mods.profile_settings import Unreadable  # noqa: F401  (keep_after raises it)
 
+if TYPE_CHECKING:
+    from roundtable_souls.game.locate import Locations
 
-def target(profile: Path) -> dict | None:
+
+def target(profile: Path, loc: Locations | None = None) -> dict | None:
     """The mod that must stay last, as the profile on disk has it: {folder, own, name}, own being the folders its
     DLLs live in (its rebuild tool's own folders, or the folder holding its package when no tool was found). None
-    when the profile has none (then nothing is ever touched)."""
+    when the profile has none (then nothing is ever touched). loc: the game's locations (None:
+    rebuild.elden_ring_locations())."""
     from roundtable_souls.mods import rebuild as merge
 
     profile = Path(profile)
     try:
         if not profile.is_file() or not merge.is_elden_ring(profile):
             return None
-        layer, tool, _by_hand = merge.overlay(profile)
+        layer, tool, _by_hand = merge.overlay(profile, loc=loc or merge.elden_ring_locations())
     except OSError, ValueError:
         return None
     if layer is None:
@@ -154,13 +159,17 @@ def _loops(profile: Path, text: str) -> set[str]:
 
 
 def reconcile(
-    profile: Path, text: str, tgt: dict | None = None, renamed: dict[str, str] | None = None
+    profile: Path,
+    text: str,
+    tgt: dict | None = None,
+    renamed: dict[str, str] | None = None,
+    loc: Locations | None = None,
 ) -> tuple[str, str | None]:
     """The text with the mod that must stay last listed after everything else (see the module notes), and None; or
     the text unchanged and why, when the result would loop. tgt: target() of the profile before this change (found
-    again when not given). renamed: {old name (lower-case): new name} for an id just changed."""
+    again, with loc, when not given). renamed: {old name (lower-case): new name} for an id just changed."""
     profile = Path(profile)
-    tgt = target(profile) if tgt is None else tgt
+    tgt = target(profile, loc) if tgt is None else tgt
     if not tgt:
         return text, None
     base = mod_manage.to_blocks(text) if mod_manage.is_array_form(text) else text
@@ -225,13 +234,13 @@ def _rows(items: list[dict], kind: str) -> list[dict]:
     return out
 
 
-def status(profile: Path) -> dict | None:
+def status(profile: Path, *, loc: Locations) -> dict | None:
     """{name, late, kept, kept_setting, can_fix, problem} for the Load order card, or None when there is no mod
     that must stay last. late: enabled entries that load after it without being kept there on purpose (they replace
     its files); kept: the ones kept after it on purpose, kept_setting those of them kept by Keep it after
     (roundtable.json); can_fix: fix() would change the file; problem: why it cannot."""
     profile = Path(profile)
-    tgt = target(profile)
+    tgt = target(profile, loc)
     if not tgt:
         return None
     text = mod_manage.read_text(profile)
@@ -276,12 +285,12 @@ def status(profile: Path) -> dict | None:
     }
 
 
-def fix(profile: Path) -> str | None:
+def fix(profile: Path, *, loc: Locations) -> str | None:
     """Write the profile with the mod that must stay last put after everything else. Returns why it could not, or
     None (also when there was nothing to change)."""
     profile = Path(profile)
     text = mod_manage.read_text(profile)
-    new, problem = reconcile(profile, text)
+    new, problem = reconcile(profile, text, loc=loc)
     if problem:
         return problem
     if new != text:

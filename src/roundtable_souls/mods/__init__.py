@@ -4,7 +4,7 @@ profile (reading a profile), profile_edit (editing its text), order (me3's load 
 remove and checks (installing, unpacking, removing, and what is wrong with a profile's entries), conflicts
 (which file wins), stay_last, rebuild (merged parameters and files), history and undo, configs (a DLL's
 settings files), profile_settings, models (the install plan's shape). engine and backends are the setup
-engines Phase 6 replaces; locations holds the game's Locations they read until then."""
+engines Phase 6 replaces."""
 
 from typing import TYPE_CHECKING
 
@@ -18,7 +18,6 @@ if TYPE_CHECKING:  # each module is imported where it is used, not here: importi
         extract,
         history,
         install,
-        locations,
         models,
         order,
         profile,
@@ -38,7 +37,6 @@ __all__ = [
     "extract",
     "history",
     "install",
-    "locations",
     "models",
     "order",
     "profile",

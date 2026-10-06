@@ -20,6 +20,7 @@ from roundtable_souls.mods import backends, engine
 from roundtable_souls.mods import rebuild as merge
 from roundtable_souls.mods.backends import manifest_refresh
 from roundtable_souls.platform import paths as common
+from support import er
 
 PROFILE = """profileVersion = "v1"
 
@@ -154,7 +155,7 @@ class Revive:
 
     def build(self, log=lambda s: None):
         recipe, version, _ = engine.match(self.setup)
-        return engine.build(self.profile, self.own / "mod", self.setup, recipe, version, log)
+        return engine.build(self.profile, self.own / "mod", self.setup, recipe, version, log, loc=er())
 
 
 @pytest.fixture
@@ -307,10 +308,10 @@ def test_a_rebuild_uses_the_engine_only_with_the_switch_on(world, monkeypatch):
     ran = []
     monkeypatch.setattr(backends.Tool, "run", lambda self, log: ran.append(self.recipe.engine is not None))
     layer = next(l for l in merge.layers(world.profile) if l["name"] == "nightreign-revive")
-    r = manifest_refresh.recipe(world.profile, layer)
+    r = manifest_refresh.recipe(world.profile, layer, loc=er())
     assert r is not None and r.engine is None and r.command  # off: the mod's installer runs
     settings.save_settings(build_merges=True)
-    r = manifest_refresh.recipe(world.profile, layer)
+    r = manifest_refresh.recipe(world.profile, layer, loc=er())
     assert r.engine is not None and r.label == "the launcher's build of nightreign-revive"
     assert (
         "builds nightreign" in backends.Tool(r).describe().lower() or "Nightreign Revive" in backends.Tool(r).describe()
@@ -319,11 +320,11 @@ def test_a_rebuild_uses_the_engine_only_with_the_switch_on(world, monkeypatch):
 
 def test_a_whole_rebuild_through_the_engine_is_current_and_can_be_undone(world):
     settings.save_settings(build_merges=True)
-    tool = merge.find_backend(world.profile)
+    tool = merge.find_backend(world.profile, loc=er())
     merge.approve(tool)
-    out = merge.rebuild(world.profile, lambda s: None)
+    out = merge.rebuild(world.profile, lambda s: None, loc=er())
     assert out["undo"]["tool_restore"] and out["undo"]["tool_restore"].endswith("restore.json")
-    assert merge.health(world.profile)["state"] == "current"
+    assert merge.health(world.profile, loc=er())["state"] == "current"
     assert world.profile.read_text(encoding="utf-8") == PROFILE  # never rewritten
 
 
@@ -372,7 +373,7 @@ def test_a_second_recipe_needs_no_code(world, tmp_path):
     target.mkdir(parents=True)
     world.profile.write_text(PROFILE + "\n[[packages]]\nid = \"toy\"\npath = 'Toy/mod'\n")
     (world.own / "mod/regulation.bin").write_bytes(vanilla())  # the package before it: a real one
-    engine.build(world.profile, target, setup, recipe, version, lambda s: None)
+    engine.build(world.profile, target, setup, recipe, version, lambda s: None, loc=er())
     assert (world.base / "Toy/toy.dll").read_bytes() == b"toy"
     rows = rows_of((target / "regulation.bin").read_bytes(), "EquipParamWeapon")
     assert int.from_bytes(rows[2000].data[8:12], "little") == 9  # the toy's change

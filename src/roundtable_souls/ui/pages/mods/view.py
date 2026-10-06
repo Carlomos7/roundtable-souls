@@ -395,10 +395,11 @@ class ModsView:
             return
         self.conf_note.setText("Scanning packages...")
         prof = Path(self.setup.profile)
+        loc = self.ctx.locations
 
         def work(_progress):
             try:
-                return mod_overview.overview(prof)
+                return mod_overview.overview(prof, loc=loc)
             except Exception as e:  # never leave the card saying "Scanning..."
                 return {"profile": str(prof), "error": str(e)}
 
@@ -561,7 +562,7 @@ class ModsView:
             return
         prof = Path(self.setup.profile)
         try:
-            problem = mod_stay_last.fix(prof)
+            problem = mod_stay_last.fix(prof, loc=self.ctx.locations)
         except OSError as e:
             problem = str(e)
         if problem:
@@ -582,7 +583,7 @@ class ModsView:
         try:
             mod_stay_last.keep_after(prof, list(names), keep)
             if not keep:
-                problem = mod_stay_last.fix(prof)
+                problem = mod_stay_last.fix(prof, loc=self.ctx.locations)
                 if problem:
                     self._toast("Could not fix the load order", problem, error=True)
         except (OSError, mod_stay_last.Unreadable) as e:
@@ -1118,12 +1119,12 @@ class ModsView:
         if self.game_running:
             self._toast("Close the game first", "The rebuild rewrites files the game has open.", error=True)
             return
-        blocked = core.mod_merge.setup_problem(prof)
+        blocked = core.mod_merge.setup_problem(prof, loc=self.ctx.locations)
         if blocked:
             self._toast("It cannot be rebuilt now", blocked, error=True)
             return
-        tool = core.mod_merge.find_backend(prof)
-        h = core.mod_merge.health(prof)
+        tool = core.mod_merge.find_backend(prof, loc=self.ctx.locations)
+        h = core.mod_merge.health(prof, loc=self.ctx.locations)
         if tool is None and not (h.get("combine") or h.get("can_combine") or combine):
             self._toast(
                 "Nothing to rebuild", "Fewer than two packs ship parameters and there is no rebuild tool.", error=True
@@ -1135,7 +1136,7 @@ class ModsView:
         def job(_setup, loc):
             run_logging.start_log("launcher: rebuild combined parameters", loc.game.key)
             try:
-                out = core.mod_merge.rebuild(prof, run_logging.log, combine=combine)
+                out = core.mod_merge.rebuild(prof, run_logging.log, combine=combine, loc=loc)
                 core.run_logging.set_undo(out.get("undo"))
                 run_logging.log(f"done: combined parameters rebuilt by {out['backend']}; {out['profile_note']}")
             except core.mod_merge.MergeError as e:
@@ -1391,7 +1392,7 @@ class ModsView:
         if not ov or ov.get("error") or not mod_checks.same_folder(Path(ov.get("profile") or ""), prof):
             ov = None
         try:
-            return mod_overview.merged_from(prof, entry["name"], ov)
+            return mod_overview.merged_from(prof, entry["name"], ov, loc=self.ctx.locations)
         except Exception:
             return []
 
@@ -1402,7 +1403,9 @@ class ModsView:
         if self.game is not games.ELDEN_RING or self.stackedWidget.currentWidget() is not self.mods_page:
             return
         try:
-            tool: Any = core.mod_merge.find_backend(prof)  # a rebuild tool (mods.backends), or None
+            tool: Any = core.mod_merge.find_backend(
+                prof, loc=self.ctx.locations
+            )  # a rebuild tool (mods.backends), or None
             if tool is None or tool.problem() or core.mod_merge.approved(tool):
                 return
         except Exception:
@@ -1434,7 +1437,7 @@ class ModsView:
     def _tool_ready(self, prof) -> bool:
         """The profile's rebuild tool can run: found, nothing stopping it, and allowed by the user (asked once per
         version of the tool). True when there is no tool (the launcher's own combine needs no permission)."""
-        tool = core.mod_merge.find_backend(prof)
+        tool = core.mod_merge.find_backend(prof, loc=self.ctx.locations)
         if tool is None:
             return True
         if tool.problem():

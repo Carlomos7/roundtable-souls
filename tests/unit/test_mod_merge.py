@@ -13,6 +13,7 @@ from roundtable_souls.mods import backends, install, remove
 from roundtable_souls.mods import profile_edit as M
 from roundtable_souls.mods import rebuild as merge
 from roundtable_souls.platform import paths as common
+from support import er
 
 TALK = "script/talk/m00_00_00_00.talkesdbnd.dcx"
 PROFILE = (
@@ -55,7 +56,7 @@ class World:
         self.runs = 0
         monkeypatch.setattr(backends.Tool, "run", lambda b, log: self.fake_run(b))
         self.fake_run(None)  # a first merge, as the tool's own installer leaves it
-        merge.approve(merge.find_backend(self.profile))
+        merge.approve(merge.find_backend(self.profile, loc=er()))
 
     def pack(self, name, files=("regulation.bin",), before="last", listed=True):
         """A package placed before the merger and (listed) in its load_after, as the launcher's install does: me3
@@ -126,41 +127,41 @@ def test_no_merger_is_single_or_stacked(tmp_path, monkeypatch):
         (base / "mod" / name / "regulation.bin").write_bytes(name.encode())
     prof = base / "p.me3"
     prof.write_text("[[packages]]\nid = \"a\"\npath = 'mod/a'\n", encoding="utf-8")
-    assert merge.health(prof)["state"] == "single"
+    assert merge.health(prof, loc=er())["state"] == "single"
     prof.write_text(prof.read_text() + "[[packages]]\nid = \"b\"\npath = 'mod/b'\n", encoding="utf-8")
-    h = merge.health(prof)
+    h = merge.health(prof, loc=er())
     assert h["state"] == "stacked" and h["winner"] == "b" and h["backend"] is None
 
 
 def test_a_fresh_merge_is_current_and_names_its_merger(world):
-    h = merge.health(world.profile)
+    h = merge.health(world.profile, loc=er())
     assert h["state"] == "current" and h["backend"] == "the rebuild tool of last" and h["reasons"] == []
 
 
 def test_a_new_pack_before_the_merger_makes_it_stale_until_rebuilt(world):
     world.pack("params", ("regulation.bin", TALK))
-    h = merge.health(world.profile)
+    h = merge.health(world.profile, loc=er())
     assert h["state"] == "stale" and h["packs"] == ["params", "last"]
     assert any(r.startswith("regulation.bin: params ships it now") for r in h["reasons"])
     assert any(r.startswith(f"{TALK}: params ships it now") for r in h["reasons"])
-    out = merge.rebuild(world.profile, lambda s: None)
-    assert merge.health(world.profile)["state"] == "current"
+    out = merge.rebuild(world.profile, lambda s: None, loc=er())
+    assert merge.health(world.profile, loc=er())["state"] == "current"
     assert "comments were kept" in out["profile_note"]
 
 
 def test_changed_bytes_disabling_and_uninstalling_a_source_make_it_stale(world):
     d = world.pack("params")
-    merge.rebuild(world.profile, lambda s: None)
+    merge.rebuild(world.profile, lambda s: None, loc=er())
     (d / "regulation.bin").write_bytes(b"params v2, a bit longer")
-    assert "copy changed" in merge.health(world.profile)["reasons"][0]
-    merge.rebuild(world.profile, lambda s: None)
+    assert "copy changed" in merge.health(world.profile, loc=er())["reasons"][0]
+    merge.rebuild(world.profile, lambda s: None, loc=er())
     idx = next(e["index"] for e in M.entries(world.profile) if e["name"] == "params")
     M.set_options(world.profile, idx, {"enabled": False})
-    assert "params is no longer loaded" in merge.health(world.profile)["reasons"][0]
+    assert "params is no longer loaded" in merge.health(world.profile, loc=er())["reasons"][0]
     M.set_options(world.profile, idx, {"enabled": True})
-    assert merge.health(world.profile)["state"] == "current"
+    assert merge.health(world.profile, loc=er())["state"] == "current"
     remove.uninstall(world.profile, idx)
-    h = merge.health(world.profile)
+    h = merge.health(world.profile, loc=er())
     assert h["state"] == "stale" and "params is no longer loaded" in h["reasons"][0]
     assert "still in last's build" in h["reasons"][0]  # named by its folder, with what it means
 
@@ -170,13 +171,13 @@ def test_a_pack_after_the_merger_is_named(world):
     (world.base / "mod" / "late").mkdir()
     (world.base / "mod" / "late" / "regulation.bin").write_bytes(b"late")
     world.profile.write_text(text + "\n[[packages]]\nid = \"late\"\npath = 'mod/late'\n", encoding="utf-8")
-    h = merge.health(world.profile)
+    h = merge.health(world.profile, loc=er())
     assert h["state"] == "stale" and h["reasons"] == ["late loads after last, the package that must stay last"]
 
 
 def test_a_game_update_makes_it_stale(world):
     (world.game / "regulation.bin").write_bytes(b"GAME 1.17")
-    assert "game's copy changed" in merge.health(world.profile)["reasons"][0]
+    assert "game's copy changed" in merge.health(world.profile, loc=er())["reasons"][0]
 
 
 def test_a_merger_without_a_source_list_is_never_current(world):
@@ -184,7 +185,7 @@ def test_a_merger_without_a_source_list_is_never_current(world):
     data = json.loads(m.read_text())
     data["sources"] = []
     m.write_text(json.dumps(data))
-    h = merge.health(world.profile)
+    h = merge.health(world.profile, loc=er())
     assert h["state"] == "stale" and "left no list" in h["reasons"][0]
 
 
@@ -197,7 +198,7 @@ def test_sources_written_on_another_pc_are_found_here(world):
         )
         s["path"] = s["path"].replace(str(world.game), r"D:\SteamLibrary\steamapps\common\ELDEN RING\Game")
     m.write_text(json.dumps(data))
-    assert merge.health(world.profile)["state"] == "current"
+    assert merge.health(world.profile, loc=er())["state"] == "current"
     assert (
         backends.local_path(r"D:\Steam\ELDEN RING\Game\regulation.bin", world.profile, world.game)
         == world.game / "regulation.bin"
@@ -207,7 +208,7 @@ def test_sources_written_on_another_pc_are_found_here(world):
 def test_not_for_other_games(world):
     world.profile.write_text('[[supports]]\ngame = "nightreign"\n\n' + world.profile.read_text(encoding="utf-8"))
     common._PROFILE_GAMES_CACHE.clear()
-    assert merge.health(world.profile)["state"] is None
+    assert merge.health(world.profile, loc=er())["state"] is None
 
 
 # ----------------------------------------------------------------------------- rebuilds
@@ -215,12 +216,12 @@ def test_a_rebuild_that_does_not_use_the_new_pack_fails_and_says_so(world, monke
     world.pack("params")
     monkeypatch.setattr(backends.Tool, "run", lambda b, log: world.fake_run(b, sources_from_game=True))
     with pytest.raises(merge.MergeError, match="does not match the packages"):
-        merge.rebuild(world.profile, lambda s: None)
-    h = merge.health(world.profile)
+        merge.rebuild(world.profile, lambda s: None, loc=er())
+    h = merge.health(world.profile, loc=er())
     assert h["state"] == "failed" and "does not match" in h["reasons"][0]
     monkeypatch.setattr(backends.Tool, "run", lambda b, log: world.fake_run(b))
-    merge.rebuild(world.profile, lambda s: None)
-    assert merge.health(world.profile)["state"] == "current"  # a good run clears the failure
+    merge.rebuild(world.profile, lambda s: None, loc=er())
+    assert merge.health(world.profile, loc=er())["state"] == "current"  # a good run clears the failure
 
 
 def test_a_merger_that_stops_leaves_the_profile_as_it_was(world, monkeypatch):
@@ -228,20 +229,23 @@ def test_a_merger_that_stops_leaves_the_profile_as_it_was(world, monkeypatch):
     before = world.profile.read_text(encoding="utf-8")
     monkeypatch.setattr(backends.Tool, "run", lambda b, log: world.fake_run(b, fail=True))
     with pytest.raises(merge.MergeError, match="refused"):
-        merge.rebuild(world.profile, lambda s: None)
-    assert world.profile.read_text(encoding="utf-8") == before and merge.health(world.profile)["state"] == "failed"
+        merge.rebuild(world.profile, lambda s: None, loc=er())
+    assert (
+        world.profile.read_text(encoding="utf-8") == before
+        and merge.health(world.profile, loc=er())["state"] == "failed"
+    )
 
 
 def test_no_rebuild_while_the_game_runs(world, monkeypatch):
     monkeypatch.setattr(common, "exe_running", lambda _exe: True)
     with pytest.raises(merge.MergeError, match="Close the game"):
-        merge.rebuild(world.profile, lambda s: None)
+        merge.rebuild(world.profile, lambda s: None, loc=er())
     assert world.runs == 1
 
 
 def test_the_profile_text_comes_back_with_only_the_mergers_lists_updated(world):
     world.pack("params")
-    merge.rebuild(world.profile, lambda s: None)
+    merge.rebuild(world.profile, lambda s: None, loc=er())
     text = world.profile.read_text(encoding="utf-8")
     assert "# the merger's package must stay last" in text and "# base mods" in text
     last = next(e for e in M.entries(world.profile) if e["name"] == "last")
@@ -258,20 +262,20 @@ def test_a_merger_that_changes_what_loads_keeps_its_version(world, monkeypatch):
         world.profile.write_text(t.replace('{ id = "parts"', '{ id = "parts", enabled = false', 1), encoding="utf-8")
 
     monkeypatch.setattr(backends.Tool, "run", drops_a_pack)
-    out = merge.rebuild(world.profile, lambda s: None)  # still verified against what loads now
+    out = merge.rebuild(world.profile, lambda s: None, loc=er())  # still verified against what loads now
     assert "its version is kept" in out["profile_note"]
     assert "packages = [" in world.profile.read_text(encoding="utf-8")
     assert "# base mods" in (world.base / "p.me3.bak").read_text(encoding="utf-8")
 
 
 def test_the_command_uses_refresh_here_and_install_for_a_foreign_manifest(world):
-    b = merge.find_backend(world.profile)
+    b = merge.find_backend(world.profile, loc=er())
     assert b.recipe.command[4] == "refresh"
     m = world.base / "Merger" / "installation.json"
     data = json.loads(m.read_text())
     data["maintenance"] = r"C:\Users\someone\profiles\er\.merger-setup"
     m.write_text(json.dumps(data))
-    b = merge.find_backend(world.profile)
+    b = merge.find_backend(world.profile, loc=er())
     cmd = b.recipe.command
     assert b.recipe.cwd == world.setup and cmd[4] == "install" and cmd[cmd.index("--package") + 1] == str(world.setup)
     assert cmd[cmd.index("--target") + 1] == str(world.base)
@@ -343,20 +347,20 @@ def _as_fork(world):
 def test_a_fork_is_found_only_once_set_as_the_overlay(world):
     _as_fork(world)
     world.pack("params")
-    assert merge.health(world.profile)["state"] == "stacked"
+    assert merge.health(world.profile, loc=er())["state"] == "stacked"
     merge.set_overlay_override(world.profile, world.winner)
-    h = merge.health(world.profile)
+    h = merge.health(world.profile, loc=er())
     assert h["overlay"] == "last" and h["overlay_set"] and h["state"] == "stale" and h["backend"]
-    merge.rebuild(world.profile, lambda s: None)
-    assert merge.health(world.profile)["state"] == "current"
+    merge.rebuild(world.profile, lambda s: None, loc=er())
+    assert merge.health(world.profile, loc=er())["state"] == "current"
     merge.set_overlay_override(world.profile, None)
-    assert merge.health(world.profile)["overlay_set"] is False
+    assert merge.health(world.profile, loc=er())["overlay_set"] is False
 
 
 def test_an_overlay_without_a_tool_still_says_what_must_stay_last(world, tmp_path):
     (world.base / "Merger" / "installation.json").unlink()
     merge.set_overlay_override(world.profile, world.winner)
-    h = merge.health(world.profile)
+    h = merge.health(world.profile, loc=er())
     assert h["backend"] is None and "setup files are missing: installation.json" in h["reasons"][0]
     plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"))
     assert plan["merge_target"] == "last" and not plan["merge_offered"]
@@ -364,12 +368,12 @@ def test_an_overlay_without_a_tool_still_says_what_must_stay_last(world, tmp_pat
     late.mkdir()
     (late / "regulation.bin").write_bytes(b"late")
     world.profile.write_text(world.profile.read_text() + "\n[[packages]]\nid = \"late\"\npath = 'mod/late'\n")
-    assert "late loads after last" in merge.health(world.profile)["reasons"][1]
+    assert "late loads after last" in merge.health(world.profile, loc=er())["reasons"][1]
 
 
 def test_an_overlay_mark_for_a_package_that_is_gone_falls_back_to_finding_it(world):
     merge.set_overlay_override(world.profile, world.base / "mod" / "removed")
-    h = merge.health(world.profile)
+    h = merge.health(world.profile, loc=er())
     assert h["overlay"] == "last" and h["overlay_set"] is False and h["state"] == "current"
 
 
@@ -424,28 +428,28 @@ def _declared(tmp_path, monkeypatch):
 
 def test_any_tool_with_a_rebuild_json_is_found_asked_about_run_and_verified(tmp_path, monkeypatch):
     prof = _declared(tmp_path, monkeypatch)
-    h = merge.health(prof)
+    h = merge.health(prof, loc=er())
     assert h["backend"] == "Overhaul's rebuild tool" and h["state"] == "stale" and "left no list" in h["reasons"][0]
-    tool = merge.find_backend(prof)
+    tool = merge.find_backend(prof, loc=er())
     assert tool.recipe.command[1] == "combine.py" and tool.recipe.command[2] == str(prof)
     with pytest.raises(merge.MergeError, match="not been allowed"):
-        merge.rebuild(prof, lambda s: None)
+        merge.rebuild(prof, lambda s: None, loc=er())
     merge.approve(tool)
     lines = []
-    merge.rebuild(prof, lines.append)
+    merge.rebuild(prof, lines.append, loc=er())
     assert any("combined 1" in l for l in lines)
     assert (prof.parent / "mod" / "overhaul" / "regulation.bin").read_bytes() == b"COMBINED:params"
-    assert merge.health(prof)["state"] == "current" and "# mine" in prof.read_text(encoding="utf-8")
+    assert merge.health(prof, loc=er())["state"] == "current" and "# mine" in prof.read_text(encoding="utf-8")
     (prof.parent / "mod" / "params" / "regulation.bin").write_bytes(b"params v2")
-    assert merge.health(prof)["state"] == "stale"
+    assert merge.health(prof, loc=er())["state"] == "stale"
 
 
 def test_a_changed_rebuild_json_is_asked_about_again(tmp_path, monkeypatch):
     prof = _declared(tmp_path, monkeypatch)
-    merge.approve(merge.find_backend(prof))
+    merge.approve(merge.find_backend(prof, loc=er()))
     f = prof.parent / "mod" / "overhaul" / "rebuild.json"
     f.write_text(f.read_text().replace("combine.py", "other.py"))
-    assert not merge.approved(merge.find_backend(prof))
+    assert not merge.approved(merge.find_backend(prof, loc=er()))
 
 
 def test_a_rebuild_json_picked_in_options_works_for_a_tool_that_ships_none(tmp_path, monkeypatch):
@@ -456,19 +460,19 @@ def test_a_rebuild_json_picked_in_options_works_for_a_tool_that_ships_none(tmp_p
         shipped.read_text().replace("{here}/../overhaul-tools", (prof.parent / "mod" / "overhaul-tools").as_posix())
     )
     shipped.unlink()
-    assert merge.health(prof)["backend"] is None
+    assert merge.health(prof, loc=er())["backend"] is None
     merge.set_overlay_override(prof, prof.parent / "mod" / "overhaul", mine)
-    tool = merge.find_backend(prof)
+    tool = merge.find_backend(prof, loc=er())
     assert tool is not None and tool.recipe.cwd == prof.parent / "mod" / "overhaul-tools"
     merge.approve(tool)
-    merge.rebuild(prof, lambda s: None)
-    assert merge.health(prof)["state"] == "current"
+    merge.rebuild(prof, lambda s: None, loc=er())
+    assert merge.health(prof, loc=er())["state"] == "current"
 
 
 def test_a_rebuild_json_that_is_not_one_is_ignored(tmp_path, monkeypatch):
     prof = _declared(tmp_path, monkeypatch)
     (prof.parent / "mod" / "overhaul" / "rebuild.json").write_text('{"rebuild": 2, "command": "rm -rf /"}')
-    assert merge.find_backend(prof) is None and merge.health(prof)["state"] == "stacked"
+    assert merge.find_backend(prof, loc=er()) is None and merge.health(prof, loc=er())["state"] == "stacked"
 
 
 def test_a_missing_program_is_said_before_running(tmp_path, monkeypatch):
@@ -477,8 +481,8 @@ def test_a_missing_program_is_said_before_running(tmp_path, monkeypatch):
     data = json.loads(f.read_text())
     data["command"][0] = "{here}/tools/missing.exe"
     f.write_text(json.dumps(data))
-    tool = merge.find_backend(prof)
+    tool = merge.find_backend(prof, loc=er())
     assert "was not found" in tool.problem()
     merge.approve(tool)
     with pytest.raises(merge.MergeError, match="was not found"):
-        merge.rebuild(prof, lambda s: None)
+        merge.rebuild(prof, lambda s: None, loc=er())

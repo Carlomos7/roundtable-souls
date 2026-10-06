@@ -8,6 +8,7 @@ from roundtable_souls.game import locate
 from roundtable_souls.mods import conflicts as overview
 from roundtable_souls.mods import rebuild as merge
 from roundtable_souls.platform import paths as common
+from support import er
 
 
 def outcomes(ov, path):
@@ -22,7 +23,7 @@ def test_plain_overlaps_are_replaced(tmp_path, monkeypatch):
         (base / "mod" / name / "parts" / "am_m_1000.partsbnd.dcx").write_bytes(name.encode())
     prof = base / "p.me3"
     prof.write_text("[[packages]]\nid = \"a\"\npath = 'mod/a'\n\n[[packages]]\nid = \"b\"\npath = 'mod/b'\n")
-    ov = overview.overview(prof)
+    ov = overview.overview(prof, loc=er())
     got, winner = outcomes(ov, "parts/am_m_1000.partsbnd.dcx")
     assert winner == "b" and got == {"a": "replaced"}
     assert ov["overlaps"]["counts"]["replaced"] == 1 and ov["overlaps"]["packages"]["a"]["replaced"] == 1
@@ -33,12 +34,12 @@ def test_what_a_rebuild_tool_merged_reads_as_combined_until_it_changes(tmp_path,
     w = World(tmp_path, monkeypatch)
     w.pack("far", (TALK,))
     w.pack("near", (TALK,))
-    merge.rebuild(w.profile, lambda s: None, combine=False)
-    ov = overview.overview(w.profile)
+    merge.rebuild(w.profile, lambda s: None, combine=False, loc=er())
+    ov = overview.overview(w.profile, loc=er())
     got, winner = outcomes(ov, TALK)
     assert winner == "last" and got == {"far": "unreached", "near": "combined"}  # only the nearest reaches the tool
     (w.base / "mod" / "near" / TALK).write_bytes(b"near v2")
-    got, _ = outcomes(overview.overview(w.profile), TALK)
+    got, _ = outcomes(overview.overview(w.profile, loc=er()), TALK)
     assert got["near"] == "stale"
 
 
@@ -47,13 +48,13 @@ def test_regulation_packs_inside_the_combine_are_combined_through_the_chain(tmp_
     (w.game / "regulation.bin").write_bytes(vanilla())
     for name, edit in (("a", set_word(1000, 0, 1)), ("b", set_word(2000, 1, 2))):
         (w.pack(name) / "regulation.bin").write_bytes(pack({"EquipParamWeapon": edit}))
-    merge.rebuild(w.profile, lambda s: None)  # combine, then the tool takes the combined file
-    ov = overview.overview(w.profile)
+    merge.rebuild(w.profile, lambda s: None, loc=er())  # combine, then the tool takes the combined file
+    ov = overview.overview(w.profile, loc=er())
     got, winner = outcomes(ov, "regulation.bin")
     assert winner == "last"
     assert got == {"a": "combined", "b": "combined", "combined-parameters": "combined"}
     (w.base / "mod" / "a" / "regulation.bin").write_bytes(pack({"EquipParamWeapon": set_word(1000, 0, 9)}))
-    got, _ = outcomes(overview.overview(w.profile), "regulation.bin")
+    got, _ = outcomes(overview.overview(w.profile, loc=er()), "regulation.bin")
     assert got["a"] == "stale" and got["b"] == "combined"
 
 
@@ -71,8 +72,8 @@ def test_the_combines_overlapping_rows_are_listed(tmp_path, monkeypatch):
         text += f"[[packages]]\nid = \"{name}\"\npath = 'mod/{name}'\n\n"
     prof = base / "p.me3"
     prof.write_text(text)
-    merge.rebuild(prof, lambda s: None, combine=True)
-    ov = overview.overview(prof)
+    merge.rebuild(prof, lambda s: None, combine=True, loc=er())
+    ov = overview.overview(prof, loc=er())
     assert (
         ov["rows"][0].startswith("1 rows changed by more than one pack")
         and "EquipParamWeapon 1000: a then b" in ov["rows"][1]
@@ -93,11 +94,11 @@ def test_a_pack_after_the_combined_one_replaces_it(tmp_path, monkeypatch):
         (base / "mod" / name / "regulation.bin").write_bytes(pack({"EquipParamWeapon": set_word(1000, 1, 5)}))
     prof = base / "p.me3"
     prof.write_text("[[packages]]\nid = \"a\"\npath = 'mod/a'\n\n[[packages]]\nid = \"b\"\npath = 'mod/b'\n")
-    merge.rebuild(prof, lambda s: None, combine=True)
+    merge.rebuild(prof, lambda s: None, combine=True, loc=er())
     (base / "mod" / "late").mkdir()
     (base / "mod" / "late" / "regulation.bin").write_bytes(vanilla())
     prof.write_text(prof.read_text() + "\n[[packages]]\nid = \"late\"\npath = 'mod/late'\n")
-    got, winner = outcomes(overview.overview(prof), "regulation.bin")
+    got, winner = outcomes(overview.overview(prof, loc=er()), "regulation.bin")
     assert winner == "late" and got["combined-parameters"] == "replaced"
 
 
@@ -116,5 +117,5 @@ def test_problems_list_what_me3_would_refuse(tmp_path):
 def test_a_broken_profile_gives_an_empty_overview_not_an_error(tmp_path):
     prof = tmp_path / "p.me3"
     prof.write_text("[[packages]\nthis is not toml")
-    ov = overview.overview(prof)
+    ov = overview.overview(prof, loc=er())
     assert ov["overlaps"]["conflicts"] == [] and ov["rows"] == [] and isinstance(ov["problems"], list)

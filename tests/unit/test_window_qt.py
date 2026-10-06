@@ -19,6 +19,7 @@ from roundtable_souls.ui.pages.mods import view as mods_view  # noqa: E402
 from roundtable_souls.ui.pages.play import view as play_view  # noqa: E402
 from roundtable_souls.ui.pages.saves import view as saves_view  # noqa: E402
 from roundtable_souls.ui.pages.tools import view as tools_view  # noqa: E402
+from support import er  # noqa: E402
 
 UI_MODULES = (
     shell,
@@ -754,7 +755,7 @@ def test_an_install_that_asked_for_it_rebuilds_afterwards(sandbox, monkeypatch, 
     monkeypatch.setattr(run_logging, "log", lambda *a, **k: None)
     rebuilt = []
     tool = type("T", (), {"label": "a tool", "package": {"name": "last"}, "problem": lambda self: None})()
-    monkeypatch.setattr(ui.core.mod_merge, "find_backend", lambda p: tool)
+    monkeypatch.setattr(ui.core.mod_merge, "find_backend", lambda p, **k: tool)
     monkeypatch.setattr(ui.core.mod_merge, "approved", lambda t: True)
     monkeypatch.setattr(
         ui.core.mod_merge, "rebuild", lambda p, log, **k: rebuilt.append(p) or {"backend": "m", "profile_note": ""}
@@ -809,7 +810,7 @@ def test_a_rebuild_tool_runs_only_after_it_is_allowed_once(sandbox, monkeypatch,
     assert len(asked) == 1 and "combine.py" in asked[0] and started == []  # declined: nothing runs
     patch_ui(monkeypatch, "confirm", lambda *a, **k: asked.append("again") or True)
     w._rebuild_merge(prof)
-    assert started == ["Rebuilding combined parameters..."] and merge.approved(merge.find_backend(prof))
+    assert started == ["Rebuilding combined parameters..."] and merge.approved(merge.find_backend(prof, loc=er()))
     w._rebuild_merge(prof)
     assert asked.count("again") == 1 and len(started) == 2  # allowed once, not asked again
 
@@ -818,7 +819,7 @@ def test_stacked_packs_offer_combine_on_the_mods_page(sandbox, monkeypatch):
     w = sandbox
     started = []
     monkeypatch.setattr(ui.Launcher, "start", lambda self, job, status, **k: started.append(status))
-    monkeypatch.setattr(ui.core.mod_merge, "health", lambda p: {"state": "stacked", "can_combine": True})
+    monkeypatch.setattr(ui.core.mod_merge, "health", lambda p, **k: {"state": "stacked", "can_combine": True})
     prof = str(w.profiles / "sandbox.me3")
     w.switchTo(w.mods_page)
     w._on_merge(
@@ -980,7 +981,7 @@ def test_the_load_order_card_shows_outcomes_from_one_scan(sandbox, tmp_path):
         encoding="utf-8",
     )
     w.switchTo(w.mods_page)
-    w._fill_conflicts(overview.overview(prof))
+    w._fill_conflicts(overview.overview(prof, loc=er()))
     assert "1 shipped by more than one" in w.conf_note.text() and "1 replaced" in w.conf_note.text()
     assert "a: 1 replaced" in w.conf_packages.text() and "b: used 1" in w.conf_packages.text()
     assert "1 replaced" in w.load_exp.card.contentLabel.text()
@@ -1094,7 +1095,7 @@ def test_removing_a_merged_package_says_play_rebuilds_first(sandbox, monkeypatch
     patch_ui(monkeypatch, "notice", lambda *a, **k: type("B", (), {"close": lambda s: None})())
     rebuilt, shown = [], []
     monkeypatch.setattr(ui.core.mod_merge, "rebuild", lambda p, log, **k: rebuilt.append(p) or {"backend": "t"})
-    monkeypatch.setattr(ui.core.mod_merge, "find_backend", lambda p: None)
+    monkeypatch.setattr(ui.core.mod_merge, "find_backend", lambda p, **k: None)
 
     def accept(dlg):
         shown.append((dlg.yesButton.text(), dlg.secondButton.text() if dlg.secondButton else None))
@@ -1178,7 +1179,7 @@ def test_the_load_order_card_says_what_loads_after_the_mod_that_must_stay_last(s
     w.switchTo(w.mods_page)
     w.load_exp.setExpand(False)
     fixed, kept = [], []
-    monkeypatch.setattr(ui.mod_stay_last, "fix", lambda p: fixed.append(p))
+    monkeypatch.setattr(ui.mod_stay_last, "fix", lambda p, **k: fixed.append(p))
     monkeypatch.setattr(ui.mod_stay_last, "keep_after", lambda p, names, keep=True: kept.append((names, keep)))
     st = {"name": "revive", "late": ["hand"], "kept": [], "kept_setting": [], "can_fix": True, "problem": None}
     assert w._fill_stay_last(st) == ["hand"]
@@ -1206,9 +1207,9 @@ def _stale_merge(monkeypatch, fail=False):
     ran = []
     h = {"state": "stale", "text": "Combined parameters are out of date", "reasons": ["p changed"], "backend": "t"}
     h.update(packs=["p", "last"], winner="last")
-    monkeypatch.setattr(ui.core.mod_merge, "play_check", lambda p: {**h, "blocked": None})
+    monkeypatch.setattr(ui.core.mod_merge, "play_check", lambda p, **k: {**h, "blocked": None})
 
-    def update(p, log):
+    def update(p, log, **k):
         ran.append(p)
         if fail:
             ui.core.mod_merge.note_run(p, False, "the tool refused a file")
@@ -1228,7 +1229,7 @@ def test_play_updates_the_merged_mods_first_then_starts(sandbox, monkeypatch):
     for _ in range(5):
         QApplication.processEvents()
     assert len(ran) == 1 and resumed == [1]
-    monkeypatch.setattr(ui.core.mod_merge, "play_check", lambda p: None)
+    monkeypatch.setattr(ui.core.mod_merge, "play_check", lambda p, **k: None)
     assert w._update_first(lambda: resumed.append(2)) is False  # up to date: Play goes straight on
 
 
@@ -1330,7 +1331,7 @@ def test_play_asks_when_the_merged_mods_cannot_be_rebuilt(sandbox, monkeypatch):
     _fresh_play(w)
     ran = _stale_merge(monkeypatch)
     h = ui.core.mod_merge.play_check(None)
-    monkeypatch.setattr(ui.core.mod_merge, "play_check", lambda p: {**h, "blocked": "the last package is missing"})
+    monkeypatch.setattr(ui.core.mod_merge, "play_check", lambda p, **k: {**h, "blocked": "the last package is missing"})
     asked = _answer(monkeypatch, None)
     assert w._update_first(lambda: None) is True and ran == [] and not w.busy
     assert asked[0][1:3] == ("Play anyway", "View details") and "missing" in asked[0][3][1]
@@ -1380,7 +1381,7 @@ def test_an_unapproved_rebuild_tool_is_offered_once_on_the_mods_page(sandbox, mo
         "Tool", (), {"label": "the rebuild tool of revive", "package": {"name": "revive"}, "problem": lambda s: None}
     )()
     allowed = {"yes": False}
-    monkeypatch.setattr(ui.core.mod_merge, "find_backend", lambda p: tool)
+    monkeypatch.setattr(ui.core.mod_merge, "find_backend", lambda p, **k: tool)
     monkeypatch.setattr(ui.core.mod_merge, "approved", lambda t: allowed["yes"])
     shown = []
     patch_ui(monkeypatch, "notice", lambda *a, **k: shown.append(a[2]) or type("B", (), {"close": lambda s: None})())

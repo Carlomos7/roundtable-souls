@@ -11,6 +11,7 @@ from roundtable_souls.mods import conflicts as overview
 from roundtable_souls.mods import rebuild as merge
 from roundtable_souls.mods import remove, undo
 from roundtable_souls.platform import trash
+from support import er
 
 PROFILE = """profileVersion = "v1"
 
@@ -142,6 +143,6 @@ def test_restore_is_not_offered_once_done_or_when_the_profile_is_gone(prof, sent
 def test_merged_from_names_what_stays_in_a_combined_result(tmp_path, monkeypatch):
     w = World(tmp_path, monkeypatch)
     w.pack("near", (TALK,))
-    merge.rebuild(w.profile, lambda s: None, combine=False)
-    assert overview.merged_from(w.profile, "near") == [TALK]
-    assert overview.merged_from(w.profile, "parts") == []
+    merge.rebuild(w.profile, lambda s: None, combine=False, loc=er())
+    assert overview.merged_from(w.profile, "near", loc=er()) == [TALK]
+    assert overview.merged_from(w.profile, "parts", loc=er()) == []

@@ -12,8 +12,12 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from roundtable_souls.mods.backends import Recipe, local_path
+
+if TYPE_CHECKING:
+    from roundtable_souls.game.locate import Locations
 
 MANIFEST = "installation.json"
 
@@ -34,9 +38,9 @@ def _read(manifest: Path, relaxed: bool = False) -> dict | None:
     return data
 
 
-def recipe(profile: Path, layer: dict, relaxed: bool = False) -> Recipe | None:
+def recipe(profile: Path, layer: dict, relaxed: bool = False, *, loc: Locations) -> Recipe | None:
     """strict: installation.json with a refresh protocol and sources. relaxed (a package the user set as the
-    parameter overlay): any .json beside it, or beside its folder, that lists sources."""
+    parameter overlay): any .json beside it, or beside its folder, that lists sources. loc: the game's locations."""
     folder = Path(layer["folder"])
     for cand in (folder, folder.parent):
         found = [cand / MANIFEST] if not relaxed else sorted(cand.glob("*.json"), key=lambda p: p.name != MANIFEST)
@@ -44,7 +48,7 @@ def recipe(profile: Path, layer: dict, relaxed: bool = False) -> Recipe | None:
             if manifest.is_file() and manifest.name != "rebuild.json":
                 data = _read(manifest, relaxed)
                 if data is not None:
-                    return _recipe(Path(profile), layer, manifest, data)
+                    return _recipe(Path(profile), layer, manifest, data, loc)
     return None
 
 
@@ -74,9 +78,7 @@ def _merges(setup: Path | None) -> set[str]:
     return out
 
 
-def _recipe(profile: Path, layer: dict, manifest: Path, data: dict) -> Recipe:
-    from roundtable_souls.mods import locations
-
+def _recipe(profile: Path, layer: dict, manifest: Path, data: dict, loc: Locations) -> Recipe:
     setup = _find_setup(profile, data)
     label = f"the rebuild tool of {layer['name']}"
     written_here = all(Path(str(data.get(k) or "")).exists() for k in ("maintenance", "game"))
@@ -90,7 +92,6 @@ def _recipe(profile: Path, layer: dict, manifest: Path, data: dict) -> Recipe:
         if written_here:
             command = [str(py), "-I", "-u", str(script), "refresh", *where]
         else:
-            loc = locations.get()
             game_dir = loc.game_dir()
             exe = Path(game_dir) / loc.game_exe_name() if game_dir else None
             me3 = loc.me3_exe()
@@ -107,7 +108,7 @@ def _recipe(profile: Path, layer: dict, manifest: Path, data: dict) -> Recipe:
         tool = hashlib.sha256((setup / "installer" / "installer.py").read_bytes()).hexdigest() if setup else ""
     except OSError:
         tool = ""
-    built = _engine(profile, layer, setup)
+    built = _engine(profile, layer, setup, loc)
     if built is not None:
         engine_problem, run, approval = built
         return Recipe(
@@ -140,8 +141,9 @@ def _recipe(profile: Path, layer: dict, manifest: Path, data: dict) -> Recipe:
 class _Build:
     """What Tool.run calls when the launcher builds the mod itself (mods.engine)."""
 
-    def __init__(self, profile: Path, layer: dict, setup: Path, recipe: dict, version: str):
+    def __init__(self, profile: Path, layer: dict, setup: Path, recipe: dict, version: str, loc: Locations):
         self.profile, self.layer, self.setup, self.recipe, self.version = profile, layer, setup, recipe, version
+        self.loc = loc
         self.describe = (
             f"The launcher builds {recipe['label']} {version} itself from its download in {setup.name} "
             f"({recipe['id']}); nothing from the download runs."
@@ -150,23 +152,23 @@ class _Build:
     def __call__(self, log):
         from roundtable_souls.mods import engine
 
-        engine.build(self.profile, Path(self.layer["folder"]), self.setup, self.recipe, self.version, log)
+        engine.build(self.profile, Path(self.layer["folder"]), self.setup, self.recipe, self.version, log, loc=self.loc)
 
 
-def _engine(profile: Path, layer: dict, setup: Path | None):
+def _engine(profile: Path, layer: dict, setup: Path | None, loc: Locations):
     """(problem, the build to run, approval key) when the launcher builds this mod itself: the switch on Settings is
     on and a recipe fits its download. None otherwise (its own installer runs)."""
     from roundtable_souls.config.settings import load_settings
-    from roundtable_souls.mods import engine, locations
+    from roundtable_souls.mods import engine
 
     if setup is None or not load_settings().build_merges:
         return None
     recipe, version, _why = engine.match(setup)
     if recipe is None:
         return None
-    game_dir = locations.get().game_dir()
+    game_dir = loc.game_dir()
     problem = None if game_dir and Path(game_dir).is_dir() else "The game was not found."
-    return problem, _Build(profile, layer, setup, recipe, version or ""), f"engine|{setup}|{recipe['id']}"
+    return problem, _Build(profile, layer, setup, recipe, version or "", loc), f"engine|{setup}|{recipe['id']}"
 
 
 def missing_text(name: str, missing: list[str]) -> str:

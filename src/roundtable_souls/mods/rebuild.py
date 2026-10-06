@@ -15,7 +15,7 @@ States:
     current   a rebuild tool's last run matches today's packages
     stale     packages, their files, order or enablement changed since the rebuild tool's last run (or it left no list)
     failed    the launcher's last run of the rebuild tool did not finish or did not verify
-Elden Ring profiles only.
+Elden Ring profiles only. Everything that looks at the game or me3 is handed the game's Locations (loc).
 """
 
 from __future__ import annotations
@@ -25,11 +25,14 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from roundtable_souls.game import catalog as games
 from roundtable_souls.mods import backends, checks
 from roundtable_souls.mods import profile_edit as mod_manage
+
+if TYPE_CHECKING:
+    from roundtable_souls.game.locate import Locations
 
 REGULATION = "regulation.bin"
 TALK = "script/talk/m00_00_00_00.talkesdbnd.dcx"
@@ -121,6 +124,15 @@ def sha256(path: Path) -> str | None:
 
 
 # ----------------------------------------------------------------------------- layers
+def elden_ring_locations() -> Locations:
+    """Elden Ring's locations from the settings, for callers not yet handed Locations (mods.install,
+    mods.profile_edit and mods.remove, until S3i passes them). The rebuild code works on Elden Ring profiles only."""
+    from roundtable_souls.config.settings import load_settings
+    from roundtable_souls.game.locate import Locations
+
+    return Locations.from_settings(load_settings(), games.ELDEN_RING)
+
+
 def is_elden_ring(profile: Path) -> bool:
     from roundtable_souls.platform import paths
 
@@ -280,7 +292,7 @@ def approve(tool) -> None:
         save_settings(rebuild_approved=[*keys, tool.approval_key()][-50:])
 
 
-def overlay(profile: Path, all_layers: list[dict] | None = None) -> tuple[dict | None, object, bool]:
+def overlay(profile: Path, all_layers: list[dict] | None = None, *, loc: Locations) -> tuple[dict | None, object, bool]:
     """(the package that must stay last, its rebuild tool or None, set by hand). Set by hand in Options wins when
     that package is loaded; otherwise it is the package whose rebuild tool is found next to it."""
     profile = Path(profile)
@@ -289,9 +301,9 @@ def overlay(profile: Path, all_layers: list[dict] | None = None) -> tuple[dict |
     if mark is not None:
         layer = next((l for l in all_layers if checks.same_folder(l["folder"], mark["package"])), None)
         if layer is not None:
-            return layer, backends.detect_for(profile, layer, mark["rebuild"]), True
+            return layer, backends.detect_for(profile, layer, mark["rebuild"], loc=loc), True
     packs = [l for l in all_layers if (l["folder"] / REGULATION).is_file()]
-    backend = backends.detect(profile, packs) if packs else None
+    backend = backends.detect(profile, packs, loc=loc) if packs else None
     if backend is None and packs:
         return _declared_last(profile, all_layers, packs), None, False
     return (backend.package if backend else None), backend, False
@@ -314,14 +326,16 @@ def _declared_last(profile: Path, all_layers: list[dict], packs: list[dict]) -> 
     return None
 
 
-def setup_problem(profile: Path, all_layers: list[dict] | None = None, found: tuple | None = None) -> str | None:
+def setup_problem(
+    profile: Path, all_layers: list[dict] | None = None, found: tuple | None = None, *, loc: Locations
+) -> str | None:
     """Why the package that must stay last cannot be rebuilt on this PC (its setup files are missing, or it cannot
     run), or None. A rebuild stops before changing anything when there is one."""
     from roundtable_souls.mods.backends import manifest_refresh
 
     profile = Path(profile)
     all_layers = layers(profile) if all_layers is None else all_layers
-    target, tool, _by_hand = found or overlay(profile, all_layers)
+    target, tool, _by_hand = found or overlay(profile, all_layers, loc=loc)
     if target is None or not (Path(target["folder"]) / REGULATION).is_file():
         return None  # nothing to rebuild into, or its parameters do not replace the combined ones
     if tool is not None:
@@ -376,10 +390,9 @@ def _shared(all_layers: list[dict], target: dict | None, combine) -> dict[str, l
     return builtin.shared_files([l for l in all_layers[:stop] if l["index"] != skip])
 
 
-def health(profile: Path) -> dict:
+def health(profile: Path, *, loc: Locations) -> dict:
     """{state, text, packs, winner, backend, reasons, run, combine, can_combine, ...} for the profile; state None
     when this does not apply (not an Elden Ring profile, or no profile)."""
-    from roundtable_souls.mods import locations
     from roundtable_souls.mods.backends import builtin
 
     profile = Path(profile)
@@ -402,8 +415,8 @@ def health(profile: Path) -> dict:
     packs = [l for l in all_layers if (l["folder"] / REGULATION).is_file()]
     out["packs"] = [p["name"] for p in packs]
     out["winner"] = packs[-1]["name"] if packs else None
-    target, tool, by_hand = overlay(profile, all_layers)
-    combine = builtin.find(profile, all_layers)
+    target, tool, by_hand = overlay(profile, all_layers, loc=loc)
+    combine = builtin.find(profile, all_layers, loc=loc)
     out["overlay"] = target["name"] if target else None
     out["overlay_set"] = by_hand
     out["combine"] = combine is not None
@@ -412,7 +425,7 @@ def health(profile: Path) -> dict:
     out["shared_files"] = sorted(o[0]["rel"] for o in shared.values())
     out["can_combine"] = len(inputs) >= 2 or (combine is not None and bool(inputs)) or bool(shared)
     reasons: list[str] = []
-    blocked = setup_problem(profile, all_layers, (target, tool, by_hand))
+    blocked = setup_problem(profile, all_layers, (target, tool, by_hand), loc=loc)
     if blocked:
         reasons.append(blocked)
     elif target is not None and tool is None and by_hand:
@@ -434,7 +447,7 @@ def health(profile: Path) -> dict:
     if combine is not None:
         reasons += [f"Combined files: {r}" for r in combine.reasons(all_layers, target)]
     if tool is not None:
-        reasons += stale_reasons(profile, all_layers, packs, tool, locations.get().game_dir())
+        reasons += stale_reasons(profile, all_layers, packs, tool, loc.game_dir())
     run = out["run"]
     made = max(t.report_time() for t in (tool, combine) if t is not None)
     if run and not run["ok"] and run["when"] >= made - 1:
@@ -557,13 +570,13 @@ class MergeError(RuntimeError):
     pass
 
 
-def find_backend(profile: Path):
+def find_backend(profile: Path, *, loc: Locations):
     """The rebuild tool declared for this profile (set by hand in Options, or found), or None. The launcher's own
     combine is not one: see rebuild()."""
-    return overlay(Path(profile))[1]
+    return overlay(Path(profile), loc=loc)[1]
 
 
-def ensure_combined(profile: Path, target: dict | None):
+def ensure_combined(profile: Path, target: dict | None, *, loc: Locations):
     """The combined-parameters package: made (an empty folder with its record, and an entry right before the
     overlay, or after the last package with parameters) when the profile has none, and moved there when a pack
     ended up after it. Returns its CombineTool."""
@@ -575,10 +588,10 @@ def ensure_combined(profile: Path, target: dict | None):
     def _write_keeping_last(profile: Path, text: str) -> None:
         # The entry has to be in the overlay's load_after too: me3 orders by load_after runs, so a package the
         # overlay does not list loads after it (and the overlay would win the files the combine made).
-        mod_manage._write_ordered(profile, text, "combined parameters", stay_last.target(profile))
+        mod_manage._write_ordered(profile, text, "combined parameters", stay_last.target(profile, loc))
 
     all_layers = layers(profile)
-    combine = builtin.find(profile, all_layers)
+    combine = builtin.find(profile, all_layers, loc=loc)
     text = mod_manage.read_text(profile)
     if mod_manage.is_array_form(text):
         text = mod_manage.to_blocks(text)
@@ -615,9 +628,9 @@ def ensure_combined(profile: Path, target: dict | None):
             row = {"kind": "package", "id": o["id"], "path": o["path"]}
             text = mod_manage.remove_block(text, combine.package["index"])
             _write_keeping_last(profile, text)
-            text = _place(profile, mod_manage.read_text(profile), row, overlay(profile)[0], layers(profile))
+            text = _place(profile, mod_manage.read_text(profile), row, overlay(profile, loc=loc)[0], layers(profile))
             _write_keeping_last(profile, text)
-    found = builtin.find(profile, layers(profile))
+    found = builtin.find(profile, layers(profile), loc=loc)
     if found is None:
         raise MergeError("The combined-parameters package could not be added to the profile.")
     return found
@@ -639,24 +652,23 @@ def _place(profile: Path, text: str, row: dict, target: dict | None, all_layers:
     return mod_manage.append_entry(text, "package", row)
 
 
-def rebuild(profile: Path, log, combine: bool | None = None) -> dict:
+def rebuild(profile: Path, log, combine: bool | None = None, *, loc: Locations) -> dict:
     """Bring the profile's combined parameters up to date: the launcher's own combine (made when two or more packs
     ship parameters, or when combine is True), then the overlay's rebuild tool, if there is one. Keeps the profile's
     own text when a tool only rewrote it and verifies the result. Raises MergeError (and records the failure)
     otherwise. Returns {backend, profile_note}."""
-    from roundtable_souls.mods import locations
     from roundtable_souls.mods.backends import builtin
 
     profile = Path(profile)
     if not is_elden_ring(profile):
         raise MergeError("Combined parameters are only rebuilt for Elden Ring profiles.")
-    if locations.get().game_running():
+    if loc.game_running():
         raise MergeError("Close the game first: the rebuild rewrites files the game has open.")
     all_layers = layers(profile)
-    target, tool, _by_hand = overlay(profile, all_layers)
-    comb = builtin.find(profile, all_layers)
+    target, tool, _by_hand = overlay(profile, all_layers, loc=loc)
+    comb = builtin.find(profile, all_layers, loc=loc)
     inputs = _combine_inputs(all_layers, target, comb)
-    blocked = setup_problem(profile, all_layers, (target, tool, _by_hand))
+    blocked = setup_problem(profile, all_layers, (target, tool, _by_hand), loc=loc)
     if blocked:  # before anything is written: the profile stays exactly as it is
         raise MergeError(blocked)
     if tool is not None and not approved(tool):
@@ -679,9 +691,9 @@ def rebuild(profile: Path, log, combine: bool | None = None) -> dict:
     combined_before = None
     try:
         if wants and combine is not False:
-            comb = ensure_combined(profile, target)
+            comb = ensure_combined(profile, target, loc=loc)
             all_layers = layers(profile)
-            target, tool, _by_hand = overlay(profile, all_layers)
+            target, tool, _by_hand = overlay(profile, all_layers, loc=loc)
             comb.run(log, all_layers, target)
             combined_before = comb.previous
             labels.append(comb.label)
@@ -701,7 +713,7 @@ def rebuild(profile: Path, log, combine: bool | None = None) -> dict:
         note_run(profile, False, str(e))
         raise MergeError(str(e)) from e
     note_run(profile, True, "")
-    h = health(profile)
+    h = health(profile, loc=loc)
     declined = combine is False and h["state"] == "stacked"  # asked for the tool alone: stacking is known
     if h["state"] != "current" and not declined:
         why = "; ".join(h["reasons"][:3]) or h["text"]
@@ -728,7 +740,7 @@ def rebuild(profile: Path, log, combine: bool | None = None) -> dict:
 AUTO_KEEP = 3  # rebuild tool backups kept after an automatic rebuild (Nightreign Revive's are about 140 MB each)
 
 
-def play_check(profile: Path) -> dict | None:
+def play_check(profile: Path, *, loc: Locations) -> dict | None:
     """What Play has to do about the merged mods first. None: nothing, the game can start. Otherwise the profile's
     health, when a merge exists (the launcher's combine or a rebuild tool) and is out of date or its last run failed,
     with "blocked": why a rebuild cannot run (see setup_problem), or None when Play should rebuild. A profile whose
@@ -738,29 +750,29 @@ def play_check(profile: Path) -> dict | None:
     try:
         if not profile.is_file() or not is_elden_ring(profile):
             return None
-        h = health(profile)
+        h = health(profile, loc=loc)
     except OSError, ValueError:
         return None
     if h["state"] not in ("stale", "failed") or not h["backend"]:
         return None
-    return {**h, "blocked": setup_problem(profile) or None}
+    return {**h, "blocked": setup_problem(profile, loc=loc) or None}
 
 
-def needs_update(profile: Path) -> dict | None:
+def needs_update(profile: Path, *, loc: Locations) -> dict | None:
     """The profile's health when Play should rebuild first (play_check, when nothing stops the rebuild)."""
-    h = play_check(profile)
+    h = play_check(profile, loc=loc)
     return h if h is not None and not h["blocked"] else None
 
 
-def update_before_play(profile: Path, log) -> dict | None:
+def update_before_play(profile: Path, log, *, loc: Locations) -> dict | None:
     """Rebuild when needs_update() says so, then keep only the newest AUTO_KEEP backups of the rebuild tool (the
     older ones go to the Recycle Bin). Returns rebuild()'s result, or None when nothing was needed. Raises MergeError
     when the rebuild fails (the previous result is still in place) or the tool has not been allowed to run."""
-    h = needs_update(profile)
+    h = needs_update(profile, loc=loc)
     if h is None:
         return None
     log(f"merge: out of date before Play ({'; '.join(h['reasons'][:2]) or h['text']}): rebuilding first")
-    out = rebuild(Path(profile), log)
+    out = rebuild(Path(profile), log, loc=loc)
     moved = trim_tool_backups(Path(profile), keep=AUTO_KEEP)
     if moved:
         log(f"merge: {len(moved)} older rebuild backup(s) moved to the Recycle Bin; the newest {AUTO_KEEP} stay")
@@ -870,10 +882,11 @@ def keep_profile_text(profile: Path, original: str, backend) -> str:
 
 
 # ----------------------------------------------------------------------------- install offers
-def offer(profile: Path, root: Path, regulation_packages: list[dict]) -> dict:
+def offer(profile: Path, root: Path, regulation_packages: list[dict], loc: Locations | None = None) -> dict:
     """For installing a package with a regulation.bin: what can be offered after the install and plain notes about
     it. merge_combine: the launcher would combine this pack's parameters with the other packs'. merge_tool: the
-    overlay's rebuild tool would run. merge_target: the package new packs go before."""
+    overlay's rebuild tool would run. merge_target: the package new packs go before. loc: the game's locations
+    (None: elden_ring_locations())."""
     from roundtable_souls.mods.backends import builtin
 
     out: dict = {
@@ -888,9 +901,10 @@ def offer(profile: Path, root: Path, regulation_packages: list[dict]) -> dict:
     profile, root = Path(profile), Path(root)
     if not is_elden_ring(profile):
         return out
+    loc = loc or elden_ring_locations()
     all_layers = layers(profile)
-    target, backend, _by_hand = overlay(profile, all_layers)
-    comb = builtin.find(profile, all_layers)
+    target, backend, _by_hand = overlay(profile, all_layers, loc=loc)
+    comb = builtin.find(profile, all_layers, loc=loc)
     if target is not None:
         out["merge_target"] = target["name"]  # where "Before" places the pack
     elif comb is not None:

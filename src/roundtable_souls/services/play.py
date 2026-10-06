@@ -683,7 +683,8 @@ def update_merge_headless(setup, automatic: bool = True) -> str | None:
     prof = Path(setup.profile) if getattr(setup, "profile", None) else None
     if prof is None:
         return None
-    h = mod_merge.play_check(prof)
+    loc = setup.loc
+    h = mod_merge.play_check(prof, loc=loc)
     if h is None:
         return None
     run_logging.start_log("launcher: update merged mods before Play (no window)", setup.game.key)
@@ -697,7 +698,7 @@ def update_merge_headless(setup, automatic: bool = True) -> str | None:
             f"The merged mods are out of date ({reason}), and rebuilding them automatically before Play is "
             "turned off. Open Roundtable Souls to rebuild them."
         )
-    tool: Any = mod_merge.find_backend(prof)  # a rebuild tool (mods.backends), or None
+    tool: Any = mod_merge.find_backend(prof, loc=loc)  # a rebuild tool (mods.backends), or None
     if tool is not None and tool.problem():
         run_logging.log(f"error: {tool.label} cannot run: {tool.problem()}")
         return f"The merged mods are out of date and {tool.label} cannot run: {tool.problem()}"
@@ -708,7 +709,7 @@ def update_merge_headless(setup, automatic: bool = True) -> str | None:
             "Open Roundtable Souls to allow it."
         )
     try:
-        mod_merge.update_before_play(prof, run_logging.log)
+        mod_merge.update_before_play(prof, run_logging.log, loc=loc)
         run_logging.log("done: merged mods updated")
         return None
     except mod_merge.MergeError as e:

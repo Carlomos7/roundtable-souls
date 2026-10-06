@@ -14,6 +14,7 @@ import json
 import os
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from roundtable_souls import formats
 from roundtable_souls.game import config as game_config
@@ -21,6 +22,9 @@ from roundtable_souls.game import oodle as game_oodle
 from roundtable_souls.merging import record as merge_record
 from roundtable_souls.merging.build import Build, BuildError
 from roundtable_souls.mods.backends import BackendError
+
+if TYPE_CHECKING:
+    from roundtable_souls.game.locate import Locations
 
 RECORD = "combined-parameters.json"
 FOLDER = "combined-parameters"
@@ -33,13 +37,12 @@ def _sha(p: Path) -> str:
     return merge.sha256(p) or ""
 
 
-def _me3_version() -> str | None:
+def _me3_version(loc: Locations) -> str | None:
     """The installed me3's version, for the record (None when it cannot be asked)."""
-    from roundtable_souls.mods import locations
     from roundtable_souls.platform import me3_info
 
     try:
-        return me3_info.me3_version(locations.get().me3_exe())
+        return me3_info.me3_version(loc.me3_exe())
     except Exception:
         return None
 
@@ -52,9 +55,10 @@ def is_combined(folder: Path) -> bool:
     return isinstance(data, dict) and data.get("combined") == 1
 
 
-def find(profile: Path, all_layers: list[dict]) -> CombineTool | None:
+def find(profile: Path, all_layers: list[dict], *, loc: Locations) -> CombineTool | None:
     """The combined package's tool. A rebuild of it that was interrupted while being put in place is undone first,
-    so what is read (its record, its files, its health) is one whole build."""
+    so what is read (its record, its files, its health) is one whole build. loc: the game's locations (its own files
+    are the base of every merge)."""
     from roundtable_souls.merging.build import recover
 
     layer = next((l for l in all_layers if is_combined(l["folder"])), None)
@@ -64,13 +68,11 @@ def find(profile: Path, all_layers: list[dict]) -> CombineTool | None:
         recover(Path(layer["folder"]))
     except OSError:
         pass  # left for the next rebuild, which tries again before it starts
-    return CombineTool(Path(profile), layer)
+    return CombineTool(Path(profile), layer, loc)
 
 
-def game_regulation() -> Path | None:
-    from roundtable_souls.mods import locations
-
-    d = locations.get().game_dir()
+def game_regulation(loc: Locations) -> Path | None:
+    d = loc.game_dir()
     p = Path(d) / REGULATION if d else None
     return p if p is not None and p.is_file() else None
 
@@ -126,9 +128,10 @@ class CombineTool:
     builtin = True
     previous: Path | None = None  # where the output this run replaced was kept
 
-    def __init__(self, profile: Path, layer: dict):
+    def __init__(self, profile: Path, layer: dict, loc: Locations):
         self.profile = profile
         self.package = layer
+        self.loc = loc
         self.label = "the launcher's parameter combine"
         self.folder = Path(layer["folder"])
 
@@ -156,7 +159,7 @@ class CombineTool:
             return 0.0
 
     def problem(self) -> str | None:
-        if game_regulation() is None:
+        if game_regulation(self.loc) is None:
             return "The game's own regulation.bin was not found (it is the base every pack is compared with)."
         return None
 
@@ -211,17 +214,11 @@ class CombineTool:
 
     def file_reasons(self, all_layers: list[dict], until: dict | None) -> list[str]:
         """Why the merged files no longer match today's packages."""
-        from roundtable_souls.mods import locations
-
         rec = self.record()
         done = rec.get("files") or {}
         shared = shared_files(self.file_inputs(all_layers, until))
         out = []
-        if (
-            (done or shared)
-            and rec.get("archives")
-            and rec["archives"] != archives_fingerprint(locations.get().game_dir())
-        ):
+        if (done or shared) and rec.get("archives") and rec["archives"] != archives_fingerprint(self.loc.game_dir()):
             return ["the game's own files changed since they were merged (a game update?)"]
         for low, owners in sorted(shared.items()):
             had = done.get(low)
@@ -260,7 +257,7 @@ class CombineTool:
                 out.append(f"{p.get('name') or Path(k).parent.name} was combined but is no longer loaded before it")
         if not out and [os.path.normcase(str(p["path"])) for p in had] != list(have):
             out.append("the packs' load order changed; where two change the same row, the later one wins")
-        base = game_regulation()
+        base = game_regulation(self.loc)
         if base is not None and rec.get("base_sha256") and _sha(base) != rec["base_sha256"]:
             out.append("the game's own regulation.bin changed since the last combine (a game update?)")
         order = [l["index"] for l in all_layers]
@@ -279,7 +276,6 @@ class CombineTool:
     def run(self, log, all_layers: list[dict] | None = None, until: dict | None = None) -> dict:
         from roundtable_souls import __version__
         from roundtable_souls.merging.rules import param as param_merge
-        from roundtable_souls.mods import locations
         from roundtable_souls.mods import rebuild as merge
 
         layers = merge.layers(self.profile) if all_layers is None else all_layers
@@ -291,7 +287,7 @@ class CombineTool:
             raise BackendError(f"The rebuild was not started: {e}. The previous result is unchanged.") from e
         self.previous = self._keep_previous()
         files = self._merge_files(log, layers, until, build)
-        base = game_regulation()
+        base = game_regulation(self.loc)
         if not packs:
             build.remove(REGULATION)
             record = self._write_record(files, None, [], None, __version__, build=build)
@@ -303,7 +299,7 @@ class CombineTool:
             f"combine: {len(packs)} packs onto the game's regulation.bin: {', '.join(p['name'] for p in packs) or 'none'}"
         )
         start = time.time()
-        game_dir = locations.get().game_dir()
+        game_dir = self.loc.game_dir()
         oodle = None
         try:
             from roundtable_souls.game.oodle import find_oodle
@@ -339,22 +335,20 @@ class CombineTool:
         shared = shared_files(self.file_inputs(layers, until))
         total = sum(max(size(Path(o["folder"]) / o["rel"]) for o in owners) for owners in shared.values())
         if packs:
-            base = game_regulation()
+            base = game_regulation(self.loc)
             total += max([size(base) if base else 0] + [size(Path(p["folder"]) / REGULATION) for p in packs])
         return total
 
     def _write_record(
         self, files: dict, base, packs, report, version, out: bytes | None = None, build: Build | None = None
     ) -> dict:
-        from roundtable_souls.mods import locations
-
         record = {
             "combined": 1,
             "made_by": f"Roundtable Souls {version}",
             "when": time.strftime("%Y-%m-%d %H:%M:%S"),
             "files": files,
-            "archives": archives_fingerprint(locations.get().game_dir()),
-        } | merge_record.facts(me3_version=_me3_version())
+            "archives": archives_fingerprint(self.loc.game_dir()),
+        } | merge_record.facts(me3_version=_me3_version(self.loc))
         if base is None:
             self._put_record(record, build)
             return record
@@ -393,9 +387,8 @@ class CombineTool:
     def _activate(self, build: Build) -> None:
         """Read every staged output back, then put them in place (refused while the game runs)."""
         from roundtable_souls.game.oodle import find_oodle
-        from roundtable_souls.mods import locations
 
-        game_dir = locations.get().game_dir()
+        game_dir = self.loc.game_dir()
         dec = find_oodle(Path(game_dir)) if game_dir else None
 
         def read(rel: str, data: bytes) -> None:
@@ -409,7 +402,7 @@ class CombineTool:
         try:
             build.check(read)
             build.activate(
-                lambda: "Close the game first: it has these files open." if locations.get().game_running() else None
+                lambda: "Close the game first: it has these files open." if self.loc.game_running() else None
             )
         except BuildError as e:
             raise BackendError(f"The rebuild was not put in place: {e}. The previous result is unchanged.") from e
@@ -420,7 +413,6 @@ class CombineTool:
         from roundtable_souls.game import archives as gamearchive
         from roundtable_souls.game.oodle import find_oodle
         from roundtable_souls.merging import merger
-        from roundtable_souls.mods import locations
 
         shared = shared_files(self.file_inputs(layers, until))
         before = self.record().get("files") or {}
@@ -429,7 +421,7 @@ class CombineTool:
                 build.remove(had["rel"])
         if not shared:
             return {}
-        game_dir = locations.get().game_dir()
+        game_dir = self.loc.game_dir()
         dec = find_oodle(Path(game_dir)) if game_dir else None
         comp = game_oodle.oodle_compressor(Path(game_dir)) if game_dir else None
         out: dict = {}

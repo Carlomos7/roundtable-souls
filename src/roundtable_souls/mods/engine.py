@@ -40,11 +40,15 @@ import os
 import shutil
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from roundtable_souls import formats, overhauls
 from roundtable_souls.formats import FormatError
 from roundtable_souls.game import config as game_config
 from roundtable_souls.game import oodle as game_oodle
+
+if TYPE_CHECKING:
+    from roundtable_souls.game.locate import Locations
 
 WORK = ".roundtable-build"  # beside the output: the previous build and its restore.json
 STEPS = {"copy_tree", "copy", "config", "merge", "text", "params", "script_append", "remove"}
@@ -236,12 +240,13 @@ def build(
     version: str,
     log,
     game_dir: Path | None = None,
+    *,
+    loc: Locations,
 ) -> dict:
     """Build the output of `recipe` for the package in target_folder (its mod folder) from the packages before it,
-    swap it in, and return {output, previous, restore, sources, seconds}. Raises EngineError; the output in place is
-    then unchanged."""
+    swap it in, and return {output, previous, restore, sources, seconds}. loc: the game's locations; game_dir, when
+    given, is used instead of loc's game folder. Raises EngineError; the output in place is then unchanged."""
     from roundtable_souls import __version__
-    from roundtable_souls.mods import locations
 
     started = time.time()
     profile, target_folder, setup = Path(profile), Path(target_folder), Path(setup)
@@ -251,7 +256,7 @@ def build(
     own = target_folder.parent
     if own.resolve() == profile.parent.resolve():
         raise EngineError(f"{recipe['label']}'s package must be in a folder of its own.")
-    found = locations.get().game_dir()
+    found = loc.game_dir()
     game_dir = Path(game_dir) if game_dir else (Path(found) if found else None)
     if game_dir is None or not game_dir.is_dir():
         raise EngineError("The game folder was not found.")

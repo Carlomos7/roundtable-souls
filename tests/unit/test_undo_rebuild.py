@@ -14,6 +14,7 @@ from roundtable_souls.mods import rebuild as merge
 from roundtable_souls.mods import undo
 from roundtable_souls.mods.backends import builtin
 from roundtable_souls.platform import logging as rl
+from support import er
 
 
 def tool_that_backs_itself_up(w: World):
@@ -48,7 +49,7 @@ def test_undo_swaps_the_tools_output_and_the_profile_back_and_redo_swaps_again(t
     w.pack("params")
     output_before = (w.winner / "regulation.bin").read_bytes()
     profile_before = w.profile.read_text(encoding="utf-8")
-    out = merge.rebuild(w.profile, lambda s: None, combine=False)
+    out = merge.rebuild(w.profile, lambda s: None, combine=False, loc=er())
     u = out["undo"]
     assert u["type"] == "rebuild" and u["tool_restore"] and u["profile_before"]
     output_after = (w.winner / "regulation.bin").read_bytes()
@@ -58,7 +59,7 @@ def test_undo_swaps_the_tools_output_and_the_profile_back_and_redo_swaps_again(t
     assert "the rebuild tool's output" in said and "the profile" in said
     assert (w.winner / "regulation.bin").read_bytes() == output_before
     assert w.profile.read_text(encoding="utf-8") == profile_before
-    assert merge.health(w.profile)["state"] == "stale"  # honest: the output no longer matches the packs
+    assert merge.health(w.profile, loc=er())["state"] == "stale"  # honest: the output no longer matches the packs
     redo = {**u, "redo": True}
     assert undo.label(redo) == "Redo rebuild"
     undo.run(redo, lambda s: None)
@@ -96,7 +97,7 @@ def test_the_combine_keeps_its_earlier_outputs_and_undo_puts_one_back(tmp_path, 
     for value in (11, 22, 33, 44):
         (base / "mod" / "a" / "regulation.bin").write_bytes(pack({"EquipParamWeapon": set_word(1000, 0, value)}))
         (base / "mod" / "b" / "regulation.bin").write_bytes(pack({"EquipParamWeapon": set_word(2000, 1, value)}))
-        res = merge.rebuild(prof, lambda s: None, combine=True)
+        res = merge.rebuild(prof, lambda s: None, combine=True, loc=er())
         outputs.append((base / "mod" / "combined-parameters" / "regulation.bin").read_bytes())
         undos.append(res["undo"])
         time.sleep(1.1)  # kept copies are named by the second
