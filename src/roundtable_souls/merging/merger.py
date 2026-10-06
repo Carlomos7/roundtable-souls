@@ -27,8 +27,8 @@ from roundtable_souls.merging.rules import tae as tae_rule
 # Talk scripts (ESD) are merged by merging.rules.esd (on since a merged grace menu was checked in game, 2026-10-02).
 # False: they are handled as any other file (the later mod's copy, a clash when several changed it).
 ESD_MERGING = True
-# Animation events (TAE) are merged animation by animation by merging.rules.tae (S3t, 2026-10-05). Not yet checked in
-# game. False: they are handled as any other file.
+# Animation events (TAE) are merged animation by animation by merging.rules.tae (S3t; a dash mod and Nightreign Revive
+# merged were checked in game, 2026-10-05). False: they are handled as any other file.
 TAE_MERGING = True
 
 
