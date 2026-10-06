@@ -12,7 +12,7 @@ graph TD
     SERVICES["<b>SERVICES</b><br/>━━━━━━━━━━━━<br/>• play: setups, play jobs, --play, --check<br/>• mods, saves, coop, settings, updates"]
     AREAS["<b>MODS · SAVES · COOP · UPDATES</b><br/>━━━━━━━━━━━━<br/>• mods: profiles, load order, install, remove, checks, conflicts, rebuild<br/>• saves: parsers, checks, repairs, library, backups<br/>• coop: Seamless ini, scaling, sharing<br/>• updates: feed, apply, signing, headless"]
     MERGING["<b>MERGING</b><br/>━━━━━━━━━━━━<br/>• merger and per-format rules<br/>• build, record"]
-    FILES["<b>FORMATS · GAME</b><br/>━━━━━━━━━━━━<br/>• formats: DCX, BND4, FMG, PARAM, regulation, ESD<br/>• game: catalog, config, archives, Oodle"]
+    FILES["<b>FORMATS · GAME</b><br/>━━━━━━━━━━━━<br/>• formats: DCX, BND4, FMG, PARAM, regulation, ESD, TAE<br/>• game: catalog, config, archives, Oodle"]
     CONFIG["<b>CONFIG</b><br/>━━━━━━━━━━━━<br/>• settings, build identity"]
     PLATFORM["<b>PLATFORM</b><br/>━━━━━━━━━━━━<br/>• paths, Steam, processes, data folder<br/>• session: launch and wait<br/>• logging, locks, trash"]
 

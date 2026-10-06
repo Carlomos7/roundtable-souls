@@ -4,6 +4,13 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
 
 ## [Unreleased]
 
+- Combine: animation events (TAE files, such as the player's in `chr/c0000.anibnd.dcx`) that several mods change are
+  merged animation by animation: a mod that changes some animations (a dash mod's dodge rolls) and one that adds
+  others (Nightreign Revive's downed and revive animations) now both apply, instead of the later mod's file winning
+  whole. The same animation changed differently by two mods goes to the later one, and the record says so. Events
+  inside one animation are not merged. Not yet checked in game. A combined package that merged files with an earlier
+  version is rebuilt once.
+
 ## [3.16.0] - 2026-10-05
 
 3.15.0 was never published (its release build stopped), so its changes, listed below under 3.15.0, reach you with

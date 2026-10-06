@@ -5,6 +5,11 @@ file this reads the game's own copy and each source with an independent reader w
 else the launcher's own, and the report says so), works out the intended result, and compares it with the file on
 disk: inner file names, IDs, flags and contents, and text entry by entry where several mods changed one text table.
 
+Animation events (TAE) that several mods changed are checked animation by animation: the intended file header and
+animations (by ID) are worked out here from the documented rule, and compared with the output by meaning. There is no
+independent reader of Elden Ring's TAE format, so these files are read with the launcher's own (formats.tae) whatever
+reader the rest uses: that part of the check shares the launcher's reading, and the report says so.
+
 The intended result follows the merge rules as documented: a part a mod changed or added is taken from the last mod
 that changed it; a part missing from a mod's copy counts as removed. That last rule is an unvalidated assumption (a
 mod made for an older game version also lacks parts it never meant to remove), so every removal is listed on its own.
@@ -40,8 +45,9 @@ def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def intended_parts(van: _readers.Parts, layers: list[tuple[str, _readers.Parts]], fmg) -> tuple[dict, dict, list]:
-    """(intended parts, text tables merged entry by entry {key: texts}, removals [(part, by)])."""
+def intended_parts(van: _readers.Parts, layers: list[tuple[str, _readers.Parts]], fmg) -> tuple[dict, dict, list, dict]:
+    """(intended parts, text tables merged entry by entry {key: texts}, removals [(part, by)], animation-event files
+    merged animation by animation {key: meaning})."""
     changes: dict[str, list] = {}
     for label, parts in layers:
         for key, v in parts.items():
@@ -52,6 +58,7 @@ def intended_parts(van: _readers.Parts, layers: list[tuple[str, _readers.Parts]]
                 changes.setdefault(key, []).append((label, REMOVED))
     out = dict(van)
     texts: dict[str, dict[int, str]] = {}
+    taes: dict[str, tuple] = {}
     removals = []
     for key, ch in changes.items():
         kept = [v for _, v in ch if v is not REMOVED]
@@ -74,12 +81,47 @@ def intended_parts(van: _readers.Parts, layers: list[tuple[str, _readers.Parts]]
                         merged.pop(tid, None)
             texts[key] = merged
             out[key] = kept[-1]
+        elif len(distinct) > 1 and len(ch) > 1 and key in van and len(kept) == len(ch) and key.endswith(".tae"):
+            try:
+                taes[key] = tae_intended(van[key][2], [v[2] for _, v in ch])
+            except formats.FormatError:
+                pass  # not merged: the later mod's copy, whole
+            out[key] = kept[-1]
         elif last is REMOVED:
             out.pop(key, None)
             removals.append((key, ch[-1][0]))
         else:
             out[key] = last
-    return out, texts, removals
+    return out, texts, removals, taes
+
+
+def tae_meaning(data: bytes) -> tuple:
+    """A TAE as the merge sees it: the file header, then each animation in stored order (formats.tae, the launcher's
+    own reader: not independent)."""
+    t = formats.tae.read_tae(data)
+    return formats.tae.header_key(t), [(a.id, formats.tae.animation_key(a)) for a in t.animations]
+
+
+def tae_intended(game: bytes, copies: list[bytes]) -> tuple:
+    """The rule as documented, worked out here: in load order, each copy's file header when it differs from the
+    game's, and each animation it added or changed (the last such copy's wins); an animation a copy lacks is removed
+    unless a later copy changed it. Animations in ID order, as the game keeps them."""
+    game_header, anims = tae_meaning(game)
+    header = game_header
+    base = dict(anims)
+    want = dict(base)
+    for data in copies:
+        h, mine = tae_meaning(data)
+        if h != game_header:
+            header = h
+        mod = dict(mine)
+        for i, k in mod.items():
+            if base.get(i) != k:
+                want[i] = k
+        for i in base:
+            if i not in mod:
+                want.pop(i, None)
+    return header, sorted(want.items())
 
 
 def check_file(entry: dict, pkg: Path, game: Path, dec, read, fmg, failures: list, notes: list) -> dict:
@@ -122,7 +164,7 @@ def check_file(entry: dict, pkg: Path, game: Path, dec, read, fmg, failures: lis
         return res
     layers = [(mod(s), read(Path(s["path"]).read_bytes())) for s in entry["sources"]]
     try:
-        want, texts, removals = intended_parts(van, layers, fmg)
+        want, texts, removals, taes = intended_parts(van, layers, fmg)
     except _readers.CannotRead as e:
         notes.append(f"{rel}: {e}")
         return res
@@ -133,6 +175,12 @@ def check_file(entry: dict, pkg: Path, game: Path, dec, read, fmg, failures: lis
         if key in texts:
             if fmg(g[2]) != texts[key]:
                 diff.append(f"{key}: text differs")
+        elif key in taes:
+            try:
+                if tae_meaning(g[2]) != taes[key]:
+                    diff.append(f"{key}: animation events differ from the intended merge")
+            except formats.FormatError as e:
+                diff.append(f"{key}: the output's animation events cannot be read ({e})")
         elif g[2] != w[2]:
             diff.append(f"{key}: contents differ")
         if (g[0], g[1]) != (w[0], w[1]):
@@ -142,6 +190,7 @@ def check_file(entry: dict, pkg: Path, game: Path, dec, read, fmg, failures: lis
         "names_as_intended": names_ok,
         "parts_differing": diff[:20],
         "text_tables_merged_by_entry": sorted(texts),
+        "tae_merged_by_animation": sorted(taes),
         "removed_because_a_copy_lacks_them": len(removals),
     }
     if not names_ok:
@@ -150,6 +199,11 @@ def check_file(entry: dict, pkg: Path, game: Path, dec, read, fmg, failures: lis
         )
     if diff:
         failures.append(f"{rel}: {len(diff)} parts differ from the intended result, e.g. {diff[0]}")
+    if taes:
+        notes.append(
+            f"{rel}: {len(taes)} animation-event files (TAE) checked by meaning with the launcher's own TAE reader "
+            "(no independent reader exists): this part is not independent"
+        )
     if removals:
         by: dict[str, int] = {}
         for _key, who in removals:

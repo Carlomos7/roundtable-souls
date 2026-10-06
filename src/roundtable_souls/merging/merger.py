@@ -3,9 +3,10 @@
 Each mod's copy is the game's file with that mod's changes. For an archive (BND4) the merger finds, inner file by
 inner file, what each mod changed, added or left out (removed) compared with the game's copy, and applies all of
 them in load order into one archive. For a text table (FMG) it does the same entry by entry. Where two mods changed
-the same inner file, and that file is itself an archive or a text table, it is merged the same way inside; otherwise
-the later mod's version is used and the merge reports it as a clash. Any other file is not merged: the later mod's
-copy is used whole (a clash when several changed it).
+the same inner file, and that file is itself an archive, a text table, a talk script (ESD) or animation events (TAE,
+animation by animation), it is merged the same way inside; otherwise the later mod's version is used and the merge
+reports it as a clash. Any other file is not merged: the later mod's copy is used whole (a clash when several changed
+it).
 
 The result keeps the game's layout (the archive's format, the file's compression), so it differs from the game's
 copy only where the mods did.
@@ -21,14 +22,25 @@ from roundtable_souls.merging.changes import Result
 from roundtable_souls.merging.rules import bnd4 as bnd4_rule
 from roundtable_souls.merging.rules import esd as esd_rule
 from roundtable_souls.merging.rules import fmg as fmg_rule
+from roundtable_souls.merging.rules import tae as tae_rule
 
 # Talk scripts (ESD) are merged by merging.rules.esd (on since a merged grace menu was checked in game, 2026-10-02).
 # False: they are handled as any other file (the later mod's copy, a clash when several changed it).
 ESD_MERGING = True
+# Animation events (TAE) are merged animation by animation by merging.rules.tae (S3t, 2026-10-05). Not yet checked in
+# game. False: they are handled as any other file.
+TAE_MERGING = True
 
 
 def mergeable(body: bytes) -> bool:
-    return formats.bnd4.is_bnd4(body) or formats.fmg.is_fmg(body) or ESD_MERGING and esd_rule.is_esd(body)
+    return (
+        formats.bnd4.is_bnd4(body)
+        or formats.fmg.is_fmg(body)
+        or ESD_MERGING
+        and esd_rule.is_esd(body)
+        or TAE_MERGING
+        and tae_rule.is_tae(body)
+    )
 
 
 def merge(
@@ -75,6 +87,8 @@ def _merge_body(base: bytes, bodies: list[tuple[str, bytes]], where: str) -> Res
         return fmg_rule.merge(base, bodies, where)
     if ESD_MERGING and esd_rule.is_esd(base) and all(esd_rule.is_esd(b) for _, b in bodies):
         return esd_rule.merge(base, bodies, where)
+    if TAE_MERGING and tae_rule.is_tae(base) and all(tae_rule.is_tae(b) for _, b in bodies):
+        return tae_rule.merge(base, bodies, where)
     changed = [(label, b) for label, b in bodies if b != base]
     out = Result(changed[-1][1] if changed else base, merged=False)
     if changed:

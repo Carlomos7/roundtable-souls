@@ -50,9 +50,9 @@ def test_intended_result_takes_the_last_change_and_lists_removals():
     van = {"a": part(b"a0"), "b": part(b"b0"), "c": part(b"c0")}
     first = {"a": part(b"a1"), "b": part(b"b0")}  # changes a, lacks c
     second = {"a": part(b"a0"), "b": part(b"b2"), "c": part(b"c0"), "d": part(b"d2", 9)}  # changes b, adds d
-    want, texts, removals = verify_output.intended_parts(van, [("first", first), ("second", second)], None)
+    want, texts, removals, taes = verify_output.intended_parts(van, [("first", first), ("second", second)], None)
     assert want == {"a": part(b"a1"), "b": part(b"b2"), "d": part(b"d2", 9)}
-    assert texts == {} and removals == [("c", "first")]
+    assert texts == {} and taes == {} and removals == [("c", "first")]
 
 
 def test_a_text_table_two_mods_change_is_merged_entry_by_entry():
@@ -61,5 +61,24 @@ def test_a_text_table_two_mods_change_is_merged_entry_by_entry():
     van = {"menu.fmg": part(enc({1: "one", 2: "two", 3: "three"}))}
     a = {"menu.fmg": part(enc({1: "ONE", 2: "two", 3: "three"}))}
     b = {"menu.fmg": part(enc({1: "one", 2: "TWO"}))}  # changes 2, lacks 3
-    _want, texts, removals = verify_output.intended_parts(van, [("a", a), ("b", b)], fmg)
+    _want, texts, removals, _taes = verify_output.intended_parts(van, [("a", a), ("b", b)], fmg)
     assert texts == {"menu.fmg": {1: "ONE", 2: "TWO"}} and removals == []
+
+
+def test_animation_events_two_mods_change_are_worked_out_animation_by_animation():
+    from roundtable_souls.formats import tae
+
+    def t(bank: int, *anims: tuple[int, float]) -> bytes:
+        events = lambda end: [tae.Event(0.0, end, 16, 0, bytes(16))]  # noqa: E731
+        made = [tae.Animation(i, tae.STANDARD, bytes(8), "a.hkt", events(end)) for i, end in anims]
+        return tae.write_tae(tae.TAE(1, bank, bytes(8), "skeleton.hkt", "c.sib", made))
+
+    van = {"a00.tae": part(t(37, (0, 1.0), (1, 1.0), (2, 1.0)))}
+    dash = {"a00.tae": part(t(-1, (0, 1.0), (1, 0.5), (2, 1.0)))}  # changes 1 and the event bank
+    revive = {"a00.tae": part(t(37, (0, 1.0), (1, 1.0), (2, 1.0), (975000, 2.0)))}  # adds 975000
+    _want, _texts, _removals, taes = verify_output.intended_parts(van, [("dash", dash), ("revive", revive)], None)
+    header, anims = taes["a00.tae"]
+    assert header[1] == -1
+    assert [i for i, _ in anims] == [0, 1, 2, 975000]
+    merged = t(-1, (0, 1.0), (1, 0.5), (2, 1.0), (975000, 2.0))
+    assert verify_output.tae_meaning(merged) == taes["a00.tae"]

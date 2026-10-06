@@ -9,6 +9,12 @@ those authors, and each part keeps its own license.
 - [SoulsFormatsNEXT](https://github.com/soulsmods/SoulsFormatsNEXT), after TKGP's SoulsFormats. The layouts of the
   game's archives (BHD5/BDT, BND4), compressed files (DCX, and the Oodle settings the game needs) and text tables (FMG)
   that the file merger reads and writes were learned from it; the launcher's code is its own.
+- The reader and writer of Elden Ring TAE (animation event) files, `src/roundtable_souls/formats/tae.py`, are ported
+  from its `SoulsFormats/Formats/TAE/` (`TAE.cs`, `Animation.cs`, `Event.cs`, `EventGroup.cs`) at commit
+  `ee1dd61958f60bdc51ce3da548e9a90a8ab39905` (the TAE code last changed in `d0caa7ab7749e1a575fb3056b9b65020e81de826`).
+  That code is by TKGP and the SoulsFormatsNEXT contributors, originally sourced from SoulsAssetPipeline by
+  Meowmartius, and is licensed under the GNU General Public License v3.0, the same license text as this repository's
+  [LICENSE](LICENSE). The file names its source and lists what was changed and when. SoulsFormats is not a dependency.
 
 ## Soulstruct (GPL-3.0-or-later)
 
