@@ -36,6 +36,39 @@ def test_writing_oodle_files_needs_the_games_library():
 
 
 # ----------------------------------------------------------------------------- merging archives
+def _archive(entries: list[tuple[str, int, bytes]]) -> bytes:
+    from fakegame import BND_HEADER
+
+    rows = [formats.bnd4.Entry(f"N:\\GR\\data\\{name}", i, data) for name, i, data in entries]
+    return formats.bnd4.write_bnd4(formats.bnd4.Bnd4(BND_HEADER, 0x2E, 0x74, True, 4, rows))
+
+
+def _order(data: bytes) -> list[tuple[str, int]]:
+    return [(e.name.rsplit("\\", 1)[-1], e.id) for e in formats.bnd4.read_bnd4(data).entries]
+
+
+def test_an_archive_listed_by_id_keeps_that_order_with_added_files_placed_by_id():
+    """The game's effect archives are listed by ascending ID; a mod's added effect goes among them by its ID, as the
+    mods' own tools write it (appended, the order would no longer be by ID)."""
+    game = _archive([("e10.fxr", 10, b"a"), ("e20.fxr", 20, b"b"), ("t90.tpf", 90, b"c")])
+    mod = _archive([("e10.fxr", 10, b"a"), ("e15.fxr", 15, b"new"), ("e20.fxr", 20, b"b"), ("t90.tpf", 90, b"c")])
+    other = _archive([("e10.fxr", 10, b"a"), ("e20.fxr", 20, b"B"), ("t90.tpf", 90, b"c"), ("t95.tpf", 95, b"t")])
+    r = merger.merge(game, [("mod", mod), ("other", other)])
+    assert _order(r.data) == [("e10.fxr", 10), ("e15.fxr", 15), ("e20.fxr", 20), ("t90.tpf", 90), ("t95.tpf", 95)]
+
+
+def test_an_archive_not_listed_by_id_keeps_the_games_order_and_appends():
+    game = _archive([("b.hkx", 20, b"b"), ("a.hkx", 10, b"a")])
+    mod = _archive([("b.hkx", 20, b"b"), ("a.hkx", 10, b"a"), ("n.hkx", 15, b"n")])
+    assert _order(merger.merge(game, [("mod", mod)]).data) == [("b.hkx", 20), ("a.hkx", 10), ("n.hkx", 15)]
+
+
+def test_added_files_with_an_id_already_used_keep_the_appended_order():
+    game = _archive([("a.hkx", 10, b"a"), ("b.hkx", 20, b"b")])
+    mod = _archive([("a.hkx", 10, b"a"), ("b.hkx", 20, b"b"), ("n.hkx", 10, b"n")])
+    assert _order(merger.merge(game, [("mod", mod)]).data) == [("a.hkx", 10), ("b.hkx", 20), ("n.hkx", 10)]
+
+
 def test_changes_additions_and_removals_of_different_mods_all_apply():
     game = dcx(bnd(GAME))
     a = dcx(bnd({"a.hkx": b"sekiro walk", "c.hkx": b"roll"}))  # changes a, removes b
