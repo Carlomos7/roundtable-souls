@@ -14,7 +14,10 @@ from pathlib import Path
 
 from roundtable_souls.formats import me3_profile
 from roundtable_souls.formats.me3_profile import resolve
+from roundtable_souls.game import catalog as games
 from roundtable_souls.mods.checks import ACCEPTABLE_FOLDERS, NOT_GAME_FOLDERS
+
+REGULATION = games.ELDEN_RING.regulation  # the parameter file a package may ship
 
 SETTING_KEYS = ("savefile", "start_online", "disable_arxan", "mem_patch", "mem_patch_heap_size")
 SETTING_TEXT = {
@@ -180,8 +183,8 @@ def me3_order(profile: Path | None, text: str):
 # ----------------------------------------------------------------------------- conflict scan (read-only)
 def category_of(rel: str) -> str:
     parts = rel.replace("\\", "/").split("/")
-    if parts[0].startswith("regulation.bin"):
-        return "regulation.bin"
+    if parts[0].startswith(REGULATION):
+        return REGULATION
     return parts[0] if len(parts) > 1 else "other"
 
 

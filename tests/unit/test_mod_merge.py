@@ -156,11 +156,11 @@ def test_changed_bytes_disabling_and_uninstalling_a_source_make_it_stale(world):
     assert "copy changed" in merge.health(world.profile, loc=er())["reasons"][0]
     merge.rebuild(world.profile, lambda s: None, loc=er())
     idx = next(e["index"] for e in M.entries(world.profile) if e["name"] == "params")
-    M.set_options(world.profile, idx, {"enabled": False})
+    M.set_options(world.profile, idx, {"enabled": False}, loc=er())
     assert "params is no longer loaded" in merge.health(world.profile, loc=er())["reasons"][0]
-    M.set_options(world.profile, idx, {"enabled": True})
+    M.set_options(world.profile, idx, {"enabled": True}, loc=er())
     assert merge.health(world.profile, loc=er())["state"] == "current"
-    remove.uninstall(world.profile, idx)
+    remove.uninstall(world.profile, idx, loc=er())
     h = merge.health(world.profile, loc=er())
     assert h["state"] == "stale" and "params is no longer loaded" in h["reasons"][0]
     assert "still in last's build" in h["reasons"][0]  # named by its folder, with what it means
@@ -295,12 +295,12 @@ def _pack_source(root: Path, wrapper=True):
 
 def test_install_offers_a_rebuild_before_the_merger(world):
     src = _pack_source(world.base.parent.parent / "dl")
-    plan = install.plan_install(world.profile, src)
+    plan = install.plan_install(world.profile, src, loc=er())
     assert plan["merge_offered"] and plan["merge_label"] == "the rebuild tool of last"
     assert plan["regulation_packages"][-1]["name"] == "last" and plan["merge_source_now"] is None
     assert any("talk file" in n for n in plan["merge_notes"])
     world.pack("older")
-    plan = install.plan_install(world.profile, src)
+    plan = install.plan_install(world.profile, src, loc=er())
     assert plan["merge_combine"] and plan["merge_tool"]  # combined with older first, so both apply
     assert any("combined with older" in n for n in plan["merge_notes"])
 
@@ -308,7 +308,7 @@ def test_install_offers_a_rebuild_before_the_merger(world):
 def test_without_a_tool_the_offer_is_to_combine(tmp_path, world):
     (world.base / "Merger" / "installation.json").unlink()
     world.pack("a")
-    plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"))
+    plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"), loc=er())
     assert [x["name"] for x in plan["regulation_packages"]] == ["a", "last"]
     assert not plan["merge_tool"] and plan["merge_combine"]  # no tool: the launcher combines the packs itself
 
@@ -321,7 +321,7 @@ def test_a_zip_and_a_folder_with_the_same_layout_plan_alike(world, tmp_path):
             if p.is_file():
                 f.write(p, p.relative_to(src).as_posix())
     keys = ("kind", "merge_offered", "merge_notes", "merge_source_now", "regulation_winner")
-    a, b = install.plan_install(world.profile, src), install.plan_install(world.profile, z)
+    a, b = install.plan_install(world.profile, src, loc=er()), install.plan_install(world.profile, z, loc=er())
     assert {k: a[k] for k in keys} == {k: b[k] for k in keys}
 
 
@@ -362,7 +362,7 @@ def test_an_overlay_without_a_tool_still_says_what_must_stay_last(world, tmp_pat
     merge.set_overlay_override(world.profile, world.winner)
     h = merge.health(world.profile, loc=er())
     assert h["backend"] is None and "setup files are missing: installation.json" in h["reasons"][0]
-    plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"))
+    plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"), loc=er())
     assert plan["merge_target"] == "last" and not plan["merge_offered"]
     late = world.base / "mod" / "late"
     late.mkdir()

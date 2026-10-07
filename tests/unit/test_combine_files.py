@@ -112,7 +112,7 @@ def test_undo_rebuild_puts_the_previous_merge_back(prof):
     time.sleep(1.1)  # kept copies are named by the second
     out = merge.rebuild(prof, lambda s: None, loc=er())
     assert _merged(prof)["SB_KG.layout"] == b"switch buttons"
-    undo.run(out["undo"], lambda s: None)
+    undo.run(out["undo"], lambda s: None, loc=er())
     assert _merged(prof) == first
 
 
@@ -191,7 +191,7 @@ def test_removing_a_mod_and_rebuilding_equals_building_without_it(prof, tmp_path
     merge.rebuild(prof, lambda s: None, loc=er())
     assert _merged(prof)["SB_Marker.layout"] == b"blue marker"
     idx = next(e["index"] for e in manage.entries(prof) if e["name"] == "marker")
-    remove.uninstall(prof, idx)
+    remove.uninstall(prof, idx, loc=er())
     merge.rebuild(prof, lambda s: None, loc=er())
     after_removal = (prof.parent / "mod" / "combined-parameters" / REL).read_bytes()
     assert files_of(after_removal) == {**GAME, "SB_KG.layout": b"ps5 buttons", "SB_Map.layout": b"big map"}

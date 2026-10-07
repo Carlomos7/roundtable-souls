@@ -55,14 +55,14 @@ def test_undo_swaps_the_tools_output_and_the_profile_back_and_redo_swaps_again(t
     output_after = (w.winner / "regulation.bin").read_bytes()
     profile_after = w.profile.read_text(encoding="utf-8")
     assert output_after != output_before and undo.available(u) and undo.label(u) == "Undo rebuild"
-    said = undo.run(u, lambda s: None)
+    said = undo.run(u, lambda s: None, loc=er())
     assert "the rebuild tool's output" in said and "the profile" in said
     assert (w.winner / "regulation.bin").read_bytes() == output_before
     assert w.profile.read_text(encoding="utf-8") == profile_before
     assert merge.health(w.profile, loc=er())["state"] == "stale"  # honest: the output no longer matches the packs
     redo = {**u, "redo": True}
     assert undo.label(redo) == "Redo rebuild"
-    undo.run(redo, lambda s: None)
+    undo.run(redo, lambda s: None, loc=er())
     assert (w.winner / "regulation.bin").read_bytes() == output_after
     assert w.profile.read_text(encoding="utf-8") == profile_after
 
@@ -104,7 +104,7 @@ def test_the_combine_keeps_its_earlier_outputs_and_undo_puts_one_back(tmp_path, 
     assert undos[0]["combined_before"] is None  # the first combine replaced nothing
     kept = sorted(os.listdir(builtin.history_root(prof)))
     assert len(kept) == 2  # the newest HISTORY_KEEP
-    said = undo.run(undos[-1], lambda s: None)
+    said = undo.run(undos[-1], lambda s: None, loc=er())
     assert "the combined files" in said
     assert (base / "mod" / "combined-parameters" / "regulation.bin").read_bytes() == outputs[-2]
 

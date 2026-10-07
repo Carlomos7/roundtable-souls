@@ -96,7 +96,7 @@ def _blocks_except(text: str, skip: set[str]) -> list[str]:
 
 def test_every_other_entry_is_listed_and_only_its_own_lists_change(world):
     text = world.profile.read_text(encoding="utf-8")
-    new, problem = mod_order.reconcile(world.profile, text)
+    new, problem = mod_order.reconcile(world.profile, text, loc=er())
     assert problem is None
     assert _after(new, "package", "last") == [("parts", True), ("off", True)]  # off ones too: toggles need no rewrite
     assert _after(new, "native", "Last.dll") == [("a.dll", True), ("b.dll", True)]  # load_early ones are not added
@@ -104,23 +104,23 @@ def test_every_other_entry_is_listed_and_only_its_own_lists_change(world):
     owners = {'id = "last"', "Merger/Last.dll"}
     assert _blocks_except(new, owners) == _blocks_except(text, owners)  # every other entry byte for byte
     assert "# the merger's package must stay last" in new and "# a DLL mod" in new
-    assert mod_order.reconcile(world.profile, new) == (new, None)  # twice changes nothing
+    assert mod_order.reconcile(world.profile, new, loc=er()) == (new, None)  # twice changes nothing
 
 
 def test_switching_a_mod_on_or_off_changes_only_that_line(world):
     assert mod_order.fix(world.profile, loc=er()) is None
     before = world.profile.read_text(encoding="utf-8")
     off = next(e for e in M.entries(world.profile) if e.get("id") == "off")
-    M.set_options(world.profile, off["index"], {"enabled": True})
+    M.set_options(world.profile, off["index"], {"enabled": True}, loc=er())
     after = world.profile.read_text(encoding="utf-8")
     changed = [l for l in difflib.ndiff(before.splitlines(), after.splitlines()) if l[:2] in ("- ", "+ ")]
     assert changed == ["- enabled = false"]
 
 
 def test_a_new_package_goes_before_it_and_is_listed(world, tmp_path):
-    plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"))
+    plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"), loc=er())
     assert plan["stay_last"] == "last"
-    install.install(world.profile, {**plan, "insert_before": None})
+    install.install(world.profile, {**plan, "insert_before": None}, loc=er())
     text = world.profile.read_text(encoding="utf-8")
     assert text.index(f'id = "{plan["id"]}"') < text.index('id = "last"')
     assert (plan["id"], True) in _after(text, "package", "last")
@@ -132,16 +132,16 @@ def test_a_new_dll_goes_before_its_dlls_and_is_listed(world, tmp_path):
     src = tmp_path / "dl" / "Cool"
     src.mkdir(parents=True)
     (src / "cool.dll").write_bytes(b"x")
-    plan = install.plan_install(world.profile, src)
-    install.install(world.profile, plan)
+    plan = install.plan_install(world.profile, src, loc=er())
+    install.install(world.profile, plan, loc=er())
     text = world.profile.read_text(encoding="utf-8")
     assert text.index("cool.dll") < text.index("Merger/Boot.dll")
     assert ("cool.dll", True) in _after(text, "native", "Last.dll")
 
 
 def test_kept_after_on_purpose_when_installed_that_way(world, tmp_path):
-    plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"))
-    install.install(world.profile, {**plan, "after_overlay": True, "insert_before": None})
+    plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"), loc=er())
+    install.install(world.profile, {**plan, "after_overlay": True, "insert_before": None}, loc=er())
     text = world.profile.read_text(encoding="utf-8")
     assert text.index(f'id = "{plan["id"]}"') > text.index('id = "last"')
     assert plan["id"] not in [i for i, _ in _after(text, "package", "last")]
@@ -153,21 +153,21 @@ def test_kept_after_on_purpose_when_installed_that_way(world, tmp_path):
 def test_removing_a_mod_drops_it_from_the_list(world):
     mod_order.fix(world.profile, loc=er())
     parts = next(e for e in M.entries(world.profile) if e.get("id") == "parts")
-    remove.uninstall(world.profile, parts["index"], delete_folder=False)
+    remove.uninstall(world.profile, parts["index"], delete_folder=False, loc=er())
     assert _after(world.profile.read_text(encoding="utf-8"), "package", "last") == [("off", True)]
 
 
 def test_a_renamed_id_is_followed_where_it_was(world):
     mod_order.fix(world.profile, loc=er())
     parts = next(e for e in M.entries(world.profile) if e.get("id") == "parts")
-    M.set_options(world.profile, parts["index"], {"id": "body"})
+    M.set_options(world.profile, parts["index"], {"id": "body"}, loc=er())
     assert _after(world.profile.read_text(encoding="utf-8"), "package", "last") == [("body", True), ("off", True)]
 
 
 def test_adding_an_existing_folder_puts_it_before_it(world):
     extra = world.base / "mod" / "extra"
     extra.mkdir()
-    install.add_existing(world.profile, [extra])
+    install.add_existing(world.profile, [extra], loc=er())
     text = world.profile.read_text(encoding="utf-8")
     assert text.index('id = "extra"') < text.index('id = "last"') and ("extra", True) in _after(text, "package", "last")
 
@@ -190,7 +190,7 @@ def test_keep_it_after_is_kept_in_roundtable_json_and_can_be_undone(world):
     assert profile_settings.load(world.profile)["after_overlay"] == ["hand"]
     st = mod_order.status(world.profile, loc=er())
     assert st["late"] == [] and st["kept_setting"] == ["hand"]
-    new, _ = mod_order.reconcile(world.profile, world.profile.read_text(encoding="utf-8"))
+    new, _ = mod_order.reconcile(world.profile, world.profile.read_text(encoding="utf-8"), loc=er())
     assert "hand" not in [i for i, _ in _after(new, "package", "last")]
     mod_order.keep_after(world.profile, ["hand"], keep=False)
     assert "after_overlay" not in profile_settings.load(world.profile)
@@ -207,7 +207,7 @@ def test_a_change_that_would_loop_writes_nothing(world):
     )
     world.profile.write_text(loop, encoding="utf-8")
     text = world.profile.read_text(encoding="utf-8")
-    new, problem = mod_order.reconcile(world.profile, text)
+    new, problem = mod_order.reconcile(world.profile, text, loc=er())
     assert new == text and "loop" in problem
     before = world.profile.read_bytes()
     assert "loop" in mod_order.fix(world.profile, loc=er())
@@ -222,10 +222,10 @@ def test_without_a_mod_that_must_stay_last_nothing_is_touched(tmp_path):
     prof = base / "p.me3"
     text = "[[packages]]\nid = \"a\"\npath = 'mod/a'\n\n[[packages]]\nid = \"b\"\npath = 'mod/b'\n"
     prof.write_text(text, encoding="utf-8")
-    assert mod_order.target(prof) is None and mod_order.status(prof, loc=er()) is None
-    assert mod_order.reconcile(prof, text) == (text, None)
+    assert mod_order.target(prof, loc=er()) is None and mod_order.status(prof, loc=er()) is None
+    assert mod_order.reconcile(prof, text, loc=er()) == (text, None)
     (base / "mod" / "c").mkdir()
-    install.add_existing(prof, [base / "mod" / "c"])
+    install.add_existing(prof, [base / "mod" / "c"], loc=er())
     assert prof.read_text(encoding="utf-8").startswith(text)  # appended, nothing else changed
 
 
@@ -258,7 +258,7 @@ def test_random_profiles_keep_it_last_and_leave_every_other_entry_alone(tmp_path
             last += "load_after = [\n" + "".join(f'  {{ id = "{i}", optional = true }},\n' for i in listed) + "]\n"
         blocks.insert(rng.randint(0, len(blocks)), last)
         text = "\n".join(blocks)
-        new, problem = mod_order.reconcile(prof, text, tgt)
+        new, problem = mod_order.reconcile(prof, text, tgt, loc=er())
         if problem:  # only a loop blocks it, and then nothing changes
             assert new == text and "loop" in problem
             continue
@@ -270,7 +270,7 @@ def test_random_profiles_keep_it_last_and_leave_every_other_entry_alone(tmp_path
             assert enabled - after_it <= before_it
         listed_now = [i for i, _ in _after(new, "package", "last")]
         assert "gone" not in listed_now and not (set(listed_now) & after_it)
-        assert mod_order.reconcile(prof, new, tgt) == (new, None)
+        assert mod_order.reconcile(prof, new, tgt, loc=er()) == (new, None)
 
 
 # ----------------------------------------------------------------------------- a missing setup is named

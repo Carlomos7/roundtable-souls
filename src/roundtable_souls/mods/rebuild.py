@@ -124,15 +124,6 @@ def sha256(path: Path) -> str | None:
 
 
 # ----------------------------------------------------------------------------- layers
-def elden_ring_locations() -> Locations:
-    """Elden Ring's locations from the settings, for callers not yet handed Locations (mods.install,
-    mods.profile_edit and mods.remove, until S3i passes them). The rebuild code works on Elden Ring profiles only."""
-    from roundtable_souls.config.settings import load_settings
-    from roundtable_souls.game.locate import Locations
-
-    return Locations.from_settings(load_settings(), games.ELDEN_RING)
-
-
 def is_elden_ring(profile: Path) -> bool:
     from roundtable_souls.platform import paths
 
@@ -882,11 +873,10 @@ def keep_profile_text(profile: Path, original: str, backend) -> str:
 
 
 # ----------------------------------------------------------------------------- install offers
-def offer(profile: Path, root: Path, regulation_packages: list[dict], loc: Locations | None = None) -> dict:
+def offer(profile: Path, root: Path, regulation_packages: list[dict], *, loc: Locations) -> dict:
     """For installing a package with a regulation.bin: what can be offered after the install and plain notes about
     it. merge_combine: the launcher would combine this pack's parameters with the other packs'. merge_tool: the
-    overlay's rebuild tool would run. merge_target: the package new packs go before. loc: the game's locations
-    (None: elden_ring_locations())."""
+    overlay's rebuild tool would run. merge_target: the package new packs go before. loc: the game's locations."""
     from roundtable_souls.mods.backends import builtin
 
     out: dict = {
@@ -901,7 +891,6 @@ def offer(profile: Path, root: Path, regulation_packages: list[dict], loc: Locat
     profile, root = Path(profile), Path(root)
     if not is_elden_ring(profile):
         return out
-    loc = loc or elden_ring_locations()
     all_layers = layers(profile)
     target, backend, _by_hand = overlay(profile, all_layers, loc=loc)
     comb = builtin.find(profile, all_layers, loc=loc)

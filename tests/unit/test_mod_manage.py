@@ -8,6 +8,7 @@ import pytest
 
 from roundtable_souls.mods import checks, extract, install, remove
 from roundtable_souls.services import play as g
+from support import er
 
 M = g.mod_manage
 
@@ -87,7 +88,7 @@ def test_loose_game_files_are_sorted_into_folders(tmp_path):
     p = tmp_path / "prof" / "p.me3"
     p.parent.mkdir()
     p.write_text('profileVersion = "v1"\n', encoding="utf-8")
-    out = install.install(p, install.plan_install(p, src, name="Ranni Hair"))
+    out = install.install(p, install.plan_install(p, src, name="Ranni Hair", loc=er()), loc=er())
     assert (out["dest"] / "parts" / "hr_a_0007.partsbnd.dcx").read_bytes() == b"h" and (
         out["dest"] / "readme.txt"
     ).is_file()
@@ -99,7 +100,7 @@ def test_loose_game_files_are_sorted_into_folders(tmp_path):
     (mixed / "menu_x.gfx").write_bytes(b"g")
     d = install.detect(mixed)
     assert d["kind"] == "package" and set(d["assets"]) == {"chr", "regulation.bin", "menu"}
-    out = install.install(p, install.plan_install(p, mixed))
+    out = install.install(p, install.plan_install(p, mixed, loc=er()), loc=er())
     assert (
         (out["dest"] / "chr" / "c0000.anibnd.dcx").is_file()
         and (out["dest"] / "regulation.bin").is_file()
@@ -108,15 +109,15 @@ def test_loose_game_files_are_sorted_into_folders(tmp_path):
     save = tmp_path / "save"
     save.mkdir()
     (save / "ER0000.sl2").write_bytes(b"s")
-    assert "No game folders" in install.plan_install(p, save)["error"]  # a save is not a mod
+    assert "No game folders" in install.plan_install(p, save, loc=er())["error"]  # a save is not a mod
     junk = tmp_path / "junk2"
     junk.mkdir()
     (junk / "notes.txt").write_text("x")
-    assert "No game folders" in install.plan_install(p, junk)["error"]
+    assert "No game folders" in install.plan_install(p, junk, loc=er())["error"]
     rs = tmp_path / "reshade" / "Dark Souls ReShaded"
     rs.mkdir(parents=True)
     (rs / "dxgi.dll").write_bytes(b"x")
-    assert install.plan_install(p, tmp_path / "reshade")["kind"] == "native"  # a DLL is a native
+    assert install.plan_install(p, tmp_path / "reshade", loc=er())["kind"] == "native"  # a DLL is a native
 
 
 def test_zip_safety(tmp_path):
@@ -143,9 +144,9 @@ def test_7z_install_and_safety(tmp_path):
     p = tmp_path / "prof" / "p.me3"
     p.parent.mkdir()
     p.write_text('profileVersion = "v1"\n', encoding="utf-8")
-    plan = install.plan_install(p, a)
+    plan = install.plan_install(p, a, loc=er())
     assert plan["kind"] == "package" and plan["name"] == "nice-mod" and plan["assets"] == ["msg"] and plan["staging"]
-    out = install.install(p, plan)
+    out = install.install(p, plan, loc=er())
     assert (out["dest"] / "msg" / "x.msgbnd.dcx").read_bytes() == b"m" and not plan["staging"].exists()
     assert (
         extract._unsafe("../evil.txt")
@@ -177,14 +178,14 @@ def test_install_package_from_zip_and_native_from_folder(tmp_path):
     with zipfile.ZipFile(z, "w") as f:
         f.writestr("Cool Armor/parts/am_m_1000.partsbnd.dcx", "p")
         f.writestr("Cool Armor/readme.txt", "r")
-    plan = install.plan_install(p, z)
+    plan = install.plan_install(p, z, loc=er())
     assert (
         plan["kind"] == "package"
         and plan["name"] == "cool-armor"
         and plan["dest"] == tmp_path / "mod" / "cool-armor"
         and plan["staging"]
     )
-    out = install.install(p, plan)
+    out = install.install(p, plan, loc=er())
     assert (
         (out["dest"] / "parts" / "am_m_1000.partsbnd.dcx").read_text() == "p"
         and not plan["staging"].exists()
@@ -199,10 +200,10 @@ def test_install_package_from_zip_and_native_from_folder(tmp_path):
     )
     assert [e["name"] for e in M.entries(p)] == ["flora", "ersc.dll", "other.dll", "cool-armor"]
     with pytest.raises(M.ModError):
-        install.install(p, install.plan_install(p, z))  # exists
-    plan = install.plan_install(p, z)
+        install.install(p, install.plan_install(p, z, loc=er()), loc=er())  # exists
+    plan = install.plan_install(p, z, loc=er())
     assert plan["already_listed"] == ["mod/cool-armor"]
-    out = install.install(p, plan, overwrite=True)
+    out = install.install(p, plan, overwrite=True, loc=er())
     assert (
         out["entries"] == [] and sum(1 for e in M.entries(p) if e["id"] == "cool-armor") == 1
     )  # files replaced, no second entry
@@ -210,31 +211,31 @@ def test_install_package_from_zip_and_native_from_folder(tmp_path):
     here = tmp_path / "mod" / "Solo"
     (here / "parts").mkdir(parents=True)
     (here / "parts" / "x.partsbnd.dcx").write_bytes(b"x")
-    plan = install.plan_install(p, here)
+    plan = install.plan_install(p, here, loc=er())
     assert plan["in_place"] and plan["exists"]
-    out = install.install(p, plan, overwrite=True)
+    out = install.install(p, plan, overwrite=True, loc=er())
     assert (
         (here / "parts" / "x.partsbnd.dcx").read_bytes() == b"x"
         and out["in_place"]
         and [e["path"] for e in out["entries"]] == ["mod/Solo"]
     )
-    plan = install.plan_install(p, here)
+    plan = install.plan_install(p, here, loc=er())
     assert plan["already_listed"] == ["mod/Solo"]
-    assert install.install(p, plan, overwrite=True)["entries"] == []
+    assert install.install(p, plan, overwrite=True, loc=er())["entries"] == []
     src = tmp_path / "dl" / "NoGlow"
     src.mkdir(parents=True)
     (src / "NoGlow.dll").write_bytes(b"g")
     (src / "NoGlow.ini").write_text("i")
-    plan = install.plan_install(p, src, name="No Glow")
+    plan = install.plan_install(p, src, name="No Glow", loc=er())
     assert plan["kind"] == "native" and plan["entries"] == [{"kind": "native", "path": "natives/No-Glow/NoGlow.dll"}]
-    out = install.install(p, plan)
+    out = install.install(p, plan, loc=er())
     assert (out["dest"] / "NoGlow.ini").is_file() and tomllib.loads(p.read_text(encoding="utf-8"))["natives"][-1][
         "path"
     ] == "natives/No-Glow/NoGlow.dll"
     bad = tmp_path / "junk"
     bad.mkdir()
     (bad / "notes.txt").write_text("x")
-    assert "error" in install.plan_install(p, bad)
+    assert "error" in install.plan_install(p, bad, loc=er())
 
 
 def test_install_into_array_form_profile_converts_it(tmp_path):
@@ -245,7 +246,7 @@ def test_install_into_array_form_profile_converts_it(tmp_path):
     (tmp_path / "SeamlessCoop" / "ersc.dll").write_bytes(b"x")
     src = tmp_path / "src" / "Tex"
     (src / "menu").mkdir(parents=True)
-    install.install(p, install.plan_install(p, src))
+    install.install(p, install.plan_install(p, src, loc=er()), loc=er())
     data = tomllib.loads(p.read_text(encoding="utf-8"))
     assert (
         data["start_online"] is False
@@ -279,6 +280,7 @@ def test_options_roundtrip_keeps_comments_and_multiline_arrays(tmp_path):
             "load_before": ["other.dll"],
             "enabled": False,
         },
+        loc=er(),
     )
     text = _read(p)
     n = tomllib.loads(text)["natives"][0]
@@ -293,17 +295,17 @@ def test_options_roundtrip_keeps_comments_and_multiline_arrays(tmp_path):
         {"id": "other.dll", "optional": True}
     ]
     assert "# keep this" in text and text.count("load_after") == 1 and "\r\n" in text
-    M.set_options(p, 1, {"initializer": {"delay": {"ms": 250}}, "enabled": True, "finalizer": ""})
+    M.set_options(p, 1, {"initializer": {"delay": {"ms": 250}}, "enabled": True, "finalizer": ""}, loc=er())
     n = tomllib.loads(p.read_text(encoding="utf-8"))["natives"][0]
     assert n["initializer"] == {"delay": {"ms": 250}} and "enabled" not in n and "finalizer" not in n
-    M.set_options(p, 0, {"id": "flora2", "load_after": ["ersc.dll"]})
+    M.set_options(p, 0, {"id": "flora2", "load_after": ["ersc.dll"]}, loc=er())
     pk = tomllib.loads(p.read_text(encoding="utf-8"))["packages"][0]
     assert (
         pk["id"] == "flora2"
         and pk["load_after"] == [{"id": "ersc.dll", "optional": True}]
         and pk["path"] == "mod/flora"
     )
-    M.set_options(p, 0, {"id": ""})
+    M.set_options(p, 0, {"id": ""}, loc=er())
     assert tomllib.loads(p.read_text(encoding="utf-8"))["packages"][0]["id"] == "flora2"  # blank keeps the old id
     assert [e["enabled"] for e in M.entries(p)] == [True, True, False]
 
@@ -315,18 +317,18 @@ def test_uninstall_rules(tmp_path):
     p.write_text(
         M.append_entry(text, "native", {"path": "natives/SeamlessCoop/second.dll"}), encoding="utf-8", newline=""
     )
-    out = remove.uninstall(p, 1, delete_folder=True)  # ersc.dll: folder still used by second.dll
+    out = remove.uninstall(p, 1, delete_folder=True, loc=er())  # ersc.dll: folder still used by second.dll
     assert out["removed_folder"] is False and (tmp_path / "natives" / "SeamlessCoop").is_dir()
     assert [e["name"] for e in M.entries(p)] == ["flora", "other.dll", "second.dll"]
-    out = remove.uninstall(p, 1, delete_folder=True)  # other.dll: its folder is only its own
+    out = remove.uninstall(p, 1, delete_folder=True, loc=er())  # other.dll: its folder is only its own
     assert out["removed_folder"] is True and not (tmp_path / "natives" / "other").exists()
-    out = remove.uninstall(p, 0, delete_folder=False)
+    out = remove.uninstall(p, 0, delete_folder=False, loc=er())
     assert (
         out["removed_folder"] is False
         and (tmp_path / "mod" / "flora").is_dir()
         and [e["name"] for e in M.entries(p)] == ["second.dll"]
     )
-    out = remove.uninstall(p, 0, delete_folder=True)
+    out = remove.uninstall(p, 0, delete_folder=True, loc=er())
     # its folder holds Seamless Co-op's DLL (another profile beside this one may load it): a shared dependency stays
     assert out["removed_folder"] is False and (tmp_path / "natives" / "SeamlessCoop" / "ersc.dll").is_file()
     assert M.entries(p) == [] and tomllib.loads(p.read_text(encoding="utf-8"))["profileVersion"] == "v1"
@@ -338,7 +340,7 @@ def test_uninstall_rules(tmp_path):
     p2.write_text(
         M.append_entry('profileVersion = "v1"\n', "package", {"id": "ext", "path": str(outside)}), encoding="utf-8"
     )
-    out = remove.uninstall(p2, 0, delete_folder=True)
+    out = remove.uninstall(p2, 0, delete_folder=True, loc=er())
     assert out["removed_folder"] is False and outside.is_dir()
 
 
@@ -391,12 +393,14 @@ def test_package_tree_finds_a_folder_of_mods_and_what_it_leaves_unloaded(tmp_pat
 def test_add_existing_lists_folders_in_place_without_copying(tmp_path):
     p = _tree_layout(tmp_path)
     before = sorted(x.as_posix() for x in (tmp_path / "mod").rglob("*"))
-    out = install.add_existing(p, [tmp_path / "mod" / "pack" / "sky", tmp_path / "mod" / "skin"])
+    out = install.add_existing(p, [tmp_path / "mod" / "pack" / "sky", tmp_path / "mod" / "skin"], loc=er())
     assert [r["id"] for r in out["entries"]] == ["pack-sky", "skin"]
     assert sorted(x.as_posix() for x in (tmp_path / "mod").rglob("*")) == before  # nothing copied or moved
     rows = tomllib.loads(p.read_text(encoding="utf-8"))["packages"]
     assert [r["path"] for r in rows[-2:]] == ["mod/pack/sky", "mod/skin"] and out["backup"].is_file()
-    again = install.add_existing(p, [tmp_path / "mod" / "skin"])  # a clash gets a numbered id, never a duplicate
+    again = install.add_existing(
+        p, [tmp_path / "mod" / "skin"], loc=er()
+    )  # a clash gets a numbered id, never a duplicate
     assert again["entries"][0]["id"] == "skin-2"
 
 
@@ -521,7 +525,7 @@ def test_unloaded_dlls_leave_out_helpers_runtimes_and_reshade_addons(tmp_path):
     )
     nt = checks.folder_overview(p, M.entries(p))["natives"]
     assert sorted(x.name for x in nt["unlisted"]) == ["UnlockTheFps.dll", "b.dll", "extra.dll"] and nt["listed"] == 2
-    out = install.add_existing(p, [tmp_path / "natives" / "b.dll"], kind="native")
+    out = install.add_existing(p, [tmp_path / "natives" / "b.dll"], kind="native", loc=er())
     assert out["entries"] == [{"kind": "native", "path": "natives/b.dll"}]
     assert "b.dll" not in [x.name for x in checks.folder_overview(p, M.entries(p))["natives"]["unlisted"]]
 
@@ -604,7 +608,7 @@ def test_plan_offers_variants_and_replans_without_unpacking_again(tmp_path):
     with py7zr.SevenZipFile(a, "w") as z:
         z.writeall(src, arcname=src.name)
     p = _revive_profile(tmp_path)
-    plan = install.plan_install(p, a)
+    plan = install.plan_install(p, a, loc=er())
     assert (
         plan["kind"] == "package"
         and plan["variants"] == ["Map for Goblins Expanded/English/mod", "Map for Goblins Expanded/Italian/mod"]
@@ -612,17 +616,17 @@ def test_plan_offers_variants_and_replans_without_unpacking_again(tmp_path):
         and plan["profiles_inside"]  # the example .me3 is noted, not what makes it a mod
         and plan["regulation_winner"] == "nightreign-revive"
     )
-    again = install.replan(p, plan, name="Goblin Maps", pkg_id="goblins", variant=plan["variants"][1])
+    again = install.replan(p, plan, name="Goblin Maps", pkg_id="goblins", variant=plan["variants"][1], loc=er())
     assert (
         again["unpacked"] == plan["unpacked"]
         and again["name"] == "Goblin-Maps"
         and again["id"] == "goblins"
         and again["root"].parent.name == "Italian"
     )
-    assert install.replan(p, plan, pkg_id="solo")["id_taken"]
+    assert install.replan(p, plan, pkg_id="solo", loc=er())["id_taken"]
     again["exclude"] = [c["name"] for c in again["contents"] if not c["on"]]
     again["insert_before"] = again["regulation_packages"][-1]["index"]
-    out = install.install(p, again)
+    out = install.install(p, again, loc=er())
     got = sorted(x.relative_to(out["dest"]).as_posix() for x in out["dest"].rglob("*") if x.is_file())
     assert "readme.txt" not in got and "regulation.bin" in got
     assert (out["dest"] / "msg" / "engus" / "item_dlc02.msgbnd.dcx").read_bytes() == b"Italian"
@@ -666,9 +670,9 @@ def test_excluded_dll_folders_get_no_entry(tmp_path):
     (src / "extra").mkdir(parents=True)
     (src / "Main.dll").write_bytes(b"m")
     (src / "extra" / "Helper.dll").write_bytes(b"h")
-    plan = install.plan_install(p, src)
+    plan = install.plan_install(p, src, loc=er())
     plan["exclude"] = ["extra"]
-    out = install.install(p, plan)
+    out = install.install(p, plan, loc=er())
     assert [e["path"] for e in out["entries"]] == ["natives/pack/Main.dll"] and not (out["dest"] / "extra").exists()
 
 
@@ -681,7 +685,7 @@ def test_unrecognised_files_install_and_loader_dlls_and_extras_do_not(tmp_path):
     (src / "Thing" / "dinput8.dll").write_bytes(b"d")
     (src / "example.me3").write_text('profileVersion = "v1"\n')
     (src / "Notes.txt").write_text("n")
-    plan = install.plan_install(p, src)
+    plan = install.plan_install(p, src, loc=er())
     got = {c["name"]: (c["group"], c["on"], c.get("extra")) for c in plan["contents"]}
     assert got == {
         "parts": ("game", True, None),
@@ -691,7 +695,7 @@ def test_unrecognised_files_install_and_loader_dlls_and_extras_do_not(tmp_path):
         "Notes.txt": ("doc", False, "Notes.txt"),
     }
     plan["exclude"] = [c["name"] for c in plan["contents"] if not c["on"] and c["name"] != "example.me3"]
-    out = install.install(p, plan)  # the .me3 ticked: kept as a copy with the mod
+    out = install.install(p, plan, loc=er())  # the .me3 ticked: kept as a copy with the mod
     names = sorted(x.name for x in out["dest"].iterdir())
     assert names == ["example.me3", "mystery.bin", "parts"]
 
@@ -701,9 +705,9 @@ def test_a_lone_dll_installs_as_a_dll_mod(tmp_path):
     dll = tmp_path / "dl" / "UnlockTheFps.dll"
     dll.parent.mkdir(parents=True)
     dll.write_bytes(b"u")
-    plan = install.plan_install(p, dll)
+    plan = install.plan_install(p, dll, loc=er())
     assert plan["kind"] == "native" and plan["name"] == "unlockthefps"
-    out = install.install(p, plan)
+    out = install.install(p, plan, loc=er())
     assert [e["path"] for e in out["entries"]] == ["natives/unlockthefps/UnlockTheFps.dll"] and dll.is_file()
 
 
@@ -712,7 +716,7 @@ def test_regulation_placement_follows_the_package_if_the_profile_changed_meanwhi
     src = tmp_path / "dl" / "Params"
     src.mkdir(parents=True)
     (src / "regulation.bin").write_bytes(b"R")
-    plan = install.plan_install(p, src)
+    plan = install.plan_install(p, src, loc=er())
     assert [x["name"] for x in plan["regulation_packages"]] == ["nightreign-revive"]
     plan["insert_before"] = "nightreign-revive"
     # edited outside the launcher before Install: a new entry above Revive moves it down one block
@@ -720,14 +724,14 @@ def test_regulation_placement_follows_the_package_if_the_profile_changed_meanwhi
         p.read_text(encoding="utf-8").replace("# Revive", "[[packages]]\nid = \"late\"\npath = 'mod/late'\n\n# Revive"),
         encoding="utf-8",
     )
-    install.install(p, plan)
+    install.install(p, plan, loc=er())
     ids = [x["id"] for x in tomllib.loads(p.read_text(encoding="utf-8"))["packages"]]
     assert ids == ["solo", "late", "params", "nightreign-revive"]
-    again = install.plan_install(p, src)  # a reinstall: its own entry is not the one to place before
+    again = install.plan_install(p, src, loc=er())  # a reinstall: its own entry is not the one to place before
     assert again["already_listed"] and [x["name"] for x in again["regulation_packages"]] == ["nightreign-revive"]
-    plan = install.plan_install(p, src, name="other")
+    plan = install.plan_install(p, src, name="other", loc=er())
     plan["insert_before"] = "gone"  # the package was removed meanwhile: goes last
-    install.install(p, plan)
+    install.install(p, plan, loc=er())
     assert [x["id"] for x in tomllib.loads(p.read_text(encoding="utf-8"))["packages"]][-1] == "other"
 
 

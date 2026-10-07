@@ -12,6 +12,11 @@ converted to blocks first (that form has no comments to lose).
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from roundtable_souls.game.locate import Locations
+
 import re
 import shutil
 import time
@@ -365,8 +370,8 @@ def _write(profile: Path, new_text: str, why: str = "change") -> Path:
 def _write_ordered(
     profile: Path, new_text: str, why: str, tgt: dict | None, renamed: dict[str, str] | None = None
 ) -> tuple[Path, str | None]:
-    """_write, with the mod that must stay last kept after everything else (see mods.stay_last). tgt is what
-    stay_last.target() said before the change. Returns (backup, why it could not be kept last, or None)."""
+    """_write, with the mod that must stay last kept after everything else (see mods.order). tgt is what
+    order.target() said before the change. Returns (backup, why it could not be kept last, or None)."""
     new_text, problem = _ordered(profile, new_text, tgt, renamed)
     return _write(profile, new_text, why), problem
 
@@ -375,11 +380,11 @@ def _ordered(
     profile: Path, new_text: str, tgt: dict | None, renamed: dict[str, str] | None = None
 ) -> tuple[str, str | None]:
     """The text with the mod that must stay last kept after everything else, and why it could not be (or None)."""
-    from roundtable_souls.mods import stay_last
+    from roundtable_souls.mods import order as mod_order
 
     if not tgt:
         return new_text, None
-    return stay_last.reconcile(profile, new_text, tgt, renamed)
+    return mod_order.reconcile(profile, new_text, tgt, renamed)
 
 
 def _stage_write(op, profile: Path, new_text: str, why: str) -> Path:
@@ -398,18 +403,18 @@ def _stage_write(op, profile: Path, new_text: str, why: str) -> Path:
 def _last_place(profile: Path, text: str, kind: str, tgt: dict | None) -> int | None:
     """The block new entries of this kind go above, so the file reads in load order: the package that must stay
     last, or the first of its DLLs. None without one."""
-    from roundtable_souls.mods import stay_last
+    from roundtable_souls.mods import order as mod_order
 
     if not tgt:
         return None
-    items = stay_last._items(profile, text)
-    pkg, _last, mine = stay_last._roles(profile, items, tgt)
+    items = mod_order._items(profile, text)
+    pkg, _last, mine = mod_order._roles(profile, items, tgt)
     if kind == "package":
         return pkg["index"] if pkg else None
     return mine[0]["index"] if mine else None
 
 
-def set_options(profile: Path, index: int, opts: dict) -> Path:
+def set_options(profile: Path, index: int, opts: dict, *, loc: Locations) -> Path:
     profile = Path(profile)
     text = read_text(profile)
     if is_array_form(text):
@@ -418,7 +423,7 @@ def set_options(profile: Path, index: int, opts: dict) -> Path:
     if set(opts) == {"enabled"}:  # switching a mod on or off: the load order lists already name every entry
         what = f"before turning {name} {'on' if opts['enabled'] else 'off'}"
         return _write(profile, set_block_options(text, index, opts), what)
-    from roundtable_souls.mods import stay_last
+    from roundtable_souls.mods import order as mod_order
 
     old = block_options(text, index)
     renamed = {}
@@ -426,7 +431,7 @@ def set_options(profile: Path, index: int, opts: dict) -> Path:
         renamed = {old["id"].lower(): opts["id"]}
     new = set_block_options(text, index, opts)
     bak, _problem = _write_ordered(
-        profile, new, f"before changing {name}'s options", stay_last.target(profile), renamed
+        profile, new, f"before changing {name}'s options", mod_order.target(profile, loc), renamed
     )
     return bak  # a loop the change would make shows on the Load order card
 

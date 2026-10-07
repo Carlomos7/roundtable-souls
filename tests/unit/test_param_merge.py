@@ -277,13 +277,13 @@ def test_a_game_update_or_a_removed_pack_makes_the_combine_stale(prof):
     assert any("game update" in r for r in merge.health(prof, loc=er())["reasons"])
     merge.rebuild(prof, lambda s: None, loc=er())
     idx = next(e["index"] for e in M.entries(prof) if e["name"] == "balance")
-    remove.uninstall(prof, idx)
+    remove.uninstall(prof, idx, loc=er())
     assert any("balance was combined but is no longer loaded" in r for r in merge.health(prof, loc=er())["reasons"])
 
 
 def test_one_pack_alone_is_not_combined_unless_asked(prof):
     idx = next(e["index"] for e in M.entries(prof) if e["name"] == "balance")
-    remove.uninstall(prof, idx)
+    remove.uninstall(prof, idx, loc=er())
     assert merge.health(prof, loc=er())["state"] == "single"
     with pytest.raises(merge.MergeError, match="nothing to combine"):
         merge.rebuild(prof, lambda s: None, loc=er())

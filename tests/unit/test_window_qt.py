@@ -683,7 +683,7 @@ def test_install_dialog_offers_a_rebuild_only_before_the_merger(app, tmp_path, m
     from roundtable_souls.mods import install
 
     world = World(tmp_path, monkeypatch)
-    plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"))
+    plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"), loc=er())
     parent = QWidget()
     parent.resize(1000, 800)
     dlg = ui.InstallDialog(parent, plan, lambda *a: plan, world.profile)
@@ -840,7 +840,7 @@ def test_install_dialog_names_a_combine_when_there_is_no_tool(app, tmp_path, mon
     world = World(tmp_path, monkeypatch)
     (world.base / "Merger" / "installation.json").unlink()
     world.pack("a")
-    plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"))
+    plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"), loc=er())
     parent = QWidget()
     parent.resize(1000, 800)
     dlg = ui.InstallDialog(parent, plan, lambda *a: plan, world.profile)
@@ -1127,7 +1127,7 @@ def test_undo_rebuild_and_redo_from_activity(sandbox, monkeypatch):
     kept.write_text("# before the rebuild\n", encoding="utf-8")
     ran = []
 
-    def fake_run(u, log):
+    def fake_run(u, log, *, loc):
         ran.append(bool(u.get("redo")))
         return "undid the rebuild: the profile back as before" if not u.get("redo") else "redid the rebuild"
 
@@ -1159,7 +1159,7 @@ def test_install_dialog_places_a_mod_before_the_one_that_must_stay_last(app, tmp
     from roundtable_souls.mods import install
 
     world = World(tmp_path, monkeypatch)
-    plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"))
+    plan = install.plan_install(world.profile, _pack_source(tmp_path / "dl"), loc=er())
     parent = QWidget()
     parent.resize(1000, 800)
     dlg = ui.InstallDialog(parent, plan, lambda *a: plan, world.profile)

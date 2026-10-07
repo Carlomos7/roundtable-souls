@@ -16,6 +16,11 @@ entry is not back already), so the Activity page only offers what works; run() d
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from roundtable_souls.game.locate import Locations
+
 from pathlib import Path
 
 from roundtable_souls.mods import profile_edit as mod_manage
@@ -86,7 +91,7 @@ def available(undo: dict | None) -> bool:
     return False
 
 
-def run(undo: dict, log) -> str:
+def run(undo: dict, log, *, loc: Locations) -> str:
     """Do it. Returns a line saying what was done. Raises UndoError when it cannot be done any more, and
     FileExistsError when a folder is back at the old place already (nothing is overwritten)."""
     if undo.get("type") == "remove":
@@ -94,7 +99,7 @@ def run(undo: dict, log) -> str:
     if undo.get("type") == "rebuild":
         return _undo_rebuild(undo, log)
     if undo.get("type") in OPERATIONS:
-        return _take_back(undo, log)
+        return _take_back(undo, log, loc)
     raise UndoError(f"Nothing to undo for {undo.get('type')!r}.")
 
 
@@ -127,7 +132,7 @@ def _restore_removed(undo: dict, log) -> str:
     return f"restored {name}" + (f" ({' and '.join(said)})" if said else "")
 
 
-def _take_back(undo: dict, log) -> str:
+def _take_back(undo: dict, log, loc: Locations) -> str:
     from roundtable_souls.mods import operations
 
     if not available(undo):
@@ -139,7 +144,7 @@ def _take_back(undo: dict, log) -> str:
     def rebuild_after() -> None:
         from roundtable_souls.mods import rebuild
 
-        rebuild.rebuild(Path(undo["profile"]), log)
+        rebuild.rebuild(Path(undo["profile"]), log, loc=loc)
 
     try:
         return operations.rollback(op, log, rebuild_after if undo.get("rebuild") else None)

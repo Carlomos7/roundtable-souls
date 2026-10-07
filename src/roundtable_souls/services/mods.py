@@ -150,28 +150,28 @@ def profile_entries(profile) -> list:
         return []
 
 
-def plan_mod_install(profile, source, name=None, pkg_id=None, variant=None) -> dict:
-    plan = install.plan_install(Path(profile), Path(source), name, pkg_id, variant)
+def plan_mod_install(profile, source, name=None, pkg_id=None, variant=None, *, loc: Locations) -> dict:
+    plan = install.plan_install(Path(profile), Path(source), name, pkg_id, variant, loc=loc)
     models.ModPlan.model_validate(plan)
     return plan
 
 
-def replan_mod_install(profile, plan, name=None, pkg_id=None, variant=None) -> dict:
+def replan_mod_install(profile, plan, name=None, pkg_id=None, variant=None, *, loc: Locations) -> dict:
     """The same unpacked mod with another folder name, id or variant (nothing is unpacked again)."""
-    new = install.replan(Path(profile), plan, name, pkg_id, variant)
+    new = install.replan(Path(profile), plan, name, pkg_id, variant, loc=loc)
     models.ModPlan.model_validate(new)
     return new
 
 
-def install_mod(profile, plan, overwrite=False, rebuild=False) -> dict:
+def install_mod(profile, plan, overwrite=False, rebuild=False, *, loc: Locations) -> dict:
     """Install (or update) as one recoverable operation (mods.operations); with rebuild, the merged mods are rebuilt
     inside it, so a failed rebuild leaves the previous installation as it was."""
     from roundtable_souls.mods import rebuild as merge
 
     def then():
-        merge.rebuild(Path(profile), run_logging.log)
+        merge.rebuild(Path(profile), run_logging.log, loc=loc)
 
-    out = install.install(Path(profile), plan, overwrite=overwrite, then=then if rebuild else None)
+    out = install.install(Path(profile), plan, overwrite=overwrite, then=then if rebuild else None, loc=loc)
     run_logging.log(f"{'updated' if out['update'] else 'installed'} {plan['kind']} {plan['name']} -> {out['dest']}")
     for rel in out.get("kept") or []:
         run_logging.log(f"kept your changed {rel} (the new version's copy is beside it as .new)")
@@ -194,8 +194,8 @@ def recover_interrupted(profile, timeout: float = 30.0) -> list[str]:
     return said
 
 
-def uninstall_mod(profile, index: int, delete_folder=True) -> dict:
-    out = remove.uninstall(Path(profile), index, delete_folder=delete_folder)
+def uninstall_mod(profile, index: int, delete_folder=True, *, loc: Locations) -> dict:
+    out = remove.uninstall(Path(profile), index, delete_folder=delete_folder, loc=loc)
     run_logging.log(
         f"removed {out['kind']} {out['path']}"
         + (
@@ -209,8 +209,8 @@ def uninstall_mod(profile, index: int, delete_folder=True) -> dict:
     return out
 
 
-def set_mod_options(profile, index: int, opts: dict):
-    return mod_manage.set_options(Path(profile), index, opts)
+def set_mod_options(profile, index: int, opts: dict, *, loc: Locations):
+    return mod_manage.set_options(Path(profile), index, opts, loc=loc)
 
 
 def create_profile(name: str, copy_from=None, *, loc: Locations) -> Path:

@@ -293,18 +293,17 @@ def supported(version: str | None) -> bool | None:
 
 
 # ----------------------------------------------------------------------------- the mod that must stay last (formerly mods.stay_last)
-def target(profile: Path, loc: Locations | None = None) -> dict | None:
+def target(profile: Path, loc: Locations) -> dict | None:
     """The mod that must stay last, as the profile on disk has it: {folder, own, name}, own being the folders its
     DLLs live in (its rebuild tool's own folders, or the folder holding its package when no tool was found). None
-    when the profile has none (then nothing is ever touched). loc: the game's locations (None:
-    rebuild.elden_ring_locations())."""
+    when the profile has none (then nothing is ever touched). loc: the game's locations."""
     from roundtable_souls.mods import rebuild as merge
 
     profile = Path(profile)
     try:
         if not profile.is_file() or not merge.is_elden_ring(profile):
             return None
-        layer, tool, _by_hand = merge.overlay(profile, loc=loc or merge.elden_ring_locations())
+        layer, tool, _by_hand = merge.overlay(profile, loc=loc)
     except OSError, ValueError:
         return None
     if layer is None:
@@ -434,7 +433,10 @@ def reconcile(
     the text unchanged and why, when the result would loop. tgt: target() of the profile before this change (found
     again, with loc, when not given). renamed: {old name (lower-case): new name} for an id just changed."""
     profile = Path(profile)
-    tgt = target(profile, loc) if tgt is None else tgt
+    if tgt is None:
+        if loc is None:
+            raise TypeError("reconcile() needs tgt or loc")
+        tgt = target(profile, loc)
     if not tgt:
         return text, None
     base = mod_manage.to_blocks(text) if mod_manage.is_array_form(text) else text

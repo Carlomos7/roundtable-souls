@@ -4,7 +4,7 @@ profile (reading a profile), profile_edit (editing its text), order (me3's load 
 must stay last after the others), install, extract, remove and checks (installing, unpacking, removing, and what is
 wrong with a profile's entries), conflicts (which file wins), rebuild (merged parameters and files), history and
 undo, configs (a DLL's settings files), profile_settings, models (the install plan's shape). engine and backends are
-the setup engines Phase 6 replaces. stay_last only re-exports order's part for callers not moved yet (until S3i)."""
+the setup engines Phase 6 replaces."""
 
 from typing import TYPE_CHECKING
 
@@ -25,7 +25,6 @@ if TYPE_CHECKING:  # each module is imported where it is used, not here: importi
         profile_settings,
         rebuild,
         remove,
-        stay_last,
         undo,
     )
 
@@ -44,7 +43,6 @@ __all__ = [
     "profile_settings",
     "rebuild",
     "remove",
-    "stay_last",
     "undo",
     "backends",
 ]

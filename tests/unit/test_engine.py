@@ -255,9 +255,9 @@ def test_the_previous_build_is_kept_and_undo_swaps_it_back(world):
     assert (out["previous"] / "mod/regulation.bin").read_bytes() == b"OLD BUILD"
     u = {"type": "rebuild", "profile": str(world.profile), "tool_restore": str(out["restore"])}
     assert undo.available(u)
-    undo.run(u, lambda s: None)
+    undo.run(u, lambda s: None, loc=er())
     assert (world.own / "mod/regulation.bin").read_bytes() == b"OLD BUILD"
-    undo.run({**u, "redo": True}, lambda s: None)
+    undo.run({**u, "redo": True}, lambda s: None, loc=er())
     assert (world.own / "mod/regulation.bin").read_bytes() != b"OLD BUILD"
 
 

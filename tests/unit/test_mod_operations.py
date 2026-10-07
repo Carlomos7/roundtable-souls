@@ -8,6 +8,7 @@ import pytest
 
 from roundtable_souls.merging import build as B
 from roundtable_souls.mods import install, operations
+from support import er
 
 PROFILE = (
     'profileVersion = "v1"\r\n\r\n[[supports]]\r\ngame = "eldenring"\r\n\r\n'
@@ -54,8 +55,8 @@ def source(tmp_path, version: str, extra: dict | None = None):
 
 
 def do_install(profile, src, **kw):
-    plan = install.plan_install(profile, src, name="grass")
-    return install.install(profile, plan, overwrite=bool(plan.get("exists")), **kw)
+    plan = install.plan_install(profile, src, name="grass", loc=er())
+    return install.install(profile, plan, overwrite=bool(plan.get("exists")), **kw, loc=er())
 
 
 def test_install_is_staged_then_applied_with_a_record(profile, tmp_path):
@@ -189,8 +190,8 @@ def test_seamless_is_never_taken_out_by_an_undo(profile, tmp_path):
     src = tmp_path / "src" / "SeamlessCoop"
     src.mkdir(parents=True)
     (src / "ersc.dll").write_bytes(b"dll 2")
-    plan = install.plan_install(profile, src)
-    out = install.install(profile, plan, overwrite=bool(plan.get("exists")))
+    plan = install.plan_install(profile, src, loc=er())
+    out = install.install(profile, plan, overwrite=bool(plan.get("exists")), loc=er())
     said = operations.undo_install(Path(out["operation"]))
     assert "ersc.dll" in profile.read_text()
     assert (profile.parent / "natives" / "SeamlessCoop" / "ersc.dll").is_file()
@@ -221,11 +222,37 @@ def test_activity_takes_an_install_and_an_update_back(profile, tmp_path):
     assert not undo.available(rec)  # the update let the install's record go: only the newest can be taken back
     upd = {"type": "update", "profile": str(profile), "name": "grass", "operation": second["operation"]}
     assert undo.available(upd) and undo.label(upd) == "Roll back"
-    said = undo.run(upd, lambda s: None)
+    said = undo.run(upd, lambda s: None, loc=er())
     assert "rolled grass back" in said and not undo.available(upd)
     grass = profile.parent / "mod" / "grass"
     assert files(grass)["grass.ini"] == b"version = 1\n"
     assert profile.read_bytes() != before  # rolled back to version 1, not uninstalled
+
+
+def test_an_install_with_a_rebuild_hands_the_rebuild_the_games_locations(profile, tmp_path, monkeypatch):
+    """The rebuild inside the operation is the game's: the service passes on the Locations it is given."""
+    from roundtable_souls.mods import rebuild
+    from roundtable_souls.services import mods as service
+
+    seen = []
+    monkeypatch.setattr(rebuild, "rebuild", lambda prof, log, combine=None, *, loc: seen.append(loc))
+    loc = er()
+    plan = install.plan_install(profile, source(tmp_path, "1"), name="grass", loc=loc)
+    service.install_mod(profile, plan, rebuild=True, loc=loc)
+    assert seen == [loc]
+
+
+def test_rolling_back_an_update_that_rebuilt_rebuilds_for_the_same_game(profile, tmp_path, monkeypatch):
+    from roundtable_souls.mods import rebuild, undo
+
+    do_install(profile, source(tmp_path, "1"))
+    second = do_install(profile, source(tmp_path, "2"))
+    seen = []
+    monkeypatch.setattr(rebuild, "rebuild", lambda prof, log, combine=None, *, loc: seen.append(loc))
+    loc = er()
+    rec = {"type": "update", "profile": str(profile), "name": "grass", "operation": second["operation"]}
+    undo.run({**rec, "rebuild": True}, lambda s: None, loc=loc)
+    assert seen == [loc]
 
 
 def test_removal_interrupted_before_the_folder_went_is_undone(profile, tmp_path, monkeypatch):
@@ -245,7 +272,7 @@ def test_removal_interrupted_before_the_folder_went_is_undone(profile, tmp_path,
         m.setattr(B.os, "replace", dying)
         m.setattr(B, "_undo", lambda op: None)
         with pytest.raises(Crash):
-            remove.uninstall(profile, index, delete_folder=True, to_trash=False)
+            remove.uninstall(profile, index, delete_folder=True, to_trash=False, loc=er())
     assert "mod/grass" not in profile.read_text()  # the profile was written, the folder not yet taken
     assert operations.problem(profile)
     assert operations.recover(profile) == ["an interrupted removal of grass was undone: the previous state is back"]
@@ -261,7 +288,7 @@ def test_removal_interrupted_after_the_folder_went_is_finished(profile, tmp_path
         m.setattr(remove.shutil, "rmtree", lambda *a, **k: (_ for _ in ()).throw(Crash()))  # after the rename
         m.setattr(B, "_undo", lambda op: None)
         with pytest.raises(Crash):
-            remove.uninstall(profile, index, delete_folder=True, to_trash=False)
+            remove.uninstall(profile, index, delete_folder=True, to_trash=False, loc=er())
     assert not (profile.parent / "mod" / "grass").exists()
     assert operations.recover(profile) == ["an interrupted removal of grass was finished"]
     assert "mod/grass" not in profile.read_text() and operations.problem(profile) is None
@@ -284,7 +311,7 @@ def test_failed_removal_leaves_the_mod_installed(profile, tmp_path, monkeypatch)
 
         m.setattr(B.os, "replace", refused)
         with pytest.raises(PermissionError):
-            remove.uninstall(profile, index, delete_folder=True, to_trash=False)
+            remove.uninstall(profile, index, delete_folder=True, to_trash=False, loc=er())
     assert files(profile.parent) == before and operations.problem(profile) is None
 
 

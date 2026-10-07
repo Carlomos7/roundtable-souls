@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from roundtable_souls.game.locate import Locations
+
 import os
 import shutil
 from pathlib import Path
@@ -19,17 +24,18 @@ from roundtable_souls.mods.profile_edit import (
 )
 
 
-def uninstall(profile: Path, index: int, delete_folder: bool = True, to_trash: bool = True) -> dict:
+def uninstall(profile: Path, index: int, delete_folder: bool = True, to_trash: bool = True, *, loc: Locations) -> dict:
     """Remove one block, with its own comments (see remove_entry). With delete_folder, the mod's folder goes too when
     it lies beside the profile and no other entry still points into it (a natives folder shared by several DLLs is
     kept): to the Recycle Bin (to_trash), so it can come back, else deleted. Returns what was removed and where, so
     it can be put back (see mods.undo)."""
-    from roundtable_souls.mods import operations, stay_last
+    from roundtable_souls.mods import operations
+    from roundtable_souls.mods import order as mod_order
 
     profile = Path(profile)
     with operations.lock(profile):
         operations.recover(profile)
-        tgt = stay_last.target(profile)
+        tgt = mod_order.target(profile, loc)
         text = read_text(profile)
         if is_array_form(text):
             text = to_blocks(text)

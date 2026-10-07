@@ -902,7 +902,7 @@ class ModsView:
         if not picked:
             return
         try:
-            out = mod_install.add_existing(Path(self.setup.profile), picked, kind=kind)
+            out = mod_install.add_existing(Path(self.setup.profile), picked, kind=kind, loc=self.ctx.locations)
         except Exception as e:
             self._toast("Could not add", str(e), error=True)
             return
@@ -945,7 +945,7 @@ class ModsView:
             fresh = self._fresh_entry(entry)
             if fresh is None:
                 return
-            uninstall_mod(self.setup.profile, fresh["index"], delete_folder=False)
+            uninstall_mod(self.setup.profile, fresh["index"], delete_folder=False, loc=self.ctx.locations)
             if needs:
                 for o in profile_entries(self.setup.profile):
                     if o["name"] in needs:
@@ -957,6 +957,7 @@ class ModsView:
                                 "load_after": keep(o.get("load_after") or []),
                                 "load_before": keep(o.get("load_before") or []),
                             },
+                            loc=self.ctx.locations,
                         )
         except Exception as e:
             self._toast("Could not remove", str(e), error=True)
@@ -1231,7 +1232,7 @@ class ModsView:
         if entry is None:
             return
         try:
-            set_mod_options(self.setup.profile, entry["index"], {"enabled": bool(checked)})
+            set_mod_options(self.setup.profile, entry["index"], {"enabled": bool(checked)}, loc=self.ctx.locations)
             self._after_profile_change(f"profile: {entry['name']} {'on' if checked else 'off'}")
             self._undo_notice(f"{entry['name']} turned {'on' if checked else 'off'}", "It applies at the next launch.")
         except Exception as e:
@@ -1270,7 +1271,7 @@ class ModsView:
                     core.mod_merge.set_overlay_override(
                         prof, folder if on else None, Path(picked) if on and picked else None
                     )
-            set_mod_options(self.setup.profile, fresh["index"], dlg.options())
+            set_mod_options(self.setup.profile, fresh["index"], dlg.options(), loc=self.ctx.locations)
             self._after_profile_change(f"profile: options saved for {entry['name']}")
             self._undo_notice(f"{entry['name']}: options saved", "They apply at the next launch.")
         except Exception as e:
@@ -1331,7 +1332,7 @@ class ModsView:
 
         def job(_setup, loc):
             run_logging.start_log(f"launcher: remove {name}", loc.game.key)
-            out = uninstall_mod(prof, index, delete_folder=delete)
+            out = uninstall_mod(prof, index, delete_folder=delete, loc=self.ctx.locations)
             core.run_logging.set_undo(
                 {
                     "type": "remove",
@@ -1546,7 +1547,7 @@ class ModsView:
                 loc.game.key,
             )
             try:
-                said = mod_undo.run(u, run_logging.log)
+                said = mod_undo.run(u, run_logging.log, loc=self.ctx.locations)
             except (mod_undo.UndoError, OSError) as e:
                 run_logging.log(f"error: {e}")
                 raise SystemExit(1) from e
@@ -1622,7 +1623,7 @@ class ModsView:
         prof = self.setup.profile
         QApplication.setOverrideCursor(Qt.WaitCursor)  # unpacking a big archive takes a moment
         try:
-            plan = plan_mod_install(prof, src)
+            plan = plan_mod_install(prof, src, loc=self.ctx.locations)
         except Exception as e:
             QApplication.restoreOverrideCursor()
             self._toast(f"Could not read {src.name}", str(e), error=True)
@@ -1647,7 +1648,7 @@ class ModsView:
         dlg = InstallDialog(
             self,
             plan,
-            lambda name, pkg_id, variant: replan_mod_install(prof, plan, name, pkg_id, variant),
+            lambda name, pkg_id, variant: replan_mod_install(prof, plan, name, pkg_id, variant, loc=self.ctx.locations),
             Path(prof),
         )
         if not dlg.exec():
@@ -1659,7 +1660,13 @@ class ModsView:
         def job(_setup, loc):
             run_logging.start_log(f"launcher: install mod {plan['name']}", loc.game.key)
             try:
-                out = install_mod(prof, plan, overwrite=bool(plan.get("exists")), rebuild=bool(plan.get("merge")))
+                out = install_mod(
+                    prof,
+                    plan,
+                    overwrite=bool(plan.get("exists")),
+                    rebuild=bool(plan.get("merge")),
+                    loc=self.ctx.locations,
+                )
                 core.run_logging.set_undo(
                     {
                         "type": "update" if out["update"] else "install",
