@@ -18,6 +18,8 @@ from roundtable_souls.mods.extract import ARCHIVE_EXTENSIONS, stage
 from roundtable_souls.mods.profile_edit import (
     ModError,
     _last_place,
+    _ordered,
+    _stage_write,
     _write_ordered,
     append_entry,
     block_options,
@@ -371,17 +373,8 @@ def regulation_order(profile: Path, skip: Path | None = None) -> dict:
     return {"regulation_packages": ships, "regulation_winner": ships[-1]["name"] if ships else None}
 
 
-def install(profile: Path, plan: dict, overwrite: bool = False) -> dict:
-    """Copy the mod into place and append its profile entries. Returns {dest, entries, backup}."""
-    profile = Path(profile)
-    if plan.get("error"):
-        raise ModError(plan["error"])
-    dest = Path(plan["dest"])
-    in_place = bool(plan.get("in_place"))
-    if dest.exists() and not in_place:
-        if not overwrite:
-            raise ModError(f"{dest.name} already exists in {dest.parent}")
-        shutil.rmtree(dest)
+def _copy_into(plan: dict, into: Path) -> None:
+    """The mod's files, as the plan picked them, into a new folder `into`."""
     loose = {Path(f).name: sub for f, sub in (plan.get("loose") or [])}
     skip = {n.lower() for n in plan.get("exclude") or []}
     root = Path(plan["root"])
@@ -391,29 +384,70 @@ def install(profile: Path, plan: dict, overwrite: bool = False) -> dict:
         top = Path(folder) == root
         return [n for n in names if n in junk or (top and n.lower() in skip)]
 
-    if in_place:
-        pass  # the files are already where they belong: only the profile changes
-    elif loose:
+    if loose:
         # loose game files go into the folder the game serves them from; everything else copies as it is
-        dest.mkdir(parents=True, exist_ok=True)
+        into.mkdir(parents=True, exist_ok=True)
         for c in _children(root):
             if c.name.lower() in skip:
                 continue
             sub = loose.get(c.name)
             if c.is_file() and sub is not None:
-                target = (dest / sub) if sub else dest
+                target = (into / sub) if sub else into
                 target.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(c, target / c.name)
             elif c.is_dir():
-                shutil.copytree(c, dest / c.name, ignore=left_out)
+                shutil.copytree(c, into / c.name, ignore=left_out)
             else:
-                shutil.copy2(c, dest / c.name)
+                shutil.copy2(c, into / c.name)
     else:
-        shutil.copytree(root, dest, ignore=left_out)
-    if not in_place:  # ticked files from beside the mod folder
-        for c in plan.get("contents") or []:
-            if c.get("extra") and c["name"].lower() not in skip:
-                shutil.copy2(Path(plan["unpacked"]) / c["extra"], dest / c["name"])
+        shutil.copytree(root, into, ignore=left_out)
+    for c in plan.get("contents") or []:  # ticked files from beside the mod folder
+        if c.get("extra") and c["name"].lower() not in skip:
+            shutil.copy2(Path(plan["unpacked"]) / c["extra"], into / c["name"])
+
+
+def install(profile: Path, plan: dict, overwrite: bool = False, then=None) -> dict:
+    """Install the mod as one recoverable operation (see mods.operations): its files are copied into a staging
+    folder beside their place and the new profile text is worked out, nothing live changing; then the folder takes
+    its place (an existing one, on an update, is kept aside for a rollback) and the profile is written under one
+    journal. then(): work that needs the new state (a rebuild); when it fails, the whole install is undone. Returns
+    {dest, entries, backup, in_place, order_problem, operation, update, kept}."""
+    from roundtable_souls.mods import operations
+
+    profile = Path(profile)
+    if plan.get("error"):
+        raise ModError(plan["error"])
+    dest = Path(plan["dest"])
+    in_place = bool(plan.get("in_place"))
+    update = dest.exists() and not in_place
+    if update and not overwrite:
+        raise ModError(f"{dest.name} already exists in {dest.parent}")
+    with operations.lock(profile):
+        operations.recover(profile)
+        op = operations.start(profile, f"{'update' if update else 'install'} of {plan['name']}")
+        try:
+            out = _prepare(profile, plan, dest, in_place, update, op)
+        except BaseException:
+            op.discard()
+            raise
+        operations.commit(op, then)
+    if plan.get("staging"):
+        shutil.rmtree(plan["staging"], ignore_errors=True)
+    return out
+
+
+def _prepare(profile: Path, plan: dict, dest: Path, in_place: bool, update: bool, op) -> dict:
+    """Stage install()'s files and profile text in op. Nothing live changes."""
+    from roundtable_souls.mods import operations
+
+    skip = {n.lower() for n in plan.get("exclude") or []}
+    kept: list[str] = []
+    if not in_place:
+        staged = dest.with_name(f".{dest.name}.staging-{op.id}")
+        _copy_into(plan, staged)
+        if update:
+            kept = operations.keep_user_edits(profile, dest, staged)
+        op.replace_folder(dest, staged)
     text = read_text(profile)
     if is_array_form(text):
         text = to_blocks(text)
@@ -449,10 +483,20 @@ def install(profile: Path, plan: dict, overwrite: bool = False) -> dict:
     problem = None
     bak = None
     if added or text != read_text(profile):
-        bak, problem = _write_ordered(profile, text, f"before installing {plan['name']}", tgt)
-    if plan.get("staging"):
-        shutil.rmtree(plan["staging"], ignore_errors=True)
-    return {"dest": dest, "entries": added, "backup": bak, "in_place": in_place, "order_problem": problem}
+        text, problem = _ordered(profile, text, tgt)
+        bak = _stage_write(op, profile, text, f"before installing {plan['name']}")
+    out = {
+        "dest": dest,
+        "entries": added,
+        "backup": bak,
+        "in_place": in_place,
+        "order_problem": problem,
+        "operation": str(op.dir),
+        "update": update,
+        "kept": kept,
+    }
+    operations.describe(op, profile, plan, dest, in_place, update, added, kept)
+    return out
 
 
 def add_existing(profile: Path, folders: list[Path], kind: str = "package") -> dict:

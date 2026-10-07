@@ -10,30 +10,9 @@ import re
 import tomllib
 from pathlib import Path
 
+from roundtable_souls.formats import me3_profile
 from roundtable_souls.game import catalog as games
 from roundtable_souls.platform.files import atomic_write
-
-
-def _profile_rows(text: str):
-    """(kind, row) for every package and native.
-
-    me3 accepts two shapes. Hand-written profiles use [[packages]] / [[natives]] blocks.
-    Nightreign Revive's installer writes packages = [ { ... } ] and natives = [ { ... } ] instead.
-    """
-    try:
-        data = tomllib.loads(text)
-    except tomllib.TOMLDecodeError:
-        return None
-    out = []
-    for key, rows in data.items():
-        kind = {"packages": "package", "natives": "native"}.get(key)
-        if kind is None:
-            continue
-        if isinstance(rows, dict):
-            rows = [rows]
-        if isinstance(rows, list):
-            out.extend((kind, row) for row in rows if isinstance(row, dict))
-    return out
 
 
 def coop_ini_for(profile: str, game: games.Game | None = None) -> Path | None:
@@ -47,16 +26,11 @@ def coop_ini_for(profile: str, game: games.Game | None = None) -> Path | None:
         text = Path(profile).read_text(encoding="utf-8", errors="replace")
     except OSError:
         return None
-    paths = []
-    rows = _profile_rows(text)
-    if rows is not None:
-        paths = [
-            str(row.get("path") or "")
-            for kind, row in rows
-            if kind == "native"
-            and row.get("enabled", True) is not False
-            and Path(str(row.get("path") or "")).name.lower() == dll
-        ]
+    try:
+        found = me3_profile.entries(text)
+    except tomllib.TOMLDecodeError:
+        found = []
+    paths = [e["path"] for e in found if e["kind"] == "native" and e["enabled"] and Path(e["path"]).name.lower() == dll]
     if not paths:
         paths = re.findall(r"""(?m)^[^#\n]*path\s*=\s*['"]([^'"]*""" + re.escape(dll) + r""")['"]""", text, re.I)
     for raw in paths:

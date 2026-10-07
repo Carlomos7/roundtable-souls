@@ -15,15 +15,25 @@ from __future__ import annotations
 import re
 import shutil
 import time
-import tomllib
 from pathlib import Path
+
+from roundtable_souls.formats import me3_profile
+from roundtable_souls.formats.me3_profile import (  # the one profile reader; re-exported for the mods layer
+    block_options,
+    blocks,
+    dep_list,
+    entry_lines,
+    entry_ref,
+    is_array_form,
+    quote,
+    read_text,
+    resolve,
+    to_blocks,
+)
 
 NATIVE_OPTION_KEYS = ("enabled", "optional", "load_early", "initializer", "finalizer", "load_after", "load_before")
 PACKAGE_OPTION_KEYS = ("enabled", "id", "load_after", "load_before")
-_BLOCK = re.compile(r"^[ \t]*\[\[(packages|natives)\]\][ \t]*$", re.I)
-_ANY_TABLE = re.compile(r"^[ \t]*\[")
 _KEY = re.compile(r"^[ \t]*([A-Za-z_][A-Za-z0-9_]*)[ \t]*=[ \t]*(.*)$")
-_ARRAY_KEY = re.compile(r"^[ \t]*(packages|natives|supports)[ \t]*=", re.I)
 
 
 class ModError(Exception):
@@ -37,104 +47,6 @@ class ModError(Exception):
 
 
 # ----------------------------------------------------------------------------- profile text
-def blocks(text: str) -> list[dict]:
-    """[[packages]] / [[natives]] blocks with line spans: {index, kind, start, end, lines, keys}. Comments are not blocks."""
-    lines = text.splitlines(keepends=True)
-    heads = [
-        (i, "package" if m.group(1).lower() == "packages" else "native")
-        for i, l in enumerate(lines)
-        if (m := _BLOCK.match(l.rstrip("\r\n")))
-    ]
-    out = []
-    for n, (i, kind) in enumerate(heads):
-        j = heads[n + 1][0] if n + 1 < len(heads) else len(lines)
-        # a following non-mod table ([supports] etc.) ends the block too
-        for k in range(i + 1, j):
-            if _ANY_TABLE.match(lines[k].rstrip("\r\n")) and not _BLOCK.match(lines[k].rstrip("\r\n")):
-                j = k
-                break
-        out.append({"index": n, "kind": kind, "start": i, "end": j, "lines": lines[i:j]})
-    return out
-
-
-def is_array_form(text: str) -> bool:
-    return not any(_BLOCK.match(l) for l in text.splitlines()) and any(_ARRAY_KEY.match(l) for l in text.splitlines())
-
-
-def _q(s: str) -> str:
-    return '"' + str(s).replace("\\", "\\\\").replace('"', '\\"') + '"'
-
-
-def _path_lit(p: str) -> str:
-    p = str(p).replace("\\", "/")
-    return "'" + p + "'" if "'" not in p else _q(p)
-
-
-def _dep_list(deps, nl: str = "", tall: bool = False) -> str:
-    """A load order list; with nl, written one entry per line when tall or longer than two entries."""
-    items = []
-    for d in deps or []:
-        if isinstance(d, str):
-            d = {"id": d, "optional": True}
-        items.append(
-            "{ id = " + _q(d["id"]) + ", optional = " + ("true" if d.get("optional", True) else "false") + " }"
-        )
-    if nl and items and (tall or len(items) > 2):
-        return "[" + nl + "".join(f"  {i},{nl}" for i in items) + "]"
-    return "[" + ", ".join(items) + "]"
-
-
-def _entry_lines(kind: str, row: dict, nl: str) -> list[str]:
-    out = [f"[[{'packages' if kind == 'package' else 'natives'}]]{nl}"]
-    if kind == "package" and row.get("id"):
-        out.append(f"id = {_q(row['id'])}{nl}")
-    out.append(f"path = {_path_lit(row['path'])}{nl}")
-    if row.get("enabled") is False:
-        out.append(f"enabled = false{nl}")
-    if kind == "native":
-        if row.get("optional"):
-            out.append(f"optional = true{nl}")
-        if row.get("load_early"):
-            out.append(f"load_early = true{nl}")
-        init = row.get("initializer")
-        if isinstance(init, dict):
-            if init.get("function"):
-                out.append(f"initializer = {{ function = {_q(init['function'])} }}{nl}")
-            elif isinstance(init.get("delay"), dict) and init["delay"].get("ms") is not None:
-                out.append(f"initializer = {{ delay = {{ ms = {int(init['delay']['ms'])} }} }}{nl}")
-        if row.get("finalizer"):
-            out.append(f"finalizer = {_q(row['finalizer'])}{nl}")
-    if row.get("load_after"):
-        out.append(f"load_after = {_dep_list(row['load_after'])}{nl}")
-    if row.get("load_before"):
-        out.append(f"load_before = {_dep_list(row['load_before'])}{nl}")
-    return out
-
-
-def to_blocks(text: str) -> str:
-    """Rewrite an inline-array profile (Revive's shape) as [[packages]] / [[natives]] blocks."""
-    data = tomllib.loads(text)
-    nl = "\r\n" if "\r\n" in text else "\n"
-    out = []
-    for key in ("profileVersion", "savefile", "start_online", "disable_arxan", "mem_patch", "mem_patch_heap_size"):
-        if key in data:
-            v = data[key]
-            lit = "true" if v is True else "false" if v is False else str(v) if isinstance(v, int) else _q(v)
-            out.append(f"{key} = {lit}{nl}")
-    for sup in data.get("supports") or []:
-        if isinstance(sup, dict) and sup.get("game"):
-            out.append(f"{nl}[[supports]]{nl}game = {_q(sup['game'])}{nl}")
-    for key, kind in (("natives", "native"), ("packages", "package")):
-        rows = data.get(key) or []
-        if isinstance(rows, dict):
-            rows = [rows]
-        for row in rows:
-            if isinstance(row, dict) and row.get("path"):
-                out.append(nl)
-                out.extend(_entry_lines(kind, row, nl))
-    return "".join(out)
-
-
 def _strip_key(lines: list[str], key: str) -> list[str]:
     """Remove a key from a block's lines, including a multi-line [ ... ] value."""
     out = []
@@ -156,36 +68,6 @@ def _strip_key(lines: list[str], key: str) -> list[str]:
             continue
         out.append(l)
     return out
-
-
-def block_options(text: str, index: int) -> dict:
-    """Parsed options of one block (via tomllib on that block alone)."""
-    b = blocks(text)[index]
-    body = "".join(b["lines"])
-    try:
-        data = tomllib.loads(body)
-    except tomllib.TOMLDecodeError:
-        return {"kind": b["kind"], "path": "", "id": "", "enabled": True}
-    rows = data.get("packages") or data.get("natives") or [{}]
-    row = rows[0] if isinstance(rows, list) else rows
-    deps = lambda v: [
-        {"id": d["id"], "optional": bool(d.get("optional", False))}
-        if isinstance(d, dict)
-        else {"id": str(d), "optional": True}
-        for d in (v or [])
-    ]
-    return {
-        "kind": b["kind"],
-        "path": str(row.get("path") or ""),
-        "id": str(row.get("id") or ""),
-        "enabled": row.get("enabled", True) is not False,
-        "optional": bool(row.get("optional", False)),
-        "load_early": bool(row.get("load_early", False)),
-        "initializer": row.get("initializer") if isinstance(row.get("initializer"), dict) else None,
-        "finalizer": str(row.get("finalizer") or ""),
-        "load_after": deps(row.get("load_after")),
-        "load_before": deps(row.get("load_before")),
-    }
 
 
 def set_block_options(text: str, index: int, opts: dict) -> str:
@@ -215,21 +97,21 @@ def set_block_options(text: str, index: int, opts: dict) -> str:
             if not v:  # blank: keep whatever the block had
                 cur = block_options(text, index).get("id")
                 if cur:
-                    new.append(f"id = {_q(cur)}{nl}")
+                    new.append(f"id = {quote(cur)}{nl}")
             else:
-                new.append(f"id = {_q(v)}{nl}")
+                new.append(f"id = {quote(v)}{nl}")
         elif key == "finalizer":
             if v:
-                new.append(f"finalizer = {_q(v)}{nl}")
+                new.append(f"finalizer = {quote(v)}{nl}")
         elif key == "initializer":
             if isinstance(v, dict) and v.get("function"):
-                new.append(f"initializer = {{ function = {_q(v['function'])} }}{nl}")
+                new.append(f"initializer = {{ function = {quote(v['function'])} }}{nl}")
             elif isinstance(v, dict) and isinstance(v.get("delay"), dict) and v["delay"].get("ms") is not None:
                 new.append(f"initializer = {{ delay = {{ ms = {int(v['delay']['ms'])} }} }}{nl}")
         elif key in ("load_after", "load_before"):
             if v:
                 tall = was is not None and lines_was.rstrip().endswith("[")  # keep a one-per-line list that way
-                new.append(f"{key} = {_dep_list(v, nl, tall)}{nl}")
+                new.append(f"{key} = {dep_list(v, nl, tall)}{nl}")
         if was is not None:
             lines[was:was] = new[before:]
             del new[before:]
@@ -409,7 +291,7 @@ def insert_entry(text: str, kind: str, row: dict, before: int) -> str:
         if not prev.startswith("#") or _commented_entry(prev):
             break  # a blank line, a real line, or a commented-out entry: the note above ends here
         at -= 1
-    new = "".join(_entry_lines(kind, row, nl)) + nl
+    new = "".join(entry_lines(kind, row, nl)) + nl
     return "".join(lines[:at]) + new + "".join(lines[at:])
 
 
@@ -417,28 +299,10 @@ def append_entry(text: str, kind: str, row: dict) -> str:
     nl = "\r\n" if "\r\n" in text else "\n"
     if text and not text.endswith(("\n", "\r\n")):
         text += nl
-    return text + nl + "".join(_entry_lines(kind, row, nl))
-
-
-def read_text(path: Path) -> str:
-    """Profile text with its line endings intact (read_text would turn CRLF into LF)."""
-    return Path(path).read_bytes().decode("utf-8", errors="replace")
+    return text + nl + "".join(entry_lines(kind, row, nl))
 
 
 # ----------------------------------------------------------------------------- where things live
-def entry_ref(entry: dict) -> str:
-    """The name other entries use in load_after / load_before: a package's id (its folder name when it has none),
-    a native's DLL file name."""
-    if entry.get("kind") == "package" and entry.get("id"):
-        return entry["id"]
-    return Path(entry.get("path") or "").name
-
-
-def resolve(profile: Path, path: str) -> Path:
-    p = Path(path)
-    return p if p.is_absolute() else (Path(profile).parent / p)
-
-
 def roots(profile: Path, text: str) -> tuple[Path, Path]:
     """(packages root, natives root). New packages go into the mods container existing packages share (a folder
     named mod / mods / packages beside the profile), else mod/; natives likewise into natives/. A package that lives
@@ -503,12 +367,32 @@ def _write_ordered(
 ) -> tuple[Path, str | None]:
     """_write, with the mod that must stay last kept after everything else (see mods.stay_last). tgt is what
     stay_last.target() said before the change. Returns (backup, why it could not be kept last, or None)."""
+    new_text, problem = _ordered(profile, new_text, tgt, renamed)
+    return _write(profile, new_text, why), problem
+
+
+def _ordered(
+    profile: Path, new_text: str, tgt: dict | None, renamed: dict[str, str] | None = None
+) -> tuple[str, str | None]:
+    """The text with the mod that must stay last kept after everything else, and why it could not be (or None)."""
     from roundtable_souls.mods import stay_last
 
-    problem = None
-    if tgt:
-        new_text, problem = stay_last.reconcile(profile, new_text, tgt, renamed)
-    return _write(profile, new_text, why), problem
+    if not tgt:
+        return new_text, None
+    return stay_last.reconcile(profile, new_text, tgt, renamed)
+
+
+def _stage_write(op, profile: Path, new_text: str, why: str) -> Path:
+    """_write for an operation (merging.build.Operation): the history copy and the .bak now, the new text as one of
+    its steps, so it changes together with the rest. Returns the .bak."""
+    from roundtable_souls.mods import history
+
+    profile = Path(profile)
+    history.snapshot(profile, why)
+    bak = profile.with_name(profile.name + ".bak")
+    shutil.copy2(profile, bak)
+    op.write_file(profile, new_text.encode("utf-8"))
+    return bak
 
 
 def _last_place(profile: Path, text: str, kind: str, tgt: dict | None) -> int | None:
@@ -549,16 +433,7 @@ def set_options(profile: Path, index: int, opts: dict) -> Path:
 
 def entries(profile: Path) -> list[dict]:
     """Every block, enabled or not, with its options; 'index' addresses it for the other operations."""
-    text = read_text(Path(profile))
-    if is_array_form(text):
-        text = to_blocks(text)
-    out = []
-    for b in blocks(text):
-        o = block_options(text, b["index"])
-        o["index"] = b["index"]
-        o["name"] = o["id"] or Path(o["path"]).name or f"entry {b['index'] + 1}"
-        out.append(o)
-    return out
+    return me3_profile.entries(read_text(Path(profile)))
 
 
 # ----------------------------------------------------------------------------- package folders in a profile
@@ -577,7 +452,7 @@ def create_profile(folder: Path, name: str, game: str = "eldenring", copy_from: 
     if copy_from and Path(copy_from).is_file():
         text = read_text(Path(copy_from))
     else:
-        text = f'profileVersion = "v1"\n\n[[supports]]\ngame = {_q(game)}\n'
+        text = f'profileVersion = "v1"\n\n[[supports]]\ngame = {quote(game)}\n'
     path.write_text(text, encoding="utf-8", newline="")
     (folder / "mod").mkdir(exist_ok=True)
     (folder / "natives").mkdir(exist_ok=True)

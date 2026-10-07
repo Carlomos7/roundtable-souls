@@ -327,7 +327,8 @@ def test_uninstall_rules(tmp_path):
         and [e["name"] for e in M.entries(p)] == ["second.dll"]
     )
     out = remove.uninstall(p, 0, delete_folder=True)
-    assert out["removed_folder"] is True and not (tmp_path / "natives" / "SeamlessCoop").exists()
+    # its folder holds Seamless Co-op's DLL (another profile beside this one may load it): a shared dependency stays
+    assert out["removed_folder"] is False and (tmp_path / "natives" / "SeamlessCoop" / "ersc.dll").is_file()
     assert M.entries(p) == [] and tomllib.loads(p.read_text(encoding="utf-8"))["profileVersion"] == "v1"
     # a package outside the profile folder is never deleted
     p2 = tmp_path / "p2.me3"
