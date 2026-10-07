@@ -9,7 +9,9 @@ An overhaul is a mod that must load after the others and ships merged copies of 
                 text that marks its profile entries (an offline launch can switch those off)
     builds      what the launcher can build itself, one per edition: how to recognise that edition's download and
                 which versions it was written for, and the steps that build its output from the packages before it
-                (the steps mods.engine runs, none of them a program of the mod's; docs/Overhaul configs.md)
+                (the steps mods.engine runs, none of them a program of the mod's; docs/Overhaul configs.md); and,
+                optionally, what installing that edition does to the me3 profile (install; overhauls.install_plan
+                works out the changes, nothing here writes a profile)
 
 The shipped configs are in data/overhauls; a file in the local folder (overhauls/ in the launcher's data folder) with
 the same id replaces the shipped one, and one with a new id adds an overhaul. A file that does not read or does not
@@ -138,6 +140,55 @@ Step = Annotated[
 ]
 
 
+# ----------------------------------------------------------------------------- installing it into a profile
+class Initializer(_Strict):
+    function: str  # the DLL's function me3 calls after loading it
+
+
+class InstallNative(_Strict):
+    """A DLL entry the install adds, with its load settings exactly as the overhaul's installer writes them."""
+
+    file: str  # in the overhaul's own folder
+    load_early: bool | None = None
+    initializer: Initializer | None = None
+    after_enabled_natives: bool = False  # load_after every enabled DLL already in the profile, each optional
+
+
+class InstallPackage(_Strict):
+    id: str
+    folder: str = "mod"  # in the overhaul's own folder
+    after_enabled_packages: bool = False  # load_after every enabled package already in the profile, each optional
+
+
+class SetInitializer(_Strict):
+    """An initializer the install gives other mods' DLLs that have none (a companion mod the overhaul knows)."""
+
+    name_prefix: str  # DLL file names starting with this, case aside
+    function: str
+
+
+class Seamless(_Strict):
+    """The overhaul needs Seamless Co-op's DLL switched on in the profile."""
+
+    dll: str = "ersc.dll"
+    # Where to look when the profile has none switched on, in order; {profile_dir} and {game_dir} are filled in.
+    candidates: list[str] = Field(default_factory=list)
+
+
+class Install(_Strict):
+    """What installing one edition does to the me3 profile it is installed into (its own folder beside it)."""
+
+    profile_settings: dict[str, str | int | bool] = Field(default_factory=dict)  # top-level keys set
+    owned_package_ids: list[str] = Field(default_factory=list)  # earlier installs' entries, removed first
+    owned_dlls: list[str] = Field(default_factory=list)  # DLL file names (lower-case), removed first
+    seamless: Seamless | None = None
+    set_initializers: list[SetInitializer] = Field(default_factory=list)
+    natives: list[InstallNative] = Field(default_factory=list)  # added after the profile's own, in this order
+    package: InstallPackage | None = None  # added after the profile's own
+    required_files: list[str] = Field(default_factory=list)  # in its folder, after a build (its check)
+    required_folders: list[str] = Field(default_factory=list)  # in its folder, not empty
+
+
 class Build(_Strict):
     """One edition the launcher builds itself."""
 
@@ -145,6 +196,7 @@ class Build(_Strict):
     match: Match
     output: Output
     steps: list[Step]
+    install: Install | None = None  # what installing it does to the profile; None: the launcher does not install it
 
 
 # ----------------------------------------------------------------------------- the config
@@ -156,6 +208,8 @@ class OverhaulConfig(_Strict):
     game: str  # the game's key (data/games, game.catalog)
     recognise: Recognise
     builds: list[Build] = Field(default_factory=list)
+    # Editions its installer knows that the launcher does not install, and why (edition -> reason).
+    install_unsupported: dict[str, str] = Field(default_factory=dict)
 
     def recipe(self, build: Build) -> dict:
         """One build in the shape mods.engine reads (the former data/recipes JSON). Only what the file sets is

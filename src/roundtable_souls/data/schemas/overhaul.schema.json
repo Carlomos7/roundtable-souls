@@ -114,6 +114,17 @@
      },
      "title": "Steps",
      "type": "array"
+    },
+    "install": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/Install"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null
     }
    },
    "required": [
@@ -194,6 +205,176 @@
     "folders_in"
    ],
    "title": "Each",
+   "type": "object"
+  },
+  "Initializer": {
+   "additionalProperties": false,
+   "properties": {
+    "function": {
+     "title": "Function",
+     "type": "string"
+    }
+   },
+   "required": [
+    "function"
+   ],
+   "title": "Initializer",
+   "type": "object"
+  },
+  "Install": {
+   "additionalProperties": false,
+   "description": "What installing one edition does to the me3 profile it is installed into (its own folder beside it).",
+   "properties": {
+    "profile_settings": {
+     "additionalProperties": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "integer"
+       },
+       {
+        "type": "boolean"
+       }
+      ]
+     },
+     "title": "Profile Settings",
+     "type": "object"
+    },
+    "owned_package_ids": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Owned Package Ids",
+     "type": "array"
+    },
+    "owned_dlls": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Owned Dlls",
+     "type": "array"
+    },
+    "seamless": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/Seamless"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null
+    },
+    "set_initializers": {
+     "items": {
+      "$ref": "#/$defs/SetInitializer"
+     },
+     "title": "Set Initializers",
+     "type": "array"
+    },
+    "natives": {
+     "items": {
+      "$ref": "#/$defs/InstallNative"
+     },
+     "title": "Natives",
+     "type": "array"
+    },
+    "package": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/InstallPackage"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null
+    },
+    "required_files": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Required Files",
+     "type": "array"
+    },
+    "required_folders": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Required Folders",
+     "type": "array"
+    }
+   },
+   "title": "Install",
+   "type": "object"
+  },
+  "InstallNative": {
+   "additionalProperties": false,
+   "description": "A DLL entry the install adds, with its load settings exactly as the overhaul's installer writes them.",
+   "properties": {
+    "file": {
+     "title": "File",
+     "type": "string"
+    },
+    "load_early": {
+     "anyOf": [
+      {
+       "type": "boolean"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Load Early"
+    },
+    "initializer": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/Initializer"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null
+    },
+    "after_enabled_natives": {
+     "default": false,
+     "title": "After Enabled Natives",
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "file"
+   ],
+   "title": "InstallNative",
+   "type": "object"
+  },
+  "InstallPackage": {
+   "additionalProperties": false,
+   "properties": {
+    "id": {
+     "title": "Id",
+     "type": "string"
+    },
+    "folder": {
+     "default": "mod",
+     "title": "Folder",
+     "type": "string"
+    },
+    "after_enabled_packages": {
+     "default": false,
+     "title": "After Enabled Packages",
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "id"
+   ],
+   "title": "InstallPackage",
    "type": "object"
   },
   "JsonEquals": {
@@ -519,6 +700,46 @@
    "title": "ScriptAppend",
    "type": "object"
   },
+  "Seamless": {
+   "additionalProperties": false,
+   "description": "The overhaul needs Seamless Co-op's DLL switched on in the profile.",
+   "properties": {
+    "dll": {
+     "default": "ersc.dll",
+     "title": "Dll",
+     "type": "string"
+    },
+    "candidates": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Candidates",
+     "type": "array"
+    }
+   },
+   "title": "Seamless",
+   "type": "object"
+  },
+  "SetInitializer": {
+   "additionalProperties": false,
+   "description": "An initializer the install gives other mods' DLLs that have none (a companion mod the overhaul knows).",
+   "properties": {
+    "name_prefix": {
+     "title": "Name Prefix",
+     "type": "string"
+    },
+    "function": {
+     "title": "Function",
+     "type": "string"
+    }
+   },
+   "required": [
+    "name_prefix",
+    "function"
+   ],
+   "title": "SetInitializer",
+   "type": "object"
+  },
   "VersionKey": {
    "additionalProperties": false,
    "properties": {
@@ -571,6 +792,13 @@
    },
    "title": "Builds",
    "type": "array"
+  },
+  "install_unsupported": {
+   "additionalProperties": {
+    "type": "string"
+   },
+   "title": "Install Unsupported",
+   "type": "object"
   }
  },
  "required": [
