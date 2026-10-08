@@ -422,7 +422,8 @@ def test_animation_data_changed_differently_by_the_package_and_the_mod_is_a_reco
     clips = files_of((world.own / "mod/chr/c0000_a00_hi.anibnd.dcx").read_bytes())
     assert clips["a000_000.hkx"] == b"revive walk"
     report = (world.own / "merge-report.txt").read_text()
-    assert "clash: chr/c0000_a00_hi.anibnd.dcx" in report and "a000_000.hkx" in report
+    assert "clash: chr/c0000_a00_hi.anibnd.dcx (the player character's animations) " in report
+    assert "a000_000.hkx" in report
 
 
 def test_packages_with_different_entry_scripts_are_a_recorded_clash(world):
@@ -432,7 +433,7 @@ def test_packages_with_different_entry_scripts_are_a_recorded_clash(world):
     hks = (world.own / "mod/action/script/c0000.hks").read_bytes()
     assert hks.startswith(b"-- anims script")  # the last package's
     report = (world.own / "merge-report.txt").read_text()
-    assert "clash: action/script/c0000.hks: body, anims ship different copies" in report
+    assert "clash: action/script/c0000.hks (behaviour scripts): body, anims ship different copies" in report
 
 
 def test_the_same_entry_script_in_two_packages_is_no_clash(world):

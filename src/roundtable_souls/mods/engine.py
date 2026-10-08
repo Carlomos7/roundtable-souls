@@ -233,6 +233,13 @@ def _fill(text: str, values: dict) -> str:
     return text
 
 
+def _named(rel: str) -> str:
+    """A game path for the build's report, with what it is in plain words when the game's file-category map knows
+    it: "chr/c0000.anibnd.dcx (the player character's animations)"."""
+    what = game_config.load().category_of(rel)
+    return f"{rel} ({what})" if what else rel
+
+
 def _effective(layers_: list[Path], rel: str) -> Path | None:
     return next((p / rel for p in reversed(layers_) if (p / rel).is_file()), None)
 
@@ -430,7 +437,9 @@ def _launcher_step(step, each, setup, inputs, game_dir, mod, sources, report, lo
     if result.clashes:
         log(f"  {rel}: {result.summary()}")
         for where, who in sorted(result.clashes.items()):
-            report.append(f"clash: {rel} {where}: changed differently by {', '.join(who)}; the last one's is used")
+            report.append(
+                f"clash: {_named(rel)} {where}: changed differently by {', '.join(who)}; the last one's is used"
+            )
     for where, said in sorted(result.notes.items()):
         report += [f"note: {rel} {where}: {n}" for n in said]
     if not result.merged:
@@ -455,7 +464,7 @@ def _hook_step(steps, label, setup, inputs, mod, sources, report, log) -> None:
     shipped = [(layer, (layer / folder / name).read_bytes()) for layer in inputs if (layer / folder / name).is_file()]
     if len({data for _layer, data in shipped}) > 1:
         names = ", ".join(layer.name for layer, _data in shipped)
-        line = f"clash: {folder}/{name}: {names} ship different copies; the last one's is used"
+        line = f"clash: {_named(f'{folder}/{name}')}: {names} ship different copies; the last one's is used"
         report.append(line)
         log(f"  {line}")
     entry = dest / name
