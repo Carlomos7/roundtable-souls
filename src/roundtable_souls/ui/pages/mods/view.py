@@ -982,7 +982,7 @@ class ModsView:
             names = ", ".join(f["path"].name for f in files[:3]) + (f" +{len(files) - 3}" if len(files) > 3 else "")
             b.setToolTip(f"Edit its settings: {names}")
         else:
-            b.setToolTip("No settings file found beside it. Click to tie one the mod reads.")
+            b.setToolTip("No settings file found beside it. Click to attach one the mod reads.")
             quiet = QGraphicsOpacityEffect(b)  # present in every row, but quiet when there is nothing to edit yet
             quiet.setOpacity(0.45)
             b.setGraphicsEffect(quiet)
