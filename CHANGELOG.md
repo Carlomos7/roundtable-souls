@@ -4,6 +4,12 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
 
 ## [Unreleased]
 
+- Mods: every change the launcher makes to a me3 profile now goes through one writer with one set of rules. New:
+  a profile edited outside the launcher (a text editor, another tool) after the launcher read it is never
+  overwritten; the change is refused with "the profile changed outside the launcher; reload and try again". Also
+  refused, as me3 would refuse to start: a change that makes a package id appear twice, loops the load order, or
+  switches on two DLLs with the same file name (both are named). Problems a profile already had do not block other
+  changes.
 - Profile history: two changes made within the same millisecond are listed in the order they were made
   (the newer one could show as the older).
 

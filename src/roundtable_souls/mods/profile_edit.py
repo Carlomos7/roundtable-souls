@@ -7,7 +7,8 @@ contains a .me3 file. Single-folder wrappers (the usual zip layout) are unwrappe
 Profile edits are text-level so comments and order survive: new [[packages]] / [[natives]] blocks go
 at the end (later loads later, so a new mod overrides what is above it), and per-mod options rewrite
 only the keys inside one block. Profiles in the inline-array form Revive's installer writes are
-converted to blocks first (that form has no comments to lose).
+converted to blocks first (that form has no comments to lose). The functions here change text; every
+write of a profile goes through mods.profile_writer.
 """
 
 from __future__ import annotations
@@ -353,87 +354,21 @@ def rel(profile: Path, target: Path) -> str:
 
 
 # ----------------------------------------------------------------------------- operations
-def _write(profile: Path, new_text: str, why: str = "change") -> Path:
-    """Write the profile atomically: a copy in its history first (see mods.history), and one .bak beside it."""
-    from roundtable_souls.mods import history
+def set_options(profile: Path, index: int, opts: dict, *, loc: Locations) -> Path | None:
+    """Rewrite one entry's options (set_block_options) through the writer: the mod that must stay last follows an id
+    renamed here. Returns the .bak. A loop the change would make among the other entries shows on the Load order
+    card; one it would make itself is refused (mods.profile_writer)."""
+    from roundtable_souls.mods import profile_writer
 
-    profile = Path(profile)
-    history.snapshot(profile, why)
-    bak = profile.with_name(profile.name + ".bak")
-    shutil.copy2(profile, bak)
-    tmp = profile.with_name(profile.name + ".tmp")
-    tmp.write_text(new_text, encoding="utf-8", newline="")
-    tmp.replace(profile)
-    return bak
-
-
-def _write_ordered(
-    profile: Path, new_text: str, why: str, tgt: dict | None, renamed: dict[str, str] | None = None
-) -> tuple[Path, str | None]:
-    """_write, with the mod that must stay last kept after everything else (see mods.order). tgt is what
-    order.target() said before the change. Returns (backup, why it could not be kept last, or None)."""
-    new_text, problem = _ordered(profile, new_text, tgt, renamed)
-    return _write(profile, new_text, why), problem
-
-
-def _ordered(
-    profile: Path, new_text: str, tgt: dict | None, renamed: dict[str, str] | None = None
-) -> tuple[str, str | None]:
-    """The text with the mod that must stay last kept after everything else, and why it could not be (or None)."""
-    from roundtable_souls.mods import order as mod_order
-
-    if not tgt:
-        return new_text, None
-    return mod_order.reconcile(profile, new_text, tgt, renamed)
-
-
-def _stage_write(op, profile: Path, new_text: str, why: str) -> Path:
-    """_write for an operation (merging.build.Operation): the history copy and the .bak now, the new text as one of
-    its steps, so it changes together with the rest. Returns the .bak."""
-    from roundtable_souls.mods import history
-
-    profile = Path(profile)
-    history.snapshot(profile, why)
-    bak = profile.with_name(profile.name + ".bak")
-    shutil.copy2(profile, bak)
-    op.write_file(profile, new_text.encode("utf-8"))
-    return bak
-
-
-def _last_place(profile: Path, text: str, kind: str, tgt: dict | None) -> int | None:
-    """The block new entries of this kind go above, so the file reads in load order: the package that must stay
-    last, or the first of its DLLs. None without one."""
-    from roundtable_souls.mods import order as mod_order
-
-    if not tgt:
-        return None
-    items = mod_order._items(profile, text)
-    pkg, _last, mine = mod_order._roles(profile, items, tgt)
-    if kind == "package":
-        return pkg["index"] if pkg else None
-    return mine[0]["index"] if mine else None
-
-
-def set_options(profile: Path, index: int, opts: dict, *, loc: Locations) -> Path:
-    profile = Path(profile)
-    text = read_text(profile)
-    if is_array_form(text):
-        text = to_blocks(text)
-    name = block_options(text, index)["id"] or Path(block_options(text, index)["path"]).name
-    if set(opts) == {"enabled"}:  # switching a mod on or off: the load order lists already name every entry
+    w = profile_writer.ProfileWriter(Path(profile), loc)
+    o = w.options(index)
+    name = o["id"] or Path(o["path"]).name
+    if set(opts) == {"enabled"}:
         what = f"before turning {name} {'on' if opts['enabled'] else 'off'}"
-        return _write(profile, set_block_options(text, index, opts), what)
-    from roundtable_souls.mods import order as mod_order
-
-    old = block_options(text, index)
-    renamed = {}
-    if old["kind"] == "package" and opts.get("id") and old["id"] and opts["id"] != old["id"]:
-        renamed = {old["id"].lower(): opts["id"]}
-    new = set_block_options(text, index, opts)
-    bak, _problem = _write_ordered(
-        profile, new, f"before changing {name}'s options", mod_order.target(profile, loc), renamed
-    )
-    return bak  # a loop the change would make shows on the Load order card
+    else:
+        what = f"before changing {name}'s options"
+    w.set_options(index, opts)
+    return w.write(what).backup
 
 
 def entries(profile: Path) -> list[dict]:
@@ -458,7 +393,9 @@ def create_profile(folder: Path, name: str, game: str = "eldenring", copy_from: 
         text = read_text(Path(copy_from))
     else:
         text = f'profileVersion = "v1"\n\n[[supports]]\ngame = {quote(game)}\n'
-    path.write_text(text, encoding="utf-8", newline="")
+    from roundtable_souls.mods import profile_writer
+
+    profile_writer.ProfileWriter.create(path, text).write("new profile")
     (folder / "mod").mkdir(exist_ok=True)
     (folder / "natives").mkdir(exist_ok=True)
     return path

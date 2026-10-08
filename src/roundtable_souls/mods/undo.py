@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 from pathlib import Path
 
 from roundtable_souls.mods import profile_edit as mod_manage
+from roundtable_souls.mods import profile_writer
 
 LABEL = {
     "remove": "Restore",
@@ -122,11 +123,9 @@ def _restore_removed(undo: dict, log) -> str:
     if _listed(profile, undo.get("path") or ""):
         log(f"restore: {name} is already in {profile.name}")
     else:
-        text = mod_manage.read_text(profile)
-        if mod_manage.is_array_form(text):
-            text = mod_manage.to_blocks(text)
-        new = mod_manage.restore_entry(text, undo["entry_text"], undo.get("where") or {})
-        mod_manage._write(profile, new, f"before restoring {name}")
+        w = profile_writer.ProfileWriter(profile)
+        w.restore_entry(undo["entry_text"], undo.get("where") or {})
+        w.write(f"before restoring {name}")
         log(f"restore: {name}'s entry is back in {profile.name}, where it was")
         said.insert(0, "its entry")
     return f"restored {name}" + (f" ({' and '.join(said)})" if said else "")

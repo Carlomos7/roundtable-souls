@@ -54,6 +54,7 @@ from roundtable_souls.services.mods import (
     read_profile_settings,
     recover_interrupted,
     replan_mod_install,
+    save_profile_text,
     set_mod_options,
     uninstall_mod,
     write_profile_setting,
@@ -1840,10 +1841,7 @@ class ModsView:
             return False
         text = self.profile_edit.toPlainText()
         try:
-            mod_history.snapshot(self._profile_file, "before saving the editor")
-            core.atomic_write(
-                self._profile_file, text.replace("\n", "\r\n") if self._profile_crlf else text, backup=True
-            )
+            save_profile_text(self._profile_file, text.replace("\n", "\r\n") if self._profile_crlf else text)
         except Exception as e:
             self._toast("Could not save the profile", str(e), error=True)
             return False

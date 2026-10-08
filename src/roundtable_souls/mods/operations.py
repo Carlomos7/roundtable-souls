@@ -21,6 +21,7 @@ The records live beside the profile (.roundtable-ops/<id>/): they protect the fi
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 from pathlib import Path
@@ -206,22 +207,24 @@ def _profile_step(op: build.Operation) -> dict | None:
     return next((s for s in op.steps if s["type"] == "file"), None)
 
 
-def _profile_back(op: build.Operation, profile: Path, notes: list[str]) -> bytes | None:
-    """The profile's bytes once op is taken back: its exact previous bytes when it has not changed since; else the
-    current text without the entries op added. None: leave it as it is."""
+def _profile_back(op: build.Operation, profile: Path, notes: list[str]) -> tuple[bytes, str] | None:
+    """The profile's bytes once op is taken back, with the sha256 of its bytes now (what Operation.write_file
+    expects to find, so a profile edited outside the launcher meanwhile is not overwritten): its exact previous bytes
+    when it has not changed since; else the current text without the entries op added. None: leave it as it is."""
     from roundtable_souls.mods import profile_edit
 
     step = _profile_step(op)
     if step is None:
         return None
     now = profile.read_bytes()
+    expect = hashlib.sha256(now).hexdigest()
     after = (op.dir / step["after"]).read_bytes()
     before = (op.dir / step["before"]).read_bytes() if step["before"] else b""
     current = now.decode("utf-8", errors="replace")
     if now == after:
         back = before.decode("utf-8", errors="replace")
         if _coop_entries(current) <= _coop_entries(back):
-            return before
+            return before, expect
         notes.append("Seamless Co-op stays in the profile (it was added with this mod and other mods use it)")
     else:
         notes.append(f"{profile.name} changed since, so only this mod's entries were taken out of it")
@@ -232,7 +235,7 @@ def _profile_back(op: build.Operation, profile: Path, notes: list[str]) -> bytes
             text
         ):
             text = profile_edit.remove_block(text, e["index"])
-    return text.encode("utf-8") if text != current else None
+    return (text.encode("utf-8"), expect) if text != current else None
 
 
 def _new_op(op: build.Operation, what: str) -> build.Operation:
@@ -249,9 +252,9 @@ def undo_install(op_dir: Path, log=lambda s: None) -> str:
     with lock(profile):
         new = _new_op(op, f"undo of the install of {name}")
         try:
-            data = _profile_back(op, profile, notes)
-            if data is not None:
-                new.write_file(profile, data)
+            back = _profile_back(op, profile, notes)
+            if back is not None:
+                new.write_file(profile, back[0], expect=back[1])
             left: list[str] = []
             if dest.is_dir() and op.info.get("fresh") and not _shared_folder(dest):
                 created = op.info.get("created") or {}
@@ -302,9 +305,9 @@ def rollback(op_dir: Path, log=lambda s: None, then=None) -> str:
         new = _new_op(op, f"rollback of the update of {name}")
         try:
             new.replace_folder(dest, previous)
-            data = _profile_back(op, profile, notes)
-            if data is not None:
-                new.write_file(profile, data)
+            back = _profile_back(op, profile, notes)
+            if back is not None:
+                new.write_file(profile, back[0], expect=back[1])
             new.note(kind="rollback", name=name, dest=str(dest), created=None, entries=[])
         except BaseException:
             new.discard()

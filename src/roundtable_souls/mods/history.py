@@ -131,12 +131,10 @@ def prune(profile: Path, keep: int = KEEP) -> None:
 
 
 def restore(profile: Path, copy: Path) -> Path | None:
-    """Put a copy back as the profile. The profile as it was is copied first, so a restore can be undone too.
-    Returns that copy."""
-    profile, copy = Path(profile), Path(copy)
-    data = copy.read_bytes()
-    before = snapshot(profile, "before restoring an earlier version")
-    tmp = profile.with_name(profile.name + ".tmp")
-    tmp.write_bytes(data)
-    tmp.replace(profile)
-    return before
+    """Put a copy back as the profile, exactly, through the profile writer (mods.profile_writer). The profile as it
+    was is copied first, so a restore can be undone too. Returns that copy."""
+    from roundtable_souls.mods import profile_writer
+
+    writer = profile_writer.ProfileWriter(Path(profile))
+    writer.restore_bytes(Path(copy).read_bytes())
+    return writer.write("before restoring an earlier version").snapshot
