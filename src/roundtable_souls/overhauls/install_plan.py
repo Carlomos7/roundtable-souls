@@ -9,7 +9,7 @@ The changes are those Nightreign Revive's installer makes to a profile on a LITE
 installer/installer.py: clean_owned, then patched_profile), with its DLLs' load settings exactly as it writes them:
     remove   earlier installs' own entries (its package ids and DLL file names)
     set      top-level settings (profileVersion, start_online)
-    update   a required mod (the build's requires list: Revive's is Seamless Co-op) switched back on, pointed at
+    update   a required mod (the build's requires list, as the mod's author declares it) switched back on, pointed at
              the copy found, when the profile has it switched off and the requirement allows it; a companion mod's
              DLL given its initializer when it has none
     add      a required mod when the profile has none (the first of its candidates that exists); the overhaul's

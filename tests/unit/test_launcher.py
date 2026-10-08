@@ -7,7 +7,6 @@ import pytest
 
 from roundtable_souls.config.settings import LauncherSettings
 from roundtable_souls.game.locate import Locations, Overrides
-from roundtable_souls.mods.profile_writer import Refused
 from roundtable_souls.platform import paths
 from roundtable_souls.services import coop as coop_service
 from roundtable_souls.services import mods as mods_service
@@ -267,13 +266,8 @@ def test_profile_mods_are_the_ones_me3_loads(tmp_path):
         ("native", "ersc.dll", "natives/SeamlessCoop/ersc.dll"),
         ("package", "nightreign-revive", "NightreignRevive/mod"),
     ]
-    # Seamless Co-op stays on while Nightreign Revive (which requires it, by its config) is on
-    with pytest.raises(Refused, match="nightreign-revive needs ersc.dll, which this change would leave switched off"):
-        mods_service.set_profile_mod_enabled(p, 1, False)
-    assert not (tmp_path / "profile.me3.bak").exists()
-    assert mods_service.set_profile_mod_enabled(p, 3, False)  # Revive off first (block 2 is a switched-off DLL)
     assert mods_service.set_profile_mod_enabled(p, 1, False)
-    assert [m["id"] for m in mods_service.read_profile_mods(p)] == ["flora"]
+    assert [m["id"] for m in mods_service.read_profile_mods(p)] == ["flora", "nightreign-revive"]
     assert (tmp_path / "profile.me3.bak").is_file()
 
 

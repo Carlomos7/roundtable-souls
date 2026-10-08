@@ -282,29 +282,33 @@ def test_a_damaged_file_stops_the_build_with_its_name(world):
     assert not list(world.base.glob(".NightreignRevive.building-*"))
 
 
-def test_seamless_is_required(world):
+def test_without_a_requires_list_nothing_is_required(world):
+    """Revive's config declares no requirement, so it builds without Seamless Co-op switched on."""
     world.profile.write_text(
         PROFILE.replace(
             "path = 'natives/SeamlessCoop/ersc.dll'", "path = 'natives/SeamlessCoop/ersc.dll'\nenabled = false"
         )
     )
-    with pytest.raises(engine.EngineError) as e:
-        world.build()
-    assert str(e.value) == "Nightreign Revive needs Seamless Co-op (ersc.dll) switched on in the profile."
+    world.build()
+    assert (world.own / "mod/regulation.bin").read_bytes() != b"OLD BUILD"
 
 
-def test_a_configs_requirements_are_checked_not_a_mod_name(world):
-    """The refusal comes from the config's requires list: a config without one builds without Seamless."""
+def test_a_configs_requirements_refuse_the_build_naming_them(world):
+    """What a config's requires list names: present and switched on, or the build is refused, naming it."""
     recipe, version, _ = engine.match(world.setup)
+    assert "requires" not in recipe and engine.unmet(world.profile, recipe) == []
+    needs = {
+        **recipe,
+        "requires": [{"package": "body"}, {"package": "trees", "label": "Trees"}, {"native": "ersc.dll"}],
+    }
     world.profile.write_text(PROFILE.replace("path = 'natives/SeamlessCoop/ersc.dll'\nload_early = true\n", ""))
-    assert engine.unmet(world.profile, recipe) == [
-        "Nightreign Revive needs Seamless Co-op (ersc.dll) switched on in the profile."
+    assert engine.unmet(world.profile, needs) == [
+        "Nightreign Revive needs Trees (trees) switched on in the profile.",
+        "Nightreign Revive needs ersc.dll switched on in the profile.",
     ]
-    assert engine.unmet(world.profile, {k: v for k, v in recipe.items() if k != "requires"}) == []
-    needs_package = {**recipe, "requires": [{"package": "body"}, {"package": "trees", "label": "Trees"}]}
-    assert engine.unmet(world.profile, needs_package) == [
-        "Nightreign Revive needs Trees (trees) switched on in the profile."
-    ]
+    with pytest.raises(engine.EngineError, match="needs Trees"):
+        engine.build(world.profile, world.own / "mod", world.setup, needs, version, lambda s: None, loc=er())
+    assert (world.own / "mod/regulation.bin").read_bytes() == b"OLD BUILD"
 
 
 def test_the_inputs_are_only_read(world):

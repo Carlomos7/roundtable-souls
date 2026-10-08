@@ -277,21 +277,50 @@ def test_declared_dependencies_stay_present_and_switched_on(profile):
     ]
 
 
+GROVE = """overhaul = 1
+id = "grove"
+label = "Grove"
+short_label = "Grove"
+game = "eldenring"
+
+[recognise]
+folder = "Grove"
+manifest = "grove.json"
+
+[[builds]]
+id = "grove"
+match = { files = ["grove.json"] }
+output = { mod = "mod" }
+steps = []
+requires = [{ native = "cam.dll" }]
+
+[builds.install]
+owned_package_ids = ["grove"]
+"""
+
+
 def test_the_overhaul_configs_requirements_are_the_default_source(profile):
-    """An entry an overhaul owns (Nightreign Revive's package here) needs what its config's requires list names:
-    switching Seamless Co-op off is refused while it is on; the player's own entries need nothing."""
-    profile.write_text(PROFILE + "\n[[packages]]\nid = \"nightreign-revive\"\npath = 'NightreignRevive/mod'\n")
+    """An entry an overhaul owns needs what its author's config declares (here a made-up overhaul's local config):
+    switching that off is refused while the overhaul is on; the player's own entries need nothing, and an overhaul
+    that declares nothing (Revive) needs nothing."""
+    from roundtable_souls import overhauls
+
+    local = overhauls.local_dir()
+    assert local is not None
+    local.mkdir(parents=True, exist_ok=True)
+    (local / "grove.toml").write_text(GROVE, encoding="utf-8")
+    profile.write_text(PROFILE + "\n[[packages]]\nid = \"grove\"\npath = 'Grove/mod'\n")
     w = W.ProfileWriter(profile, rules=[W.Requires()])
-    w.set_options(0, {"enabled": False})
+    w.set_options(1, {"enabled": False})
     assert [r.message for r in w.plan("x").refusals] == [
-        "nightreign-revive needs ersc.dll, which this change would leave switched off"
+        "grove needs cam.dll, which this change would leave switched off"
     ]
     w = W.ProfileWriter(profile, rules=[W.Requires()])
-    w.set_options(4, {"enabled": False})  # Revive itself off: then nothing needs Seamless
-    w.set_options(0, {"enabled": False})
+    w.set_options(4, {"enabled": False})  # the overhaul itself off: then nothing needs cam.dll
+    w.set_options(1, {"enabled": False})
     assert w.plan("x").ok
     assert W.OverhaulRequirements().of({"kind": "package", "id": "flora", "path": "mod/flora"}) == []
-    assert W.OverhaulRequirements([]).of({"kind": "package", "id": "nightreign-revive", "path": "x"}) == []
+    assert W.OverhaulRequirements().of({"kind": "package", "id": "nightreign-revive", "path": "x"}) == []
 
 
 def test_added_entries_get_relative_paths_and_a_length_check(profile):

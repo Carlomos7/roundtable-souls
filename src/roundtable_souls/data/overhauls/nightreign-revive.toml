@@ -26,12 +26,9 @@ profile_marks = ["nightreign-revive", "reviveprototype", "revivehud", "reviveers
 # own installer and its merge tool (tools/merge/Assets.exe) are not run.
 [[builds]]
 id = "nightreign-revive-lite"
-# Other mods it needs, present and switched on: the build is refused without them, and an install switches one on
-# (enable_if_off) or adds the first of its candidates that exists. Revive's installer (install()) requires Seamless:
-# the profile's switched-on ersc.dll, else the first of these.
-requires = [
-  { native = "ersc.dll", label = "Seamless Co-op", enable_if_off = true, candidates = ["{profile_dir}/dll/offline/ersc.dll", "{profile_dir}/SeamlessCoop/ersc.dll", "{game_dir}/SeamlessCoop/ersc.dll"] },
-]
+# No requires list: what a mod needs is for its author to declare (owner, 2026-10-08), and the launcher does not
+# write one on a mod's behalf. Revive's own installer insists on Seamless Co-op; the launcher's build and install
+# leave Seamless as the player has it.
 
 [builds.match]
 files = ["edition.json", "revive-maintenance.json", "payload/RevivePrototype.dll"]

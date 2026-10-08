@@ -136,32 +136,18 @@ path = 'dll/offline/NightreignRevive.dll'
     ]
 
 
-def test_seamless_switched_off_is_switched_on_and_pointed_at_the_one_found():
-    text = "profileVersion = \"v1\"\nstart_online = false\n[[natives]]\npath = 'old/ersc.dll'\nenabled = false\n"
-    p, result = planned(text, provided={"ersc.dll": SEAMLESS})
-    # patched_profile: disabled['enabled']=True; disabled['path']=seamless.as_posix()
-    assert p.changes[0] == Change(
-        "update", "native", "old/ersc.dll", {"enabled": True, "path": SEAMLESS.as_posix()}, "Seamless Co-op is required"
-    )
-    assert result["natives"][0] == {"path": SEAMLESS.as_posix(), "enabled": True}
-    assert result["natives"][-1]["load_after"] == [{"id": "ersc.dll", "optional": True}]
-
-
-def test_without_seamless_the_candidates_are_tried_in_order_and_one_is_added():
-    text = 'profileVersion = "v1"\nstart_online = false\n'
-    game = Path("C:/Games/ELDEN RING/Game")
-    there = {game / "SeamlessCoop/ersc.dll"}
-    # install(): candidates root/dll/offline/ersc.dll, root/SeamlessCoop/ersc.dll, game.parent/SeamlessCoop/ersc.dll
-    p, result = planned(text, game_dir=game, is_file=lambda q: Path(q) in there)
-    assert result["natives"][0] == {"path": (game / "SeamlessCoop/ersc.dll").as_posix()}
-    beside = {PROFILE.parent / "SeamlessCoop/ersc.dll", game / "SeamlessCoop/ersc.dll"}
-    p, result = planned(text, game_dir=game, is_file=lambda q: Path(q) in beside)
-    assert result["natives"][0] == {"path": (PROFILE.parent / "SeamlessCoop/ersc.dll").as_posix()}
-
-
-def test_no_seamless_anywhere_stops_the_install():
-    p, _ = planned('profileVersion = "v1"\n', is_file=lambda _q: False)
-    assert not p.ok and [x.code for x in p.problems] == ["requirement-missing"]
+def test_revives_install_leaves_seamless_as_the_player_has_it():
+    """Revive's config declares no requirement (its author has not; the launcher writes none for it), so its plan
+    neither switches Seamless on nor adds it, and does not stop without it."""
+    off = "profileVersion = \"v1\"\nstart_online = false\n[[natives]]\npath = 'old/ersc.dll'\nenabled = false\n"
+    p, result = planned(off, is_file=lambda _q: True)
+    assert p.ok and not [c for c in p.changes if c.key == "old/ersc.dll"]
+    assert result["natives"][0] == {"path": "old/ersc.dll", "enabled": False}
+    p, result = planned('profileVersion = "v1"\nstart_online = false\n', is_file=lambda _q: True)
+    assert p.ok and [Path(n["path"]).name for n in result["natives"]] == [
+        "ReviveHudBootstrap.dll",
+        "RevivePrototype.dll",
+    ]
 
 
 def test_movement_dlls_get_their_initializer_only_when_they_have_none():
@@ -421,5 +407,6 @@ def test_one_place_says_which_overhaul_owns_an_entry():
         "nightreign-revive": ["NightreignRevive/RevivePrototype.dll"],
         "fake": ["Fake/mod"],
     }
-    assert [r.name for r in requirements.needed_by(configs, "native", entries[1])] == ["ersc.dll"]
+    assert requirements.needed_by(configs, "native", entries[1]) == []  # Revive declares nothing
+    assert [r.name for r in requirements.needed_by(configs, "package", entries[2])] == ["framework", "helper.dll"]
     assert requirements.needed_by(configs, "package", entries[3]) == []

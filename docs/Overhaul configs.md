@@ -64,8 +64,9 @@ it. The build is refused while one is missing or switched off ("My Overhaul need
 on in the profile."); an install adds it or switches it on as described under *Installing it into a profile*
 (`enable_if_off`, `candidates`, where `{profile_dir}` and `{game_dir}` are filled in). The launcher also keeps it on
 afterwards: a later change to the profile that would switch off or remove what an overhaul's entries need is
-refused. Nightreign Revive's Seamless Co-op is only its entry here; the launcher has no special case for it. (Before
-3.20 this was `[builds.install.seamless]`; a config still using it is left out, and the launcher says why.)
+refused. Requirements are the mod author's to declare: the launcher never adds one on a mod's behalf, and a
+config without `requires` needs nothing (the shipped Nightreign Revive config has none). (Before 3.20 this was
+`[builds.install.seamless]`; a config still using it is left out, and the launcher says why.)
 
 For a mod whose installer keeps its download in a setup folder, the launcher can do the installer's merge itself when
 the player turns on **Build Nightreign Revive in the launcher** on Settings. Nothing from the download runs: every
