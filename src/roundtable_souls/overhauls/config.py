@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic_core import ErrorDetails
 
 from roundtable_souls.resources import DATA_DIR
 
@@ -305,7 +306,7 @@ _MOVED = {
 }
 
 
-def _moved(error: dict) -> str:
+def _moved(error: ErrorDetails) -> str:
     hits = [str(x) for x in error["loc"]] + [str(error.get("input"))]
     for key, why in _MOVED.items():
         if any(h == key for h in hits) or f"'{key}'" in error.get("msg", ""):
