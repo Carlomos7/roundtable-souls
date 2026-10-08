@@ -25,6 +25,10 @@ profile_marks = ["myoverhaul"]   # text marking its profile entries (case aside)
 
 [[builds]]                       # one per edition the launcher builds itself; none is fine
 id = "my-overhaul-lite"          # written into the build's manifest as "recipe"
+requires = [                     # other mods it needs, present and switched on (none is fine)
+  { native = "ersc.dll", label = "Seamless Co-op", enable_if_off = true,
+    candidates = ["{profile_dir}/SeamlessCoop/ersc.dll", "{game_dir}/SeamlessCoop/ersc.dll"] },
+]
 
 [builds.match]
 files = ["edition.json", "payload/my-overhaul.dll"]
@@ -51,6 +55,17 @@ started from its manifest, its folder is beside the profile, or the profile has 
 with **Skip Revive too** turns off the profile entries containing one of `profile_marks`.
 
 ## Builds: the launcher builds it itself
+
+### Other mods it needs
+
+`requires` lists the mods a build needs in the profile, present and switched on: `native` names a DLL by its file
+name, `package` a package by its id (its folder's name when it has none), case aside. `label` is how messages name
+it. The build is refused while one is missing or switched off ("My Overhaul needs Seamless Co-op (ersc.dll) switched
+on in the profile."); an install adds it or switches it on as described under *Installing it into a profile*
+(`enable_if_off`, `candidates`, where `{profile_dir}` and `{game_dir}` are filled in). The launcher also keeps it on
+afterwards: a later change to the profile that would switch off or remove what an overhaul's entries need is
+refused. Nightreign Revive's Seamless Co-op is only its entry here; the launcher has no special case for it. (Before
+3.20 this was `[builds.install.seamless]`; a config still using it is left out, and the launcher says why.)
 
 For a mod whose installer keeps its download in a setup folder, the launcher can do the installer's merge itself when
 the player turns on **Build Nightreign Revive in the launcher** on Settings. Nothing from the download runs: every
@@ -97,10 +112,6 @@ owned_dlls = ["myoverhaul.dll"]              # an earlier install's DLLs (file n
 required_files = ["MyOverhaul.dll", "mod/regulation.bin"]   # in its folder: the check after an install
 required_folders = ["ui"]                    # in its folder, not empty
 
-[builds.install.seamless]                    # Seamless Co-op must be switched on
-dll = "ersc.dll"
-candidates = ["{profile_dir}/SeamlessCoop/ersc.dll", "{game_dir}/SeamlessCoop/ersc.dll"]
-
 [[builds.install.set_initializers]]          # other mods' DLLs that get an initializer when they have none
 name_prefix = "companionmod"
 function = "CompanionInitialize"
@@ -117,9 +128,10 @@ folder = "mod"
 after_enabled_packages = true                # load_after every enabled package already there, each optional
 ```
 
-The plan removes an earlier install's own entries, sets the settings that differ, switches Seamless Co-op on (an
-entry switched off is switched on and pointed at the Seamless found; with none, the first candidate that exists is
-added; with no Seamless at all the install stops), gives the matching DLLs their initializer, and adds the
+The plan removes an earlier install's own entries, sets the settings that differ, makes sure every mod the build
+`requires` is there and switched on (an entry switched off is switched on and pointed at the copy found when
+`enable_if_off` allows it, else the install stops; with none, the first candidate that exists is added; with no copy
+at all the install stops, naming it), gives the matching DLLs their initializer, and adds the
 overhaul's DLLs and package last with the load settings written here. The player's other entries are left as they
 are. It stops for a profile me3 cannot use (two enabled packages with one id, a circle of `load_after`), an enabled
 package whose folder is missing, or an unreadable profile. Nightreign Revive's LITE description is the one its own

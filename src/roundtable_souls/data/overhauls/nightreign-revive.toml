@@ -26,6 +26,12 @@ profile_marks = ["nightreign-revive", "reviveprototype", "revivehud", "reviveers
 # own installer and its merge tool (tools/merge/Assets.exe) are not run.
 [[builds]]
 id = "nightreign-revive-lite"
+# Other mods it needs, present and switched on: the build is refused without them, and an install switches one on
+# (enable_if_off) or adds the first of its candidates that exists. Revive's installer (install()) requires Seamless:
+# the profile's switched-on ersc.dll, else the first of these.
+requires = [
+  { native = "ersc.dll", label = "Seamless Co-op", enable_if_off = true, candidates = ["{profile_dir}/dll/offline/ersc.dll", "{profile_dir}/SeamlessCoop/ersc.dll", "{game_dir}/SeamlessCoop/ersc.dll"] },
+]
 
 [builds.match]
 files = ["edition.json", "revive-maintenance.json", "payload/RevivePrototype.dll"]
@@ -136,11 +142,6 @@ owned_package_ids = ["nightreign-revive", "zz_NightreignRevive"]  # clean_owned:
 owned_dlls = ["reviveprototype.dll", "revivehudbootstrap.dll", "reforgedme3compat.dll", "nightreignrevive.dll"]  # OWN_DLLS
 required_files = ["RevivePrototype.dll", "ReviveHudBootstrap.dll", "mod/chr/c0000.behbnd.dcx", "mod/regulation.bin", "mod/action/script/c0000.hks", "mod/sfx/sfxbnd_commoneffects.ffxbnd.dcx"]  # check()
 required_folders = ["ui"]  # check(): the UI assets
-
-# install(): Seamless is required; the profile's switched-on ersc.dll, else the first of these that exists
-[builds.install.seamless]
-dll = "ersc.dll"
-candidates = ["{profile_dir}/dll/offline/ersc.dll", "{profile_dir}/SeamlessCoop/ersc.dll", "{game_dir}/SeamlessCoop/ersc.dll"]
 
 # patched_profile: Nightreign Movement's DLLs get its initializer when they have none
 [[builds.install.set_initializers]]

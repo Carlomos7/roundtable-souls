@@ -288,8 +288,23 @@ def test_seamless_is_required(world):
             "path = 'natives/SeamlessCoop/ersc.dll'", "path = 'natives/SeamlessCoop/ersc.dll'\nenabled = false"
         )
     )
-    with pytest.raises(engine.EngineError, match="Seamless"):
+    with pytest.raises(engine.EngineError) as e:
         world.build()
+    assert str(e.value) == "Nightreign Revive needs Seamless Co-op (ersc.dll) switched on in the profile."
+
+
+def test_a_configs_requirements_are_checked_not_a_mod_name(world):
+    """The refusal comes from the config's requires list: a config without one builds without Seamless."""
+    recipe, version, _ = engine.match(world.setup)
+    world.profile.write_text(PROFILE.replace("path = 'natives/SeamlessCoop/ersc.dll'\nload_early = true\n", ""))
+    assert engine.unmet(world.profile, recipe) == [
+        "Nightreign Revive needs Seamless Co-op (ersc.dll) switched on in the profile."
+    ]
+    assert engine.unmet(world.profile, {k: v for k, v in recipe.items() if k != "requires"}) == []
+    needs_package = {**recipe, "requires": [{"package": "body"}, {"package": "trees", "label": "Trees"}]}
+    assert engine.unmet(world.profile, needs_package) == [
+        "Nightreign Revive needs Trees (trees) switched on in the profile."
+    ]
 
 
 def test_the_inputs_are_only_read(world):

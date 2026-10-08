@@ -115,6 +115,13 @@
      "title": "Steps",
      "type": "array"
     },
+    "requires": {
+     "items": {
+      "$ref": "#/$defs/Requirement"
+     },
+     "title": "Requires",
+     "type": "array"
+    },
     "install": {
      "anyOf": [
       {
@@ -255,17 +262,6 @@
      },
      "title": "Owned Dlls",
      "type": "array"
-    },
-    "seamless": {
-     "anyOf": [
-      {
-       "$ref": "#/$defs/Seamless"
-      },
-      {
-       "type": "null"
-      }
-     ],
-     "default": null
     },
     "set_initializers": {
      "items": {
@@ -634,6 +630,62 @@
    "title": "Remove",
    "type": "object"
   },
+  "Requirement": {
+   "additionalProperties": false,
+   "description": "Another mod the overhaul needs in the profile, present and switched on: a DLL (native, its file name) or a\npackage (its id). The build is refused without it; an install switches it on when it is there but off and\nenable_if_off allows it, else adds the first of candidates that exists, else stops.",
+   "properties": {
+    "native": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Native"
+    },
+    "package": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Package"
+    },
+    "label": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Label"
+    },
+    "enable_if_off": {
+     "default": false,
+     "title": "Enable If Off",
+     "type": "boolean"
+    },
+    "candidates": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Candidates",
+     "type": "array"
+    }
+   },
+   "title": "Requirement",
+   "type": "object"
+  },
   "ScriptAppend": {
    "additionalProperties": false,
    "properties": {
@@ -698,26 +750,6 @@
     "append"
    ],
    "title": "ScriptAppend",
-   "type": "object"
-  },
-  "Seamless": {
-   "additionalProperties": false,
-   "description": "The overhaul needs Seamless Co-op's DLL switched on in the profile.",
-   "properties": {
-    "dll": {
-     "default": "ersc.dll",
-     "title": "Dll",
-     "type": "string"
-    },
-    "candidates": {
-     "items": {
-      "type": "string"
-     },
-     "title": "Candidates",
-     "type": "array"
-    }
-   },
-   "title": "Seamless",
    "type": "object"
   },
   "SetInitializer": {

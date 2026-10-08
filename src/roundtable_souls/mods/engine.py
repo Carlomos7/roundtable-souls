@@ -160,17 +160,16 @@ def layers(profile: Path, target_folder: Path) -> list[Path]:
     return out
 
 
-def _seamless(profile: Path) -> Path | None:
+def unmet(profile: Path, recipe: dict) -> list[str]:
+    """Why the profile cannot have this build: each requirement of the recipe (another mod it needs) that is not
+    present and switched on (overhauls.requirements decides), as the refusal says it."""
     from roundtable_souls.mods import profile_edit as mod_manage
 
-    for e in mod_manage.entries(profile):
-        if (
-            e["kind"] == "native"
-            and e.get("enabled", True)
-            and Path(e.get("path") or "").name.lower() == games.ELDEN_RING.coop_dll
-        ):
-            return mod_manage.resolve(profile, e["path"])
-    return None
+    requires = [overhauls.Requirement.model_validate(r) for r in recipe.get("requires") or []]
+    if not requires:
+        return []
+    found = overhauls.requirements.unmet(requires, mod_manage.entries(profile))
+    return [overhauls.requirements.refusal(recipe["label"], req) for req, _state in found]
 
 
 # ----------------------------------------------------------------------------- settings files
@@ -265,10 +264,9 @@ def build(
     game_dir = Path(game_dir) if game_dir else (Path(found) if found else None)
     if game_dir is None or not game_dir.is_dir():
         raise EngineError("The game folder was not found.")
-    if _seamless(profile) is None:
-        raise EngineError(
-            f"{recipe['label']} needs Seamless Co-op ({games.ELDEN_RING.coop_dll}) switched on in the profile."
-        )
+    refused = unmet(profile, recipe)
+    if refused:
+        raise EngineError(" ".join(refused))
     inputs = layers(profile, target_folder)
     stage = own.parent / f".{own.name}.building-{int(started)}"
     if stage.exists():

@@ -277,6 +277,23 @@ def test_declared_dependencies_stay_present_and_switched_on(profile):
     ]
 
 
+def test_the_overhaul_configs_requirements_are_the_default_source(profile):
+    """An entry an overhaul owns (Nightreign Revive's package here) needs what its config's requires list names:
+    switching Seamless Co-op off is refused while it is on; the player's own entries need nothing."""
+    profile.write_text(PROFILE + "\n[[packages]]\nid = \"nightreign-revive\"\npath = 'NightreignRevive/mod'\n")
+    w = W.ProfileWriter(profile, rules=[W.Requires()])
+    w.set_options(0, {"enabled": False})
+    assert [r.message for r in w.plan("x").refusals] == [
+        "nightreign-revive needs ersc.dll, which this change would leave switched off"
+    ]
+    w = W.ProfileWriter(profile, rules=[W.Requires()])
+    w.set_options(4, {"enabled": False})  # Revive itself off: then nothing needs Seamless
+    w.set_options(0, {"enabled": False})
+    assert w.plan("x").ok
+    assert W.OverhaulRequirements().of({"kind": "package", "id": "flora", "path": "mod/flora"}) == []
+    assert W.OverhaulRequirements([]).of({"kind": "package", "id": "nightreign-revive", "path": "x"}) == []
+
+
 def test_added_entries_get_relative_paths_and_a_length_check(profile):
     w = W.ProfileWriter(profile, er())
     row = w.add_package("grass", profile.parent / "mod" / "grass")

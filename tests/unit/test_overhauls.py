@@ -129,3 +129,13 @@ def test_the_offline_strip_uses_each_configs_profile_marks():
     local("toy.toml", TOY)
     assert '# id = "toy-overhaul"' in play.offline_profile_text(toy, strip_revive=True)
     assert '\nid = "toy-overhaul"' in play.offline_profile_text(toy)
+
+
+def test_a_config_with_the_old_seamless_key_is_left_out_and_says_where_it_went():
+    shipped = (overhaul_config.SHIPPED_DIR / "nightreign-revive.toml").read_text(encoding="utf-8")
+    old = shipped.replace("[builds.install]\n", '[builds.install]\nseamless = { dll = "ersc.dll" }\n')
+    bad = local("old.toml", old.replace('id = "nightreign-revive"', 'id = "old-revive"', 1))
+    assert "old-revive" not in [o.id for o in overhauls.load()]
+    (said,) = overhauls.problems()
+    assert said.startswith(f"{bad}: builds.0.install.seamless: Extra inputs are not permitted")
+    assert said.endswith("(seamless: since 3.20 a required mod is listed in the build's requires)")
