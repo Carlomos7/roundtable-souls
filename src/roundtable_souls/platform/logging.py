@@ -530,6 +530,8 @@ def _pid_alive(pid: int) -> bool:
     if pid == os.getpid():
         return True
     try:
+        # Optional and not a declared dependency: used when a packaged or dev environment happens to have it, with
+        # the platform's own check below as the way that always works.
         import psutil  # type: ignore[import-not-found]
 
         return psutil.pid_exists(pid)
