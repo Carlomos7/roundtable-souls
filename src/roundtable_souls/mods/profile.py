@@ -15,6 +15,7 @@ from pathlib import Path
 from roundtable_souls.formats import me3_profile
 from roundtable_souls.formats.me3_profile import resolve
 from roundtable_souls.game import catalog as games
+from roundtable_souls.game import config as game_config
 from roundtable_souls.mods.checks import ACCEPTABLE_FOLDERS, NOT_GAME_FOLDERS
 
 REGULATION = games.ELDEN_RING.regulation  # the parameter file a package may ship
@@ -182,6 +183,12 @@ def me3_order(profile: Path | None, text: str):
 
 # ----------------------------------------------------------------------------- conflict scan (read-only)
 def category_of(rel: str) -> str:
+    """What the game file at rel is, for the conflict list: the plain name the game's file-category map gives it
+    ("characters", "text"); for a path the map does not know, the regulation file's name, the top folder, or "other"
+    for a file at the top."""
+    known = game_config.load().category_of(rel)
+    if known is not None:
+        return known
     parts = rel.replace("\\", "/").split("/")
     if parts[0].startswith(REGULATION):
         return REGULATION

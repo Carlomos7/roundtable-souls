@@ -137,16 +137,25 @@ def test_conflict_scan_finds_shared_paths_and_winner(tmp_path):
     assert set(paths) == {"parts/am_m_1000.partsbnd.dcx", "regulation.bin", "chr/c0000.chrbnd.dcx"}
     assert paths["parts/am_m_1000.partsbnd.dcx"]["winner"] == "b"  # b loads last: it wins, case-insensitively
     assert paths["regulation.bin"]["winner"] == "c" and [l["id"] for l in paths["regulation.bin"]["losers"]] == ["a"]
-    assert paths["chr/c0000.chrbnd.dcx"]["winner"] == "b" and paths["chr/c0000.chrbnd.dcx"]["category"] == "chr"
-    assert (
-        r["by_category"] == {"parts": 1, "regulation.bin": 1, "chr": 1} and r["files"] == 6 and not r["truncated"]
-    )  # only_a.txt at the root is not a game path
+    player = "the player character's animations"
+    assert paths["chr/c0000.chrbnd.dcx"]["winner"] == "b" and paths["chr/c0000.chrbnd.dcx"]["category"] == player
+    assert r["by_category"] == {"equipment models": 1, "parameters": 1, player: 1}
+    assert r["files"] == 6 and not r["truncated"]  # only_a.txt at the root is not a game path
     by = {p["id"]: p for p in r["packages"]}
     assert by["b"]["wins"] == 2 and by["a"]["loses"] == 2 and by["c"]["wins"] == 1 and by["c"]["loses"] == 1
-    assert P.category_of("regulation.bin") == "regulation.bin" and P.category_of("readme.txt") == "other"
     (tmp_path / "mods" / "c").rename(tmp_path / "mods" / "gone")
     r2 = P.scan_conflicts(prof)
     assert next(p for p in r2["packages"] if p["id"] == "c")["missing"]
+
+
+def test_a_conflicting_file_is_named_in_plain_words_or_by_its_folder():
+    assert P.category_of("chr/c2010.chrbnd.dcx") == "characters"
+    assert P.category_of("MSG\\engUS\\item_dlc02.msgbnd.dcx") == "text"
+    assert P.category_of("regulation.bin") == "parameters"
+    # paths the map does not know are named as before: the regulation file, the top folder, or "other"
+    assert P.category_of("regulation.bin.prev") == "regulation.bin"
+    assert P.category_of("Extras/notes.dds") == "Extras"
+    assert P.category_of("readme.txt") == "other"
 
 
 def test_me3_facts_parse_without_a_binary():

@@ -485,7 +485,8 @@ class ModsView:
             rl.setContentsMargins(0, 0, 0, 0)
             rl.setSpacing(10)
             cat = CaptionLabel(c["category"])
-            cat.setFixedWidth(96)
+            cat.setFixedWidth(120)
+            cat.setWordWrap(True)  # the plainer names ("the player character's animations") run to two lines
             tone_label(cat, "muted")
             rl.addWidget(cat)
             lab = ElideLabel(c["path"])
