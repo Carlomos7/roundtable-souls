@@ -126,6 +126,12 @@ def version_key(v: str) -> tuple:
     return tuple(int(x) for x in re.findall(r"\d+", v)[:3])
 
 
+def is_prerelease(v: str) -> bool:
+    """A beta (X.Y.Z-beta.N): published to the Beta channel only, so the installed copy must be on that channel to
+    see it (the Stable channel takes GitHub's /releases/latest, which never names a pre-release)."""
+    return "-" in v
+
+
 # ----------------------------------------------------------------------------- a throwaway signing key
 class Key:
     def __init__(self):
@@ -151,7 +157,7 @@ def serve(version: str, files: dict[str, bytes]) -> ThreadingHTTPServer:
         "tag_name": f"v{version}",
         "name": f"Roundtable Souls v{version}",
         "draft": False,
-        "prerelease": False,
+        "prerelease": is_prerelease(version),
         "html_url": f"{base}/releases/v{version}",
         "body": "update test",
         "assets": [{"name": n, "browser_download_url": f"{base}/dl/{n}"} for n in files],
@@ -243,6 +249,10 @@ def main() -> None:
     (data_dir / "build-identity.json").write_text(json.dumps(override, indent=1), encoding="utf-8")
     files = {p.name: p.read_bytes() for p in SHARE.iterdir() if p.is_file() and p.suffix in (".nupkg", ".json")}
     files[sig_name] = key.sign(files[feed_name], f"roundtable-souls {new} win").encode()
+    if is_prerelease(new):  # a beta: the installed copy is put on the Beta channel first, as a beta tester would be
+        DATA.mkdir(parents=True, exist_ok=True)
+        (DATA / "launcher_settings.json").write_text(json.dumps({"launcher_channel": "beta"}), encoding="utf-8")
+        say("this build is a beta: the installed copy's Settings put on the Beta channel")
     server = serve(new, files)
     try:
         # 3. Update now, without the window
