@@ -3697,7 +3697,7 @@ wheels = [
 
 [[package]]
 name = "roundtable-souls"
-version = "3.18.0b1"
+version = "3.18.0"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },

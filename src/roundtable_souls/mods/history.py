@@ -82,16 +82,23 @@ def snapshot(profile: Path, why: str = "change") -> Path | None:
         data = profile.read_bytes()
     except OSError:
         return None
-    newest = latest(profile)
+    existing = versions(profile)
+    newest = existing[0]["path"] if existing else None
     try:
         if newest is not None and newest.read_bytes() == data:
             return newest
     except OSError:
         pass
+    # Copies are ordered by their time, to the millisecond: two changes in the same millisecond (or a clock set back)
+    # would otherwise tie, and the newer copy could sort as the older one. Each copy is later than the newest.
+    when = datetime.datetime.now()
+    when = when.replace(microsecond=when.microsecond // 1000 * 1000)
+    if existing and when <= existing[0]["when"]:
+        when = existing[0]["when"] + datetime.timedelta(milliseconds=1)
     d = folder(profile)
     try:
         d.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")[:-3]
+        stamp = when.strftime("%Y%m%d-%H%M%S-%f")[:-3]
         out = d / f"{stamp}_{_slug(why)}.me3"
         n = 2
         while out.exists():

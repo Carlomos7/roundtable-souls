@@ -4,7 +4,10 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
 
 ## [Unreleased]
 
-## [3.18.0-beta.1] - 2026-10-08
+- Profile history: two changes made within the same millisecond are listed in the order they were made
+  (the newer one could show as the older).
+
+## [3.18.0] - 2026-10-08
 
 - Mods: installing, updating and removing a mod are now each one step that can't be left half-done. The new files
   are prepared beside the old ones and your profile's new text is worked out first; only then is everything swapped
