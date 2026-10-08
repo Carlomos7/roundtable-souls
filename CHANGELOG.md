@@ -4,6 +4,31 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
 
 ## [Unreleased]
 
+## [3.18.0] - 2026-10-08
+
+- Mods: installing, updating and removing a mod are now each one step that can't be left half-done. The new files
+  are prepared beside the old ones and your profile's new text is worked out first; only then is everything swapped
+  in together. If the window or the PC closes in the middle, the next start finishes or undoes it, and Play waits
+  until it has.
+- Mods: an update keeps the previous version. Activity offers Roll back (folder and profile back as a set), and a
+  fresh install can be undone (your profile exactly as before, and only the files the install added are removed).
+  Files of the mod you had changed yourself (an ini, say) are kept; the new version's copy is put beside them as
+  .new, and the log says which.
+- Mods: when "rebuild after installing" is ticked, the rebuild is part of the install: if it fails, the whole install
+  is undone and the previous setup stays as it was.
+- Mods: removing a mod never deletes a folder that holds Seamless Co-op's DLL, even when this profile no longer lists
+  it (another profile may still use it).
+- Combine: archives the game lists in ID order (its effect archives, for example) keep that order when a mod adds
+  files to them, as the mods' own tools write them. A combined package merged with an earlier version is rebuilt once.
+- Nightreign Revive (only with "Build Nightreign Revive in the launcher (preview)" on): the launcher now merges the
+  grace menu itself too, and runs nothing from Revive's download (no Assets.exe). Two mods shipping different
+  character scripts, and a compiled script that Revive's script can't be added to, are reported instead of silently
+  replaced; clashes go to merge-report.txt. The launcher's own build no longer asks for rebuild-tool permission. The
+  preview's description no longer claims a recorded comparison with Revive's installer: that check now exists as
+  scripts/verify/native_parity.py, and its in-game half is still to come.
+- Under the hood: one profile reader for every part of the launcher, Nightreign Revive described in one data file
+  (data/overhauls), and the game's locations handed to every mod operation; no change in behaviour.
+
 ## [3.17.0] - 2026-10-06
 
 - Combine: animation events (TAE files, such as the player's in `chr/c0000.anibnd.dcx`) that several mods change are
