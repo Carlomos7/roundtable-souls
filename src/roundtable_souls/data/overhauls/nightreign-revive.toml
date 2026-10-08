@@ -119,14 +119,15 @@ vanilla = "payload/settings/vanilla/msg/{each}/menu_dlc02.msgbnd.dcx"
 table = "eventtextfortalk.fmg"
 texts = { rusru = "payload/settings/rusru.json", "*" = "payload/settings/engus.json" }
 
+# the downed and revive states: Revive's fragment appended to the character script, wrapping its Update
 [[builds.steps]]
-do = "script_append"
+do = "hook"
 folder = "action/script"
 entry = "c0000.hks"
 base = "payload/mod/action/script/c0000.hks"
 base_until = "-- Wrap the current mod's Update;"
-append = "installer/revive.hks"
-refuse = ["local NrrOriginalUpdate = Update", "-- Nightreign Revive deferred adapter"]
+fragment = "installer/revive.hks"
+markers = ["local NrrOriginalUpdate = Update", "-- Nightreign Revive deferred adapter"]
 refuse_text = "A mod before it already contains Nightreign Revive's script; keep only the original mod in the profile."
 
 [[builds.steps]]

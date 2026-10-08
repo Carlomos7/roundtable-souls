@@ -456,3 +456,71 @@ def test_merge_ini_adds_only_what_is_new():
     assert out.startswith("; mine\r\n[Coop]\r\nEnabled=0\r\nRescue=60\r\n[Input]\r\nKeyboardEnabled=0\r\n")
     assert out.endswith("[New]\r\nX=1\r\n")
     assert engine.merge_ini(mine, "[Coop]\nEnabled=1\n") == mine  # nothing new: byte for byte
+
+
+HOOKS_CONFIG = """overhaul = 1
+id = "hooks"
+label = "Hooks"
+short_label = "Hooks"
+game = "eldenring"
+
+[recognise]
+folder = "Hooks"
+manifest = "installation.json"
+
+[[builds]]
+id = "hooks"
+match = { files = ["hooks.json"] }
+output = { mod = "mod" }
+
+[[builds.steps]]
+do = "hook"
+folder = "action/script"
+entry = "c0000.hks"
+base = "base.hks"
+fragment = "first.hks"
+markers = ["FirstOriginalUpdate"]
+
+[[builds.steps]]
+do = "hook"
+folder = "action/script"
+entry = "c0000.hks"
+base = "base.hks"
+fragment = "second.hks"
+markers = ["SecondOriginalUpdate"]
+"""
+
+
+def hooks_setup(world, tmp_path):
+    local = overhauls.local_dir()
+    assert local is not None
+    local.mkdir(parents=True, exist_ok=True)
+    (local / "hooks.toml").write_text(HOOKS_CONFIG, encoding="utf-8")
+    setup = tmp_path / "hookssetup"
+    setup.mkdir()
+    (setup / "hooks.json").write_text("{}")
+    (setup / "base.hks").write_text("-- base\n")
+    (setup / "first.hks").write_text("local FirstOriginalUpdate = Update\n")
+    (setup / "second.hks").write_text("local SecondOriginalUpdate = Update\n")
+    target = world.base / "Hooks" / "mod"
+    target.mkdir(parents=True)
+    world.profile.write_text(PROFILE + "\n[[packages]]\nid = \"hooks\"\npath = 'Hooks/mod'\n")
+    recipe, version, _ = engine.match(setup)
+    assert recipe is not None and recipe["id"] == "hooks"
+    return setup, target, recipe, version
+
+
+def test_several_hook_steps_are_appended_in_order_to_the_last_packages_script(world, tmp_path):
+    setup, target, recipe, version = hooks_setup(world, tmp_path)
+    engine.build(world.profile, target, setup, recipe, version, lambda s: None, loc=er())
+    # the last package before it with the script: Revive's build ("NightreignRevive/mod" loads after anims)
+    hks = (target / "action/script/c0000.hks").read_text()
+    assert hks.endswith("\nlocal FirstOriginalUpdate = Update\n\nlocal SecondOriginalUpdate = Update\n")
+    assert hks.index("FirstOriginalUpdate") < hks.index("SecondOriginalUpdate")
+
+
+def test_a_hook_already_in_a_package_before_it_is_refused(world, tmp_path):
+    setup, target, recipe, version = hooks_setup(world, tmp_path)
+    (world.base / "mod/anims/action/script/c0000.hks").write_text("local SecondOriginalUpdate = Update\n")
+    with pytest.raises(engine.EngineError, match="A mod before Hooks already contains its script."):
+        engine.build(world.profile, target, setup, recipe, version, lambda s: None, loc=er())

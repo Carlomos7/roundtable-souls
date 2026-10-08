@@ -118,15 +118,19 @@ class AddText(_Strict):
     each: Each | None = None
 
 
-class ScriptAppend(_Strict):
-    do: Literal["script_append"]
-    folder: str
-    entry: str
-    base: str
-    base_until: str | None = None
-    append: str
-    refuse: list[str] = Field(default_factory=list)
-    refuse_text: str | None = None
+class Hook(_Strict):
+    """A mod's script fragment added to the entry script (overhauls.hooks): the packages' own script folder copied
+    in load order, then the fragment appended to the entry file (the last package's copy, else the download's base).
+    Several hooks for one entry are appended in the order of the steps, each wrapping the one before."""
+
+    do: Literal["hook"]
+    folder: str  # the script folder, for example action/script
+    entry: str  # the entry script in it, for example c0000.hks
+    base: str  # the download's copy of the entry script, used when no package ships one
+    base_until: str | None = None  # the base is cut before this text (the mod's own hook already in it)
+    fragment: str  # the download's file appended
+    markers: list[str] = Field(default_factory=list)  # text meaning a script already contains the fragment
+    refuse_text: str | None = None  # the refusal then
 
 
 class Remove(_Strict):
@@ -135,7 +139,7 @@ class Remove(_Strict):
 
 
 Step = Annotated[
-    CopyTree | Copy | KeepConfig | Params | Merge | AddText | ScriptAppend | Remove,
+    CopyTree | Copy | KeepConfig | Params | Merge | AddText | Hook | Remove,
     Field(discriminator="do"),
 ]
 
@@ -297,6 +301,7 @@ def load(game: str | None = None) -> list[OverhaulConfig]:
 # Keys an earlier version of the format had, and where they went (said when a file still uses one).
 _MOVED = {
     "seamless": "since 3.20 a required mod is listed in the build's requires",
+    "script_append": 'since 3.20 a script fragment is added with do = "hook" (append is fragment, refuse is markers)',
 }
 
 

@@ -15,9 +15,10 @@ was written for) and the steps that build its output folder from the packages be
                        tables (`table`) of the game's copy, then merged like `merge`
     params             the parameters (regulation.bin): the launcher's row-by-row combine of that package's and the
                        mod's copy against the game's
-    script_append      a script: the packages' own script folders copied in load order, then the mod's text appended
-                       to the entry file (the last package's copy, or the download's base when no package has one);
-                       refused when that already holds the mod's text or is compiled (bytecode), and packages
+    hook               a script fragment: the packages' own script folders copied in load order, then the mod's
+                       fragment appended to the entry file (the last package's copy, or the download's base when no
+                       package has one), several in step order, each wrapping the one before (overhauls.hooks);
+                       refused when that already holds a fragment's markers or is compiled (bytecode), and packages
                        shipping different entry files are a clash, recorded
     remove             leftovers (a glob below the output's mod folder)
 
@@ -47,13 +48,13 @@ from roundtable_souls.formats import FormatError
 from roundtable_souls.game import catalog as games
 from roundtable_souls.game import config as game_config
 from roundtable_souls.game import oodle as game_oodle
+from roundtable_souls.overhauls import hooks
 
 if TYPE_CHECKING:
     from roundtable_souls.game.locate import Locations
 
 WORK = ".roundtable-build"  # beside the output: the previous build and its restore.json
-STEPS = {"copy_tree", "copy", "config", "merge", "text", "params", "script_append", "remove"}
-COMPILED_LUA = b"\x1bLua"  # a compiled script starts with this; text cannot be appended to it
+STEPS = {"copy_tree", "copy", "config", "merge", "text", "params", "hook", "remove"}
 
 
 class EngineError(RuntimeError):
@@ -276,6 +277,7 @@ def build(
     sources: list[dict] = []
     report: list[str] = []
     made: list[Path] = []
+    hooked: set[tuple[str, str]] = set()
     log(f"engine: building {recipe['label']} {version} from {len(inputs)} package(s), {recipe['id']}")
     try:
         for step in recipe["steps"]:
@@ -316,9 +318,13 @@ def build(
                     except FormatError as e:
                         where = _fill(step["file"], {"each": each or ""})
                         raise EngineError(f"{where} could not be merged: {e}") from e
-            elif kind == "script_append":
-                _script_step(step, setup, inputs, mod, sources, report, log)
-                made.append(mod / step["folder"] / step["entry"])
+            elif kind == "hook":
+                target = (step["folder"], step["entry"])
+                if target not in hooked:  # every hook step for this entry, composed at the first one
+                    hooked.add(target)
+                    same = [h for h in recipe["steps"] if h["do"] == "hook" and (h["folder"], h["entry"]) == target]
+                    _hook_step(same, recipe["label"], setup, inputs, mod, sources, report, log)
+                    made.append(mod / step["folder"] / step["entry"])
             elif kind == "remove":
                 for p in sorted(mod.glob(step["glob"]), reverse=True):
                     if p.is_dir():
@@ -433,50 +439,48 @@ def _launcher_step(step, each, setup, inputs, game_dir, mod, sources, report, lo
     return out
 
 
-def _script_step(step, setup, inputs, mod, sources, report, log) -> None:
-    """The packages' script folders in load order (a later file of the same name replaces an earlier one), then the
-    mod's text appended to the entry script: the last package's copy, else the download's base."""
-    dest = mod / step["folder"]
+def _hook_step(steps, label, setup, inputs, mod, sources, report, log) -> None:
+    """The packages' script folder in load order (a later file of the same name replaces an earlier one), then each
+    hook step's fragment appended to the entry script: the last package's copy, else the download's base."""
+    first = steps[0]
+    folder, name = first["folder"], first["entry"]
+    dest = mod / folder
     for layer in inputs:
-        src = layer / step["folder"]
+        src = layer / folder
         for p in sorted(src.rglob("*")) if src.is_dir() else []:
             if p.is_file():
                 target = dest / p.relative_to(src)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(p, target)
-    shipped = [
-        (layer, (layer / step["folder"] / step["entry"]).read_bytes())
-        for layer in inputs
-        if (layer / step["folder"] / step["entry"]).is_file()
-    ]
+    shipped = [(layer, (layer / folder / name).read_bytes()) for layer in inputs if (layer / folder / name).is_file()]
     if len({data for _layer, data in shipped}) > 1:
         names = ", ".join(layer.name for layer, _data in shipped)
-        line = f"clash: {step['folder']}/{step['entry']}: {names} ship different copies; the last one's is used"
+        line = f"clash: {folder}/{name}: {names} ship different copies; the last one's is used"
         report.append(line)
         log(f"  {line}")
-    entry = dest / step["entry"]
-    raw = entry.read_bytes() if entry.is_file() else (setup / step["base"]).read_bytes()
-    if raw.startswith(COMPILED_LUA):
-        whose = shipped[-1][0].name if shipped else "the download"
-        raise EngineError(
-            f"{step['folder']}/{step['entry']} from {whose} is compiled (bytecode), so the mod's script cannot be "
-            "added to it. A package with the script as text is needed."
-        )
-    try:  # read as text: line endings become \n, as the mod's installer reads it
-        original = raw.decode("utf-8-sig").replace("\r\n", "\n").replace("\r", "\n")
-    except UnicodeDecodeError as e:
-        raise EngineError(
-            f"{step['folder']}/{step['entry']} is not UTF-8 text, so the mod's script cannot be added."
-        ) from e
-    if not entry.is_file() and step.get("base_until"):
-        original = original.split(step["base_until"])[0]
-    if any(m in original for m in step.get("refuse") or []):
-        raise EngineError(step.get("refuse_text") or "A package before it already contains its script.")
-    extension = (setup / step["append"]).read_text(encoding="utf-8-sig")
+    entry = dest / name
+    if entry.is_file():
+        base_from = f"{folder}/{name} from {shipped[-1][0].name}" if shipped else f"{folder}/{name}"
+        raw = entry.read_bytes()
+    else:
+        base_from = f"{folder}/{name} from the download"
+        raw = (setup / first["base"]).read_bytes()
+    try:
+        base = hooks.as_text(raw, base_from)
+        if not entry.is_file() and first.get("base_until"):
+            base = base.split(first["base_until"])[0]
+        fragments = [
+            hooks.Hook(label, (setup / s["fragment"]).read_text(encoding="utf-8-sig"), s.get("markers") or [],
+                       s.get("refuse_text"))
+            for s in steps
+        ]  # fmt: skip
+        composed = hooks.compose(base, base_from, fragments)
+    except hooks.HookError as e:
+        raise EngineError(str(e)) from e
     entry.parent.mkdir(parents=True, exist_ok=True)
-    entry.write_text(original + "\n" + extension, encoding="utf-8", newline="\n")
+    entry.write_text(composed.text, encoding="utf-8", newline="\n")
     for layer in inputs:
-        src = layer / step["folder"]
+        src = layer / folder
         for p in src.rglob("*") if src.is_dir() else []:
             if p.is_file():
                 sources.append({"path": str(p), "sha256": _sha(p)})

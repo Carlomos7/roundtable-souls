@@ -139,3 +139,14 @@ def test_a_config_with_the_old_seamless_key_is_left_out_and_says_where_it_went()
     (said,) = overhauls.problems()
     assert said.startswith(f"{bad}: builds.0.install.seamless: Extra inputs are not permitted")
     assert said.endswith("(seamless: since 3.20 a required mod is listed in the build's requires)")
+
+
+def test_a_config_with_the_old_script_append_step_is_left_out_and_says_where_it_went():
+    shipped = (overhaul_config.SHIPPED_DIR / "nightreign-revive.toml").read_text(encoding="utf-8")
+    old = shipped.replace('do = "hook"', 'do = "script_append"').replace('id = "nightreign-revive"', 'id = "x"', 1)
+    local("old.toml", old)
+    assert "x" not in [o.id for o in overhauls.load()]
+    (said,) = overhauls.problems()
+    assert said.endswith(
+        '(script_append: since 3.20 a script fragment is added with do = "hook" (append is fragment, refuse is markers))'
+    )

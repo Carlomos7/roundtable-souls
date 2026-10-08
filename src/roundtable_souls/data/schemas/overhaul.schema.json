@@ -77,10 +77,10 @@
         "config": "#/$defs/KeepConfig",
         "copy": "#/$defs/Copy",
         "copy_tree": "#/$defs/CopyTree",
+        "hook": "#/$defs/Hook",
         "merge": "#/$defs/Merge",
         "params": "#/$defs/Params",
         "remove": "#/$defs/Remove",
-        "script_append": "#/$defs/ScriptAppend",
         "text": "#/$defs/AddText"
        },
        "propertyName": "do"
@@ -105,7 +105,7 @@
         "$ref": "#/$defs/AddText"
        },
        {
-        "$ref": "#/$defs/ScriptAppend"
+        "$ref": "#/$defs/Hook"
        },
        {
         "$ref": "#/$defs/Remove"
@@ -212,6 +212,73 @@
     "folders_in"
    ],
    "title": "Each",
+   "type": "object"
+  },
+  "Hook": {
+   "additionalProperties": false,
+   "description": "A mod's script fragment added to the entry script (overhauls.hooks): the packages' own script folder copied\nin load order, then the fragment appended to the entry file (the last package's copy, else the download's base).\nSeveral hooks for one entry are appended in the order of the steps, each wrapping the one before.",
+   "properties": {
+    "do": {
+     "const": "hook",
+     "title": "Do",
+     "type": "string"
+    },
+    "folder": {
+     "title": "Folder",
+     "type": "string"
+    },
+    "entry": {
+     "title": "Entry",
+     "type": "string"
+    },
+    "base": {
+     "title": "Base",
+     "type": "string"
+    },
+    "base_until": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Base Until"
+    },
+    "fragment": {
+     "title": "Fragment",
+     "type": "string"
+    },
+    "markers": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Markers",
+     "type": "array"
+    },
+    "refuse_text": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Refuse Text"
+    }
+   },
+   "required": [
+    "do",
+    "folder",
+    "entry",
+    "base",
+    "fragment"
+   ],
+   "title": "Hook",
    "type": "object"
   },
   "Initializer": {
@@ -684,72 +751,6 @@
     }
    },
    "title": "Requirement",
-   "type": "object"
-  },
-  "ScriptAppend": {
-   "additionalProperties": false,
-   "properties": {
-    "do": {
-     "const": "script_append",
-     "title": "Do",
-     "type": "string"
-    },
-    "folder": {
-     "title": "Folder",
-     "type": "string"
-    },
-    "entry": {
-     "title": "Entry",
-     "type": "string"
-    },
-    "base": {
-     "title": "Base",
-     "type": "string"
-    },
-    "base_until": {
-     "anyOf": [
-      {
-       "type": "string"
-      },
-      {
-       "type": "null"
-      }
-     ],
-     "default": null,
-     "title": "Base Until"
-    },
-    "append": {
-     "title": "Append",
-     "type": "string"
-    },
-    "refuse": {
-     "items": {
-      "type": "string"
-     },
-     "title": "Refuse",
-     "type": "array"
-    },
-    "refuse_text": {
-     "anyOf": [
-      {
-       "type": "string"
-      },
-      {
-       "type": "null"
-      }
-     ],
-     "default": null,
-     "title": "Refuse Text"
-    }
-   },
-   "required": [
-    "do",
-    "folder",
-    "entry",
-    "base",
-    "append"
-   ],
-   "title": "ScriptAppend",
    "type": "object"
   },
   "SetInitializer": {
