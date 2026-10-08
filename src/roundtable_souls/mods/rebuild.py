@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Protocol
 from roundtable_souls.game import catalog as games
 from roundtable_souls.mods import backends, checks
 from roundtable_souls.mods import profile_edit as mod_manage
+from roundtable_souls.mods.profile_writer import ProfileWriter
 
 if TYPE_CHECKING:
     from roundtable_souls.game.locate import Locations
@@ -571,21 +572,15 @@ def ensure_combined(profile: Path, target: dict | None, *, loc: Locations):
     """The combined-parameters package: made (an empty folder with its record, and an entry right before the
     overlay, or after the last package with parameters) when the profile has none, and moved there when a pack
     ended up after it. Returns its CombineTool."""
-    from roundtable_souls.mods import order as mod_order
     from roundtable_souls.mods.backends import builtin
 
     profile = Path(profile)
-
-    def _write_keeping_last(profile: Path, text: str) -> None:
-        # The entry has to be in the overlay's load_after too: me3 orders by load_after runs, so a package the
-        # overlay does not list loads after it (and the overlay would win the files the combine made).
-        mod_manage._write_ordered(profile, text, "combined parameters", mod_order.target(profile, loc))
-
     all_layers = layers(profile)
     combine = builtin.find(profile, all_layers, loc=loc)
-    text = mod_manage.read_text(profile)
-    if mod_manage.is_array_form(text):
-        text = mod_manage.to_blocks(text)
+    # The writer keeps the entry in the overlay's load_after too (its StayLast rule): me3 orders by load_after runs,
+    # so a package the overlay does not list loads after it (and the overlay would win the files the combine made).
+    writer = ProfileWriter(profile, loc)
+    text = writer.as_blocks()
     if combine is None:
         pk_root, _nt = mod_manage.roots(profile, text)
         folder = pk_root / builtin.FOLDER
@@ -596,13 +591,12 @@ def ensure_combined(profile: Path, target: dict | None, *, loc: Locations):
         folder.mkdir(parents=True, exist_ok=True)
         if not (folder / builtin.RECORD).is_file():
             (folder / builtin.RECORD).write_text(json.dumps({"combined": 1, "packs": []}), encoding="utf-8")
-        taken = {(e.get("id") or "").lower() for e in mod_manage.entries(profile) if e["kind"] == "package"}
+        taken = {(e.get("id") or "").lower() for e in writer.entries() if e["kind"] == "package"}
         ident, n = builtin.FOLDER, 2
         while ident in taken:
             ident, n = f"{builtin.FOLDER}-{n}", n + 1
-        row = {"kind": "package", "id": ident, "path": mod_manage.rel(profile, folder)}
-        text = _place(profile, text, row, target, all_layers)
-        _write_keeping_last(profile, text)
+        writer.add_package(ident, folder, before=_place(profile, text, target, all_layers))
+        writer.write("combined parameters")
     else:
         order = [l["index"] for l in all_layers]
         at = order.index(combine.package["index"])
@@ -614,24 +608,25 @@ def ensure_combined(profile: Path, target: dict | None, *, loc: Locations):
             and (target is None or l["index"] != target["index"])
         ]
         before_target = target is None or order.index(target["index"]) > at
-        if packs_after or not before_target:  # move it back into place
-            o = mod_manage.block_options(text, combine.package["index"])
-            row = {"kind": "package", "id": o["id"], "path": o["path"]}
-            text = mod_manage.remove_block(text, combine.package["index"])
-            _write_keeping_last(profile, text)
-            text = _place(profile, mod_manage.read_text(profile), row, overlay(profile, loc=loc)[0], layers(profile))
-            _write_keeping_last(profile, text)
+        if packs_after or not before_target:  # move it back into place: out, then in where it belongs
+            o = writer.options(combine.package["index"])
+            writer.remove_entry(combine.package["index"])
+            writer.write("combined parameters")
+            writer = ProfileWriter(profile, loc)
+            at = _place(profile, writer.as_blocks(), overlay(profile, loc=loc)[0], layers(profile))
+            writer.add_package(o["id"], o["path"], before=at)
+            writer.write("combined parameters")
     found = builtin.find(profile, layers(profile), loc=loc)
     if found is None:
         raise MergeError("The combined-parameters package could not be added to the profile.")
     return found
 
 
-def _place(profile: Path, text: str, row: dict, target: dict | None, all_layers: list[dict]) -> str:
-    """Add the combined package's entry: right before the overlay, else right after the last package with
-    parameters or a file it merges (before whatever follows it), else at the end."""
+def _place(profile: Path, text: str, target: dict | None, all_layers: list[dict]) -> int | None:
+    """The block the combined package's entry goes above: the overlay, else the first package after the last package
+    with parameters or a file it merges; None for the end."""
     if target is not None:
-        return mod_manage.insert_entry(text, "package", row, target["index"])
+        return target["index"]
     shared = {o["index"] for owners in _shared(all_layers, None, None).values() for o in owners}
     packs = [l for l in all_layers if (l["folder"] / REGULATION).is_file() or l["index"] in shared]
     if packs:
@@ -639,8 +634,8 @@ def _place(profile: Path, text: str, row: dict, target: dict | None, all_layers:
             b["index"] for b in mod_manage.blocks(text) if b["index"] > packs[-1]["index"] and b["kind"] == "package"
         ]
         if following:
-            return mod_manage.insert_entry(text, "package", row, following[0])
-    return mod_manage.append_entry(text, "package", row)
+            return following[0]
+    return None
 
 
 def rebuild(profile: Path, log, combine: bool | None = None, *, loc: Locations) -> dict:
@@ -699,8 +694,10 @@ def rebuild(profile: Path, log, combine: bool | None = None, *, loc: Locations) 
             note = keep_profile_text(profile, before_tool, tool)
             log(f"merge: {note}")
     except backends.BackendError as e:
-        if mod_manage.read_text(profile) != original and tool is not None:
-            _put(profile, mod_manage.read_text(profile) if comb is not None else original)
+        if comb is None and tool is not None and mod_manage.read_text(profile) != original:
+            writer = ProfileWriter(profile)  # the tool rewrote the profile and failed: the text before it comes back
+            writer.replace_text(original)
+            writer.write("before putting the profile back after a failed rebuild")
         note_run(profile, False, str(e))
         raise MergeError(str(e)) from e
     note_run(profile, True, "")
@@ -817,12 +814,6 @@ def trim_tool_backups(profile: Path, keep: int = 3) -> list[dict]:
     return moved
 
 
-def _put(profile: Path, text: str) -> None:
-    tmp = profile.with_name(profile.name + ".tmp")
-    tmp.write_text(text, encoding="utf-8", newline="")
-    tmp.replace(profile)
-
-
 def _shape(profile: Path, text: str, own: list[Path]) -> tuple:
     """What a profile loads, ignoring layout, comments and the load order lists of the rebuild tool's own entries."""
     from roundtable_souls.mods import profile as profile_tools
@@ -849,7 +840,8 @@ def keep_profile_text(profile: Path, original: str, backend) -> str:
     """After a rebuild tool rewrote the profile: when it loads the same things as before (only the rebuild tool's own entries'
     load order lists may differ), put the original text back with those lists updated. Otherwise keep the rebuild tool's
     version; the original stays in the .bak. Returns what happened, for the log."""
-    now = mod_manage.read_text(profile)
+    writer = ProfileWriter(profile)
+    now = writer.text
     if now == original:
         return "the profile was not changed"
     own = [checks._canon(f) for f in backend.own_folders()]
@@ -868,7 +860,8 @@ def keep_profile_text(profile: Path, original: str, backend) -> str:
         where = str(checks._canon(mod_manage.resolve(profile, o["path"]))) if o["path"] else ""
         if where in lists:
             text = mod_manage.set_block_options(text, b["index"], lists[where])
-    _put(profile, text)
+    writer.replace_text(text)
+    writer.write("before putting the profile's text back after the rebuild tool")
     return "your profile's text and comments were kept; only the rebuild tool's own load order lists were updated"
 
 

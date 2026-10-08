@@ -456,7 +456,7 @@ class ProfileWriter:
     # ---------------------------------------------------------------- reading the text as it stands
     def entries(self) -> list[dict]:
         """The entries as the edits so far leave them (formats.me3_profile.entries): 'index' addresses them."""
-        return me3_profile.entries(self._blocks())
+        return me3_profile.entries(self.as_blocks())
 
     def find(self, kind: str, name: str) -> int | None:
         """The index of the entry of this kind called name (its id, else its file or folder name), case aside."""
@@ -464,7 +464,7 @@ class ProfileWriter:
         return next((e["index"] for e in self.entries() if e["kind"] == kind and e["name"].lower() == low), None)
 
     def options(self, index: int) -> dict:
-        return me3_profile.block_options(self._blocks(), index)
+        return me3_profile.block_options(self.as_blocks(), index)
 
     def _name(self, index: int) -> str:
         o = self.options(index)
@@ -485,7 +485,7 @@ class ProfileWriter:
         last (a package above its package, a DLL above its first DLL), so the file reads in load order; else at the
         end. after_last keeps it after that mod on purpose: last, naming the mod in its own load_after. deepest: the
         longest file path inside its folder, in characters, for the Paths rule. Returns the entry as added."""
-        self._blocks()
+        self.as_blocks()
         row = {**row, "kind": kind, "path": self._relative(row["path"])}
         where = before
         if after_last and self.target is not None:
@@ -517,25 +517,25 @@ class ProfileWriter:
         """Take block `index` out with its own comments (profile_edit.remove_entry). Returns (the text taken out,
         where it was), what restore_entry needs to put it back."""
         o = self.options(index)
-        self.text, chunk, where = profile_edit.remove_entry(self._blocks(), index)
+        self.text, chunk, where = profile_edit.remove_entry(self.as_blocks(), index)
         self.changes.append(Change("remove", o["kind"], index, o["path"], before=o))
         return chunk, where
 
     def restore_entry(self, chunk: str, where: dict) -> None:
         """Put an entry taken out by remove_entry back where it was (profile_edit.restore_entry)."""
-        self.text = profile_edit.restore_entry(self._blocks(), chunk, where)
+        self.text = profile_edit.restore_entry(self.as_blocks(), chunk, where)
         self.changes.append(Change("add", row={}))
 
     def set_options(self, index: int, opts: dict) -> None:
         """Rewrite the option keys of one block (profile_edit.set_block_options); keys absent from opts stay."""
         o = self.options(index)
-        self.text = profile_edit.set_block_options(self._blocks(), index, opts)
+        self.text = profile_edit.set_block_options(self.as_blocks(), index, opts)
         self.changes.append(Change("options", o["kind"], index, o["path"], row=dict(opts), before=o))
 
     def replace_block(self, index: int, lines: list[str]) -> None:
         """One block's lines replaced as given (an edit profile_edit has no function for)."""
         o = self.options(index)
-        b = me3_profile.blocks(self._blocks())[index]
+        b = me3_profile.blocks(self.as_blocks())[index]
         all_lines = self.text.splitlines(keepends=True)
         all_lines[b["start"] : b["end"]] = lines
         self.text = "".join(all_lines)
@@ -617,7 +617,7 @@ class ProfileWriter:
     def _applying(self, plan: Plan) -> list[ProfileRule]:
         return [r for r in self.rules if r.verbatim or not plan.verbatim]
 
-    def _blocks(self) -> str:
+    def as_blocks(self) -> str:
         """The text as [[packages]] / [[natives]] blocks, converting an inline-array profile once."""
         if me3_profile.is_array_form(self.text):
             self.text = me3_profile.to_blocks(self.text)
@@ -630,7 +630,7 @@ class ProfileWriter:
 
     def _roles(self) -> tuple[dict | None, list[dict], list[dict]]:
         assert self.target is not None
-        items = mod_order._items(self.profile, self._blocks())
+        items = mod_order._items(self.profile, self.as_blocks())
         return mod_order._roles(self.profile, items, self.target)
 
     def _last_place(self, kind: str) -> int | None:

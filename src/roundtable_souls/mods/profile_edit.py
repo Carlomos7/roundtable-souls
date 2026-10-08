@@ -354,64 +354,6 @@ def rel(profile: Path, target: Path) -> str:
 
 
 # ----------------------------------------------------------------------------- operations
-def _write(profile: Path, new_text: str, why: str = "change") -> Path:
-    """Interim, for the callers not yet on mods.profile_writer: the text written as it is, through the writer (the
-    history copy, the .bak, one atomic replace)."""
-    from roundtable_souls.mods import profile_writer
-
-    w = profile_writer.ProfileWriter(Path(profile))
-    w.replace_text(new_text)
-    plan = w.write(why)
-    assert plan.backup is not None
-    return plan.backup
-
-
-def _write_ordered(
-    profile: Path, new_text: str, why: str, tgt: dict | None, renamed: dict[str, str] | None = None
-) -> tuple[Path, str | None]:
-    """_write, with the mod that must stay last kept after everything else (see mods.order). tgt is what
-    order.target() said before the change. Returns (backup, why it could not be kept last, or None)."""
-    new_text, problem = _ordered(profile, new_text, tgt, renamed)
-    return _write(profile, new_text, why), problem
-
-
-def _ordered(
-    profile: Path, new_text: str, tgt: dict | None, renamed: dict[str, str] | None = None
-) -> tuple[str, str | None]:
-    """The text with the mod that must stay last kept after everything else, and why it could not be (or None)."""
-    from roundtable_souls.mods import order as mod_order
-
-    if not tgt:
-        return new_text, None
-    return mod_order.reconcile(profile, new_text, tgt, renamed)
-
-
-def _stage_write(op, profile: Path, new_text: str, why: str) -> Path:
-    """Interim, for the callers not yet on mods.profile_writer: _write for an operation (merging.build.Operation):
-    the history copy and the .bak now, the new text as one of its steps. Returns the .bak."""
-    from roundtable_souls.mods import profile_writer
-
-    w = profile_writer.ProfileWriter(Path(profile))
-    w.replace_text(new_text)
-    plan = w.write(why, operation=op)
-    assert plan.backup is not None
-    return plan.backup
-
-
-def _last_place(profile: Path, text: str, kind: str, tgt: dict | None) -> int | None:
-    """The block new entries of this kind go above, so the file reads in load order: the package that must stay
-    last, or the first of its DLLs. None without one."""
-    from roundtable_souls.mods import order as mod_order
-
-    if not tgt:
-        return None
-    items = mod_order._items(profile, text)
-    pkg, _last, mine = mod_order._roles(profile, items, tgt)
-    if kind == "package":
-        return pkg["index"] if pkg else None
-    return mine[0]["index"] if mine else None
-
-
 def set_options(profile: Path, index: int, opts: dict, *, loc: Locations) -> Path | None:
     """Rewrite one entry's options (set_block_options) through the writer: the mod that must stay last follows an id
     renamed here. Returns the .bak. A loop the change would make among the other entries shows on the Load order
