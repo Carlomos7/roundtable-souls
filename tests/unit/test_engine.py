@@ -1,23 +1,27 @@
-"""The launcher's own build of a mod that must stay last, from a recipe: the launcher's merges on tiny game files,
-and a fake tool for the one step still left to the mod's own tool (the real one never runs in tests). Checked on a
-real PC against the mod's installer: the same content."""
+"""The launcher's own build of a mod that must stay last, from its overhaul config: the launcher's merges on tiny
+game files, the grace menu included, and nothing of the mod's runs (any program started fails the test)."""
 
 import json
 import shutil
+import subprocess
 from pathlib import Path
 
+import fakegame
 import pytest
 from fakegame import bnd, dcx, files_of, fmg, texts_of
+from test_esd_merge import game_script, options, with_option
 from test_param_merge import pack, rows_of, set_word, vanilla
 
+from roundtable_souls import overhauls
 from roundtable_souls.config import settings
+from roundtable_souls.formats.esd import write_esd
 from roundtable_souls.game import locate
 from roundtable_souls.mods import backends, engine
 from roundtable_souls.mods import rebuild as merge
 from roundtable_souls.mods.backends import manifest_refresh
 from roundtable_souls.platform import paths as common
+from support import er
 
-RECIPE = json.loads((engine.RECIPES_DIR / "nightreign-revive-lite.json").read_text(encoding="utf-8"))
 PROFILE = """profileVersion = "v1"
 
 [[packages]]
@@ -52,9 +56,6 @@ PAYLOAD = [
     "payload/audio/revive.wav",
     "payload/ui/base.png",
     "payload/settings/m00_00_00_00.talkesdbnd.dcx",
-    "payload/settings/vanilla/script/talk/m00_00_00_00.talkesdbnd.dcx",
-    "tools/merge/Assets.exe",
-    "tools/defs/SpEffect.xml",
 ]
 ARCHIVES = ["chr/c0000.anibnd.dcx", "chr/c0000.behbnd.dcx", "chr/c0000_a00_hi.anibnd.dcx", "chr/c0000_a00_md.anibnd.dcx",
             "chr/c0000_a00_lo.anibnd.dcx", "sfx/sfxbnd_commoneffects.ffxbnd.dcx"]  # fmt: skip
@@ -72,7 +73,7 @@ def game_files() -> dict[str, bytes]:
 
 class Revive:
     """A profile folder with a Revive-like mod: its download (setup folder), an installed build, packages before it,
-    Seamless, and a game; the merge tool is faked (each output names what it merged)."""
+    Seamless, and a game. Starting any program fails: the launcher's build runs nothing of the mod's."""
 
     def __init__(self, tmp_path, monkeypatch):
         self.base = tmp_path / "profiles" / "er"
@@ -80,8 +81,6 @@ class Revive:
         self.game.mkdir(parents=True)
         (self.game / "regulation.bin").write_bytes(vanilla())
         (self.game / "eldenring.exe").write_bytes(b"x")
-        import fakegame
-
         fakegame.game(monkeypatch, game_files())
         monkeypatch.setattr(locate, "installed_dir", lambda _game: self.game)
         monkeypatch.setattr(common, "exe_running", lambda _exe: False)
@@ -147,22 +146,16 @@ class Revive:
         )
         self.profile = self.base / "p.me3"
         self.profile.write_text(PROFILE, encoding="utf-8")
-        self.calls = []
-        monkeypatch.setattr(engine, "run_tool", self.fake_tool)
 
-    def fake_tool(self, exe, args, env, timeout, cwd):
-        self.calls.append((args[0], Path(args[1]).name if len(args) > 1 else "", env))
-        out = Path(args[3] if args[0] != "merge-archive" else args[4])
-        if args[0] in ("merge-regulation", "merge-grace", "merge-menu-text"):
-            out = Path(args[3])
-        src = Path(args[1] if args[0] != "merge-archive" else args[2])
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_bytes(b"MERGED " + args[0].encode() + b" " + src.read_bytes())
-        return 0, f"merged {out.name}"
+        def no_programs(*args, **kwargs):
+            raise AssertionError(f"the build started a program: {args[0] if args else kwargs}")
+
+        monkeypatch.setattr(subprocess, "run", no_programs)
+        monkeypatch.setattr(subprocess, "Popen", no_programs)
 
     def build(self, log=lambda s: None):
         recipe, version, _ = engine.match(self.setup)
-        return engine.build(self.profile, self.own / "mod", self.setup, recipe, version, log)
+        return engine.build(self.profile, self.own / "mod", self.setup, recipe, version, log, loc=er())
 
 
 @pytest.fixture
@@ -171,9 +164,10 @@ def world(tmp_path, monkeypatch):
 
 
 def test_the_bundled_recipe_is_valid_and_fits_the_download(world):
-    assert engine.validate(RECIPE) == []
     recipe, version, why = engine.match(world.setup)
     assert recipe["id"] == "nightreign-revive-lite" and version == "0.1.33-rc3" and why is None
+    assert engine.validate(recipe) == [] and "tool" not in recipe
+    assert {s["do"] for s in recipe["steps"]} <= engine.STEPS
 
 
 def test_a_newer_version_is_not_built_and_says_why(world):
@@ -203,9 +197,10 @@ def test_the_launcher_merges_the_mods_files_with_the_packages_before_it(world):
     rows = rows_of((own / "mod/regulation.bin").read_bytes(), "EquipParamWeapon")
     word = lambda r, i: int.from_bytes(r.data[i * 4 : i * 4 + 4], "little")  # noqa: E731
     assert word(rows[1000], 0) == 55 and word(rows[2000], 1) == 77
-    # the grace menu is still the mod's own tool's job
-    assert [c[0] for c in world.calls] == ["merge-grace"]
-    assert world.calls[0][2]["NRR_GAME_DIRECTORY"] == str(world.game)
+    # no package ships the grace menu: the mod's own copy
+    talk = world.setup / "payload/settings/m00_00_00_00.talkesdbnd.dcx"
+    assert (own / f"mod/{TALK}").read_bytes() == talk.read_bytes()
+    assert (own / "merge-report.txt").read_text().splitlines()[-1] == "No clashes."
     assert (own / "audio/revive.wav").is_file() and (own / "ui/base.png").is_file()
     assert (own / "RevivePrototype.dll").read_bytes() == b"stock payload/RevivePrototype.dll"
 
@@ -260,15 +255,20 @@ def test_the_previous_build_is_kept_and_undo_swaps_it_back(world):
     assert (out["previous"] / "mod/regulation.bin").read_bytes() == b"OLD BUILD"
     u = {"type": "rebuild", "profile": str(world.profile), "tool_restore": str(out["restore"])}
     assert undo.available(u)
-    undo.run(u, lambda s: None)
+    undo.run(u, lambda s: None, loc=er())
     assert (world.own / "mod/regulation.bin").read_bytes() == b"OLD BUILD"
-    undo.run({**u, "redo": True}, lambda s: None)
+    undo.run({**u, "redo": True}, lambda s: None, loc=er())
     assert (world.own / "mod/regulation.bin").read_bytes() != b"OLD BUILD"
 
 
 def test_a_failed_merge_leaves_the_build_in_place_and_no_staging(world, monkeypatch):
-    monkeypatch.setattr(engine, "run_tool", lambda *a, **k: (3, "could not read the archive"))
-    with pytest.raises(engine.EngineError, match="exit 3"):
+    from roundtable_souls.merging import merger
+
+    def fail(*args, **kwargs):
+        raise RuntimeError("could not read the archive")
+
+    monkeypatch.setattr(merger, "merge", fail)
+    with pytest.raises(RuntimeError, match="could not read"):
         world.build()
     assert (world.own / "mod/regulation.bin").read_bytes() == b"OLD BUILD"
     assert not list(world.base.glob(".NightreignRevive.building-*"))
@@ -308,10 +308,10 @@ def test_a_rebuild_uses_the_engine_only_with_the_switch_on(world, monkeypatch):
     ran = []
     monkeypatch.setattr(backends.Tool, "run", lambda self, log: ran.append(self.recipe.engine is not None))
     layer = next(l for l in merge.layers(world.profile) if l["name"] == "nightreign-revive")
-    r = manifest_refresh.recipe(world.profile, layer)
+    r = manifest_refresh.recipe(world.profile, layer, loc=er())
     assert r is not None and r.engine is None and r.command  # off: the mod's installer runs
     settings.save_settings(build_merges=True)
-    r = manifest_refresh.recipe(world.profile, layer)
+    r = manifest_refresh.recipe(world.profile, layer, loc=er())
     assert r.engine is not None and r.label == "the launcher's build of nightreign-revive"
     assert (
         "builds nightreign" in backends.Tool(r).describe().lower() or "Nightreign Revive" in backends.Tool(r).describe()
@@ -320,49 +320,118 @@ def test_a_rebuild_uses_the_engine_only_with_the_switch_on(world, monkeypatch):
 
 def test_a_whole_rebuild_through_the_engine_is_current_and_can_be_undone(world):
     settings.save_settings(build_merges=True)
-    tool = merge.find_backend(world.profile)
+    tool = merge.find_backend(world.profile, loc=er())
     merge.approve(tool)
-    out = merge.rebuild(world.profile, lambda s: None)
+    out = merge.rebuild(world.profile, lambda s: None, loc=er())
     assert out["undo"]["tool_restore"] and out["undo"]["tool_restore"].endswith("restore.json")
-    assert merge.health(world.profile)["state"] == "current"
+    assert merge.health(world.profile, loc=er())["state"] == "current"
     assert world.profile.read_text(encoding="utf-8") == PROFILE  # never rewritten
 
 
-def test_a_second_recipe_needs_no_code(world, tmp_path, monkeypatch):
-    """Nothing about Revive is in the engine: a made-up mod with other names builds from its recipe alone."""
-    other = tmp_path / "recipes"
-    other.mkdir()
-    toy = {
-        "recipe": 1,
-        "id": "toy",
-        "label": "Toy",
-        "match": {"files": ["toy.json"]},
-        "tool": {"path": "bin/merge.exe"},
-        "output": {"mod": "mod"},
-        "steps": [
-            {"do": "copy", "from": "payload/toy.dll", "to": "toy.dll"},
-            {
-                "do": "tool",
-                "file": "regulation.bin",
-                "missing": "game",
-                "args": ["merge-regulation", "{source}", "{setup}/x", "{out}"],
-            },
-        ],
-    }
-    (other / "toy.json").write_text(json.dumps(toy))
-    monkeypatch.setattr(engine, "RECIPES_DIR", other)
+TOY_CONFIG = """overhaul = 1
+id = "toy"
+label = "Toy"
+short_label = "Toy"
+game = "eldenring"
+
+[recognise]
+folder = "Toy"
+manifest = "installation.json"
+
+[[builds]]
+id = "toy"
+match = { files = ["toy.json"] }
+output = { mod = "mod" }
+
+[[builds.steps]]
+do = "copy"
+from = "payload/toy.dll"
+to = "toy.dll"
+
+[[builds.steps]]
+do = "params"
+file = "regulation.bin"
+patch = "payload/toy.bin"
+"""
+
+
+def test_a_second_recipe_needs_no_code(world, tmp_path):
+    """Nothing about Revive is in the engine: a made-up mod with other names builds from its config alone, a file in
+    the local overhauls folder."""
+    local = overhauls.local_dir()
+    assert local is not None
+    local.mkdir(parents=True)
+    (local / "toy.toml").write_text(TOY_CONFIG, encoding="utf-8")
     setup = tmp_path / "toysetup"
     (setup / "payload").mkdir(parents=True)
     (setup / "toy.json").write_text("{}")
     (setup / "payload/toy.dll").write_bytes(b"toy")
+    (setup / "payload/toy.bin").write_bytes(pack({"EquipParamWeapon": set_word(2000, 2, 9)}))
     recipe, version, _ = engine.match(setup)
     assert recipe["id"] == "toy"
     target = world.base / "Toy" / "mod"
     target.mkdir(parents=True)
     world.profile.write_text(PROFILE + "\n[[packages]]\nid = \"toy\"\npath = 'Toy/mod'\n")
-    engine.build(world.profile, target, setup, recipe, version, lambda s: None)
+    (world.own / "mod/regulation.bin").write_bytes(vanilla())  # the package before it: a real one
+    engine.build(world.profile, target, setup, recipe, version, lambda s: None, loc=er())
     assert (world.base / "Toy/toy.dll").read_bytes() == b"toy"
-    assert (target / "regulation.bin").read_bytes().startswith(b"MERGED merge-regulation")
+    rows = rows_of((target / "regulation.bin").read_bytes(), "EquipParamWeapon")
+    assert int.from_bytes(rows[2000].data[8:12], "little") == 9  # the toy's change
+
+
+TALK = "script/talk/m00_00_00_00.talkesdbnd.dcx"
+
+
+def test_the_grace_menu_is_merged_by_the_launcher_with_the_packages(world, monkeypatch):
+    """The ESD rule (Phase 5), not the mod's tool: a package's grace-menu option and the mod's both offered."""
+    game = write_esd(game_script())
+    fakegame.game(monkeypatch, {**game_files(), TALK: dcx(bnd({"t000001000.esd": game}))})
+    map_mod = write_esd(with_option(game_script(), 10, 1000, 4, 120))
+    revive = write_esd(with_option(game_script(), 20, 2000, 4, 130))
+    (world.base / "mod/anims/script/talk").mkdir(parents=True)
+    (world.base / "mod/anims" / TALK).write_bytes(dcx(bnd({"t000001000.esd": map_mod})))
+    (world.setup / "payload/settings/m00_00_00_00.talkesdbnd.dcx").write_bytes(dcx(bnd({"t000001000.esd": revive})))
+    world.build()
+    merged = files_of((world.own / "mod" / TALK).read_bytes())["t000001000.esd"]
+    assert options(merged) == [(1, 2), (2, 3), (10, 4), (20, 5)]
+    m = json.loads((world.own / "installation.json").read_text())
+    assert any(Path(r["path"]).name == "m00_00_00_00.talkesdbnd.dcx" for r in m["sources"])
+
+
+def test_animation_data_changed_differently_by_the_package_and_the_mod_is_a_recorded_clash(world):
+    """.hkx is taken whole, three-way: the mod's copy (it loads last), and a line in the build's report. (As the
+    mod's installer does, only the last package that ships the file is merged with the mod's: parity mode.)"""
+    rel = "payload/mod/chr/c0000_a00_hi.anibnd.dcx"
+    (world.setup / rel).write_bytes(dcx(bnd({**GAME_CLIPS, "a000_000.hkx": b"revive walk", "revive.hkx": b"revive"})))
+    world.build()
+    clips = files_of((world.own / "mod/chr/c0000_a00_hi.anibnd.dcx").read_bytes())
+    assert clips["a000_000.hkx"] == b"revive walk"
+    report = (world.own / "merge-report.txt").read_text()
+    assert "clash: chr/c0000_a00_hi.anibnd.dcx" in report and "a000_000.hkx" in report
+
+
+def test_packages_with_different_entry_scripts_are_a_recorded_clash(world):
+    (world.base / "mod/body/action/script").mkdir(parents=True)
+    (world.base / "mod/body/action/script/c0000.hks").write_text("-- body script\n")
+    world.build()
+    hks = (world.own / "mod/action/script/c0000.hks").read_bytes()
+    assert hks.startswith(b"-- anims script")  # the last package's
+    report = (world.own / "merge-report.txt").read_text()
+    assert "clash: action/script/c0000.hks: body, anims ship different copies" in report
+
+
+def test_the_same_entry_script_in_two_packages_is_no_clash(world):
+    (world.base / "mod/body/action/script").mkdir(parents=True)
+    shutil.copy2(world.base / "mod/anims/action/script/c0000.hks", world.base / "mod/body/action/script/c0000.hks")
+    world.build()
+    assert "clash:" not in (world.own / "merge-report.txt").read_text()
+
+
+def test_a_compiled_entry_script_is_refused(world):
+    (world.base / "mod/anims/action/script/c0000.hks").write_bytes(b"\x1bLuaQ\x00\x01\x04compiled")
+    with pytest.raises(engine.EngineError, match="compiled"):
+        world.build()
+    assert (world.own / "mod/regulation.bin").read_bytes() == b"OLD BUILD"
 
 
 def test_merge_ini_adds_only_what_is_new():

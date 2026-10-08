@@ -13,9 +13,14 @@ Nested = Callable[[bytes, list[tuple[str, bytes]], str], Result | None]
 def merge(base: bytes, bodies: list[tuple[str, bytes]], where: str, nested: Nested) -> Result:
     """Inner file by inner file: what each mod changed, added or left out against the game's archive, applied in
     load order; an inner file several mods changed is merged inside when it is itself an archive or a text table.
-    nested(base, bodies, where) is the merger's own dispatch for such an inner file (None: no rule for it)."""
+    nested(base, bodies, where) is the merger's own dispatch for such an inner file (None: no rule for it).
+
+    Inner files keep the game's order, added ones after them; but when the game's archive lists its inner files by
+    ascending ID (as its effect and animation archives do) and the result's IDs are all different, the result is
+    listed by ID too, so added files take their place among the game's (as the mods' own tools write them)."""
     van = formats.bnd4.read_bnd4(base)
     _unique(van, "the game's")
+    by_id = all(a.id < b.id for a, b in zip(van.entries, van.entries[1:], strict=False))
     vmap = {e.key: e for e in van.entries}
     order = [e.key for e in van.entries]
     touched: dict[str, list[tuple[str, object]]] = {}
@@ -67,6 +72,8 @@ def merge(base: bytes, bodies: list[tuple[str, bytes]], where: str, nested: Nest
         else:
             result[key] = last
     van.entries = [result[k] for k in order if k in result]
+    if by_id and len({e.id for e in van.entries}) == len(van.entries):
+        van.entries.sort(key=lambda e: e.id)
     out.data = formats.bnd4.write_bnd4(van)
     return out
 

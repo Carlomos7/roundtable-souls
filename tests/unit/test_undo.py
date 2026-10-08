@@ -11,6 +11,7 @@ from roundtable_souls.mods import conflicts as overview
 from roundtable_souls.mods import rebuild as merge
 from roundtable_souls.mods import remove, undo
 from roundtable_souls.platform import trash
+from support import er
 
 PROFILE = """profileVersion = "v1"
 
@@ -58,7 +59,7 @@ def prof(tmp_path, monkeypatch):
 
 
 def removal(p, index, sent, delete=True):
-    out = remove.uninstall(p, index, delete_folder=delete)
+    out = remove.uninstall(p, index, delete_folder=delete, loc=er())
     if out.get("trash"):
         sent.append(out["trash"])
     rec = {
@@ -79,7 +80,7 @@ def test_a_removed_mod_comes_back_entry_and_folder(prof, sent):
     folder = prof.parent / "mod" / "voice"
     assert out["removed_folder"] and not folder.exists() and trash.exists(out["trash"])
     assert undo.available(rec) and undo.label(rec) == "Restore"
-    said = undo.run(rec, lambda s: None)
+    said = undo.run(rec, lambda s: None, loc=er())
     assert said == "restored voice (its entry and its folder)"
     assert prof.read_text(encoding="utf-8") == PROFILE and (folder / "sd" / "voice.bnk").read_bytes() == b"voice"
     assert not undo.available(rec)  # done: nothing left to take back
@@ -88,7 +89,7 @@ def test_a_removed_mod_comes_back_entry_and_folder(prof, sent):
 def test_only_the_entry_comes_back_when_the_folder_was_kept(prof, sent):
     _out, rec = removal(prof, 1, sent, delete=False)
     assert rec["trash"] is None and undo.available(rec)
-    assert undo.run(rec, lambda s: None) == "restored voice (its entry)"
+    assert undo.run(rec, lambda s: None, loc=er()) == "restored voice (its entry)"
     assert prof.read_text(encoding="utf-8") == PROFILE
 
 
@@ -98,7 +99,7 @@ def test_an_emptied_bin_still_gives_the_entry_back(prof, sent):
     trash.purge(out["trash"])
     lines = []
     assert undo.available(rec)
-    undo.run(rec, lines.append)
+    undo.run(rec, lines.append, loc=er())
     assert prof.read_text(encoding="utf-8") == PROFILE
     assert any("no longer in the Recycle Bin" in x for x in lines)
 
@@ -113,7 +114,7 @@ def test_a_folder_windows_deleted_for_good_leaves_the_entry_to_restore(prof, sen
     out, rec = removal(prof, 1, sent)
     assert out["removed_folder"] and not trash.exists(out["trash"])
     assert undo.available(rec)
-    undo.run(rec, lambda s: None)
+    undo.run(rec, lambda s: None, loc=er())
     assert prof.read_text(encoding="utf-8") == PROFILE
     trash.purge(out["trash"])  # a "gone" record: nothing to purge, and nothing else touched
     assert prof.is_file() and (prof.parent / "mod" / "hud").is_dir()
@@ -124,24 +125,24 @@ def test_a_folder_put_back_meanwhile_is_not_overwritten(prof, sent):
     out, rec = removal(prof, 1, sent)
     (prof.parent / "mod" / "voice").mkdir()  # reinstalled meanwhile
     with pytest.raises(FileExistsError):
-        undo.run(rec, lambda s: None)
+        undo.run(rec, lambda s: None, loc=er())
     assert trash.exists(out["trash"])  # still in the bin, nothing lost
 
 
 def test_restore_is_not_offered_once_done_or_when_the_profile_is_gone(prof, sent):
     _out, rec = removal(prof, 1, sent, delete=False)
-    undo.run(rec, lambda s: None)
+    undo.run(rec, lambda s: None, loc=er())
     assert not undo.available(rec)
     prof.unlink()
     assert not undo.available(rec)
     with pytest.raises(undo.UndoError):
-        undo.run(rec, lambda s: None)
+        undo.run(rec, lambda s: None, loc=er())
     assert not undo.available(None) and not undo.available({"type": "nothing"})
 
 
 def test_merged_from_names_what_stays_in_a_combined_result(tmp_path, monkeypatch):
     w = World(tmp_path, monkeypatch)
     w.pack("near", (TALK,))
-    merge.rebuild(w.profile, lambda s: None, combine=False)
-    assert overview.merged_from(w.profile, "near") == [TALK]
-    assert overview.merged_from(w.profile, "parts") == []
+    merge.rebuild(w.profile, lambda s: None, combine=False, loc=er())
+    assert overview.merged_from(w.profile, "near", loc=er()) == [TALK]
+    assert overview.merged_from(w.profile, "parts", loc=er()) == []

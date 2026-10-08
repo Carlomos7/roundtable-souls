@@ -24,7 +24,6 @@ from roundtable_souls.config import identity
 from roundtable_souls.config.settings import LauncherSettings, data_dir, load_settings
 from roundtable_souls.game import catalog
 from roundtable_souls.game.locate import Locations
-from roundtable_souls.mods import locations as mod_locations
 from roundtable_souls.mods import rebuild as mod_rebuild
 from roundtable_souls.platform import data_folder, instance, paths
 from roundtable_souls.platform import logging as run_logging
@@ -48,7 +47,6 @@ class AppContext:
 
     def _located(self, loc: Locations) -> Locations:
         self.locations = loc
-        mod_locations.use(loc)  # the rebuild code's one injected value, until Phase 6 hands it Locations
         return loc
 
     def reload_settings(self) -> LauncherSettings:
@@ -111,7 +109,6 @@ def create_app(start_game: catalog.Game | None = None) -> AppContext:
     settings = load_settings()
     game = start_game or catalog.get(settings.game)
     ctx = AppContext(identity.get(), settings, game, Locations.from_settings(settings, game), data)
-    mod_locations.use(ctx.locations)
     try:
         ctx.storage = storage_db.open_database(data_folder.data_root())
     except storage_db.StorageUnavailable as e:

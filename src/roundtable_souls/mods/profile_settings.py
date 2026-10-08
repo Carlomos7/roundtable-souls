@@ -7,7 +7,7 @@ folder to another PC copies them too:
 
     overlay        the package set by hand (Options) as the one that must stay last, and the rebuild.json picked for
                    it; null when it was turned off (then it is found from its files again)
-    after_overlay  entries kept after that package on purpose (see mods.stay_last), by the name load order uses
+    after_overlay  entries kept after that package on purpose (see mods.order), by the name load order uses
 
 One file serves every profile in the folder, keyed by the profile's file name. Paths are relative to the folder when
 they are inside it. The file is written to a temporary file first and then renamed over the old one. Keys this

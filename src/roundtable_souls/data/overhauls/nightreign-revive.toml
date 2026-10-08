@@ -1,0 +1,164 @@
+# Nightreign Revive: how the launcher recognises it and builds it. Format: docs/Overhaul configs.md;
+# schema: data/schemas/overhaul.schema.json. The build below was data/recipes/nightreign-revive-lite.json (S3a,
+# 2026-10-06); since S3b it runs nothing from the download: the grace menu is merged by the launcher too.
+
+overhaul = 1
+id = "nightreign-revive"
+label = "Nightreign Revive"
+short_label = "Revive"
+game = "eldenring"  # an Elden Ring mod despite its name
+# The launcher installs only LITE into a profile (builds.install below); its installer's other editions:
+install_unsupported = { STANDALONE = "Installs into a folder of its own with its own me3 and Launch.cmd; not described here.", CONVERGENCE = "Patches both Convergence profiles and orders Seamless before every DLL; not described here.", REFORGED = "Rewrites Reforged's own profile from its folders and installs as an addon; not described here." }
+
+[recognise]
+# Its installer puts it in this folder beside the me3 profile (the Standalone edition: in the game folder), with
+# this manifest, which the Play page offers as a setup of its own.
+folder = "NightreignRevive"
+manifest = "installation.json"
+# A profile with one of these entries includes it (the Play page says so).
+mod_ids = ["nightreign-revive", "reviveprototype.dll"]
+# Profile entries containing one of these (case aside) are its own: an offline launch with "Skip Revive too" turns
+# them off.
+profile_marks = ["nightreign-revive", "reviveprototype", "revivehud", "reviveerss", "nrrinitialize", "nrrhud"]
+
+# ---------------------------------------------------------------------------------------------------------------------
+# LITE 0.1.33-rc3: the launcher's own build (Settings: "Build Nightreign Revive in the launcher (preview)"). Revive's
+# own installer and its merge tool (tools/merge/Assets.exe) are not run.
+[[builds]]
+id = "nightreign-revive-lite"
+
+[builds.match]
+files = ["edition.json", "revive-maintenance.json", "payload/RevivePrototype.dll"]
+json = [{ file = "edition.json", key = "edition", equals = "LITE" }]
+version = { file = "revive-maintenance.json", key = "version" }
+versions = ["0.1.33-rc3"]
+
+[builds.output]
+mod = "mod"
+report = "merge-report.txt"
+manifest = "installation.json"
+
+[[builds.steps]]
+do = "copy_tree"
+from = "payload/audio"
+to = "audio"
+
+[[builds.steps]]
+do = "copy_tree"
+from = "payload/ui"
+to = "ui"
+
+[[builds.steps]]
+do = "copy"
+from = "payload/RevivePrototype.dll"
+to = "RevivePrototype.dll"
+
+[[builds.steps]]
+do = "copy"
+from = "payload/ReviveHudBootstrap.dll"
+to = "ReviveHudBootstrap.dll"
+
+[[builds.steps]]
+do = "config"
+from = "payload/RevivePrototype.ini"
+to = "RevivePrototype.ini"
+
+[[builds.steps]]
+do = "params"
+file = "regulation.bin"
+patch = "payload/mod/regulation.bin"
+
+[[builds.steps]]
+do = "merge"
+file = "chr/c0000.anibnd.dcx"
+patch = "payload/mod/chr/c0000.anibnd.dcx"
+
+[[builds.steps]]
+do = "merge"
+file = "chr/c0000.behbnd.dcx"
+patch = "payload/mod/chr/c0000.behbnd.dcx"
+
+[[builds.steps]]
+do = "merge"
+file = "chr/c0000_a00_hi.anibnd.dcx"
+patch = "payload/mod/chr/c0000_a00_hi.anibnd.dcx"
+
+[[builds.steps]]
+do = "merge"
+file = "chr/c0000_a00_md.anibnd.dcx"
+patch = "payload/mod/chr/c0000_a00_md.anibnd.dcx"
+
+[[builds.steps]]
+do = "merge"
+file = "chr/c0000_a00_lo.anibnd.dcx"
+patch = "payload/mod/chr/c0000_a00_lo.anibnd.dcx"
+
+[[builds.steps]]
+do = "merge"
+file = "sfx/sfxbnd_commoneffects.ffxbnd.dcx"
+patch = "payload/mod/sfx/sfxbnd_commoneffects.ffxbnd.dcx"
+
+# the grace menu: Revive's talk scripts merged state by state with the last package's (the ESD rule); with no
+# package shipping it, Revive's own copy
+[[builds.steps]]
+do = "merge"
+file = "script/talk/m00_00_00_00.talkesdbnd.dcx"
+patch = "payload/settings/m00_00_00_00.talkesdbnd.dcx"
+
+[[builds.steps]]
+do = "text"
+each = { folders_in = "payload/settings/vanilla/msg", except = ["common"] }
+file = "msg/{each}/menu_dlc02.msgbnd.dcx"
+vanilla = "payload/settings/vanilla/msg/{each}/menu_dlc02.msgbnd.dcx"
+table = "eventtextfortalk.fmg"
+texts = { rusru = "payload/settings/rusru.json", "*" = "payload/settings/engus.json" }
+
+[[builds.steps]]
+do = "script_append"
+folder = "action/script"
+entry = "c0000.hks"
+base = "payload/mod/action/script/c0000.hks"
+base_until = "-- Wrap the current mod's Update;"
+append = "installer/revive.hks"
+refuse = ["local NrrOriginalUpdate = Update", "-- Nightreign Revive deferred adapter"]
+refuse_text = "A mod before it already contains Nightreign Revive's script; keep only the original mod in the profile."
+
+[[builds.steps]]
+do = "remove"
+glob = "**/*.graph-work"
+
+# What Revive's installer (0.1.33-rc3, installer/installer.py) does to the me3 profile on a LITE install; the
+# launcher's install plan (overhauls/install_plan.py) works out the same changes. Revive's own folder is beside the
+# profile (recognise.folder).
+[builds.install]
+profile_settings = { profileVersion = "v1", start_online = false }  # patched_profile
+owned_package_ids = ["nightreign-revive", "zz_NightreignRevive"]  # clean_owned: OWN_ID, ADDON_ID
+owned_dlls = ["reviveprototype.dll", "revivehudbootstrap.dll", "reforgedme3compat.dll", "nightreignrevive.dll"]  # OWN_DLLS
+required_files = ["RevivePrototype.dll", "ReviveHudBootstrap.dll", "mod/chr/c0000.behbnd.dcx", "mod/regulation.bin", "mod/action/script/c0000.hks", "mod/sfx/sfxbnd_commoneffects.ffxbnd.dcx"]  # check()
+required_folders = ["ui"]  # check(): the UI assets
+
+# install(): Seamless is required; the profile's switched-on ersc.dll, else the first of these that exists
+[builds.install.seamless]
+dll = "ersc.dll"
+candidates = ["{profile_dir}/dll/offline/ersc.dll", "{profile_dir}/SeamlessCoop/ersc.dll", "{game_dir}/SeamlessCoop/ersc.dll"]
+
+# patched_profile: Nightreign Movement's DLLs get its initializer when they have none
+[[builds.install.set_initializers]]
+name_prefix = "nightreignmovement"
+function = "NrmInitialize"
+
+# patched_profile, in this order, after the profile's own DLLs
+[[builds.install.natives]]
+file = "ReviveHudBootstrap.dll"
+load_early = true
+initializer = { function = "NrrHudBootstrapInitialize" }
+
+[[builds.install.natives]]
+file = "RevivePrototype.dll"
+initializer = { function = "NrrInitialize" }
+after_enabled_natives = true
+
+[builds.install.package]
+id = "nightreign-revive"
+folder = "mod"
+after_enabled_packages = true

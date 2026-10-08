@@ -19,21 +19,21 @@ def world(tmp_path, monkeypatch):
 
 
 def test_nothing_happens_when_the_merge_is_up_to_date(world):
-    assert merge.health(world.profile)["state"] == "current"
+    assert merge.health(world.profile, loc=er())["state"] == "current"
     runs = world.runs
-    assert merge.needs_update(world.profile) is None
-    assert merge.update_before_play(world.profile, lambda s: None) is None
+    assert merge.needs_update(world.profile, loc=er()) is None
+    assert merge.update_before_play(world.profile, lambda s: None, loc=er()) is None
     assert world.runs == runs
 
 
 def test_an_out_of_date_merge_is_rebuilt_before_play(world):
     world.pack("params")
-    h = merge.needs_update(world.profile)
+    h = merge.needs_update(world.profile, loc=er())
     assert h is not None and h["state"] == "stale"
     said = []
-    out = merge.update_before_play(world.profile, said.append)
+    out = merge.update_before_play(world.profile, said.append, loc=er())
     assert out["undo"]["type"] == "rebuild"
-    assert merge.health(world.profile)["state"] == "current"
+    assert merge.health(world.profile, loc=er())["state"] == "current"
     assert any("rebuilding first" in s for s in said)
 
 
@@ -42,10 +42,10 @@ def test_a_failed_update_raises_and_leaves_the_previous_result(world, monkeypatc
     before = (world.winner / "regulation.bin").read_bytes()
     monkeypatch.setattr("roundtable_souls.mods.backends.Tool.run", lambda b, log: world.fake_run(b, fail=True))
     with pytest.raises(merge.MergeError):
-        merge.update_before_play(world.profile, lambda s: None)
+        merge.update_before_play(world.profile, lambda s: None, loc=er())
     assert (world.winner / "regulation.bin").read_bytes() == before
-    assert merge.health(world.profile)["state"] == "failed"
-    assert merge.needs_update(world.profile) is not None  # still out of date: the next Play tries again
+    assert merge.health(world.profile, loc=er())["state"] == "failed"
+    assert merge.needs_update(world.profile, loc=er()) is not None  # still out of date: the next Play tries again
 
 
 def test_a_missing_setup_is_not_rebuilt_play_only_warns(world):
@@ -53,7 +53,7 @@ def test_a_missing_setup_is_not_rebuilt_play_only_warns(world):
 
     world.pack("params")
     shutil.rmtree(world.setup)
-    assert merge.needs_update(world.profile) is None
+    assert merge.needs_update(world.profile, loc=er()) is None
 
 
 def test_stacked_packs_without_a_merge_are_left_alone(tmp_path, monkeypatch):
@@ -63,8 +63,8 @@ def test_stacked_packs_without_a_merge_are_left_alone(tmp_path, monkeypatch):
         (base / "mod" / name / "regulation.bin").write_bytes(name.encode())
     prof = base / "p.me3"
     prof.write_text("[[packages]]\nid = \"a\"\npath = 'mod/a'\n\n[[packages]]\nid = \"b\"\npath = 'mod/b'\n")
-    assert merge.health(prof)["state"] == "stacked"
-    assert merge.needs_update(prof) is None  # making a combined package is the user's call
+    assert merge.health(prof, loc=er())["state"] == "stacked"
+    assert merge.needs_update(prof, loc=er()) is None  # making a combined package is the user's call
 
 
 def test_only_the_newest_tool_backups_are_kept_after_an_automatic_rebuild(world, monkeypatch):
@@ -80,18 +80,18 @@ def test_only_the_newest_tool_backups_are_kept_after_an_automatic_rebuild(world,
         (d / "restore.json").write_text("{}")
         os.utime(d / "restore.json", (1_700_000_000 + i, 1_700_000_000 + i))
     world.pack("params")
-    merge.update_before_play(world.profile, lambda s: None)
+    merge.update_before_play(world.profile, lambda s: None, loc=er())
     left = sorted(p.name for p in (world.base / "Tool Backups").iterdir())
     assert left == ["old2", "old3", "old4"]
 
 
 def test_play_without_the_window_updates_first_when_the_tool_is_allowed(world, monkeypatch):
     world.pack("params")
-    setup = type("S", (), {"profile": str(world.profile), "game": core.games.ELDEN_RING})()
+    setup = type("S", (), {"profile": str(world.profile), "game": core.games.ELDEN_RING, "loc": er()})()
     lines = []
     monkeypatch.setattr(run_logging, "log", lines.append)
     assert core.update_merge_headless(setup) is None  # updated: the game may start
-    assert merge.health(world.profile)["state"] == "current"
+    assert merge.health(world.profile, loc=er())["state"] == "current"
     assert any(l.startswith("done: merged mods updated") for l in lines)
 
 
@@ -101,7 +101,9 @@ def test_play_without_the_window_never_runs_a_tool_it_was_not_allowed_to(world, 
     monkeypatch.setattr(merge, "approved", lambda tool: False)
     lines = []
     monkeypatch.setattr(run_logging, "log", lines.append)
-    why = core.update_merge_headless(type("S", (), {"profile": str(world.profile), "game": core.games.ELDEN_RING})())
+    why = core.update_merge_headless(
+        type("S", (), {"profile": str(world.profile), "game": core.games.ELDEN_RING, "loc": er()})()
+    )
     assert world.runs == runs and "has not been allowed" in why  # and so the game must not start
 
 
@@ -110,7 +112,9 @@ def test_play_without_the_window_does_not_start_when_the_update_fails(world, mon
     monkeypatch.setattr("roundtable_souls.mods.backends.Tool.run", lambda b, log: world.fake_run(b, fail=True))
     lines = []
     monkeypatch.setattr(run_logging, "log", lines.append)
-    why = core.update_merge_headless(type("S", (), {"profile": str(world.profile), "game": core.games.ELDEN_RING})())
+    why = core.update_merge_headless(
+        type("S", (), {"profile": str(world.profile), "game": core.games.ELDEN_RING, "loc": er()})()
+    )
     assert why and why.startswith("The merged mods could not be updated")
     assert any(l.startswith("error: the merged mods could not be updated") for l in lines)
 
@@ -120,7 +124,7 @@ def test_play_without_the_window_asks_nothing_and_starts_nothing_when_automatic_
     runs = world.runs
     monkeypatch.setattr(run_logging, "log", lambda s: None)
     why = core.update_merge_headless(
-        type("S", (), {"profile": str(world.profile), "game": core.games.ELDEN_RING})(), automatic=False
+        type("S", (), {"profile": str(world.profile), "game": core.games.ELDEN_RING, "loc": er()})(), automatic=False
     )
     assert world.runs == runs and "turned off" in why
 
@@ -129,9 +133,11 @@ def test_play_without_the_window_does_not_start_when_the_merge_cannot_be_rebuilt
     world.pack("params")
     monkeypatch.setattr(merge, "setup_problem", lambda *a, **k: "the package that must stay last is missing")
     monkeypatch.setattr(run_logging, "log", lambda s: None)
-    assert merge.needs_update(world.profile) is None  # nothing to rebuild ...
-    assert merge.play_check(world.profile)["blocked"]  # ... yet it is out of date
-    why = core.update_merge_headless(type("S", (), {"profile": str(world.profile), "game": core.games.ELDEN_RING})())
+    assert merge.needs_update(world.profile, loc=er()) is None  # nothing to rebuild ...
+    assert merge.play_check(world.profile, loc=er())["blocked"]  # ... yet it is out of date
+    why = core.update_merge_headless(
+        type("S", (), {"profile": str(world.profile), "game": core.games.ELDEN_RING, "loc": er()})()
+    )
     assert "cannot be rebuilt" in why
 
 

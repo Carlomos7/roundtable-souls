@@ -2,6 +2,10 @@
 
     remove   an entry removed from a profile: its text and where it was, and the folder when it went to the
              Recycle Bin (see system.trash). Restore puts both back.
+    install  a fresh install, update an update, rollback a rollback (see mods.operations): the operation's own
+             folder (.roundtable-ops/<id>) says what to take back. An install is undone (the profile's exact
+             previous bytes, the files it created that nobody changed); an update or a rollback is rolled back as
+             a set, with a rebuild when the install asked for one.
     rebuild  a rebuild of combined parameters: the profile as it was before (mods.history), the combined output it
              replaced (kept in the data folder), and the rebuild tool's own backup (its restore.json). Undo swaps each
              back by renaming, so it takes no time or space, and doing it again redoes the rebuild.
@@ -12,11 +16,23 @@ entry is not back already), so the Activity page only offers what works; run() d
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from roundtable_souls.game.locate import Locations
+
 from pathlib import Path
 
 from roundtable_souls.mods import profile_edit as mod_manage
 
-LABEL = {"remove": "Restore", "rebuild": "Undo rebuild"}
+LABEL = {
+    "remove": "Restore",
+    "rebuild": "Undo rebuild",
+    "install": "Undo install",
+    "update": "Roll back",
+    "rollback": "Roll back again",
+}
+OPERATIONS = ("install", "update", "rollback")
 
 
 class UndoError(RuntimeError):
@@ -56,6 +72,11 @@ def available(undo: dict | None) -> bool:
         if not undo.get("profile") or not profile.is_file() or not undo.get("entry_text"):
             return False
         return not _listed(profile, undo.get("path") or "") or _in_bin(undo)
+    if undo.get("type") in OPERATIONS:
+        from roundtable_souls.merging import build
+
+        op = Path(str(undo.get("operation") or ""))
+        return bool(undo.get("operation")) and build._state(op) == build.ACTIVE
     if undo.get("type") == "rebuild":
         profile = Path(undo.get("profile") or "")
         if not undo.get("profile") or not profile.is_file():
@@ -70,13 +91,15 @@ def available(undo: dict | None) -> bool:
     return False
 
 
-def run(undo: dict, log) -> str:
+def run(undo: dict, log, *, loc: Locations) -> str:
     """Do it. Returns a line saying what was done. Raises UndoError when it cannot be done any more, and
     FileExistsError when a folder is back at the old place already (nothing is overwritten)."""
     if undo.get("type") == "remove":
         return _restore_removed(undo, log)
     if undo.get("type") == "rebuild":
         return _undo_rebuild(undo, log)
+    if undo.get("type") in OPERATIONS:
+        return _take_back(undo, log, loc)
     raise UndoError(f"Nothing to undo for {undo.get('type')!r}.")
 
 
@@ -107,6 +130,26 @@ def _restore_removed(undo: dict, log) -> str:
         log(f"restore: {name}'s entry is back in {profile.name}, where it was")
         said.insert(0, "its entry")
     return f"restored {name}" + (f" ({' and '.join(said)})" if said else "")
+
+
+def _take_back(undo: dict, log, loc: Locations) -> str:
+    from roundtable_souls.mods import operations
+
+    if not available(undo):
+        raise UndoError(f"{undo.get('name') or 'It'} can no longer be taken back.")
+    op = Path(undo["operation"])
+    if undo["type"] == "install":
+        return operations.undo_install(op, log)
+
+    def rebuild_after() -> None:
+        from roundtable_souls.mods import rebuild
+
+        rebuild.rebuild(Path(undo["profile"]), log, loc=loc)
+
+    try:
+        return operations.rollback(op, log, rebuild_after if undo.get("rebuild") else None)
+    except operations.OperationError as e:
+        raise UndoError(str(e)) from e
 
 
 # ----------------------------------------------------------------------------- rebuilds

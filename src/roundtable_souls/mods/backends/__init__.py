@@ -21,6 +21,10 @@ import subprocess
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from roundtable_souls.game.locate import Locations
 
 
 class BackendError(RuntimeError):
@@ -176,26 +180,27 @@ def _adapters():
     return (declared, manifest_refresh)
 
 
-def detect(profile: Path, packs: list[dict]):
-    """The rebuild tool that writes into one of these packages (checked from the last), or None."""
+def detect(profile: Path, packs: list[dict], *, loc: Locations):
+    """The rebuild tool that writes into one of these packages (checked from the last), or None. loc: the game's
+    locations (a tool's command names the game and me3)."""
     for layer in reversed(packs):
         for kind in _adapters():
-            recipe = kind.recipe(Path(profile), layer)
+            recipe = kind.recipe(Path(profile), layer, loc=loc)
             if recipe is not None:
                 return Tool(recipe)
     return None
 
 
-def detect_for(profile: Path, layer: dict, rebuild_file: Path | None = None):
+def detect_for(profile: Path, layer: dict, rebuild_file: Path | None = None, *, loc: Locations):
     """The rebuild tool of a package the user set as the parameter overlay: from the rebuild.json they picked, else
     looked for with looser rules (a fork or a newer version may name its files differently), or None."""
     from roundtable_souls.mods.backends import declared
 
     if rebuild_file is not None:
-        recipe = declared.recipe(Path(profile), layer, file=Path(rebuild_file))
+        recipe = declared.recipe(Path(profile), layer, file=Path(rebuild_file), loc=loc)
         return Tool(recipe) if recipe is not None else None
     for kind in _adapters():
-        recipe = kind.recipe(Path(profile), layer) or kind.recipe(Path(profile), layer, relaxed=True)
+        recipe = kind.recipe(Path(profile), layer, loc=loc) or kind.recipe(Path(profile), layer, relaxed=True, loc=loc)
         if recipe is not None:
             return Tool(recipe)
     return None

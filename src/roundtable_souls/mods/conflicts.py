@@ -20,12 +20,16 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from roundtable_souls.mods import checks
 from roundtable_souls.mods import profile as profile_tools
 from roundtable_souls.mods import profile_edit as mod_manage
 from roundtable_souls.mods import rebuild as merge
 from roundtable_souls.mods.backends import builtin, local_path
+
+if TYPE_CHECKING:
+    from roundtable_souls.game.locate import Locations
 
 OUTCOMES = ("replaced", "combined", "stale", "unreached")
 OUTCOME_TEXT = {
@@ -40,10 +44,11 @@ def _key(p: Path) -> str:
     return os.path.normcase(os.path.abspath(str(p)))
 
 
-def classify(profile: Path, scan: dict, game_dir=None) -> dict:
+def classify(profile: Path, scan: dict, *, loc: Locations) -> dict:
     """Outcomes for every overlap in scan (profile.scan_conflicts). Returns {conflicts: [{path, category, winner,
     losers: [{id, outcome}]}], counts: {outcome: n}, packages: {id: {outcome: n, wins: n}}}."""
     profile = Path(profile)
+    game_dir = loc.game_dir()
     folders = {p["id"]: Path(p["path"]) for p in scan.get("packages") or []}
     tool = combine = None
     tool_files: set[str] = set()
@@ -52,8 +57,8 @@ def classify(profile: Path, scan: dict, game_dir=None) -> dict:
     merged_files: set[str] = set()
     if merge.is_elden_ring(profile):
         layers = merge.layers(profile)
-        _target, tool, _by_hand = merge.overlay(profile, layers)
-        combine = builtin.find(profile, layers)
+        _target, tool, _by_hand = merge.overlay(profile, layers, loc=loc)
+        combine = builtin.find(profile, layers, loc=loc)
         if tool is not None:
             tool_files = {f.lower() for f in tool.merges()} | merge.covered(tool)
             for s in tool.sources() or []:
@@ -108,11 +113,11 @@ def classify(profile: Path, scan: dict, game_dir=None) -> dict:
     return {"conflicts": out, "counts": counts, "packages": per}
 
 
-def merged_from(profile: Path, package_id: str, ov: dict | None = None) -> list[str]:
+def merged_from(profile: Path, package_id: str, ov: dict | None = None, *, loc: Locations) -> list[str]:
     """The files of one package that a combined result was built from (combined, or combined but out of date):
     what stays in the game after the package is removed, until a rebuild. ov: an overview() of this profile to
     reuse, else one is worked out."""
-    ov = ov if ov is not None else overview(Path(profile))
+    ov = ov if ov is not None else overview(Path(profile), loc=loc)
     out = []
     for c in (ov.get("overlaps") or {}).get("conflicts") or []:
         if any(l["id"] == package_id and l["outcome"] in ("combined", "stale") for l in c["losers"]):
@@ -120,12 +125,12 @@ def merged_from(profile: Path, package_id: str, ov: dict | None = None) -> list[
     return sorted(set(out), key=str.lower)
 
 
-def row_conflicts(profile: Path) -> list[str]:
+def row_conflicts(profile: Path, *, loc: Locations) -> list[str]:
     """The combine's report lines about rows two packs both changed (empty without a combine)."""
     profile = Path(profile)
     if not merge.is_elden_ring(profile):
         return []
-    combine = builtin.find(profile, merge.layers(profile))
+    combine = builtin.find(profile, merge.layers(profile), loc=loc)
     if combine is None:
         return []
     lines = combine.record().get("report") or []
@@ -145,25 +150,24 @@ def problems(profile: Path) -> list[dict]:
     ]
 
 
-def overview(profile: Path) -> dict:
-    """Everything the Mods page's Load order card and its pill show, from one pass (run it off the UI thread)."""
-    from roundtable_souls.mods import locations
-
+def overview(profile: Path, *, loc: Locations) -> dict:
+    """Everything the Mods page's Load order card and its pill show, from one pass (run it off the UI thread). loc:
+    the game's locations."""
     profile = Path(profile)
     out: dict = {"profile": str(profile)}
     try:
-        out["health"] = merge.health(profile)
+        out["health"] = merge.health(profile, loc=loc)
     except Exception as e:  # a broken profile or unreadable record: say nothing rather than guess
         out["health"] = {"state": None, "error": str(e)}
     try:
         scan = profile_tools.scan_conflicts(profile)
         out["scan"] = scan
-        out["overlaps"] = classify(profile, scan, locations.get().game_dir())
+        out["overlaps"] = classify(profile, scan, loc=loc)
     except Exception as e:
         out["scan"] = {"error": str(e)}
         out["overlaps"] = {"conflicts": [], "counts": dict.fromkeys(OUTCOMES, 0), "packages": {}}
     try:
-        out["rows"] = row_conflicts(profile)
+        out["rows"] = row_conflicts(profile, loc=loc)
     except Exception:
         out["rows"] = []
     try:
@@ -171,9 +175,9 @@ def overview(profile: Path) -> dict:
     except Exception:
         out["problems"] = []
     try:
-        from roundtable_souls.mods import stay_last
+        from roundtable_souls.mods import order as mod_order
 
-        out["stay_last"] = stay_last.status(profile)
+        out["stay_last"] = mod_order.status(profile, loc=loc)
     except Exception:
         out["stay_last"] = None
     try:

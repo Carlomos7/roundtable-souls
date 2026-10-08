@@ -41,7 +41,8 @@ class DcxWriter(BaseModel):
 
 class GameConfig(BaseModel):
     """One game's files: its archives (names and the RSA public keys of their headers), the Oodle library it ships,
-    the DCX layouts the launcher writes for it, and the file types it loads as DFLT in place of KRAK."""
+    the DCX layouts the launcher writes for it, the file types it loads as DFLT in place of KRAK, and how its mods are
+    laid out (the folders a package serves game files from, the DLLs in a download that are not mods)."""
 
     model_config = ConfigDict(extra="forbid")
     game: str
@@ -51,6 +52,8 @@ class GameConfig(BaseModel):
     oodle_library: str  # a glob in the game folder
     dcx_writer: DcxWriter
     dflt_fallback: list[str]  # file name endings, lower-case
+    mod_folders: list[str]  # top-level folders of a package that me3 serves game files from, lower-case
+    ignored_dlls: list[str]  # DLLs in a mod download that are not mods (loaders, runtimes), lower-case
 
     def dflt_fallback_for(self, rel: str) -> bool:
         """Whether rel may be written as DFLT when the game's Oodle library is not available."""

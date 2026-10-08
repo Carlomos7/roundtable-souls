@@ -40,7 +40,7 @@ from roundtable_souls.mods import conflicts as mod_overview
 from roundtable_souls.mods import extract as mod_extract
 from roundtable_souls.mods import history as mod_history
 from roundtable_souls.mods import install as mod_install
-from roundtable_souls.mods import stay_last as mod_stay_last
+from roundtable_souls.mods import order as mod_order
 from roundtable_souls.mods import undo as mod_undo
 from roundtable_souls.platform import desktop, trash
 from roundtable_souls.platform import logging as run_logging
@@ -52,6 +52,7 @@ from roundtable_souls.services.mods import (
     plan_mod_install,
     profile_entries,
     read_profile_settings,
+    recover_interrupted,
     replan_mod_install,
     set_mod_options,
     uninstall_mod,
@@ -395,10 +396,11 @@ class ModsView:
             return
         self.conf_note.setText("Scanning packages...")
         prof = Path(self.setup.profile)
+        loc = self.ctx.locations
 
         def work(_progress):
             try:
-                return mod_overview.overview(prof)
+                return mod_overview.overview(prof, loc=loc)
             except Exception as e:  # never leave the card saying "Scanning..."
                 return {"profile": str(prof), "error": str(e)}
 
@@ -561,7 +563,7 @@ class ModsView:
             return
         prof = Path(self.setup.profile)
         try:
-            problem = mod_stay_last.fix(prof)
+            problem = mod_order.fix(prof, loc=self.ctx.locations)
         except OSError as e:
             problem = str(e)
         if problem:
@@ -580,12 +582,12 @@ class ModsView:
         if not names:
             return
         try:
-            mod_stay_last.keep_after(prof, list(names), keep)
+            mod_order.keep_after(prof, list(names), keep)
             if not keep:
-                problem = mod_stay_last.fix(prof)
+                problem = mod_order.fix(prof, loc=self.ctx.locations)
                 if problem:
                     self._toast("Could not fix the load order", problem, error=True)
-        except (OSError, mod_stay_last.Unreadable) as e:
+        except (OSError, mod_order.Unreadable) as e:
             self._toast("Could not save that", str(e), error=True)
             return
         self._after_profile_change(
@@ -594,6 +596,9 @@ class ModsView:
 
     def _fill_mods(self):
         keep_p, keep_n = self.pack_exp.isExpand, self.nat_exp.isExpand
+        if self.setup and not self.busy and Path(self.setup.profile).is_file():
+            for line in recover_interrupted(self.setup.profile, timeout=0.5):  # the window closed during one
+                self._toast("An interrupted change was put right", line[:1].upper() + line[1:] + ".")
         self._load_profile_settings()
         self._scan_conflicts()  # the Load order card and the pill, from one scan
         first = not getattr(self, "_mods_seen", False)
@@ -897,7 +902,7 @@ class ModsView:
         if not picked:
             return
         try:
-            out = mod_install.add_existing(Path(self.setup.profile), picked, kind=kind)
+            out = mod_install.add_existing(Path(self.setup.profile), picked, kind=kind, loc=self.ctx.locations)
         except Exception as e:
             self._toast("Could not add", str(e), error=True)
             return
@@ -940,7 +945,7 @@ class ModsView:
             fresh = self._fresh_entry(entry)
             if fresh is None:
                 return
-            uninstall_mod(self.setup.profile, fresh["index"], delete_folder=False)
+            uninstall_mod(self.setup.profile, fresh["index"], delete_folder=False, loc=self.ctx.locations)
             if needs:
                 for o in profile_entries(self.setup.profile):
                     if o["name"] in needs:
@@ -952,6 +957,7 @@ class ModsView:
                                 "load_after": keep(o.get("load_after") or []),
                                 "load_before": keep(o.get("load_before") or []),
                             },
+                            loc=self.ctx.locations,
                         )
         except Exception as e:
             self._toast("Could not remove", str(e), error=True)
@@ -1118,12 +1124,12 @@ class ModsView:
         if self.game_running:
             self._toast("Close the game first", "The rebuild rewrites files the game has open.", error=True)
             return
-        blocked = core.mod_merge.setup_problem(prof)
+        blocked = core.mod_merge.setup_problem(prof, loc=self.ctx.locations)
         if blocked:
             self._toast("It cannot be rebuilt now", blocked, error=True)
             return
-        tool = core.mod_merge.find_backend(prof)
-        h = core.mod_merge.health(prof)
+        tool = core.mod_merge.find_backend(prof, loc=self.ctx.locations)
+        h = core.mod_merge.health(prof, loc=self.ctx.locations)
         if tool is None and not (h.get("combine") or h.get("can_combine") or combine):
             self._toast(
                 "Nothing to rebuild", "Fewer than two packs ship parameters and there is no rebuild tool.", error=True
@@ -1135,7 +1141,7 @@ class ModsView:
         def job(_setup, loc):
             run_logging.start_log("launcher: rebuild combined parameters", loc.game.key)
             try:
-                out = core.mod_merge.rebuild(prof, run_logging.log, combine=combine)
+                out = core.mod_merge.rebuild(prof, run_logging.log, combine=combine, loc=loc)
                 core.run_logging.set_undo(out.get("undo"))
                 run_logging.log(f"done: combined parameters rebuilt by {out['backend']}; {out['profile_note']}")
             except core.mod_merge.MergeError as e:
@@ -1226,7 +1232,7 @@ class ModsView:
         if entry is None:
             return
         try:
-            set_mod_options(self.setup.profile, entry["index"], {"enabled": bool(checked)})
+            set_mod_options(self.setup.profile, entry["index"], {"enabled": bool(checked)}, loc=self.ctx.locations)
             self._after_profile_change(f"profile: {entry['name']} {'on' if checked else 'off'}")
             self._undo_notice(f"{entry['name']} turned {'on' if checked else 'off'}", "It applies at the next launch.")
         except Exception as e:
@@ -1265,7 +1271,7 @@ class ModsView:
                     core.mod_merge.set_overlay_override(
                         prof, folder if on else None, Path(picked) if on and picked else None
                     )
-            set_mod_options(self.setup.profile, fresh["index"], dlg.options())
+            set_mod_options(self.setup.profile, fresh["index"], dlg.options(), loc=self.ctx.locations)
             self._after_profile_change(f"profile: options saved for {entry['name']}")
             self._undo_notice(f"{entry['name']}: options saved", "They apply at the next launch.")
         except Exception as e:
@@ -1326,7 +1332,7 @@ class ModsView:
 
         def job(_setup, loc):
             run_logging.start_log(f"launcher: remove {name}", loc.game.key)
-            out = uninstall_mod(prof, index, delete_folder=delete)
+            out = uninstall_mod(prof, index, delete_folder=delete, loc=self.ctx.locations)
             core.run_logging.set_undo(
                 {
                     "type": "remove",
@@ -1391,7 +1397,7 @@ class ModsView:
         if not ov or ov.get("error") or not mod_checks.same_folder(Path(ov.get("profile") or ""), prof):
             ov = None
         try:
-            return mod_overview.merged_from(prof, entry["name"], ov)
+            return mod_overview.merged_from(prof, entry["name"], ov, loc=self.ctx.locations)
         except Exception:
             return []
 
@@ -1402,7 +1408,9 @@ class ModsView:
         if self.game is not games.ELDEN_RING or self.stackedWidget.currentWidget() is not self.mods_page:
             return
         try:
-            tool: Any = core.mod_merge.find_backend(prof)  # a rebuild tool (mods.backends), or None
+            tool: Any = core.mod_merge.find_backend(
+                prof, loc=self.ctx.locations
+            )  # a rebuild tool (mods.backends), or None
             if tool is None or tool.problem() or core.mod_merge.approved(tool):
                 return
         except Exception:
@@ -1434,7 +1442,7 @@ class ModsView:
     def _tool_ready(self, prof) -> bool:
         """The profile's rebuild tool can run: found, nothing stopping it, and allowed by the user (asked once per
         version of the tool). True when there is no tool (the launcher's own combine needs no permission)."""
-        tool = core.mod_merge.find_backend(prof)
+        tool = core.mod_merge.find_backend(prof, loc=self.ctx.locations)
         if tool is None:
             return True
         if tool.problem():
@@ -1488,6 +1496,27 @@ class ModsView:
             if not ok:
                 return
             name = "the rebuild"
+        elif u.get("type") in mod_undo.OPERATIONS:
+            name = u.get("name") or "the mod"
+            fresh = u.get("type") == "install"
+            ok = confirm(
+                self,
+                f"Undo the install of {name}" if fresh else f"Roll {name} back",
+                changes=[
+                    f"{prof.name} goes back to exactly what it was before the install"
+                    if fresh
+                    else f"{name}'s folder and its entries go back to the version before",
+                    "The files the install added are removed; any you changed since stay, and are listed"
+                    if fresh
+                    else "The version it replaces is kept aside, with any changes you made to it",
+                    "The merged mods are rebuilt for it" if u.get("rebuild") and not fresh else "",
+                ],
+                safety="Seamless Co-op and your other mods are not touched. If the profile changed since, only "
+                f"{name}'s entries are taken out of it.",
+                apply_text="Undo install" if fresh else "Roll back",
+            )
+            if not ok:
+                return
         else:
             name = u.get("name") or "it"
             in_bin = trash.exists(u.get("trash"))
@@ -1512,11 +1541,13 @@ class ModsView:
             run_logging.start_log(
                 f"launcher: {'redo' if u.get('redo') else 'undo'} the rebuild"
                 if u.get("type") == "rebuild"
+                else f"launcher: {mod_undo.label(u).lower()} {name}"
+                if u.get("type") in mod_undo.OPERATIONS
                 else f"launcher: restore {name}",
                 loc.game.key,
             )
             try:
-                said = mod_undo.run(u, run_logging.log)
+                said = mod_undo.run(u, run_logging.log, loc=self.ctx.locations)
             except (mod_undo.UndoError, OSError) as e:
                 run_logging.log(f"error: {e}")
                 raise SystemExit(1) from e
@@ -1592,7 +1623,7 @@ class ModsView:
         prof = self.setup.profile
         QApplication.setOverrideCursor(Qt.WaitCursor)  # unpacking a big archive takes a moment
         try:
-            plan = plan_mod_install(prof, src)
+            plan = plan_mod_install(prof, src, loc=self.ctx.locations)
         except Exception as e:
             QApplication.restoreOverrideCursor()
             self._toast(f"Could not read {src.name}", str(e), error=True)
@@ -1617,7 +1648,7 @@ class ModsView:
         dlg = InstallDialog(
             self,
             plan,
-            lambda name, pkg_id, variant: replan_mod_install(prof, plan, name, pkg_id, variant),
+            lambda name, pkg_id, variant: replan_mod_install(prof, plan, name, pkg_id, variant, loc=self.ctx.locations),
             Path(prof),
         )
         if not dlg.exec():
@@ -1625,13 +1656,27 @@ class ModsView:
             QTimer.singleShot(0, self._install_next)
             return
         plan = dlg.plan
-        self._merge_after = Path(prof) if plan.get("merge") else None
 
         def job(_setup, loc):
             run_logging.start_log(f"launcher: install mod {plan['name']}", loc.game.key)
             try:
-                install_mod(prof, plan, overwrite=bool(plan.get("exists")))
-                run_logging.log(f"done: installed {plan['name']}")
+                out = install_mod(
+                    prof,
+                    plan,
+                    overwrite=bool(plan.get("exists")),
+                    rebuild=bool(plan.get("merge")),
+                    loc=self.ctx.locations,
+                )
+                core.run_logging.set_undo(
+                    {
+                        "type": "update" if out["update"] else "install",
+                        "profile": str(prof),
+                        "name": plan["name"],
+                        "operation": out["operation"],
+                        "rebuild": bool(plan.get("merge")),
+                    }
+                )
+                run_logging.log(f"done: {'updated' if out['update'] else 'installed'} {plan['name']}")
             except Exception as e:
                 run_logging.log(f"error: {e}")
                 raise SystemExit(1) from e

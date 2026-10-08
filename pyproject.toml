@@ -1,6 +1,6 @@
 [project]
 name = "roundtable-souls"
-version = "3.17.0"
+version = "3.18.0"
 description = "Launcher and save toolkit for modded Elden Ring: me3 profiles, Seamless Co-op settings, save checks and repairs."
 readme = "README.md"
 license = "GPL-3.0-or-later"
@@ -100,6 +100,7 @@ layers = [
     "roundtable_souls.ui",
     "roundtable_souls.services",
     "roundtable_souls.mods | roundtable_souls.saves | roundtable_souls.coop | roundtable_souls.updates",
+    "roundtable_souls.overhauls",
     "roundtable_souls.merging",
     "roundtable_souls.formats | roundtable_souls.game",
     "roundtable_souls.storage",
@@ -116,6 +117,7 @@ source_modules = [
     "roundtable_souls.saves",
     "roundtable_souls.coop",
     "roundtable_souls.updates",
+    "roundtable_souls.overhauls",
     "roundtable_souls.merging",
     "roundtable_souls.formats",
     "roundtable_souls.game",

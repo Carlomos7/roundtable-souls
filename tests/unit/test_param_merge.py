@@ -14,6 +14,7 @@ from roundtable_souls.mods import rebuild as merge
 from roundtable_souls.mods import remove
 from roundtable_souls.mods.backends import builtin
 from roundtable_souls.platform import paths as common
+from support import er
 
 DCX = (  # the 0x4C header of the game's regulation (sizes are filled in on write)
     b"DCX\0"
@@ -232,60 +233,60 @@ def prof(tmp_path, monkeypatch):
 
 
 def test_stacked_packs_can_be_combined_and_then_stay_checked(prof):
-    h = merge.health(prof)
+    h = merge.health(prof, loc=er())
     assert h["state"] == "stacked" and h["can_combine"] and h["winner"] == "effects"
-    out = merge.rebuild(prof, lambda s: None, combine=True)
+    out = merge.rebuild(prof, lambda s: None, combine=True, loc=er())
     assert "combine" in out["backend"]
     ids = [e["id"] for e in M.entries(prof) if e["kind"] == "package"]
     assert ids == ["balance", "effects", "combined-parameters", "textures"]  # right after the last pack
     got = prof.parent / "mod" / "combined-parameters" / "regulation.bin"
     assert struct.unpack("<I", rows_of(got.read_bytes(), "EquipParamWeapon")[1000].data[:4])[0] == 111
     assert struct.unpack("<4I", rows_of(got.read_bytes(), "SpEffectParam")[10].data)[1] == 42
-    h = merge.health(prof)
+    h = merge.health(prof, loc=er())
     assert h["state"] == "current" and h["combine"] and h["winner"] == "combined-parameters"
     assert "# mine" in prof.read_text(encoding="utf-8")
     (prof.parent / "mod" / "effects" / "regulation.bin").write_bytes(pack({"SpEffectParam": set_word(10, 1, 43)}))
-    assert "effects's regulation.bin changed" in merge.health(prof)["reasons"][0]
-    merge.rebuild(prof, lambda s: None)
-    assert merge.health(prof)["state"] == "current"
+    assert "effects's regulation.bin changed" in merge.health(prof, loc=er())["reasons"][0]
+    merge.rebuild(prof, lambda s: None, loc=er())
+    assert merge.health(prof, loc=er())["state"] == "current"
     record = json.loads((prof.parent / "mod" / "combined-parameters" / builtin.RECORD).read_text())
     assert [p["name"] for p in record["packs"]] == ["balance", "effects"] and record["base_sha256"]
 
 
 def test_a_pack_placed_after_the_combined_one_is_moved_behind_on_rebuild(prof):
-    merge.rebuild(prof, lambda s: None, combine=True)
+    merge.rebuild(prof, lambda s: None, combine=True, loc=er())
     late = prof.parent / "mod" / "late"
     late.mkdir()
     late.joinpath("regulation.bin").write_bytes(pack({"SpEffectParam": set_word(10, 3, 7)}))
     prof.write_text(
         prof.read_text(encoding="utf-8") + "\n[[packages]]\nid = \"late\"\npath = 'mod/late'\n", encoding="utf-8"
     )
-    h = merge.health(prof)
+    h = merge.health(prof, loc=er())
     assert h["state"] == "stale" and any("late ships parameters now" in r for r in h["reasons"])
-    merge.rebuild(prof, lambda s: None)
+    merge.rebuild(prof, lambda s: None, loc=er())
     ids = [e["id"] for e in M.entries(prof) if e["kind"] == "package"]
-    assert ids.index("combined-parameters") > ids.index("late") and merge.health(prof)["state"] == "current"
+    assert ids.index("combined-parameters") > ids.index("late") and merge.health(prof, loc=er())["state"] == "current"
 
 
 def test_a_game_update_or_a_removed_pack_makes_the_combine_stale(prof):
-    merge.rebuild(prof, lambda s: None, combine=True)
+    merge.rebuild(prof, lambda s: None, combine=True, loc=er())
     game_dir = locate.installed_dir(locate.catalog.ELDEN_RING)
     assert game_dir is not None
     game = game_dir / "regulation.bin"
     game.write_bytes(pack({"EquipParamWeapon": set_word(2000, 0, 1)}))
-    assert any("game update" in r for r in merge.health(prof)["reasons"])
-    merge.rebuild(prof, lambda s: None)
+    assert any("game update" in r for r in merge.health(prof, loc=er())["reasons"])
+    merge.rebuild(prof, lambda s: None, loc=er())
     idx = next(e["index"] for e in M.entries(prof) if e["name"] == "balance")
-    remove.uninstall(prof, idx)
-    assert any("balance was combined but is no longer loaded" in r for r in merge.health(prof)["reasons"])
+    remove.uninstall(prof, idx, loc=er())
+    assert any("balance was combined but is no longer loaded" in r for r in merge.health(prof, loc=er())["reasons"])
 
 
 def test_one_pack_alone_is_not_combined_unless_asked(prof):
     idx = next(e["index"] for e in M.entries(prof) if e["name"] == "balance")
-    remove.uninstall(prof, idx)
-    assert merge.health(prof)["state"] == "single"
+    remove.uninstall(prof, idx, loc=er())
+    assert merge.health(prof, loc=er())["state"] == "single"
     with pytest.raises(merge.MergeError, match="nothing to combine"):
-        merge.rebuild(prof, lambda s: None)
+        merge.rebuild(prof, lambda s: None, loc=er())
 
 
 def test_with_an_overlay_tool_the_combine_sits_right_before_it_and_feeds_it(tmp_path, monkeypatch):
@@ -296,12 +297,12 @@ def test_with_an_overlay_tool_the_combine_sits_right_before_it_and_feeds_it(tmp_
     for name, edit in (("a", set_word(1000, 0, 111)), ("b", set_word(2000, 3, 222))):
         d = w.pack(name)
         (d / "regulation.bin").write_bytes(pack({"EquipParamWeapon": edit}))
-    h = merge.health(w.profile)
+    h = merge.health(w.profile, loc=er())
     assert h["state"] == "stale" and h["can_combine"] and not h["combine"]
-    merge.rebuild(w.profile, lambda s: None)  # two packs before the overlay: combined first, then its tool
+    merge.rebuild(w.profile, lambda s: None, loc=er())  # two packs before the overlay: combined first, then its tool
     ids = [e["id"] for e in M.entries(w.profile) if e["kind"] == "package"]
     assert ids == ["parts", "a", "b", "combined-parameters", "last"]
-    h = merge.health(w.profile)
+    h = merge.health(w.profile, loc=er())
     assert h["state"] == "current" and h["combine"] and h["backend"] == "the rebuild tool of last"
     sources = json.loads((w.base / "Merger" / "installation.json").read_text())["sources"]
     used = [s["path"].replace("\\", "/") for s in sources]
@@ -319,7 +320,9 @@ def test_the_combined_package_is_listed_for_the_overlay_so_me3_loads_it_before_i
     (w.game / "regulation.bin").write_bytes(vanilla())
     for name in ("a", "b"):
         (w.pack(name) / "regulation.bin").write_bytes(pack({"EquipParamWeapon": set_word(1000, 1, 5)}))
-    merge.ensure_combined(w.profile, merge.overlay(w.profile)[0])  # before the tool rewrites anything
+    merge.ensure_combined(
+        w.profile, merge.overlay(w.profile, loc=er())[0], loc=er()
+    )  # before the tool rewrites anything
     text = w.profile.read_text(encoding="utf-8")
     assert '{ id = "combined-parameters", optional = true }' in text.split('id = "last"')[1]
     order = [r["id"] for r in P.me3_order(w.profile, text).rows]
@@ -333,6 +336,6 @@ def test_two_packs_before_a_tool_without_a_combine_are_stacked(tmp_path, monkeyp
     (w.game / "regulation.bin").write_bytes(vanilla())
     for name in ("a", "b"):
         (w.pack(name) / "regulation.bin").write_bytes(pack({"EquipParamWeapon": set_word(1000, 1, 5)}))
-    merge.rebuild(w.profile, lambda s: None, combine=False)  # only the tool, as before
-    h = merge.health(w.profile)
+    merge.rebuild(w.profile, lambda s: None, combine=False, loc=er())  # only the tool, as before
+    h = merge.health(w.profile, loc=er())
     assert h["state"] == "stacked" and "only b's reach it" in h["reasons"][0]

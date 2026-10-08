@@ -7,6 +7,7 @@ import pytest
 from roundtable_souls.mods import history, remove
 from roundtable_souls.mods import profile_edit as M
 from roundtable_souls.services import mods as service
+from support import er
 
 SF_VOICE = """profileVersion = "v1"
 
@@ -98,7 +99,7 @@ def test_uninstall_returns_what_restore_needs(tmp_path):
     p = tmp_path / "p.me3"
     (tmp_path / "mod" / "voice-pack").mkdir(parents=True)
     p.write_text(SF_VOICE, encoding="utf-8")
-    out = remove.uninstall(p, 0, delete_folder=False)
+    out = remove.uninstall(p, 0, delete_folder=False, loc=er())
     assert out["name"] == "voice-pack" and out["entry_text"].startswith("# voice pack")
     assert M.restore_entry(p.read_text(encoding="utf-8"), out["entry_text"], out["where"]) == SF_VOICE
 
@@ -108,9 +109,9 @@ def test_every_launcher_write_keeps_a_copy_first(tmp_path):
     p = tmp_path / "p.me3"
     (tmp_path / "mod" / "voice-pack").mkdir(parents=True)
     p.write_text(SF_VOICE, encoding="utf-8")
-    M.set_options(p, 0, {"enabled": False})
+    M.set_options(p, 0, {"enabled": False}, loc=er())
     service.write_profile_setting(p, "mem_patch", True)
-    remove.uninstall(p, 0, delete_folder=False)
+    remove.uninstall(p, 0, delete_folder=False, loc=er())
     whys = [v["why"] for v in history.versions(p)]
     assert whys == ["before removing voice-pack", "before changing mem_patch", "before turning voice-pack off"]
     assert history.versions(p)[-1]["path"].read_text(encoding="utf-8") == SF_VOICE
@@ -164,5 +165,5 @@ def test_a_history_that_cannot_be_written_never_stops_a_change(tmp_path, monkeyp
     p = tmp_path / "p.me3"
     p.write_text(SF_VOICE, encoding="utf-8")
     assert history.snapshot(p) is None
-    M.set_options(p, 0, {"enabled": False})  # still written
+    M.set_options(p, 0, {"enabled": False}, loc=er())  # still written
     assert "enabled = false" in p.read_text(encoding="utf-8")

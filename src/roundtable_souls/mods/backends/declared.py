@@ -23,17 +23,18 @@ import hashlib
 import json
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from roundtable_souls.mods.backends import Recipe
+
+if TYPE_CHECKING:
+    from roundtable_souls.game.locate import Locations
 
 FILE = "rebuild.json"
 _PLACE = re.compile(r"\{(here|package|profile|profile_dir|game_dir|game_exe|me3)\}")
 
 
-def _values(profile: Path, layer: dict, here: Path) -> dict[str, str]:
-    from roundtable_souls.mods import locations
-
-    loc = locations.get()
+def _values(profile: Path, layer: dict, here: Path, loc: Locations) -> dict[str, str]:
     game_dir = loc.game_dir()
     return {
         "here": str(here),
@@ -70,20 +71,23 @@ def load(file: Path) -> dict | None:
     return data
 
 
-def recipe(profile: Path, layer: dict, relaxed: bool = False, file: Path | None = None) -> Recipe | None:
-    """relaxed changes nothing here: rebuild.json is the same wherever it is found."""
+def recipe(
+    profile: Path, layer: dict, relaxed: bool = False, file: Path | None = None, *, loc: Locations
+) -> Recipe | None:
+    """relaxed changes nothing here: rebuild.json is the same wherever it is found. loc: the game's locations, for
+    the {game_dir}, {game_exe} and {me3} placeholders."""
     folder = Path(layer["folder"])
     candidates = [Path(file)] if file is not None else [folder / FILE, folder.parent / FILE]
     for f in candidates:
         data = load(f) if f.is_file() else None
         if data is not None:
-            return _recipe(Path(profile), layer, f, data)
+            return _recipe(Path(profile), layer, f, data, loc)
     return None
 
 
-def _recipe(profile: Path, layer: dict, file: Path, data: dict) -> Recipe:
+def _recipe(profile: Path, layer: dict, file: Path, data: dict, loc: Locations) -> Recipe:
     here = file.parent
-    values = _values(profile, layer, here)
+    values = _values(profile, layer, here, loc)
     program = _fill(data["command"][0], values)
     if not Path(program).is_absolute() and ("/" in program or "\\" in program):
         program = str(here / program)  # a program shipped with the tool; a bare name is looked up on PATH

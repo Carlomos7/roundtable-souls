@@ -6,6 +6,8 @@ import os
 import re
 from pathlib import Path
 
+from roundtable_souls.game import catalog as games
+from roundtable_souls.game import config as game_config
 from roundtable_souls.mods.profile_edit import (
     entry_ref,
     read_text,
@@ -13,45 +15,11 @@ from roundtable_souls.mods.profile_edit import (
     roots,
 )
 
-ACCEPTABLE_FOLDERS = {
-    "_backup",
-    "_unknown",
-    "action",
-    "asset",
-    "chr",
-    "cutscene",
-    "event",
-    "font",
-    "map",
-    "material",
-    "menu",
-    "movie",
-    "msg",
-    "other",
-    "param",
-    "parts",
-    "script",
-    "sd",
-    "sfx",
-    "shader",
-    "sound",
-    "expression",
-    "facegen",
-    "obj",
-    "mtd",
-    "model",
-    "sfxbnd",
-}
+NOT_GAME_FOLDERS = {"_backup", "_unknown"}  # accepted when installing, but me3 serves nothing from them
 
-IGNORED_DLLS = {
-    "dinput8.dll",
-    "modengine2.dll",
-    "mod_loader.dll",
-    "lua.dll",
-    "zlib1.dll",
-    "me3-mod-host.dll",
-    "me3_mod_host.dll",
-}
+# The game's mod layout (data/games): the folders a package may have, and DLLs that are not mods
+ACCEPTABLE_FOLDERS = set(game_config.load().mod_folders) | NOT_GAME_FOLDERS
+IGNORED_DLLS = set(game_config.load().ignored_dlls)
 
 # Loose game files at an archive root (a common Nexus layout: one .partsbnd.dcx and a readme) and the folder
 # the game serves them from. First match wins.
@@ -96,9 +64,6 @@ def _children(folder: Path) -> list[Path]:
         return []
 
 
-NOT_GAME_FOLDERS = {"_backup", "_unknown"}  # accepted when installing, but me3 serves nothing from them
-
-
 def has_game_files(folder: Path) -> bool:
     """Whether a package folder holds game files at its own top level (game folders, regulation.bin, loose files):
     what me3 actually serves from it. A folder of other mods' folders has none."""
@@ -106,7 +71,7 @@ def has_game_files(folder: Path) -> bool:
     kids = _children(folder)
     return (
         any(c.is_dir() and c.name.lower() in ACCEPTABLE_FOLDERS - NOT_GAME_FOLDERS for c in kids)
-        or (folder / "regulation.bin").is_file()
+        or (folder / games.ELDEN_RING.regulation).is_file()
         or bool(loose_files(folder))
     )
 
