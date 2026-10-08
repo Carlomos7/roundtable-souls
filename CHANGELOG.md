@@ -4,6 +4,11 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
 
 ## [Unreleased]
 
+- Appearance: new colours, the first step of the new look. Dark is now a near-neutral charcoal with the gold as its
+  only colour (it was brown), with quieter lines between parts; light keeps its Carian blue with softer lines, and
+  secondary buttons in both themes have no fill until you point at them. Code in the editors is highlighted in the
+  same colours, with keywords in green so they read clearly. Layout and behaviour are unchanged.
+
 ## [3.19.0] - 2026-10-08
 
 - Mod configs: the last place that said "tie" now says "attach", like the Attach and Detach buttons.

@@ -13,12 +13,11 @@ from qfluentwidgets import (
     PushButton,
     TransparentToggleToolButton,
     TransparentToolButton,
-    isDarkTheme,
 )
 
 from roundtable_souls.services.coop import COMMENT_PREFIX, indent_lines, toggle_comment
 from roundtable_souls.ui import find
-from roundtable_souls.ui.theme import RADIUS, TEXT_LIGHT, style_editor, tokens
+from roundtable_souls.ui.theme import RADIUS, css, style_editor, syntax_colors, tokens
 
 
 class CodeHighlighter(QSyntaxHighlighter):
@@ -32,24 +31,7 @@ class CodeHighlighter(QSyntaxHighlighter):
         self.restyle()
 
     def restyle(self):
-        if isDarkTheme():
-            colors = {
-                "comment": "#8A6E4A",
-                "key": "#E8D2A0",
-                "string": "#F9C043",
-                "number": "#E08A7A",
-                "keyword": "#BD6707",
-                "header": "#F9C043",
-            }
-        else:
-            colors = {
-                "comment": "#4B6283",
-                "key": TEXT_LIGHT,
-                "string": "#245BC4",
-                "number": "#963C48",
-                "keyword": "#194BAA",
-                "header": "#245BC4",
-            }
+        colors = syntax_colors()
 
         def fmt(name, bold=False):
             f = QTextCharFormat()
@@ -176,7 +158,7 @@ class FindBar(QFrame):
         t = tokens()
         surf = t["surf"].name() if isinstance(t["surf"], QColor) else t["surf"]
         self.setStyleSheet(
-            f"FindBar{{background:{surf};border:1px solid {t['border'].name()};border-radius:{RADIUS}px;}}"
+            f"FindBar{{background:{surf};border:1px solid {css(t['border'])};border-radius:{RADIUS}px;}}"
         )
 
     def open(self, replace: bool = False):
