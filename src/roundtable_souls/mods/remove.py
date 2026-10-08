@@ -11,17 +11,8 @@ import os
 import shutil
 from pathlib import Path
 
-from roundtable_souls.mods.profile_edit import (
-    _ordered,
-    _stage_write,
-    block_options,
-    blocks,
-    is_array_form,
-    read_text,
-    remove_entry,
-    resolve,
-    to_blocks,
-)
+from roundtable_souls.mods.profile_edit import block_options, blocks, resolve
+from roundtable_souls.mods.profile_writer import ProfileWriter
 
 
 def uninstall(profile: Path, index: int, delete_folder: bool = True, to_trash: bool = True, *, loc: Locations) -> dict:
@@ -30,22 +21,19 @@ def uninstall(profile: Path, index: int, delete_folder: bool = True, to_trash: b
     kept): to the Recycle Bin (to_trash), so it can come back, else deleted. Returns what was removed and where, so
     it can be put back (see mods.undo)."""
     from roundtable_souls.mods import operations
-    from roundtable_souls.mods import order as mod_order
 
     profile = Path(profile)
     with operations.lock(profile):
         operations.recover(profile)
-        tgt = mod_order.target(profile, loc)
-        text = read_text(profile)
-        if is_array_form(text):
-            text = to_blocks(text)
-        o = block_options(text, index)
+        writer = ProfileWriter(profile, loc)
+        o = writer.options(index)
         target = resolve(profile, o["path"]) if o["path"] else None
         folder = None
         if target is not None:
             folder = target if o["kind"] == "package" else target.parent
         name = o["id"] or Path(o["path"]).name or f"entry {index + 1}"
-        new_text, chunk, where = remove_entry(text, index)
+        chunk, where = writer.remove_entry(index)
+        new_text = writer.text
         goes = False
         if delete_folder and folder is not None and folder.is_dir():
             inside = profile.parent.resolve() in folder.resolve().parents
@@ -64,8 +52,9 @@ def uninstall(profile: Path, index: int, delete_folder: bool = True, to_trash: b
         # (the entry comes back) unless the folder had already left, then it is finished.
         op = operations.start(profile, f"removal of {name}")
         try:
-            new_text, problem = _ordered(profile, new_text, tgt)
-            bak = _stage_write(op, profile, new_text, f"before removing {name}")
+            change = writer.plan(f"before removing {name}")
+            bak = writer.commit(change, operation=op)
+            problem = change.notes.get("order_problem")
             op.note(kind="remove", name=name)
             if goes and folder is not None:
                 op.note(dest=str(folder))

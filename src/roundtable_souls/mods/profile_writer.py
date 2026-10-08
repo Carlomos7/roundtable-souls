@@ -502,11 +502,16 @@ class ProfileWriter:
         self.changes.append(Change("add", kind, path=row["path"], row=row, deepest=deepest))
         return row
 
-    def add_package(self, ident: str, path: Path | str, *, before: int | None = None, after_last=False, **opts) -> dict:
-        return self.add_entry("package", {"id": ident, "path": path, **opts}, before=before, after_last=after_last)
+    def add_package(
+        self, ident: str, path: Path | str, *, before: int | None = None, after_last=False, deepest=0, **opts
+    ) -> dict:
+        row = {"id": ident, "path": path, **opts}
+        return self.add_entry("package", row, before=before, after_last=after_last, deepest=deepest)
 
-    def add_native(self, path: Path | str, *, before: int | None = None, after_last: bool = False, **opts) -> dict:
-        return self.add_entry("native", {"path": path, **opts}, before=before, after_last=after_last)
+    def add_native(
+        self, path: Path | str, *, before: int | None = None, after_last: bool = False, deepest=0, **opts
+    ) -> dict:
+        return self.add_entry("native", {"path": path, **opts}, before=before, after_last=after_last, deepest=deepest)
 
     def remove_entry(self, index: int) -> tuple[str, dict]:
         """Take block `index` out with its own comments (profile_edit.remove_entry). Returns (the text taken out,
