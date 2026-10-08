@@ -466,10 +466,6 @@ class ProfileWriter:
     def options(self, index: int) -> dict:
         return me3_profile.block_options(self.as_blocks(), index)
 
-    def _name(self, index: int) -> str:
-        o = self.options(index)
-        return o["id"] or Path(o["path"]).name or f"entry {index + 1}"
-
     # ---------------------------------------------------------------- edits (the text in memory only)
     def add_entry(
         self,
