@@ -4,6 +4,19 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
 
 ## [Unreleased]
 
+- Mods: while Nightreign Revive is switched on in a profile, switching Seamless Co-op off or removing it is refused
+  ("nightreign-revive needs ersc.dll, which this change would leave switched off"): Revive does not work without
+  it. Switch Revive off first. What an overhaul needs now comes from its config, so this holds for any overhaul.
+- Mods: the conflict list names what each file is in plain words (the player character's animations, behaviour
+  scripts, text, parameters, ...) instead of its folder.
+- Nightreign Revive (only with "Build Nightreign Revive in the launcher (preview)" on): merge-report.txt says what
+  each clashing file is, licence and notice files a download ships are kept next to its DLLs, and the build's
+  installation.json records the edition. The build is the same as before.
+- Overhaul configs (for mod authors): what an overhaul needs is a `requires` list on its build, and a script
+  fragment is added with `do = "hook"` (several in order, each wrapping the one before). A config you made yourself
+  with `[builds.install.seamless]` or `do = "script_append"` is left out until it is updated, and the launcher says
+  which key moved where; docs/Overhaul configs.md has the new form.
+
 ## [3.19.0] - 2026-10-08
 
 - Mod configs: the last place that said "tie" now says "attach", like the Attach and Detach buttons.
