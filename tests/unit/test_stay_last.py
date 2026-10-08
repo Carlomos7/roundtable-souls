@@ -157,6 +157,19 @@ def test_removing_a_mod_drops_it_from_the_list(world):
     assert _after(world.profile.read_text(encoding="utf-8"), "package", "last") == [("off", True)]
 
 
+def test_undoing_a_removal_lists_the_mod_again(world):
+    """The entry comes back where it was, and the mod that must stay last loads after it again."""
+    from roundtable_souls.mods import undo
+
+    mod_order.fix(world.profile, loc=er())
+    parts = next(e for e in M.entries(world.profile) if e.get("id") == "parts")
+    out = remove.uninstall(world.profile, parts["index"], delete_folder=False, loc=er())
+    rec = {"type": "remove", "profile": str(world.profile), "name": "parts", "path": out["path"]}
+    rec |= {"entry_text": out["entry_text"], "where": out["where"]}
+    undo.run(rec, lambda s: None, loc=er())
+    assert ("parts", True) in _after(world.profile.read_text(encoding="utf-8"), "package", "last")
+
+
 def test_a_renamed_id_is_followed_where_it_was(world):
     mod_order.fix(world.profile, loc=er())
     parts = next(e for e in M.entries(world.profile) if e.get("id") == "parts")

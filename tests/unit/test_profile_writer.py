@@ -111,6 +111,35 @@ def test_a_profile_changed_outside_the_launcher_is_not_overwritten(profile):
     assert "# edited in a text editor meanwhile" in profile.read_text(encoding="utf-8")
 
 
+def test_a_write_waits_for_another_windows_operation_and_then_refuses(profile, monkeypatch):
+    """A standalone write takes the folder's lock, as operations do: while another launcher window holds it (here
+    another thread), the write waits briefly, then refuses with the reason and leaves the file alone."""
+    import threading
+
+    monkeypatch.setattr(W, "STANDALONE_LOCK_WAIT", 0.3)
+    held, release = threading.Event(), threading.Event()
+
+    def other_window():
+        with operations.lock(profile):
+            held.set()
+            release.wait(10)
+
+    t = threading.Thread(target=other_window)
+    t.start()
+    try:
+        assert held.wait(10)
+        w = W.ProfileWriter(profile, er())
+        w.set_options(1, {"enabled": False})
+        with pytest.raises(B.BuildError, match="another launcher window"):
+            w.write("before turning cam.dll off")
+        assert profile.read_text(encoding="utf-8") == PROFILE
+    finally:
+        release.set()
+        t.join(10)
+    w.write("before turning cam.dll off")  # once the other window is done, the same change goes through
+    assert profile.read_text(encoding="utf-8") != PROFILE
+
+
 def test_inside_an_operation_the_journal_checks_again_before_its_file_step(profile):
     root = profile.parent
     w = W.ProfileWriter(profile, er())
@@ -360,5 +389,10 @@ def test_the_profile_folder_is_never_left_with_a_temp_file(profile):
     w = W.ProfileWriter(profile)
     w.set_setting("start_online", True)
     w.write("x")
-    assert sorted(p.name for p in profile.parent.iterdir() if p.is_file()) == ["my.me3", "my.me3.bak"]
+    # the folder's lock file (shared with operations) is expected; nothing else is left beside the profile
+    assert sorted(p.name for p in profile.parent.iterdir() if p.is_file()) == [
+        ".roundtable-ops.lock",
+        "my.me3",
+        "my.me3.bak",
+    ]
     assert not any(p.name.endswith(".tmp") for p in os.scandir(profile.parent))

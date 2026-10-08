@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     from roundtable_souls.merging.build import Operation
 
 CHANGED_OUTSIDE = "the profile changed outside the launcher; reload and try again"
+STANDALONE_LOCK_WAIT = 5.0  # seconds a write outside an operation waits for another window's operation to finish
 
 
 # ----------------------------------------------------------------------------- what a plan holds
@@ -592,16 +593,25 @@ class ProfileWriter:
         data = plan.bytes_to_write
         if not plan.changes and data == plan.read:
             return None
+        if operation is not None:  # the operation already holds the folder's lock
+            self._before_write(plan)
+            operation.write_file(plan.profile, data, expect=_sha256(plan.read) if plan.existed else "missing")
+        else:
+            from roundtable_souls.merging import build
+
+            # The same lock operations hold, for the last check and the replace: another launcher window can't write
+            # this profile in between (a write already inside an operation on this thread just enters).
+            with build.ops_lock(plan.profile.parent, timeout=STANDALONE_LOCK_WAIT):
+                self._before_write(plan)
+                files.atomic_write(plan.profile, data)
+        plan.written = True
+        return plan.backup
+
+    def _before_write(self, plan: Plan) -> None:
         for rule in self._applying(plan):
             found = rule.before_write(plan)
             if found is not None:
                 raise Refused([found])
-        if operation is not None:
-            operation.write_file(plan.profile, data, expect=_sha256(plan.read) if plan.existed else "missing")
-        else:
-            files.atomic_write(plan.profile, data)
-        plan.written = True
-        return plan.backup
 
     def write(self, why: str, operation: Operation | None = None) -> Plan:
         """plan() and commit() in one: the committed plan (raises Refused when a rule refused it)."""
