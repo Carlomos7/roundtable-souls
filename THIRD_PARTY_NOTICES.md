@@ -255,8 +255,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 ## Fluent UI System Icons (MIT)
 
 - [Fluent UI System Icons](https://github.com/microsoft/fluentui-system-icons) by Microsoft: the interface icons
-  (`src/roundtable_souls/ui/assets/icons/*.svg`, about fifty of them) are its SVG files, tinted at run time. An
-  asset, not a dependency.
+  (`src/roundtable_souls/ui/assets/icons/*.svg`, about fifty of them) are its SVG files with their embedded
+  metadata removed, tinted at run time. An asset, not a dependency.
 
 ```
 MIT License
