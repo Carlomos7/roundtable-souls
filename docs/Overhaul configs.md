@@ -107,8 +107,8 @@ the launcher does not install are listed with the reason in `install_unsupported
 ```toml
 [builds.install]
 profile_settings = { profileVersion = "v1", start_online = false }  # top-level keys set
-owned_package_ids = ["my-overhaul"]          # an earlier install's packages, removed first
-owned_dlls = ["myoverhaul.dll"]              # an earlier install's DLLs (file names, lower-case), removed first
+owned_package_ids = ["my-overhaul"]          # the packages it owns: an earlier install's are removed first
+owned_dlls = ["myoverhaul.dll"]              # the DLLs it owns (file names, case aside), likewise
 required_files = ["MyOverhaul.dll", "mod/regulation.bin"]   # in its folder: the check after an install
 required_folders = ["ui"]                    # in its folder, not empty
 
@@ -133,6 +133,13 @@ The plan removes an earlier install's own entries, sets the settings that differ
 `enable_if_off` allows it, else the install stops; with none, the first candidate that exists is added; with no copy
 at all the install stops, naming it), gives the matching DLLs their initializer, and adds the
 overhaul's DLLs and package last with the load settings written here. The player's other entries are left as they
-are. It stops for a profile me3 cannot use (two enabled packages with one id, a circle of `load_after`), an enabled
+are. **Owned entries.** `owned_package_ids` and `owned_dlls` are the one record of which profile entries are the
+overhaul's own (list every id and file name any version of it has used): installing it again, any version or
+edition, removes those first, so it is an update of the earlier install and never a second set of entries. They are
+also how the launcher tells the overhaul's entries from the player's, which entries its `requires` apply to, and
+whether a profile already has an overhaul: a profile can have one overhaul for now, so installing a different one
+into it stops ("This profile already has Nightreign Revive. A profile can have one overhaul for now: …").
+
+It stops for a profile me3 cannot use (two enabled packages with one id, a circle of `load_after`), an enabled
 package whose folder is missing, or an unreadable profile. Nightreign Revive's LITE description is the one its own
 installer (0.1.33-rc3) applies; the plan gives the same profile as that installer on the profiles compared.

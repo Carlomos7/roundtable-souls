@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import os
 import tomllib
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath
 from typing import Any, Literal
@@ -55,6 +55,9 @@ class Problem:
 class Plan:
     changes: list[Change] = field(default_factory=list)
     problems: list[Problem] = field(default_factory=list)
+    # The profile already had this overhaul's entries (an earlier install, any edition or version): the install
+    # replaces them, so it is an update of that install, never a second set of entries.
+    update: bool = False
 
     @property
     def ok(self) -> bool:
@@ -136,12 +139,16 @@ def plan(
     *,
     game_dir: Path | None = None,
     provided: dict[str, Path] | None = None,
+    others: Sequence[OverhaulConfig] = (),
     is_file: Callable[[Path], bool] = Path.is_file,
     is_dir: Callable[[Path], bool] = Path.is_dir,
 ) -> Plan:
     """The changes that install one edition of the overhaul (build; its own folder `own`) into the profile at
     `profile` whose text is profile_text, and the problems. provided: a copy of a required mod to use when the profile
-    has none switched on, by the requirement's name (else its candidates are tried)."""
+    has none switched on, by the requirement's name (else its candidates are tried). others: the other overhauls'
+    configs (overhauls.load); a profile that has one of them is refused (one overhaul per profile for now). The
+    entries this edition owns (Install.owned_package_ids, owned_dlls) are removed first: plan.update says the
+    profile had them."""
     if build.install is None:
         raise ValueError(f"{build.id} has no install description")
     install = build.install
@@ -156,16 +163,34 @@ def plan(
     packages = [dict(r) for r in rows(data, "packages")]
     natives = [dict(r) for r in rows(data, "natives")]
 
-    # clean_owned: an earlier install's own entries go first (any edition's)
-    owned_ids, owned_dlls = set(install.owned_package_ids), {d.lower() for d in install.owned_dlls}
+    # one overhaul per profile (for now): another overhaul's entries stop the install
+    for other in others:
+        if any(
+            requirements.owner([other], kind, r)
+            for kind, rs in (("package", packages), ("native", natives))
+            for r in rs
+        ) and not _same_overhaul(other, build):
+            out.problems.append(
+                Problem(
+                    "another-overhaul",
+                    f"This profile already has {other.label}. A profile can have one overhaul for now: remove "
+                    f"{other.label} from it first, or install into another profile.",
+                )
+            )
+
+    # clean_owned: an earlier install's own entries go first (any edition's): installing again is an update
+    def mine(kind: str, r: dict) -> bool:
+        return requirements.owns(install, kind, r)
+
     for r in packages:
-        if r.get("id") in owned_ids:
+        if mine("package", r):
             out.changes.append(Change("remove", "package", package_id(r), why="an earlier install's own package"))
     for r in natives:
-        if dll_name(r) in owned_dlls:
+        if mine("native", r):
             out.changes.append(Change("remove", "native", str(r.get("path", "")), why="an earlier install's own DLL"))
-    packages = [r for r in packages if r.get("id") not in owned_ids]
-    natives = [r for r in natives if dll_name(r) not in owned_dlls]
+    out.update = any(c.action == "remove" for c in out.changes)
+    packages = [r for r in packages if not mine("package", r)]
+    natives = [r for r in natives if not mine("native", r)]
 
     # install(): every enabled package's folder must be there, in an order me3 can follow
     _, problem = _ordered(packages)
@@ -212,6 +237,10 @@ def plan(
             entry["load_after"] = [{"id": package_id(p), "optional": True} for p in packages if _enabled(p)]
         out.changes.append(Change("add", "package", values=entry, why="the overhaul's package"))
     return out
+
+
+def _same_overhaul(other: OverhaulConfig, build: Build) -> bool:
+    return any(b is build or b.id == build.id for b in other.builds)
 
 
 def _require(req: Requirement, out: Plan, packages, natives, profile, game_dir, given, is_file) -> Problem | None:

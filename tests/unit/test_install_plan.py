@@ -365,3 +365,61 @@ def test_a_requirement_names_one_kind():
         overhauls.Requirement(native="a.dll", package="b")
     with pytest.raises(ValueError, match="either native or package"):
         overhauls.Requirement()
+
+
+# ----------------------------------------------------------------------------- owned entries are data
+def test_installing_again_is_an_update_never_a_second_set_of_entries():
+    first, once = planned(ORDINARY, provided={"ersc.dll": SEAMLESS})
+    assert not first.update
+    again = _toml(once)
+    second, twice = planned(again, provided={"ersc.dll": SEAMLESS})
+    assert second.ok and second.update
+    assert [r["id"] for r in twice["packages"]].count("nightreign-revive") == 1
+    names = [Path(n["path"]).name for n in twice["natives"]]
+    assert names.count("RevivePrototype.dll") == 1 and names.count("ReviveHudBootstrap.dll") == 1
+    assert twice == once  # the same profile as one install
+
+
+def test_a_fake_overhauls_owned_entries_are_replaced_by_its_reinstall():
+    text = FRAMEWORK + HELPER + "[[packages]]\nid = \"fake\"\npath = 'Old/mod'\n[[natives]]\npath = 'Old/FAKE.dll'\n"
+    p = fake_plan(text)
+    assert p.update and [(c.action, c.key) for c in p.changes if c.action == "remove"] == [
+        ("remove", "fake"),
+        ("remove", "Old/FAKE.dll"),
+    ]
+
+
+def test_a_second_overhaul_in_one_profile_is_refused():
+    revive_config, _ = revive()
+    fake_config, _ = fake()
+    _, with_revive = planned(ORDINARY, provided={"ersc.dll": SEAMLESS})
+    p = fake_plan(_toml(with_revive) + FRAMEWORK + HELPER, others=[revive_config, fake_config])
+    assert [(x.code, x.message) for x in p.problems] == [
+        (
+            "another-overhaul",
+            "This profile already has Nightreign Revive. A profile can have one overhaul for now: remove "
+            "Nightreign Revive from it first, or install into another profile.",
+        )
+    ]
+    # its own earlier install is no reason to refuse
+    assert fake_plan(FRAMEWORK + HELPER + "[[packages]]\nid = \"fake\"\npath = 'Fake/mod'\n", others=[fake_config]).ok
+
+
+def test_one_place_says_which_overhaul_owns_an_entry():
+    from roundtable_souls.overhauls import requirements
+
+    revive_config, _ = revive()
+    fake_config, _ = fake()
+    configs = [revive_config, fake_config]
+    entries = [
+        {"kind": "native", "path": "x/ersc.dll"},
+        {"kind": "native", "path": "NightreignRevive/RevivePrototype.dll"},
+        {"kind": "package", "id": "fake", "path": "Fake/mod"},
+        {"kind": "package", "id": "body", "path": "mod/body"},
+    ]
+    assert {k: [e["path"] for e in v] for k, v in requirements.owned_by(configs, entries).items()} == {
+        "nightreign-revive": ["NightreignRevive/RevivePrototype.dll"],
+        "fake": ["Fake/mod"],
+    }
+    assert [r.name for r in requirements.needed_by(configs, "native", entries[1])] == ["ersc.dll"]
+    assert requirements.needed_by(configs, "package", entries[3]) == []
