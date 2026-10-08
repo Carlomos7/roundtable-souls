@@ -551,13 +551,13 @@ def status(profile: Path, *, loc: Locations) -> dict | None:
 
 
 def fix(profile: Path, *, loc: Locations) -> str | None:
-    """Write the profile with the mod that must stay last put after everything else. Returns why it could not, or
-    None (also when there was nothing to change)."""
-    profile = Path(profile)
-    text = mod_manage.read_text(profile)
-    new, problem = reconcile(profile, text, loc=loc)
-    if problem:
-        return problem
-    if new != text:
-        mod_manage._write(profile, new, "before fixing the load order")
+    """Write the profile with the mod that must stay last put after everything else (the writer's StayLast rule,
+    with no other change). Returns why it could not, or None (also when there was nothing to change)."""
+    from roundtable_souls.mods import profile_writer
+
+    w = profile_writer.ProfileWriter(Path(profile), loc)
+    plan = w.plan("before fixing the load order")
+    if plan.notes.get("order_problem"):
+        return plan.notes["order_problem"]
+    w.commit(plan)
     return None

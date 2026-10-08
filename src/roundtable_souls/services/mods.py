@@ -10,12 +10,11 @@ from pathlib import Path
 from roundtable_souls.config.settings import load_settings, save_settings
 from roundtable_souls.formats import me3_profile
 from roundtable_souls.game.locate import Locations
-from roundtable_souls.mods import install, models, remove
+from roundtable_souls.mods import install, models, profile_writer, remove
 from roundtable_souls.mods import profile as profile_tools
 from roundtable_souls.mods import profile_edit as mod_manage
 from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.platform import me3_info
-from roundtable_souls.platform.files import atomic_write
 
 
 def _plain_line(line: str) -> str:
@@ -64,22 +63,19 @@ def _rewrite_block(block_lines, enabled: bool):
 
 
 def set_profile_mod_enabled(profile, index: int, enabled: bool) -> bool:
-    """Turn one package or native on or off. Commented-out blocks are uncommented when turned on. Returns whether it changed."""
-    path = Path(profile)
-    text = me3_profile.read_text(path)
-    blocks = me3_profile.blocks(text)
+    """Turn one package or native on or off. Commented-out keys in its block are uncommented when turned on. Returns
+    whether it changed."""
+    w = profile_writer.ProfileWriter(Path(profile))
+    blocks = me3_profile.blocks(w.text)
     if index < 0 or index >= len(blocks):
         raise IndexError(index)
     i, j = blocks[index]["start"], blocks[index]["end"]
-    lines = text.splitlines(keepends=True)
+    lines = w.text.splitlines(keepends=True)
     new_block = _rewrite_block(lines[i:j], enabled)
     if new_block == lines[i:j]:
         return False
-    lines[i:j] = new_block
-    from roundtable_souls.mods import history
-
-    history.snapshot(path, f"before turning a mod {'on' if enabled else 'off'}")
-    atomic_write(path, "".join(lines), backup=True)
+    w.replace_block(index, new_block)
+    w.write(f"before turning a mod {'on' if enabled else 'off'}")
     return True
 
 
@@ -126,16 +122,20 @@ def read_profile_settings(profile) -> dict:
 
 def write_profile_setting(profile, key: str, value) -> bool:
     """Set (or None: remove) one top-level me3 setting in the profile text, keeping comments; one .bak. Returns whether it changed."""
-    path = Path(profile)
-    text = me3_profile.read_text(path)
-    new = profile_tools.set_setting(text, key, value)
-    if new == text:
+    w = profile_writer.ProfileWriter(Path(profile))
+    w.set_setting(key, value)
+    if w.text == w.before:
         return False
-    from roundtable_souls.mods import history
-
-    history.snapshot(path, f"before changing {key}")
-    atomic_write(path, new, backup=True)
+    w.write(f"before changing {key}")
     return True
+
+
+def save_profile_text(profile, text: str) -> None:
+    """The profile's whole text as the player wrote it in the editor: one .bak and a history copy first, written
+    as it is (no rule but the safety ones applies to the player's own text)."""
+    w = profile_writer.ProfileWriter(Path(profile))
+    w.replace_text(text)
+    w.write("before saving the editor")
 
 
 def scan_profile_conflicts(profile) -> dict:

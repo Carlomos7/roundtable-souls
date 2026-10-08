@@ -26,8 +26,9 @@ a reason to refuse every later edit. A verbatim change (the whole text as the pl
 earlier version put back) goes through Safety and UnchangedSinceRead only.
 
 Entries are addressed by block index, as mods.profile_edit addresses them; removing one shifts the indexes after it,
-so several removals go from the highest index down. A profile in the inline-array form is converted to blocks when
-it is read (that form has no comments to lose), as every edit did before.
+so several removals go from the highest index down. A profile in the inline-array form is converted to blocks by the
+first edit of an entry (that form has no comments to lose), as every such edit did before; a setting changed on its
+own leaves the form as it is.
 """
 
 from __future__ import annotations
@@ -436,7 +437,7 @@ class ProfileWriter:
             raise ModError(f"{self.profile.name} is not there")
         self.read = self.profile.read_bytes() if self.existed else b""
         self.original = self.read.decode("utf-8", errors="replace")
-        self.text = me3_profile.to_blocks(self.original) if me3_profile.is_array_form(self.original) else self.original
+        self.text = self.original
         self.before = self.text
         self.changes: list[Change] = []
         self.verbatim = False
@@ -455,7 +456,7 @@ class ProfileWriter:
     # ---------------------------------------------------------------- reading the text as it stands
     def entries(self) -> list[dict]:
         """The entries as the edits so far leave them (formats.me3_profile.entries): 'index' addresses them."""
-        return me3_profile.entries(self.text)
+        return me3_profile.entries(self._blocks())
 
     def find(self, kind: str, name: str) -> int | None:
         """The index of the entry of this kind called name (its id, else its file or folder name), case aside."""
@@ -463,7 +464,7 @@ class ProfileWriter:
         return next((e["index"] for e in self.entries() if e["kind"] == kind and e["name"].lower() == low), None)
 
     def options(self, index: int) -> dict:
-        return me3_profile.block_options(self.text, index)
+        return me3_profile.block_options(self._blocks(), index)
 
     def _name(self, index: int) -> str:
         o = self.options(index)
@@ -484,6 +485,7 @@ class ProfileWriter:
         last (a package above its package, a DLL above its first DLL), so the file reads in load order; else at the
         end. after_last keeps it after that mod on purpose: last, naming the mod in its own load_after. deepest: the
         longest file path inside its folder, in characters, for the Paths rule. Returns the entry as added."""
+        self._blocks()
         row = {**row, "kind": kind, "path": self._relative(row["path"])}
         where = before
         if after_last and self.target is not None:
@@ -510,25 +512,25 @@ class ProfileWriter:
         """Take block `index` out with its own comments (profile_edit.remove_entry). Returns (the text taken out,
         where it was), what restore_entry needs to put it back."""
         o = self.options(index)
-        self.text, chunk, where = profile_edit.remove_entry(self.text, index)
+        self.text, chunk, where = profile_edit.remove_entry(self._blocks(), index)
         self.changes.append(Change("remove", o["kind"], index, o["path"], before=o))
         return chunk, where
 
     def restore_entry(self, chunk: str, where: dict) -> None:
         """Put an entry taken out by remove_entry back where it was (profile_edit.restore_entry)."""
-        self.text = profile_edit.restore_entry(self.text, chunk, where)
+        self.text = profile_edit.restore_entry(self._blocks(), chunk, where)
         self.changes.append(Change("add", row={}))
 
     def set_options(self, index: int, opts: dict) -> None:
         """Rewrite the option keys of one block (profile_edit.set_block_options); keys absent from opts stay."""
         o = self.options(index)
-        self.text = profile_edit.set_block_options(self.text, index, opts)
+        self.text = profile_edit.set_block_options(self._blocks(), index, opts)
         self.changes.append(Change("options", o["kind"], index, o["path"], row=dict(opts), before=o))
 
     def replace_block(self, index: int, lines: list[str]) -> None:
         """One block's lines replaced as given (an edit profile_edit has no function for)."""
         o = self.options(index)
-        b = me3_profile.blocks(self.text)[index]
+        b = me3_profile.blocks(self._blocks())[index]
         all_lines = self.text.splitlines(keepends=True)
         all_lines[b["start"] : b["end"]] = lines
         self.text = "".join(all_lines)
@@ -610,6 +612,12 @@ class ProfileWriter:
     def _applying(self, plan: Plan) -> list[ProfileRule]:
         return [r for r in self.rules if r.verbatim or not plan.verbatim]
 
+    def _blocks(self) -> str:
+        """The text as [[packages]] / [[natives]] blocks, converting an inline-array profile once."""
+        if me3_profile.is_array_form(self.text):
+            self.text = me3_profile.to_blocks(self.text)
+        return self.text
+
     def _relative(self, path: Path | str) -> str:
         if isinstance(path, Path) or Path(path).is_absolute():
             return profile_edit.rel(self.profile, Path(path))
@@ -617,7 +625,7 @@ class ProfileWriter:
 
     def _roles(self) -> tuple[dict | None, list[dict], list[dict]]:
         assert self.target is not None
-        items = mod_order._items(self.profile, self.text)
+        items = mod_order._items(self.profile, self._blocks())
         return mod_order._roles(self.profile, items, self.target)
 
     def _last_place(self, kind: str) -> int | None:

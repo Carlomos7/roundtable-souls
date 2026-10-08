@@ -276,8 +276,8 @@ def test_options_roundtrip_keeps_comments_and_multiline_arrays(tmp_path):
             "optional": True,
             "initializer": {"function": "Init"},
             "finalizer": "Fini",
-            "load_after": [{"id": "flora", "optional": False}],
-            "load_before": ["other.dll"],
+            "load_after": [{"id": "other.dll", "optional": False}],  # required: must be in the profile
+            "load_before": ["x.dll"],
             "enabled": False,
         },
         loc=er(),
@@ -291,8 +291,8 @@ def test_options_roundtrip_keeps_comments_and_multiline_arrays(tmp_path):
         and n["enabled"] is False
     )
     assert n["initializer"] == {"function": "Init"} and n["finalizer"] == "Fini"
-    assert n["load_after"] == [{"id": "flora", "optional": False}] and n["load_before"] == [
-        {"id": "other.dll", "optional": True}
+    assert n["load_after"] == [{"id": "other.dll", "optional": False}] and n["load_before"] == [
+        {"id": "x.dll", "optional": True}
     ]
     assert "# keep this" in text and text.count("load_after") == 1 and "\r\n" in text
     M.set_options(p, 1, {"initializer": {"delay": {"ms": 250}}, "enabled": True, "finalizer": ""}, loc=er())
