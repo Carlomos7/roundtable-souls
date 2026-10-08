@@ -4,8 +4,9 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
 
 ## [Unreleased]
 
-## [3.19.0-beta.1] - 2026-10-08
+## [3.19.0] - 2026-10-08
 
+- Mod configs: the last place that said "tie" now says "attach", like the Attach and Detach buttons.
 - Mods: every change the launcher makes to a me3 profile now goes through one writer with one set of rules. New:
   a profile edited outside the launcher (a text editor, another tool) after the launcher read it is never
   overwritten; the change is refused with "the profile changed outside the launcher; reload and try again". Also
