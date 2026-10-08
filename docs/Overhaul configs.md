@@ -91,6 +91,12 @@ mod's copy. Files no format rule covers (behaviour and animation data, `.hkx`) a
 by one side, its copy; changed differently by both, the mod's copy and a clash. Clashes and the rules' notes are
 written to the build's report (`merge-report.txt`).
 
+Only the files the steps name are taken from the download, with one addition: licence and notice files the
+download ships (`LICENSE*`, `NOTICE*`, `COPYING*`, third-party notices, a `licenses/` folder), beside a DLL a `copy`
+step takes or at the download's top, are copied next to that DLL when present, since their licences ask for them to
+travel with the binaries. None is required. What the download says about itself (the values `match.json` checks, its
+`version`) is read once, when it is matched, and written into the build's manifest.
+
 The build runs in a staging folder beside the output and replaces it by renaming; the build it replaced is kept in
 `.roundtable-build/previous` for Undo rebuild. The manifest is written as the mod's installer writes it, with each
 source's path and sha256, so the launcher's checks and the mod's installer keep working. The inputs are only read

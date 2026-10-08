@@ -38,6 +38,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import time
 from pathlib import Path
@@ -338,6 +339,8 @@ def build(
                         shutil.rmtree(p)
                     elif p.is_file():
                         p.unlink()
+        for name in _notices(recipe, setup, stage):
+            log(f"engine: {name} kept beside the mod's DLLs")
         (stage / out_cfg.get("report", "merge-report.txt")).write_text(
             f"{recipe['label']} {version}, built by Roundtable Souls {__version__} from {len(inputs)} package(s).\n"
             + ("".join(f"{line}\n" for line in report) or "No clashes.\n"),
@@ -361,6 +364,39 @@ def build(
     seconds = time.time() - started
     log(f"engine: {recipe['label']} built in {seconds:.0f}s; the build it replaced is kept for Undo rebuild")
     return {"output": own, "previous": previous, "restore": restore, "sources": sources, "seconds": seconds}
+
+
+NOTICE_NAMES = re.compile(r"(?i)^(licen[cs]e|notice|copying|third[-_ ]?party[-_ ]?notices?)\b")
+NOTICE_FOLDERS = {"licenses", "licences"}
+
+
+def _notices(recipe: dict, setup: Path, stage: Path) -> list[str]:
+    """Licence and notice files the download ships (LICENSE*, NOTICE*, COPYING*, third-party notices, a licenses/
+    folder), copied next to the mod's DLLs when present: their licences ask for them to travel with the binaries.
+    Looked for beside each DLL a copy step takes, and at the download's top; none is required. Returns what was
+    copied (paths in the output)."""
+    places: list[tuple[Path, Path]] = []
+    for step in recipe["steps"]:
+        if step["do"] == "copy" and str(step["to"]).lower().endswith(".dll"):
+            dest = (stage / step["to"]).parent
+            for src in ((setup / step["from"]).parent, setup):
+                if (src, dest) not in places:
+                    places.append((src, dest))
+    out: list[str] = []
+    for src, dest in places:
+        for p in sorted(src.iterdir()) if src.is_dir() else []:
+            target = dest / p.name
+            if target.exists():
+                continue
+            if p.is_file() and NOTICE_NAMES.match(p.name):
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(p, target)
+            elif p.is_dir() and p.name.lower() in NOTICE_FOLDERS:
+                shutil.copytree(p, target)
+            else:
+                continue
+            out.append(target.relative_to(stage).as_posix())
+    return out
 
 
 def _each(step, setup) -> list:
@@ -495,6 +531,9 @@ def _hook_step(steps, label, setup, inputs, mod, sources, report, log) -> None:
                 sources.append({"path": str(p), "sha256": _sha(p)})
 
 
+_OWN_KEYS = {"version", "game", "profile", "sources", "refreshProtocol", "maintenance", "builtBy", "recipe", "buildKey"}
+
+
 def _manifest(own, stage, out_cfg, recipe, version, sources, profile, setup, game_dir, launcher) -> dict:
     """The mod's own manifest, as its installer keeps it (so its checks and a later run of it work), with the new
     sources and a note of who built it."""
@@ -506,8 +545,12 @@ def _manifest(own, stage, out_cfg, recipe, version, sources, profile, setup, gam
     key = hashlib.sha256(
         json.dumps([recipe, version, [(r["path"], r["sha256"]) for r in sources]], sort_keys=True).encode()
     ).hexdigest()
+    # what the download says about itself (its edition, ...), read once when it was matched: the values the
+    # recipe matched on, so the download's own metadata files are not needed afterwards
+    said = {c["key"]: c["equals"] for c in recipe["match"].get("json") or [] if c["key"] not in _OWN_KEYS}
     return {
         **old,
+        **said,
         "version": version or old.get("version"),
         "game": old.get("game") or str(game_dir / games.ELDEN_RING.exe),
         "profile": old.get("profile") or str(profile),

@@ -525,3 +525,40 @@ def test_a_hook_already_in_a_package_before_it_is_refused(world, tmp_path):
     (world.base / "mod/anims/action/script/c0000.hks").write_text("local SecondOriginalUpdate = Update\n")
     with pytest.raises(engine.EngineError, match="A mod before Hooks already contains its script."):
         engine.build(world.profile, target, setup, recipe, version, lambda s: None, loc=er())
+
+
+def test_licence_and_notice_files_travel_with_the_dlls_when_present(world, tmp_path):
+    """The made-up mod's licences: beside its DLL in the download and at the download's top. Nothing else of the
+    download is taken, and a download without any builds as before."""
+    local = overhauls.local_dir()
+    assert local is not None
+    local.mkdir(parents=True)
+    (local / "toy.toml").write_text(TOY_CONFIG, encoding="utf-8")
+    setup = tmp_path / "toysetup"
+    (setup / "payload/licenses").mkdir(parents=True)
+    (setup / "toy.json").write_text("{}")
+    (setup / "payload/toy.dll").write_bytes(b"toy")
+    (setup / "payload/toy.bin").write_bytes(pack({"EquipParamWeapon": set_word(2000, 2, 9)}))
+    (setup / "payload/LICENSE.txt").write_text("MIT")
+    (setup / "payload/licenses/zlib.txt").write_text("zlib")
+    (setup / "NOTICE").write_text("notice")
+    (setup / "README.md").write_text("not a notice")
+    (setup / "payload/licensed-stuff.ini").write_text("not a notice either")
+    recipe, version, _ = engine.match(setup)
+    target = world.base / "Toy" / "mod"
+    target.mkdir(parents=True)
+    world.profile.write_text(PROFILE + "\n[[packages]]\nid = \"toy\"\npath = 'Toy/mod'\n")
+    (world.own / "mod/regulation.bin").write_bytes(vanilla())
+    said = []
+    engine.build(world.profile, target, setup, recipe, version, said.append, loc=er())
+    toy = world.base / "Toy"
+    assert (toy / "LICENSE.txt").read_text() == "MIT" and (toy / "NOTICE").read_text() == "notice"
+    assert (toy / "licenses/zlib.txt").read_text() == "zlib"
+    assert not (toy / "README.md").exists() and not (toy / "licensed-stuff.ini").exists()
+    assert any("LICENSE.txt kept beside the mod's DLLs" in line for line in said)
+
+
+def test_the_manifest_records_what_the_download_said_about_itself(world):
+    world.build()
+    m = json.loads((world.own / "installation.json").read_text())
+    assert m["edition"] == "LITE" and m["version"] == "0.1.33-rc3"
