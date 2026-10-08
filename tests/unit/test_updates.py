@@ -24,7 +24,8 @@ VECTORS = Path(__file__).parent / "data" / "minisign"
 
 
 def _bump(v: str) -> str:
-    a, b, c = (int(x) for x in v.split(".")[:3])
+    """A version newer than v, also when v is a beta (3.18.0-beta.1 -> 3.18.1)."""
+    a, b, c = (int(x) for x in v.split("-")[0].split(".")[:3])
     return f"{a}.{b}.{c + 1}"
 
 
