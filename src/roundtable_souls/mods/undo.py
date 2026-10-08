@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 from pathlib import Path
 
 from roundtable_souls.mods import profile_edit as mod_manage
+from roundtable_souls.mods import profile_writer
 
 LABEL = {
     "remove": "Restore",
@@ -95,7 +96,7 @@ def run(undo: dict, log, *, loc: Locations) -> str:
     """Do it. Returns a line saying what was done. Raises UndoError when it cannot be done any more, and
     FileExistsError when a folder is back at the old place already (nothing is overwritten)."""
     if undo.get("type") == "remove":
-        return _restore_removed(undo, log)
+        return _restore_removed(undo, log, loc)
     if undo.get("type") == "rebuild":
         return _undo_rebuild(undo, log)
     if undo.get("type") in OPERATIONS:
@@ -103,7 +104,7 @@ def run(undo: dict, log, *, loc: Locations) -> str:
     raise UndoError(f"Nothing to undo for {undo.get('type')!r}.")
 
 
-def _restore_removed(undo: dict, log) -> str:
+def _restore_removed(undo: dict, log, loc: Locations) -> str:
     from roundtable_souls.platform import trash
 
     profile = Path(undo.get("profile") or "")
@@ -122,11 +123,9 @@ def _restore_removed(undo: dict, log) -> str:
     if _listed(profile, undo.get("path") or ""):
         log(f"restore: {name} is already in {profile.name}")
     else:
-        text = mod_manage.read_text(profile)
-        if mod_manage.is_array_form(text):
-            text = mod_manage.to_blocks(text)
-        new = mod_manage.restore_entry(text, undo["entry_text"], undo.get("where") or {})
-        mod_manage._write(profile, new, f"before restoring {name}")
+        w = profile_writer.ProfileWriter(profile, loc)  # loc: the mod that must stay last is kept last
+        w.restore_entry(undo["entry_text"], undo.get("where") or {})
+        w.write(f"before restoring {name}")
         log(f"restore: {name}'s entry is back in {profile.name}, where it was")
         said.insert(0, "its entry")
     return f"restored {name}" + (f" ({' and '.join(said)})" if said else "")

@@ -23,24 +23,15 @@ from roundtable_souls.mods.checks import (
 from roundtable_souls.mods.extract import ARCHIVE_EXTENSIONS, stage
 from roundtable_souls.mods.profile_edit import (
     ModError,
-    _last_place,
-    _ordered,
-    _stage_write,
-    _write_ordered,
-    append_entry,
-    block_options,
-    blocks,
     entries,
-    entry_ref,
-    insert_entry,
     is_array_form,
     read_text,
     rel,
     resolve,
     roots,
     slug,
-    to_blocks,
 )
+from roundtable_souls.mods.profile_writer import ProfileWriter
 
 REGULATION = games.ELDEN_RING.regulation  # the parameter file a package may ship
 
@@ -467,15 +458,14 @@ def _prepare(profile: Path, plan: dict, dest: Path, in_place: bool, update: bool
 
     skip = {n.lower() for n in plan.get("exclude") or []}
     kept: list[str] = []
+    staged = dest
     if not in_place:
         staged = dest.with_name(f".{dest.name}.staging-{op.id}")
         _copy_into(plan, staged)
         if update:
             kept = operations.keep_user_edits(profile, dest, staged)
         op.replace_folder(dest, staged)
-    text = read_text(profile)
-    if is_array_form(text):
-        text = to_blocks(text)
+    writer = ProfileWriter(profile, loc)
     listed = set(plan.get("already_listed") or [])
     added = [
         e
@@ -483,33 +473,22 @@ def _prepare(profile: Path, plan: dict, dest: Path, in_place: bool, update: bool
         if e["path"] not in listed
         and not (e["kind"] == "native" and Path(e["path"]).relative_to(rel(profile, dest)).parts[0].lower() in skip)
     ]
-    from roundtable_souls.mods import order as mod_order
-
-    tgt = mod_order.target(profile, loc)
-    after_it = bool(plan.get("after_overlay")) and tgt is not None
+    after_it = bool(plan.get("after_overlay"))  # kept after the mod that must stay last on purpose
     before = plan.get("insert_before")  # a package's name: where it is now, not where it was when the plan was made
     if isinstance(before, str):
-        before = next(
-            (x["index"] for x in entries(profile) if x["kind"] == "package" and x["name"].lower() == before.lower()),
-            None,
-        )
+        before = writer.find("package", before)
+    deepest = _deepest(staged)
     for e in added:
-        where = before
-        if after_it:  # kept after the mod that must stay last on purpose: last, and saying so in its own entry
-            items = mod_order._items(profile, text)
-            pkg, last, _mine = mod_order._roles(profile, items, tgt)
-            owner = pkg if e["kind"] == "package" else (last[0] if last else None)
-            if owner is not None:
-                e = {**e, "load_after": [{"id": entry_ref(owner), "optional": True}]}
-            where = None
-        elif where is None or e["kind"] == "native":
-            where = _last_place(profile, text, e["kind"], tgt)
-        text = append_entry(text, e["kind"], e) if where is None else insert_entry(text, e["kind"], e, where)
+        # a package goes where the plan says; a DLL above the DLLs of the mod that must stay last
+        writer.add_entry(
+            e["kind"], e, before=before if e["kind"] == "package" else None, after_last=after_it, deepest=deepest
+        )
     problem = None
     bak = None
-    if added or text != read_text(profile):
-        text, problem = _ordered(profile, text, tgt)
-        bak = _stage_write(op, profile, text, f"before installing {plan['name']}")
+    if added:
+        change = writer.plan(f"before installing {plan['name']}")
+        bak = writer.commit(change, operation=op)
+        problem = change.notes.get("order_problem")
     out = {
         "dest": dest,
         "entries": added,
@@ -529,25 +508,15 @@ def add_existing(profile: Path, folders: list[Path], kind: str = "package", *, l
     folders and get an id from the path below the packages folder ('improved-textures/architecture' ->
     improved-textures-architecture); natives are DLL files, named by their file."""
     profile = Path(profile)
-    text = read_text(profile)
-    if is_array_form(text):
-        text = to_blocks(text)
-    from roundtable_souls.mods import order as mod_order
-
-    tgt = mod_order.target(profile, loc)
-    pk_root, _nt = roots(profile, text)
-    have = {(block_options(text, b["index"]).get("id") or "").lower() for b in blocks(text) if b["kind"] == "package"}
+    writer = ProfileWriter(profile, loc)
+    pk_root, _nt = roots(profile, writer.text)
+    have = {(e.get("id") or "").lower() for e in writer.entries() if e["kind"] == "package"}
     added = []
-
-    def put(text, row):
-        where = _last_place(profile, text, row["kind"], tgt)
-        return append_entry(text, row["kind"], row) if where is None else insert_entry(text, row["kind"], row, where)
-
     for f in folders:
         f = Path(f)
         if kind == "native":
             row = {"kind": "native", "path": rel(profile, f)}
-            text = put(text, row)
+            writer.add_native(row["path"])
             added.append(row)
             continue
         try:
@@ -560,7 +529,18 @@ def add_existing(profile: Path, folders: list[Path], kind: str = "package", *, l
             ident, n = f"{base}-{n}", n + 1
         have.add(ident.lower())
         row = {"kind": "package", "id": ident, "path": rel(profile, f)}
-        text = put(text, row)
+        writer.add_package(ident, row["path"], deepest=_deepest(f))
         added.append(row)
-    bak, problem = _write_ordered(profile, text, "before adding existing mods", tgt) if added else (None, None)
-    return {"entries": added, "backup": bak, "order_problem": problem}
+    if not added:
+        return {"entries": [], "backup": None, "order_problem": None}
+    change = writer.plan("before adding existing mods")
+    bak = writer.commit(change)
+    return {"entries": added, "backup": bak, "order_problem": change.notes.get("order_problem")}
+
+
+def _deepest(folder: Path) -> int:
+    """The longest path of a file below folder, from folder, in characters (for the writer's Paths rule)."""
+    try:
+        return max((len(p.relative_to(folder).as_posix()) for p in Path(folder).rglob("*") if p.is_file()), default=0)
+    except OSError:
+        return 0

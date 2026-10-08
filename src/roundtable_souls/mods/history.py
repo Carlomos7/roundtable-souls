@@ -82,16 +82,23 @@ def snapshot(profile: Path, why: str = "change") -> Path | None:
         data = profile.read_bytes()
     except OSError:
         return None
-    newest = latest(profile)
+    existing = versions(profile)
+    newest = existing[0]["path"] if existing else None
     try:
         if newest is not None and newest.read_bytes() == data:
             return newest
     except OSError:
         pass
+    # Copies are ordered by their time, to the millisecond: two changes in the same millisecond (or a clock set back)
+    # would otherwise tie, and the newer copy could sort as the older one. Each copy is later than the newest.
+    when = datetime.datetime.now()
+    when = when.replace(microsecond=when.microsecond // 1000 * 1000)
+    if existing and when <= existing[0]["when"]:
+        when = existing[0]["when"] + datetime.timedelta(milliseconds=1)
     d = folder(profile)
     try:
         d.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")[:-3]
+        stamp = when.strftime("%Y%m%d-%H%M%S-%f")[:-3]
         out = d / f"{stamp}_{_slug(why)}.me3"
         n = 2
         while out.exists():
@@ -124,12 +131,10 @@ def prune(profile: Path, keep: int = KEEP) -> None:
 
 
 def restore(profile: Path, copy: Path) -> Path | None:
-    """Put a copy back as the profile. The profile as it was is copied first, so a restore can be undone too.
-    Returns that copy."""
-    profile, copy = Path(profile), Path(copy)
-    data = copy.read_bytes()
-    before = snapshot(profile, "before restoring an earlier version")
-    tmp = profile.with_name(profile.name + ".tmp")
-    tmp.write_bytes(data)
-    tmp.replace(profile)
-    return before
+    """Put a copy back as the profile, exactly, through the profile writer (mods.profile_writer). The profile as it
+    was is copied first, so a restore can be undone too. Returns that copy."""
+    from roundtable_souls.mods import profile_writer
+
+    writer = profile_writer.ProfileWriter(Path(profile))
+    writer.restore_bytes(Path(copy).read_bytes())
+    return writer.write("before restoring an earlier version").snapshot

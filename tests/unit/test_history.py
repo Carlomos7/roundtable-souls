@@ -117,6 +117,26 @@ def test_every_launcher_write_keeps_a_copy_first(tmp_path):
     assert history.versions(p)[-1]["path"].read_text(encoding="utf-8") == SF_VOICE
 
 
+def test_copies_made_in_the_same_millisecond_keep_their_order(tmp_path, monkeypatch):
+    """A fast machine can make two copies in one millisecond; each copy is still later than the one before (the
+    order once depended on the descriptions' alphabetical order, which a release's test run caught)."""
+    import datetime as real
+
+    class Frozen(real.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2026, 10, 8, 12, 0, 0, 123456)
+
+    monkeypatch.setattr(history.datetime, "datetime", Frozen)
+    p = tmp_path / "p.me3"
+    for n, why in enumerate(["zeta first", "alpha second", "mid third"]):
+        p.write_text(f"# change {n}\n", encoding="utf-8")
+        history.snapshot(p, why)
+    assert [v["why"] for v in history.versions(p)] == ["mid third", "alpha second", "zeta first"]
+    stamps = [v["when"] for v in history.versions(p)]
+    assert stamps == sorted(stamps, reverse=True) and len(set(stamps)) == 3
+
+
 def test_an_unchanged_profile_is_not_copied_twice(tmp_path):
     p = tmp_path / "p.me3"
     p.write_text(SF_VOICE, encoding="utf-8")

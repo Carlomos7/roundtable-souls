@@ -18,6 +18,7 @@ undoes an interrupted one as a whole; a build that was the last step of a finish
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -193,6 +194,14 @@ def _move(src: Path, dst: Path) -> None:
     os.replace(src, dst)
 
 
+def _fingerprint(path: Path) -> str:
+    """The sha256 of a file's bytes, or "missing" (what Operation.write_file's expect names)."""
+    try:
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    except FileNotFoundError:
+        return "missing"
+
+
 class Operation:
     """Several live changes made as one: folders replaced by staged ones, files rewritten, and a staged Build
     activated last. Everything is prepared first (nothing live changes); commit() then applies the steps in order
@@ -218,6 +227,7 @@ class Operation:
         self._builds: list[Build] = []
         self.state = PREPARED
         self.done = 0
+        self.untouched = False  # commit() refused the step at done before starting it: nothing of it to undo
         self._save()
 
     @classmethod
@@ -228,6 +238,7 @@ class Operation:
         op.id, op.dir, op.what = op_dir.name, op_dir, data.get("what", "")
         op.steps, op.info = list(data.get("steps") or []), dict(data.get("info") or {})
         op.state, op.done, op._builds = data.get("state", PREPARED), int(data.get("done", 0)), []
+        op.untouched = False
         return op
 
     def _save(self) -> None:
@@ -256,17 +267,21 @@ class Operation:
         self.steps.append({"type": "folder", "live": str(live), "staged": str(staged), "previous": str(prev or "")})
         self._save()
 
-    def write_file(self, live: Path, data: bytes) -> None:
-        """live gets these bytes; the bytes it had (if any) are kept in the operation's folder."""
+    def write_file(self, live: Path, data: bytes, expect: str | None = None) -> None:
+        """live gets these bytes; the bytes it had (if any) are kept in the operation's folder. expect: the sha256
+        of the bytes the caller read (or "missing": the file was not there): commit() checks the file still holds
+        them right before this step and refuses the operation otherwise, so an edit made to the file outside the
+        launcher meanwhile is never overwritten."""
         live = Path(live)
         n = len(self.steps)
         (self.dir / f"{n}.after").write_bytes(data)
         had = live.is_file()
         if had:
             shutil.copy2(live, self.dir / f"{n}.before")
-        self.steps.append(
-            {"type": "file", "live": str(live), "before": f"{n}.before" if had else "", "after": f"{n}.after"}
-        )
+        step = {"type": "file", "live": str(live), "before": f"{n}.before" if had else "", "after": f"{n}.after"}
+        if expect:
+            step["expect"] = expect
+        self.steps.append(step)
         self._save()
 
     def activate_build(self, build: Build) -> None:
@@ -310,6 +325,9 @@ class Operation:
                     _move(Path(step["staged"]), Path(step["live"]))
                 elif step["type"] == "file":
                     live = Path(step["live"])
+                    if step.get("expect") and _fingerprint(live) != step["expect"]:
+                        self.untouched = True  # this step was not started: nothing of it to put back
+                        raise BuildError(f"{live.name} changed outside the launcher; reload and try again")
                     tmp = live.with_name(live.name + ".tmp")
                     shutil.copyfile(self.dir / step["after"], tmp)
                     os.replace(tmp, live)
@@ -338,8 +356,9 @@ class Operation:
 
 
 def _undo(op: Operation) -> None:
-    """Put back what the applied steps (and a step half applied) changed, last first; then forget the operation."""
-    for step in reversed(op.steps[: op.done + 1]):
+    """Put back what the applied steps (and the step that was being applied, unless it was never started) changed,
+    last first; then forget the operation."""
+    for step in reversed(op.steps[: op.done + (0 if op.untouched else 1)]):
         live = Path(step["live"])
         if step["type"] == "folder":
             prev, staged = (Path(step["previous"]) if step["previous"] else None), Path(step["staged"])
