@@ -4,6 +4,8 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
 
 ## [Unreleased]
 
+## [3.19.0-beta.1] - 2026-10-08
+
 - Mods: every change the launcher makes to a me3 profile now goes through one writer with one set of rules. New:
   a profile edited outside the launcher (a text editor, another tool) after the launcher read it is never
   overwritten; the change is refused with "the profile changed outside the launcher; reload and try again". Also
@@ -12,6 +14,9 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
   changes.
 - Profile history: two changes made within the same millisecond are listed in the order they were made
   (the newer one could show as the older).
+- Mods: two launcher windows can no longer write the same profile at the same moment: a change waits briefly for
+  the other window's install or removal to finish, then says so instead of writing. Undoing a removal lists the
+  restored mod under the mod that must stay last again.
 
 ## [3.18.0] - 2026-10-08
 
