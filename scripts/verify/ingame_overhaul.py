@@ -109,6 +109,25 @@ def main() -> int:
         "  exit /b 1\r\n"
         ")\r\n"
         "echo Saves backed up to %BK%\r\n"
+        # Steam running and signed in first, as the launcher's Play waits for it: the game checks the DLC with Steam,
+        # and a launch before the sign-in reports the DLC as missing.
+        'tasklist /FI "IMAGENAME eq steam.exe" | find /I "steam.exe" >nul || start "" "steam://open/main"\r\n'
+        'set "TRIES=0"\r\n'
+        ":steam\r\n"
+        'set "USER=0x0"\r\n'
+        'for /f "tokens=3" %%a in (\'reg query HKCU\\Software\\Valve\\Steam\\ActiveProcess /v ActiveUser 2^>nul '
+        '^| find /I "ActiveUser"\') do set "USER=%%a"\r\n'
+        'if not "%USER%"=="0x0" goto launch\r\n'
+        "set /a TRIES+=1\r\n"
+        "if %TRIES% GEQ 60 (\r\n"
+        "  echo Steam did not sign in within 3 minutes; sign in, then run this again.\r\n"
+        "  pause\r\n"
+        "  exit /b 1\r\n"
+        ")\r\n"
+        "echo Waiting for Steam to sign in...\r\n"
+        "timeout /t 3 /nobreak >nul\r\n"
+        "goto steam\r\n"
+        ":launch\r\n"
         f'"{me3 or "me3"}" launch -g eldenring -p "{copy}"\r\n',
         encoding="utf-8",
     )
