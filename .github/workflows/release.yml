@@ -74,6 +74,8 @@ jobs:
         uv run ruff format --check .
         uv run pyright
         uv run lint-imports --no-cache
+        uv run python scripts/theme/gen_theme.py --check
+        uv run pytest -q tests/unit/test_theme_contrast.py
 
     - name: Run tests
       run: uv run pytest
