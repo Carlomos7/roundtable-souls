@@ -39,6 +39,18 @@ jobs:
         version=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)
         [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME does not match version $version" >&2; exit 1; }
 
+    # vX.Y.Z-beta.N is a beta; a plain vX.Y.Z is a stable release and must be newer than the current stable one.
+    - name: A stable tag is newer than the current stable release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "$GITHUB_REF_NAME is a beta"; exit 0; }
+        latest=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)
+        [ -n "$latest" ] || exit 0
+        newest=$(printf '%s\n%s\n' "${latest#v}" "${GITHUB_REF_NAME#v}" | sort -V | tail -n1)
+        [ "$newest" = "${GITHUB_REF_NAME#v}" ] && [ "$latest" != "$GITHUB_REF_NAME" ] \
+          || { echo "$GITHUB_REF_NAME is not newer than the stable $latest" >&2; exit 1; }
+
   windows:
     needs: verify
     if: always() && (needs.verify.result == 'success' || needs.verify.result == 'skipped')
@@ -271,7 +283,13 @@ jobs:
         sha256sum --check SHA256SUMS.txt
         for f in releases.win.json releases.linux.json SHA256SUMS.txt; do minisign -V -p "../$PUBLIC_KEY" -m "$f"; done
 
-    # Every release is published as a pre-release: the Beta channel offers it, Stable does not. The Promote workflow
-    # (.github/workflows/promote.yml) later makes this same release, these same files, the stable one.
-    - name: Publish the verified release (beta)
-      run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+    # A tag with a suffix (v3.18.0-beta.1) is a beta: published as a pre-release, which only the Beta channel offers.
+    # A plain vX.Y.Z is the stable release, built from the commit its last beta was tested on (only the version
+    # changes): published as the latest release, which both channels offer.
+    - name: Publish the verified release (beta, or stable for vX.Y.Z)
+      run: |
+        if [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest
+        else
+          gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+        fi
