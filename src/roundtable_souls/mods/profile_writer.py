@@ -256,8 +256,8 @@ class SharedDependencyGuard(ProfileRule):
                 Refusal(
                     self.name,
                     f"{e['name']} is a shared dependency and stays switched on; this change would "
-                    f"{'remove' if not any(_norm(x['path']) == path for x in plan.entries()) else 'switch off'} "
-                    "it as a side effect",
+                    f"{'remove it' if not any(_norm(x['path']) == path for x in plan.entries()) else 'switch it off'} "
+                    "as a side effect",
                 )
             )
         return out

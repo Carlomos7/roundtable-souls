@@ -219,7 +219,7 @@ def test_a_shared_dependency_is_only_removed_or_switched_off_on_purpose(profile)
         "path = 'natives/SeamlessCoop/ersc.dll'\n", "path = 'natives/SeamlessCoop/ersc.dll'\nenabled = false\n"
     )
     assert [r.message for r in w.plan("x").refusals] == [
-        "ersc.dll is a shared dependency and stays switched on; this change would switch off it as a side effect"
+        "ersc.dll is a shared dependency and stays switched on; this change would switch it off as a side effect"
     ]
 
 
