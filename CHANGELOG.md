@@ -12,6 +12,9 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
 - Nightreign Revive (only with "Build Nightreign Revive in the launcher (preview)" on): merge-report.txt says what
   each clashing file is, licence and notice files a download ships are kept next to its DLLs, and the build's
   installation.json records the edition. The build is the same as before.
+- Nightreign Revive (same preview): the character script the build puts together is checked before it is used. One
+  that the game could not load is refused when you build, naming the line and whose script it is, instead of the
+  downed and revive states silently not working in game; the previous build stays.
 - Overhaul configs (for mod authors): what an overhaul needs is a `requires` list on its build, and a script
   fragment is added with `do = "hook"` (several in order, each wrapping the one before). A config you made yourself
   with `[builds.install.seamless]` or `do = "script_append"` is left out until it is updated, and the launcher says

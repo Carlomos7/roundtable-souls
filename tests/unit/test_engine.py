@@ -562,3 +562,15 @@ def test_the_manifest_records_what_the_download_said_about_itself(world):
     world.build()
     m = json.loads((world.own / "installation.json").read_text())
     assert m["edition"] == "LITE" and m["version"] == "0.1.33-rc3"
+
+
+def test_a_composed_script_that_would_not_load_is_refused_offline(world):
+    """Revive's fragment cut short: the build is refused naming the file, the line and the mod; nothing changes."""
+    (world.setup / "installer/revive.hks").write_text("local NrrOriginalUpdate = Update\nfunction Update()\n")
+    with pytest.raises(engine.EngineError) as e:
+        world.build()
+    assert str(e.value).startswith(
+        "action/script/c0000.hks would not load in game: Nightreign Revive's script has a syntax error at its line 2 ("
+    )
+    assert str(e.value).endswith("The previous build is kept.")
+    assert (world.own / "mod/regulation.bin").read_bytes() == b"OLD BUILD"

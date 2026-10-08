@@ -18,8 +18,9 @@ was written for) and the steps that build its output folder from the packages be
     hook               a script fragment: the packages' own script folders copied in load order, then the mod's
                        fragment appended to the entry file (the last package's copy, or the download's base when no
                        package has one), several in step order, each wrapping the one before (overhauls.hooks);
-                       refused when that already holds a fragment's markers or is compiled (bytecode), and packages
-                       shipping different entry files are a clash, recorded
+                       refused when that already holds a fragment's markers or is compiled (bytecode), or when the
+                       result does not compile as Lua 5.1 (overhauls.lua_check; never run), and packages shipping
+                       different entry files are a clash, recorded
     remove             leftovers (a glob below the output's mod folder)
 
 `each` repeats a merge, text or params step per folder. Files a format rule does not cover (behaviour and animation
@@ -49,7 +50,7 @@ from roundtable_souls.formats import FormatError
 from roundtable_souls.game import catalog as games
 from roundtable_souls.game import config as game_config
 from roundtable_souls.game import oodle as game_oodle
-from roundtable_souls.overhauls import hooks
+from roundtable_souls.overhauls import hooks, lua_check
 
 if TYPE_CHECKING:
     from roundtable_souls.game.locate import Locations
@@ -522,6 +523,9 @@ def _hook_step(steps, label, setup, inputs, mod, sources, report, log) -> None:
         composed = hooks.compose(base, base_from, fragments)
     except hooks.HookError as e:
         raise EngineError(str(e)) from e
+    broken = lua_check.check(f"{folder}/{name}", base, base_from, fragments, composed)
+    if broken is not None:  # the game would not load it: refused here, the previous build stays
+        raise EngineError(f"{broken} The previous build is kept.")
     entry.parent.mkdir(parents=True, exist_ok=True)
     entry.write_text(composed.text, encoding="utf-8", newline="\n")
     for layer in inputs:
