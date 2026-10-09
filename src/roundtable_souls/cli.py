@@ -1,5 +1,6 @@
 """The command line: `roundtable-souls` opens the window; --play, --check and --update run without one, and --game
-picks the game. --play --allow-without-backup starts the game even when 'back up saves before Play' fails.
+picks the game. --self-test [REPORT] checks that a build starts and initializes (off-screen, in a temporary data
+folder). --play --allow-without-backup starts the game even when 'back up saves before Play' fails.
 --check-storage opens (creating or upgrading) the launcher's database in the data folder, imports the old record files
 (cache/hashes.json, logs/jobs.jsonl) into it and prints what it found: a check for builds, which touches nothing
 outside the data folder. Each mode imports only what it needs, so a Play from a Steam shortcut never loads the
@@ -16,6 +17,8 @@ if TYPE_CHECKING:
 
 def main() -> int:
     """Console entry point: the window; or without one --play, --check, --update (see headless.update_headless)."""
+    if "--self-test" in sys.argv:  # first: before anything picks the data folder or starts Velopack's hooks
+        return self_test()
     from roundtable_souls.app import use_data_folder
     from roundtable_souls.platform import logging as run_logging
 
@@ -69,6 +72,48 @@ def main() -> int:
     except MigrationFailed as e:  # no window, so no ready report: an update's watchdog rolls back
         return storage_failed(e, window=True)
     return int(window_main(ctx) or 0)
+
+
+def self_test() -> int:
+    """--self-test [REPORT]: check that this build starts and initializes (ui/self_test.py; technical specification
+    §8.5), off-screen, in a temporary data folder that is removed afterwards. The report goes to standard output and,
+    when given, to the REPORT file (a windowed build has no console). Exit 0 only when every check passed."""
+    import os
+    import shutil
+    import tempfile
+    from pathlib import Path
+
+    args = sys.argv[sys.argv.index("--self-test") + 1 :]
+    report = Path(args[0]).resolve() if args and not args[0].startswith("-") else None
+    data = Path(tempfile.mkdtemp(prefix="rs-self-test-")).resolve()
+    os.environ["ROUNDTABLE_SOULS_DATA"] = str(data)
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"  # never a window on screen
+    lines: list[str] = []
+
+    def out(line: str) -> None:
+        lines.append(line)
+        if sys.stdout is not None:
+            print(line, flush=True)
+
+    from roundtable_souls.app import use_data_folder
+    from roundtable_souls.platform import logging as run_logging
+
+    try:
+        use_data_folder()
+        run_logging.setup_logging(console=False)
+        from roundtable_souls.ui import self_test as checks
+
+        code = checks.run(data, out)
+    except Exception as e:  # a crash in the harness itself is a failure, reported like the others
+        out(f"FAIL  the self-test itself: {type(e).__name__}: {e}")
+        code = 1
+    finally:
+        run_logging.shutdown()
+        shutil.rmtree(data, ignore_errors=True)
+    if report is not None:
+        report.parent.mkdir(parents=True, exist_ok=True)
+        report.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return code
 
 
 def check_storage() -> int:

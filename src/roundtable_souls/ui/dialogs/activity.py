@@ -16,14 +16,23 @@ from qfluentwidgets import FluentIcon as FI
 
 from roundtable_souls.game import catalog as games
 from roundtable_souls.platform import logging as run_logging
+from roundtable_souls.ui.pages.activity.presenter import (  # noqa: F401  (day_label, duration_text, matches: tests)
+    SHOWN,
+    day_label,
+    duration_text,
+    game_name,
+    matches,
+    result_line,
+    title_text,
+)
+from roundtable_souls.ui.pages.activity.presenter import log_row as _row
+from roundtable_souls.ui.pages.activity.presenter import when_of as _when
 from roundtable_souls.ui.theme import ghost_btn, hint, style_editor, tone_label
 from roundtable_souls.ui.widgets.cards import GlassCard
 from roundtable_souls.ui.widgets.labels import ElideLabel
 from roundtable_souls.ui.widgets.layout import action_row, dispose
 from roundtable_souls.ui.widgets.log import log_html
 from roundtable_souls.ui.widgets.notices import StatusPill
-
-SHOWN = 100  # entries listed at most (retention keeps about this many anyway)
 
 OUTCOME = {  # outcome -> (pill text, pill level)
     "running": ("Running", "busy"),
@@ -33,62 +42,6 @@ OUTCOME = {  # outcome -> (pill text, pill level)
     "interrupted": ("Interrupted", "bad"),
     "stopped": ("Stopped", "muted"),
 }
-
-
-def _when(rec: dict) -> datetime.datetime | None:
-    try:
-        return datetime.datetime.fromisoformat(rec.get("start") or "")
-    except ValueError:
-        return None
-
-
-def day_label(day: datetime.date, today: datetime.date) -> str:
-    if day == today:
-        return "Today"
-    if day == today - datetime.timedelta(days=1):
-        return "Yesterday"
-    return day.strftime("%A %d %B %Y").replace(" 0", " ")
-
-
-def duration_text(seconds) -> str:
-    if seconds is None:
-        return ""
-    s = int(round(float(seconds)))
-    if s < 1:
-        return "under a second"
-    if s < 60:
-        return f"{s}s"
-    if s < 3600:
-        return f"{s // 60}m {s % 60:02d}s"
-    return f"{s // 3600}h {s % 3600 // 60:02d}m"
-
-
-def title_text(rec: dict) -> str:
-    t = str(rec.get("title") or "Job").strip()
-    return t[:1].upper() + t[1:]
-
-
-def game_name(key: str) -> str:
-    try:
-        return games.resolve(key).name if key else ""
-    except Exception:
-        return key
-
-
-def matches(rec: dict, game: str, group: str, failed_only: bool) -> bool:
-    if game and rec.get("game") and rec.get("game") != game:
-        return False
-    if group and run_logging.group_of(rec.get("kind") or "") != group:
-        return False
-    return not failed_only or rec.get("outcome") in ("failed", "interrupted")
-
-
-def _row(e: dict) -> tuple[str, str, str]:
-    """A log entry for the viewer. The job's own start and end lines read as quiet notes, not as output."""
-    text = e["text"]
-    if e["source"] == "job" and text.startswith("=== ") and text.endswith(" ==="):
-        return (e["time"], "debug", text[4:-4])
-    return (e["time"], e["level"], text)
 
 
 # ----------------------------------------------------------------------------- one entry
@@ -231,10 +184,7 @@ class JobRow(GlassCard):
         self.toggle.clicked.connect(self.flip)
         head.addWidget(self.toggle)
         lay.addLayout(head)
-        line = rec.get("problem") if rec.get("outcome") in ("failed", "interrupted") else ""
-        line = line or rec.get("summary") or ""
-        if rec.get("outcome") == "interrupted" and not line:
-            line = "The launcher closed before this job finished."
+        line = result_line(rec)
         self.summary = ElideLabel(line)
         tone_label(self.summary, "error" if rec.get("outcome") in ("failed", "interrupted") else "muted")
         lay.addWidget(self.summary)
