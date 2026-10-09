@@ -578,3 +578,93 @@ def test_a_composed_script_that_would_not_load_is_refused_offline(world):
     )
     assert str(e.value).endswith("The previous build is kept.")
     assert (world.own / "mod/regulation.bin").read_bytes() == b"OLD BUILD"
+
+
+# ----------------------------------------------------------------------------- what a build was made for (3.21)
+def _built(world):
+    """A whole rebuild through the engine, current afterwards; the game folder has archive indexes."""
+    for name in ("Data0", "Data1"):
+        (world.game / f"{name}.bhd").write_bytes(b"index")
+    settings.save_settings(build_merges=True)
+    merge.approve(merge.find_backend(world.profile, loc=er()))
+    merge.rebuild(world.profile, lambda s: None, loc=er())
+    h = merge.health(world.profile, loc=er())
+    assert h["state"] == "current", h["reasons"]
+    return h
+
+
+def _stale(world) -> list[str]:
+    h = merge.health(world.profile, loc=er())
+    assert h["state"] == "stale"
+    assert merge.play_check(world.profile, loc=er()) is not None  # Play rebuilds first
+    return h["reasons"]
+
+
+def test_the_build_records_the_game_the_config_and_the_merger(world):
+    from roundtable_souls.merging import record
+    from roundtable_souls.mods import records
+
+    world.build()
+    m = json.loads((world.own / "installation.json").read_text())
+    for key in ("version", "edition", "refreshProtocol", "maintenance", "game", "seamless", "sources"):
+        assert key in m  # Revive's own keys are kept
+    facts = records.BuildFacts.model_validate(m["inputs"])  # the shape the library's build.json has
+    assert facts.merger_revision == record.MERGER_REVISION
+    assert facts.game is not None and facts.game.archives and facts.game.regulation_sha256
+    assert facts.game.regulation_version == record.regulation_version(world.game / "regulation.bin") is not None
+    recipe, _version, _ = engine.match(world.setup)
+    assert facts.config_sha256 == overhauls.recipe_sha256(recipe)
+
+
+def test_a_game_update_makes_the_build_out_of_date(world):
+    _built(world)
+    (world.game / "regulation.bin").write_bytes(vanilla() + b"patched")
+    assert "the game was updated since the last build" in _stale(world)
+
+
+def test_a_changed_archive_index_makes_the_build_out_of_date(world):
+    _built(world)
+    (world.game / "Data0.bhd").write_bytes(b"a newer index")
+    assert "the game was updated since the last build" in _stale(world)
+
+
+def test_a_changed_config_makes_the_build_out_of_date(world):
+    _built(world)
+    local = overhauls.local_dir()
+    assert local is not None
+    local.mkdir(parents=True, exist_ok=True)
+    shipped = (overhauls.config.SHIPPED_DIR / "nightreign-revive.toml").read_text(encoding="utf-8")
+    comment_only = shipped.replace("overhaul = 1", "# a comment\noverhaul = 1")
+    (local / "nightreign-revive.toml").write_text(comment_only, encoding="utf-8")
+    assert merge.health(world.profile, loc=er())["state"] == "current"  # a comment changes nothing it does
+    changed = shipped + '\n[[builds.steps]]\ndo = "remove"\nglob = "**/*.bak"\n'
+    (local / "nightreign-revive.toml").write_text(changed, encoding="utf-8")
+    assert "Nightreign Revive's config changed since the last build" in _stale(world)
+
+
+def test_a_new_merger_revision_makes_the_build_out_of_date(world, monkeypatch):
+    from roundtable_souls.merging import record
+
+    _built(world)
+    with monkeypatch.context() as m:
+        m.setattr(record, "MERGER_REVISION", record.MERGER_REVISION + 1)
+        assert "the launcher's merging changed since this was built" in _stale(world)
+
+
+def test_a_build_from_before_3_21_is_rebuilt_once(world):
+    from roundtable_souls.merging import record
+
+    _built(world)
+    m = json.loads((world.own / "installation.json").read_text())
+    del m["inputs"]
+    (world.own / "installation.json").write_text(json.dumps(m))
+    assert record.UNNOTED in _stale(world)
+    merge.rebuild(world.profile, lambda s: None, loc=er())
+    assert merge.health(world.profile, loc=er())["state"] == "current"
+
+
+def test_a_build_the_mods_installer_made_is_checked_as_before(world):
+    """No recipe in its manifest: the launcher didn't make it, so only its sources are checked."""
+    m = {"version": "0.1.33-rc3", "sources": [], "refreshProtocol": 1}
+    recipe, _version, _ = engine.match(world.setup)
+    assert engine.input_reasons(m, recipe, er()) == []

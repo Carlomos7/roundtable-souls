@@ -44,7 +44,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 from roundtable_souls import overhauls
 from roundtable_souls.formats import me3_profile
 from roundtable_souls.game import catalog as games
-from roundtable_souls.mods import checks, history, profile_edit
+from roundtable_souls.mods import checks, history, naming, profile_edit
 from roundtable_souls.mods import order as mod_order
 from roundtable_souls.mods.profile_edit import ModError
 from roundtable_souls.platform import files
@@ -393,28 +393,20 @@ class Paths(ProfileRule):
     """Entries the launcher adds point at their files with a path relative to the profile (the writer makes it so
     when it adds them; the player's own entries are left as written), and stay short enough for Windows: the deepest
     file path below the entry must fit in MAX_PATH characters, well under Windows' limit of 260. When the mod's
-    files are not known yet, ROOM characters are assumed for them."""
+    files are not known yet, ROOM characters are assumed for them. Both limits are mods.naming's."""
 
     name = "paths"
-    MAX_PATH = 220
-    ROOM = 40
+    MAX_PATH = naming.MAX_PATH
+    ROOM = naming.ROOM
 
     def check(self, plan: Plan) -> list[Refusal]:
         out = []
         for c in plan.changes:
             if c.action != "add" or not c.row.get("path"):
                 continue
-            full = me3_profile.resolve(plan.profile, c.row["path"])
-            deepest = len(str(full)) + 1 + (c.deepest or self.ROOM)
-            if deepest > self.MAX_PATH:
-                out.append(
-                    Refusal(
-                        self.name,
-                        f"{full} is too long a path for Windows ({deepest} characters with the files inside; "
-                        f"{self.MAX_PATH} are safe). Use a shorter folder name, or a profile folder closer to the "
-                        "drive's root.",
-                    )
-                )
+            problem = naming.path_problem(me3_profile.resolve(plan.profile, c.row["path"]), c.deepest)
+            if problem is not None:
+                out.append(Refusal(self.name, problem))
         return out
 
 

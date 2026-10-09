@@ -36,6 +36,16 @@ json = [{ file = "edition.json", key = "edition", equals = "LITE" }]
 version = { file = "edition.json", key = "version" }
 versions = ["1.2.0"]
 
+[builds.sources]                 # download path -> "<role>/<path>": what its builds read, by role
+"payload/mod/**" = "merge/**"
+"payload/strings/*.json" = "text/*.json"
+"payload/my-hook.hks" = "hooks/my-hook.hks"
+"payload/fallback/**" = ""       # left out
+
+[builds.runtime]                 # download path -> path in its own folder: what it runs with
+"payload/*.dll" = "*.dll"
+"payload/ui/**" = "ui/**"
+
 [builds.output]
 mod = "mod"
 report = "merge-report.txt"
@@ -103,6 +113,46 @@ The build runs in a staging folder beside the output and replaces it by renaming
 source's path and sha256, so the launcher's checks and the mod's installer keep working. The inputs are only read
 and the profile is never written. A build is accepted when its output matches the mod's own installer's for the same
 inputs, file for file.
+
+The launcher adds what the build was made for under `inputs` in that manifest: the game's own files it merged
+against (the archive indexes and `regulation.bin`, with the version it names), a sha256 of the build as written in
+the config, and the launcher's merging rules. When any of them changes, the build is out of date and is rebuilt
+before Play ("the game was updated since the last build", "My Overhaul's config changed since the last build"). Only
+what the build does counts: a comment, `[builds.install]`, `[builds.sources]` or `[builds.runtime]` changes nothing.
+A build made before 3.21 has no `inputs` and is rebuilt once.
+
+### Where its files go: `[builds.sources]` and `[builds.runtime]`
+
+The launcher keeps an overhaul in a layout of its own: the files its builds read in `sources/<id>/`, by role, and
+the files it runs with in `overhauls/<id>/`. These two tables say where each file of the download goes, so the
+download's own layout is translated once, by data. Since 3.21 they are read and checked; the build above still
+reads the download as it is (installing into the launcher's folder comes later).
+
+| Role | What the build does with it |
+|---|---|
+| `merge` | Files at game paths, merged on top of the profile's packages. |
+| `text` | Strings, one file per language. |
+| `hooks` | Script fragments appended to a game script. |
+| `base` | Fallbacks, used only when no package has the file. |
+
+Each key is a path in the download with `/`; `*` stands for any part of one folder or file name, and `**` (a whole
+folder name) for any number of folders. Each value is where matching files go: in `[builds.sources]` it starts with
+a role (`merge/...`), in `[builds.runtime]` it is a path in the overhaul's own folder, and it repeats the key's
+wildcards in the same order, filled with what they matched. A value of `""` leaves the files out (for example copies
+of the game's own files the launcher reads from the game instead). When several keys of one table match a file, the
+one with the most fixed characters wins, so a file named in full beats a folder's `**`; two keys that match a file
+equally well, or two files that would land in one place, are refused. Matching ignores case. A file may be in both
+tables. Files neither table takes are not kept (the mod's installer, its tools, its own metadata).
+
+The download's identity is a sha256 over exactly the files the two tables take, at their download paths, before
+translation; files left out, files no table takes and files the mod writes while running (its logs) don't change
+it. A config's known versions will be listed by it.
+
+The shipped Nightreign Revive config maps `payload/mod/...` to `merge/` (its character script
+`payload/mod/action/script/c0000.hks` to `base/` instead, and its merge tool's `*.manifest.json` notes left out),
+`payload/settings/m00_00_00_00.talkesdbnd.dcx` to `merge/script/talk/`, `payload/settings/<lang>.json` to `text/`,
+`installer/revive.hks` to `hooks/`, and its DLLs, `RevivePrototype.ini`, `ui/` and `audio/` to its own folder. Its
+per-language fallback copies (`payload/settings/vanilla/`) are left out: the game's own archives are read instead.
 
 ## Installing it into a profile
 

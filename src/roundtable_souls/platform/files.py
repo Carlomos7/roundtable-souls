@@ -1,4 +1,5 @@
-"""Atomic file writes, and moving a folder's contents into another (each file's .json note moves with it)."""
+"""Atomic file writes, moving a folder's contents into another (each file's .json note moves with it), and hiding a
+file or folder."""
 
 from __future__ import annotations
 
@@ -65,3 +66,25 @@ def move_into(src_dir: Path, dest_dir: Path) -> None:
         src_dir.rmdir()
     except OSError:
         pass
+
+
+def hide(path: Path) -> bool:
+    """Give a file or folder Windows' hidden attribute (elsewhere a leading dot already hides it). Returns whether it
+    is hidden now; a failure to set it is not an error."""
+    if os.name != "nt":
+        return Path(path).name.startswith(".")
+    import ctypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    attrs = kernel32.GetFileAttributesW(str(path))
+    if attrs == 0xFFFFFFFF:  # INVALID_FILE_ATTRIBUTES: not there
+        return False
+    hidden = 0x2  # FILE_ATTRIBUTE_HIDDEN
+    return bool(attrs & hidden) or bool(kernel32.SetFileAttributesW(str(path), attrs | hidden))
+
+
+def is_hidden(path: Path) -> bool:
+    """Whether Windows' hidden attribute is set (elsewhere: whether the name starts with a dot)."""
+    if os.name != "nt":
+        return Path(path).name.startswith(".")
+    return bool(getattr(os.stat(path), "st_file_attributes", 0) & 0x2)

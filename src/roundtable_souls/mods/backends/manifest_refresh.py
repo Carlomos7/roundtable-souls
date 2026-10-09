@@ -154,6 +154,12 @@ class _Build:
 
         engine.build(self.profile, Path(self.layer["folder"]), self.setup, self.recipe, self.version, log, loc=self.loc)
 
+    def reasons(self, manifest: dict) -> list[str]:
+        """Why the build its manifest records is out of date beyond its sources (mods.engine.input_reasons)."""
+        from roundtable_souls.mods import engine
+
+        return engine.input_reasons(manifest, self.recipe, self.loc)
+
 
 def _engine(profile: Path, layer: dict, setup: Path | None, loc: Locations):
     """(problem, the build to run, approval key) when the launcher builds this mod itself: the switch on Settings is

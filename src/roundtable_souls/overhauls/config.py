@@ -9,9 +9,10 @@ An overhaul is a mod that must load after the others and ships merged copies of 
                 text that marks its profile entries (an offline launch can switch those off)
     builds      what the launcher can build itself, one per edition: how to recognise that edition's download and
                 which versions it was written for, and the steps that build its output from the packages before it
-                (the steps mods.engine runs, none of them a program of the mod's; docs/Overhaul configs.md); and,
-                optionally, what installing that edition does to the me3 profile (install; overhauls.install_plan
-                works out the changes, nothing here writes a profile)
+                (the steps mods.engine runs, none of them a program of the mod's; docs/Overhaul configs.md); where
+                its download's files go in the launcher's layout (sources by role, runtime; overhauls.sources);
+                and, optionally, what installing that edition does to the me3 profile (install;
+                overhauls.install_plan works out the changes, nothing here writes a profile)
 
 The shipped configs are in data/overhauls; a file in the local folder (overhauls/ in the launcher's data folder) with
 the same id replaces the shipped one, and one with a new id adds an overhaul. A file that does not read or does not
@@ -20,6 +21,7 @@ fit the model is left out, and problems() says why.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import tomllib
 from pathlib import Path
@@ -226,6 +228,19 @@ class Build(_Strict):
     steps: list[Step]
     requires: list[Requirement] = Field(default_factory=list)  # other mods it needs, present and switched on
     install: Install | None = None  # what installing it does to the profile; None: the launcher does not install it
+    # The download in the launcher's layout (overhauls.sources): path pattern -> "<role>/<path>" for what its builds
+    # read, path pattern -> path in its own folder for what it runs with; "" leaves a file out.
+    sources: dict[str, str] = Field(default_factory=dict)
+    runtime: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _layout(self) -> Build:
+        from roundtable_souls.overhauls import sources
+
+        found = sources.problems(self.sources, roles=True) + sources.problems(self.runtime, roles=False)
+        if found:
+            raise ValueError("; ".join(found))
+        return self
 
 
 # ----------------------------------------------------------------------------- the config
@@ -255,6 +270,12 @@ class OverhaulConfig(_Strict):
         if build.requires:
             out["requires"] = [r.model_dump(exclude_unset=True) for r in build.requires]
         return out
+
+
+def recipe_sha256(recipe: dict) -> str:
+    """What a build records of its overhaul's config: a sha256 of the build as mods.engine reads it (OverhaulConfig.
+    recipe), so a change to what the build does makes it out of date, and a comment or an install setting does not."""
+    return hashlib.sha256(json.dumps(recipe, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 # ----------------------------------------------------------------------------- loading
