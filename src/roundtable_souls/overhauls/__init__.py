@@ -1,7 +1,8 @@
 """Overhaul mods: their configs (data/overhauls/*.toml), read as OverhaulConfig. One description of each overhaul,
-used to recognise it (Play-page detection, the offline launch's strip) and to build it (mods.engine)."""
+used to recognise it (Play-page detection, the offline launch's strip), to build it (mods.engine) and to place its
+download in the launcher's layout (sources)."""
 
-from roundtable_souls.overhauls import requirements
+from roundtable_souls.overhauls import requirements, sources
 from roundtable_souls.overhauls.config import (
     RECIPE_VERSION,
     Build,
@@ -32,5 +33,6 @@ __all__ = [
     "requirements",
     "schema",
     "schema_path",
+    "sources",
     "write_schema",
 ]

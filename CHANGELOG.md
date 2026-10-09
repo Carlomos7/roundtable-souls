@@ -26,6 +26,9 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
   it is rebuilt before Play when the game is updated ("the game was updated since the last build") or when its
   config changes what the build does ("Nightreign Revive's config changed since the last build"). A build made
   before this version doesn't say, so it is rebuilt once, the first time you press Play.
+- Overhaul configs (for mod authors): a build can say where its download's files go in the launcher's own layout,
+  `[builds.sources]` (what its builds read: merge, text, hooks, base) and `[builds.runtime]` (what it runs with). They
+  are checked when the config loads; nothing uses them to install yet. docs/Overhaul configs.md has the details.
 
 ## [3.19.0] - 2026-10-08
 
