@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ["QT_QPA_PLATFORM"] = "offscreen"  # always: these tests must never open a window on screen
 
 pytest.importorskip("PySide6.QtQuick")
 from PySide6.QtQuick import QQuickWindow, QSGRendererInterface  # noqa: E402

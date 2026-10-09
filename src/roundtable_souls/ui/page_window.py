@@ -7,6 +7,7 @@ warning the engine reports is kept in `warnings` (the self-test fails on any).""
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QUrl
@@ -15,6 +16,7 @@ from PySide6.QtQml import QQmlApplicationEngine, QQmlError
 from PySide6.QtQuick import QQuickWindow
 from PySide6.QtQuickControls2 import QQuickStyle
 
+from roundtable_souls.platform import data_folder
 from roundtable_souls.ui.notifications import Notifier
 from roundtable_souls.ui.pages.registry import QmlPage
 
@@ -33,6 +35,20 @@ def load_fonts() -> list[str]:
             font_id = QFontDatabase.addApplicationFont(str(ttf))
             _fonts_loaded.extend(QFontDatabase.applicationFontFamilies(font_id) if font_id >= 0 else [])
     return sorted(set(_fonts_loaded))
+
+
+def use_qml_cache_folder() -> Path | None:
+    """Keep Qt's compiled-QML cache in this run's data folder (cache/qmlcache). Left alone, Qt names the folder after
+    the program (%LOCALAPPDATA%/<name>/cache), which for the packaged build is the real data folder's name: a
+    self-test or a test build in a temporary data folder would write beside the user's data. With no data folder set
+    (a test without one), the disk cache is off for the run."""
+    try:
+        folder = data_folder.data_root() / "cache" / "qmlcache"
+    except RuntimeError:
+        os.environ["QML_DISABLE_DISK_CACHE"] = "1"
+        return None
+    os.environ["QML_DISK_CACHE_PATH"] = str(folder)
+    return folder
 
 
 def theme_mode(setting: str) -> str:
@@ -64,6 +80,7 @@ class PageWindow(QObject):
         """Load the window's QML (hidden); False when it did not load."""
         if self.engine is not None:
             return self.window is not None
+        use_qml_cache_folder()  # before the engine compiles anything
         QQuickStyle.setStyle("Basic")
         load_fonts()
         self.engine = QQmlApplicationEngine(self)

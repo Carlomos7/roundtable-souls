@@ -4,6 +4,10 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
 
 ## [Unreleased]
 
+- Activity: a first look at the new design. A new button on the Activity page, Open new Activity window, opens the
+  redesigned Activity page in a window of its own: the last Play, install and failure at the top, the jobs by day,
+  each job's log one click away, and Undo, which asks before it changes anything. The Activity page you know stays
+  as it is.
 - Appearance: new colours, the first step of the new look. Dark is now a near-neutral charcoal with the gold as its
   only colour (it was brown), with quieter lines between parts; light keeps its Carian blue with softer lines, and
   secondary buttons in both themes have no fill until you point at them. Code in the editors is highlighted in the
