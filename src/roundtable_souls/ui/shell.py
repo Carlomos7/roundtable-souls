@@ -83,11 +83,15 @@ from roundtable_souls.ui.dialogs.common import (
     confirm,
 )
 from roundtable_souls.ui.jobs import Jobs
+from roundtable_souls.ui.page_window import PageWindow
+from roundtable_souls.ui.pages import registry as qml_pages
+from roundtable_souls.ui.pages.activity.presenter import ActivityPresenter
 from roundtable_souls.ui.pages.coop.view import CoopView
 from roundtable_souls.ui.pages.mods.view import ModsView
 from roundtable_souls.ui.pages.play.view import PlayView
 from roundtable_souls.ui.pages.saves.view import SavesView
 from roundtable_souls.ui.pages.tools.view import ToolsView
+from roundtable_souls.ui.text import tr
 from roundtable_souls.ui.theme import (
     ACCENT,
     ACCENT_LIGHT,
@@ -119,6 +123,37 @@ from roundtable_souls.updates import apply as updates
 from roundtable_souls.updates import inno as migration
 
 
+# ----------------------------------------------------------------------------- QML page windows
+class LauncherHost:
+    """The Widgets launcher as the host of a QML page window (ui/page_window.py) until the QML shell (S9): whether
+    a job or the game is running, the locations, logged jobs through the window's own start(), background reads
+    through its job runner."""
+
+    def __init__(self, launcher: Launcher):
+        self._w = launcher
+
+    @property
+    def busy(self) -> bool:
+        return bool(self._w.busy)
+
+    @property
+    def game_running(self) -> bool:
+        return bool(self._w.game_running)
+
+    @property
+    def locations(self):
+        return self._w.ctx.locations
+
+    def run_job(self, job, status: str) -> None:
+        self._w.start(job, status, need_setup=False)
+
+    def mark_seen(self) -> None:
+        self._w._mark_activity_seen()
+
+    def run_in_background(self, work, on_result) -> None:
+        self._w.jobs.start(lambda _progress: work(), on_result=on_result)
+
+
 # ----------------------------------------------------------------------------- window
 class Launcher(PlayView, CoopView, ModsView, SavesView, ToolsView, FluentWindow):
     def __init__(self, ctx):
@@ -130,6 +165,7 @@ class Launcher(PlayView, CoopView, ModsView, SavesView, ToolsView, FluentWindow)
         self.game = self.ctx.game
         self.bus = Bus()
         self.jobs = Jobs(self)
+        self.activity_window: PageWindow | None = None  # the QML Activity trial (S5)
         self.busy = False
         self.game_running = False
         self.steam_bar = None
@@ -576,7 +612,11 @@ class Launcher(PlayView, CoopView, ModsView, SavesView, ToolsView, FluentWindow)
             "sent anywhere."
         )
         share.clicked.connect(self._save_logs_for_support)
-        for b in (refresh, folder, share):
+        words = ActivityPresenter()
+        new_window = ghost_btn(words.open_window_text, FI.LINK)
+        new_window.setToolTip(words.open_window_tip)
+        new_window.clicked.connect(self._open_activity_window)
+        for b in (refresh, folder, share, new_window):
             al.addWidget(b)
         titled(
             lay,
@@ -601,6 +641,16 @@ class Launcher(PlayView, CoopView, ModsView, SavesView, ToolsView, FluentWindow)
         self.activity.failed_only.setChecked(failed_only)
         self.switchTo(self.activity_page)
         self.activity.refresh()
+
+    def _open_activity_window(self):
+        """The new Activity page in a window of its own (the S5 trial; the button goes when the QML shell lands)."""
+        if self.activity_window is None:
+            self.activity_window = PageWindow(qml_pages.page("activity"), LauncherHost(self), load_settings().theme)
+            self.activity_window.notifier.status(self._job_label if self.busy else tr("Ready"))
+        if not self.activity_window.show():
+            self._toast("The new Activity window did not open", "The details are in launcher.log.", error=True)
+            for line in self.activity_window.warnings:
+                core.run_logging.log_line(line)
 
     def _mark_activity_seen(self):
         save_settings(activity_seen=time.time())
@@ -695,6 +745,8 @@ class Launcher(PlayView, CoopView, ModsView, SavesView, ToolsView, FluentWindow)
             self._ws_recount()
         if status:
             self.status.setText(status)
+        if self.activity_window is not None:
+            self.activity_window.notifier.status(status if busy and status else tr("Ready"))
         if getattr(self, "game_btn", None) is not None:
             self.game_btn.setEnabled(not busy)  # never switch games under a running job
         self.setWindowTitle(self._base_title() + (f" - {status}" if busy and status else ""))
@@ -761,6 +813,8 @@ class Launcher(PlayView, CoopView, ModsView, SavesView, ToolsView, FluentWindow)
             self.activity.refresh()
             self._mark_activity_seen()
         self._update_activity_badge()
+        if self.activity_window is not None:
+            self.activity_window.adapter.refresh()
 
     def start(self, job, status, need_setup=True):
         if self.busy:
@@ -891,6 +945,8 @@ class Launcher(PlayView, CoopView, ModsView, SavesView, ToolsView, FluentWindow)
             self.logo_preview.setPixmap(QPixmap(str(path)).scaled(56, 56, Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
     def _restyle(self):
+        if getattr(self, "activity_window", None) is not None:
+            self.activity_window.set_theme("dark" if isDarkTheme() else "light")
         for b in self.findChildren(QPushBtn):
             if b.objectName() == "cta" or b.property("role"):
                 style_button(b)
@@ -964,6 +1020,8 @@ class Launcher(PlayView, CoopView, ModsView, SavesView, ToolsView, FluentWindow)
         if not self._settle_unsaved("closing"):
             e.ignore()
             return
+        if self.activity_window is not None:
+            self.activity_window.close()
         e.accept()
 
     def _unsaved(self) -> list[str]:
