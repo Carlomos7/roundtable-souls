@@ -10,7 +10,7 @@ from roundtable_souls.platform import logging as rl
 from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.ui.dialogs import activity as act
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ["QT_QPA_PLATFORM"] = "offscreen"  # always, whatever the shell sets: no real windows
 
 
 def make_job(title, lines=(), outcome=None, game="eldenring", attach=None):

@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+os.environ["QT_QPA_PLATFORM"] = "offscreen"  # always, whatever the shell sets: no real windows
 
 QtTest = pytest.importorskip("PySide6.QtTest")
 from PySide6.QtCore import Qt  # noqa: E402
