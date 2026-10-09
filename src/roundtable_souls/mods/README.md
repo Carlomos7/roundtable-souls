@@ -11,6 +11,7 @@ me3 profiles (`.me3`, TOML, schema v1) and the mods they list.
 | `extract.py` | Unpacking `.zip`, `.7z` and `.rar` downloads (or using a folder where it is) into a staging folder. |
 | `checks.py` | What a profile's mod folders hold (the package tree, folders and DLLs no entry loads) and the entry problems me3 would refuse. |
 | `remove.py` | Taking a mod's entry out of a profile, its folder optionally to the Recycle Bin, with what undo needs to put both back. |
+| `naming.py` | The launcher's names for the folders it makes (`mod_id`: lowercase kebab-case ASCII without version tokens or Nexus suffixes), Windows-unsafe names, its reserved names, unique ids (`-2`, `-3`) and the one path-length limit (220 characters) the profile writer's Paths rule uses. |
 | `models.py` | The install plan's shape, validated before the window sees it. |
 | `locations.py` | The game's `Locations` the rebuild code, its backends and the conflicts overview read, set by the app context (until Phase 6 hands them Locations call by call). |
 
