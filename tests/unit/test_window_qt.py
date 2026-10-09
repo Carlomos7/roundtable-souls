@@ -1131,8 +1131,10 @@ def test_undo_rebuild_and_redo_from_activity(sandbox, monkeypatch):
         ran.append(bool(u.get("redo")))
         return "undid the rebuild: the profile back as before" if not u.get("redo") else "redid the rebuild"
 
-    monkeypatch.setattr(ui.mod_undo, "run", fake_run)
-    monkeypatch.setattr(ui.mod_undo, "available", lambda u: bool(u))
+    from roundtable_souls.mods import undo as mod_undo
+
+    monkeypatch.setattr(mod_undo, "run", fake_run)
+    monkeypatch.setattr(mod_undo, "available", lambda u: bool(u))
     patch_ui(monkeypatch, "confirm", lambda *a, **k: True)
     patch_ui(monkeypatch, "notice", lambda *a, **k: type("B", (), {"close": lambda s: None})())
     job = rl.begin_job("rebuild combined parameters")
