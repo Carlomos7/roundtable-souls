@@ -40,6 +40,26 @@
    "title": "DfltLayout",
    "type": "object"
   },
+  "FileCategory": {
+   "additionalProperties": false,
+   "description": "One rule of the file-category map: game paths matching pattern are called label (a few plain words).",
+   "properties": {
+    "pattern": {
+     "title": "Pattern",
+     "type": "string"
+    },
+    "label": {
+     "title": "Label",
+     "type": "string"
+    }
+   },
+   "required": [
+    "pattern",
+    "label"
+   ],
+   "title": "FileCategory",
+   "type": "object"
+  },
   "KrakenLayout": {
    "additionalProperties": false,
    "properties": {
@@ -85,7 +105,7 @@
   }
  },
  "additionalProperties": false,
- "description": "One game's files: its archives (names and the RSA public keys of their headers), the Oodle library it ships,\nthe DCX layouts the launcher writes for it, the file types it loads as DFLT in place of KRAK, and how its mods are\nlaid out (the folders a package serves game files from, the DLLs in a download that are not mods).",
+ "description": "One game's files: its archives (names and the RSA public keys of their headers), the Oodle library it ships,\nthe DCX layouts the launcher writes for it, the file types it loads as DFLT in place of KRAK, and how its mods are\nlaid out (the folders a package serves game files from, the DLLs in a download that are not mods), and a short\nplain name for what a game file is, by its path.",
  "properties": {
   "game": {
    "title": "Game",
@@ -131,6 +151,13 @@
    "title": "Mod Folders",
    "type": "array"
   },
+  "file_categories": {
+   "items": {
+    "$ref": "#/$defs/FileCategory"
+   },
+   "title": "File Categories",
+   "type": "array"
+  },
   "ignored_dlls": {
    "items": {
     "type": "string"
@@ -147,6 +174,7 @@
   "dcx_writer",
   "dflt_fallback",
   "mod_folders",
+  "file_categories",
   "ignored_dlls"
  ],
  "title": "GameConfig",

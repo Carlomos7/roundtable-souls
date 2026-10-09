@@ -81,6 +81,13 @@ jobs:
     - name: Import layers
       run: uv run lint-imports --no-cache
 
+    # The theme is generated from scripts/theme/tokens.json: a hand edit or a forgotten regeneration fails here,
+    # and so does a colour pair under its contrast minimum (scripts/theme/README.md).
+    - name: Theme tokens
+      run: |
+        uv run python scripts/theme/gen_theme.py --check
+        uv run pytest -q tests/unit/test_theme_contrast.py
+
     - name: Run tests with coverage
       run: |
         uv run coverage erase

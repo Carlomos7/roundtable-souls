@@ -1,6 +1,6 @@
 {
  "game": "eldenring",
- "note": "What the launcher knows about the game's files. archives: RSA public keys of the game's archive headers (Data0-3.bhd, DLC.bhd), as published by the modding community (UXM). dcx_writer: the layouts the launcher writes, each loaded in game (docs/decisions). dflt_fallback: file types the game has loaded as DFLT in place of KRAK, written so only when the game's Oodle library is not there. mod_folders: the top-level folders of a package that me3 serves game files from. ignored_dlls: DLLs a mod download may carry that are not mods (mod loaders and runtimes).",
+ "note": "What the launcher knows about the game's files. archives: RSA public keys of the game's archive headers (Data0-3.bhd, DLC.bhd), as published by the modding community (UXM). dcx_writer: the layouts the launcher writes, each loaded in game (docs/decisions). dflt_fallback: file types the game has loaded as DFLT in place of KRAK, written so only when the game's Oodle library is not there. mod_folders: the top-level folders of a package that me3 serves game files from. file_categories: a short plain name for what a game file is, by its path (lower-case, forward slashes; * matches anything, the first rule that matches wins), shown beside files two mods both change. ignored_dlls: DLLs a mod download may carry that are not mods (mod loaders and runtimes).",
  "archive_names": [
   "Data0",
   "Data1",
@@ -62,6 +62,112 @@
   "mtd",
   "model",
   "sfxbnd"
+ ],
+ "file_categories": [
+  {
+   "pattern": "regulation.bin",
+   "label": "parameters"
+  },
+  {
+   "pattern": "param/*",
+   "label": "parameters"
+  },
+  {
+   "pattern": "chr/c0000*",
+   "label": "the player character's animations"
+  },
+  {
+   "pattern": "chr/*",
+   "label": "characters"
+  },
+  {
+   "pattern": "action/script/*",
+   "label": "behaviour scripts"
+  },
+  {
+   "pattern": "action/*",
+   "label": "character actions"
+  },
+  {
+   "pattern": "script/talk/*",
+   "label": "NPC and grace menus"
+  },
+  {
+   "pattern": "script/*",
+   "label": "scripts"
+  },
+  {
+   "pattern": "msg/*",
+   "label": "text"
+  },
+  {
+   "pattern": "sfx/*",
+   "label": "effects"
+  },
+  {
+   "pattern": "sfxbnd/*",
+   "label": "effects"
+  },
+  {
+   "pattern": "parts/*",
+   "label": "equipment models"
+  },
+  {
+   "pattern": "menu/*",
+   "label": "UI"
+  },
+  {
+   "pattern": "font/*",
+   "label": "fonts"
+  },
+  {
+   "pattern": "sound/*",
+   "label": "audio"
+  },
+  {
+   "pattern": "movie/*",
+   "label": "videos"
+  },
+  {
+   "pattern": "cutscene/*",
+   "label": "cutscenes"
+  },
+  {
+   "pattern": "map/*",
+   "label": "maps"
+  },
+  {
+   "pattern": "asset/*",
+   "label": "world objects"
+  },
+  {
+   "pattern": "obj/*",
+   "label": "world objects"
+  },
+  {
+   "pattern": "event/*",
+   "label": "map events"
+  },
+  {
+   "pattern": "facegen/*",
+   "label": "faces"
+  },
+  {
+   "pattern": "expression/*",
+   "label": "facial expressions"
+  },
+  {
+   "pattern": "material/*",
+   "label": "materials"
+  },
+  {
+   "pattern": "mtd/*",
+   "label": "materials"
+  },
+  {
+   "pattern": "shader/*",
+   "label": "shaders"
+  }
  ],
  "ignored_dlls": [
   "dinput8.dll",

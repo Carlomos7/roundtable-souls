@@ -25,7 +25,8 @@ import tomllib
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic_core import ErrorDetails
 
 from roundtable_souls.resources import DATA_DIR
 
@@ -118,15 +119,19 @@ class AddText(_Strict):
     each: Each | None = None
 
 
-class ScriptAppend(_Strict):
-    do: Literal["script_append"]
-    folder: str
-    entry: str
-    base: str
-    base_until: str | None = None
-    append: str
-    refuse: list[str] = Field(default_factory=list)
-    refuse_text: str | None = None
+class Hook(_Strict):
+    """A mod's script fragment added to the entry script (overhauls.hooks): the packages' own script folder copied
+    in load order, then the fragment appended to the entry file (the last package's copy, else the download's base).
+    Several hooks for one entry are appended in the order of the steps, each wrapping the one before."""
+
+    do: Literal["hook"]
+    folder: str  # the script folder, for example action/script
+    entry: str  # the entry script in it, for example c0000.hks
+    base: str  # the download's copy of the entry script, used when no package ships one
+    base_until: str | None = None  # the base is cut before this text (the mod's own hook already in it)
+    fragment: str  # the download's file appended
+    markers: list[str] = Field(default_factory=list)  # text meaning a script already contains the fragment
+    refuse_text: str | None = None  # the refusal then
 
 
 class Remove(_Strict):
@@ -135,12 +140,44 @@ class Remove(_Strict):
 
 
 Step = Annotated[
-    CopyTree | Copy | KeepConfig | Params | Merge | AddText | ScriptAppend | Remove,
+    CopyTree | Copy | KeepConfig | Params | Merge | AddText | Hook | Remove,
     Field(discriminator="do"),
 ]
 
 
 # ----------------------------------------------------------------------------- installing it into a profile
+class Requirement(_Strict):
+    """Another mod the overhaul needs in the profile, present and switched on: a DLL (native, its file name) or a
+    package (its id). The build is refused without it; an install switches it on when it is there but off and
+    enable_if_off allows it, else adds the first of candidates that exists, else stops."""
+
+    native: str | None = None  # a DLL's file name
+    package: str | None = None  # a package's id
+    label: str | None = None  # how messages name it ("Seamless Co-op"); else its file name or id
+    enable_if_off: bool = False  # an install may switch it on (pointed at the copy found) when it is off
+    # Where an install looks for a copy when the profile has none switched on, in order; {profile_dir} and
+    # {game_dir} are filled in.
+    candidates: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _one_kind(self) -> Requirement:
+        if (self.native is None) == (self.package is None):
+            raise ValueError("a requirement names either native or package")
+        return self
+
+    @property
+    def kind(self) -> Literal["native", "package"]:
+        return "native" if self.native is not None else "package"
+
+    @property
+    def name(self) -> str:
+        return self.native if self.native is not None else str(self.package)
+
+    def shown(self) -> str:
+        """How messages name it: "Seamless Co-op (ersc.dll)", or just its name without a label."""
+        return f"{self.label} ({self.name})" if self.label else self.name
+
+
 class Initializer(_Strict):
     function: str  # the DLL's function me3 calls after loading it
 
@@ -167,21 +204,12 @@ class SetInitializer(_Strict):
     function: str
 
 
-class Seamless(_Strict):
-    """The overhaul needs Seamless Co-op's DLL switched on in the profile."""
-
-    dll: str = "ersc.dll"
-    # Where to look when the profile has none switched on, in order; {profile_dir} and {game_dir} are filled in.
-    candidates: list[str] = Field(default_factory=list)
-
-
 class Install(_Strict):
     """What installing one edition does to the me3 profile it is installed into (its own folder beside it)."""
 
     profile_settings: dict[str, str | int | bool] = Field(default_factory=dict)  # top-level keys set
     owned_package_ids: list[str] = Field(default_factory=list)  # earlier installs' entries, removed first
     owned_dlls: list[str] = Field(default_factory=list)  # DLL file names (lower-case), removed first
-    seamless: Seamless | None = None
     set_initializers: list[SetInitializer] = Field(default_factory=list)
     natives: list[InstallNative] = Field(default_factory=list)  # added after the profile's own, in this order
     package: InstallPackage | None = None  # added after the profile's own
@@ -196,6 +224,7 @@ class Build(_Strict):
     match: Match
     output: Output
     steps: list[Step]
+    requires: list[Requirement] = Field(default_factory=list)  # other mods it needs, present and switched on
     install: Install | None = None  # what installing it does to the profile; None: the launcher does not install it
 
 
@@ -215,7 +244,7 @@ class OverhaulConfig(_Strict):
         """One build in the shape mods.engine reads (the former data/recipes JSON). Only what the file sets is
         included, so a build's key stays the same for the same file."""
         steps = [s.model_dump(by_alias=True, exclude_unset=True) for s in build.steps]
-        return {
+        out = {
             "recipe": RECIPE_VERSION,
             "id": build.id,
             "label": self.label,
@@ -223,6 +252,9 @@ class OverhaulConfig(_Strict):
             "output": build.output.model_dump(by_alias=True, exclude_unset=True),
             "steps": steps,
         }
+        if build.requires:
+            out["requires"] = [r.model_dump(exclude_unset=True) for r in build.requires]
+        return out
 
 
 # ----------------------------------------------------------------------------- loading
@@ -255,11 +287,31 @@ def load(game: str | None = None) -> list[OverhaulConfig]:
         for f in sorted(folder.glob("*.toml")):
             try:
                 cfg = read(f)
-            except (OSError, ValueError, ValidationError) as e:
+            except ValidationError as e:
+                first = e.errors()[0]
+                where = ".".join(str(x) for x in first["loc"])
+                _problems.append(f"{f}: {where}: {first['msg']}" + _moved(first))
+                continue
+            except (OSError, ValueError) as e:
                 _problems.append(f"{f}: {str(e).splitlines()[0] if str(e) else type(e).__name__}")
                 continue
             found[cfg.id] = cfg
     return [c for c in found.values() if game is None or c.game == game]
+
+
+# Keys an earlier version of the format had, and where they went (said when a file still uses one).
+_MOVED = {
+    "seamless": "since 3.20 a required mod is listed in the build's requires",
+    "script_append": 'since 3.20 a script fragment is added with do = "hook" (append is fragment, refuse is markers)',
+}
+
+
+def _moved(error: ErrorDetails) -> str:
+    hits = [str(x) for x in error["loc"]] + [str(error.get("input"))]
+    for key, why in _MOVED.items():
+        if any(h == key for h in hits) or f"'{key}'" in error.get("msg", ""):
+            return f" ({key}: {why})"
+    return ""
 
 
 def problems() -> list[str]:

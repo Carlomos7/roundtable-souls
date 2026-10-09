@@ -50,6 +50,42 @@ def test_dflt_fallback_only_for_file_types_the_game_loaded_so():
     assert not er.dflt_fallback_for("chr/c0000.behbnd.dcx")
 
 
+def test_the_file_category_map_loads_with_plain_labels():
+    er = config.load()
+    assert er.file_categories and all(c.pattern == c.pattern.lower() and c.label for c in er.file_categories)
+    assert er.category_of("regulation.bin") == "parameters"
+    assert er.category_of("action/script/c0000.hks") == "behaviour scripts"
+    assert er.category_of("script/talk/m00_00_00_00.talkesdbnd.dcx") == "NPC and grace menus"
+    assert er.category_of("script/c0000.luabnd.dcx") == "scripts"
+    assert er.category_of("parts/am_m_1000.partsbnd.dcx") == "equipment models"
+
+
+def test_the_player_is_told_apart_from_other_characters():
+    er = config.load()
+    assert er.category_of("chr/c0000_a00_hi.anibnd.dcx") == "the player character's animations"
+    assert er.category_of("chr/c2010.chrbnd.dcx") == "characters"
+
+
+def test_case_and_backslashes_do_not_matter_and_unknown_paths_have_none():
+    er = config.load()
+    assert er.category_of("CHR\\C0000_A00_HI.ANIBND.DCX") == "the player character's animations"
+    assert er.category_of("Msg\\engUS\\item.msgbnd.dcx") == "text"
+    assert er.category_of("readme.txt") is None and er.category_of("notmine/thing.bin") is None
+
+
+def test_the_first_rule_that_matches_wins():
+    rules = [config.FileCategory(pattern="chr/c1*", label="first"), config.FileCategory(pattern="chr/*", label="all")]
+    er = config.load().model_copy(update={"file_categories": rules})
+    assert er.category_of("chr/c1000.chrbnd.dcx") == "first" and er.category_of("chr/c2000.chrbnd.dcx") == "all"
+    reversed_ = er.model_copy(update={"file_categories": rules[::-1]})
+    assert reversed_.category_of("chr/c1000.chrbnd.dcx") == "all"
+
+
+def test_a_category_rule_takes_only_a_pattern_and_a_label():
+    with pytest.raises(ValueError):
+        config.FileCategory.model_validate({"pattern": "chr/*", "label": "characters", "extra": 1})
+
+
 def test_a_kraken_file_without_oodle_is_written_as_dflt_only_when_allowed():
     how = dcx.Dcx(KRAK_HEADER, b"KRAK")
     with pytest.raises(formats.FormatError):

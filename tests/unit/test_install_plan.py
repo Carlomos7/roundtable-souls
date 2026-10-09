@@ -21,13 +21,13 @@ def revive():
     config = next(c for c in overhauls.load() if c.id == "nightreign-revive")
     build, problem = install_plan.install_of(config, "LITE")
     assert problem is None and build is not None and build.install is not None
-    return config, build.install
+    return config, build
 
 
 def planned(text: str, **kw) -> tuple[install_plan.Plan, dict]:
-    _, install = revive()
+    _, build = revive()
     kw.setdefault("is_dir", ANY_DIR)
-    p = plan(text, PROFILE, install, OWN, **kw)
+    p = plan(text, PROFILE, build, OWN, **kw)
     return p, apply(tomllib.loads(text), p.changes)
 
 
@@ -64,7 +64,7 @@ enabled = false
 
 
 def test_an_ordinary_profile_gets_revives_dlls_and_package_last():
-    p, result = planned(ORDINARY, seamless=SEAMLESS)
+    p, result = planned(ORDINARY, provided={"ersc.dll": SEAMLESS})
     assert p.ok and p.problems == []
     # patched_profile: the HUD bootstrap loads early with its initializer; RevivePrototype loads after every enabled
     # DLL (deps: native id, else the file name), each optional; the package after every enabled package
@@ -90,7 +90,7 @@ def test_an_ordinary_profile_gets_revives_dlls_and_package_last():
 
 
 def test_settings_are_set_only_where_they_differ():
-    p, result = planned("start_online = true\n", seamless=SEAMLESS)
+    p, result = planned("start_online = true\n", provided={"ersc.dll": SEAMLESS})
     sets = [c for c in p.changes if c.action == "set"]
     assert sets == [
         Change("set", "setting", "profileVersion", {"profileVersion": "v1"}, "the overhaul's installer sets it"),
@@ -136,32 +136,18 @@ path = 'dll/offline/NightreignRevive.dll'
     ]
 
 
-def test_seamless_switched_off_is_switched_on_and_pointed_at_the_one_found():
-    text = "profileVersion = \"v1\"\nstart_online = false\n[[natives]]\npath = 'old/ersc.dll'\nenabled = false\n"
-    p, result = planned(text, seamless=SEAMLESS)
-    # patched_profile: disabled['enabled']=True; disabled['path']=seamless.as_posix()
-    assert p.changes[0] == Change(
-        "update", "native", "old/ersc.dll", {"enabled": True, "path": SEAMLESS.as_posix()}, "Seamless is required"
-    )
-    assert result["natives"][0] == {"path": SEAMLESS.as_posix(), "enabled": True}
-    assert result["natives"][-1]["load_after"] == [{"id": "ersc.dll", "optional": True}]
-
-
-def test_without_seamless_the_candidates_are_tried_in_order_and_one_is_added():
-    text = 'profileVersion = "v1"\nstart_online = false\n'
-    game = Path("C:/Games/ELDEN RING/Game")
-    there = {game / "SeamlessCoop/ersc.dll"}
-    # install(): candidates root/dll/offline/ersc.dll, root/SeamlessCoop/ersc.dll, game.parent/SeamlessCoop/ersc.dll
-    p, result = planned(text, game_dir=game, is_file=lambda q: Path(q) in there)
-    assert result["natives"][0] == {"path": (game / "SeamlessCoop/ersc.dll").as_posix()}
-    beside = {PROFILE.parent / "SeamlessCoop/ersc.dll", game / "SeamlessCoop/ersc.dll"}
-    p, result = planned(text, game_dir=game, is_file=lambda q: Path(q) in beside)
-    assert result["natives"][0] == {"path": (PROFILE.parent / "SeamlessCoop/ersc.dll").as_posix()}
-
-
-def test_no_seamless_anywhere_stops_the_install():
-    p, _ = planned('profileVersion = "v1"\n', is_file=lambda _q: False)
-    assert not p.ok and [x.code for x in p.problems] == ["seamless-missing"]
+def test_revives_install_leaves_seamless_as_the_player_has_it():
+    """Revive's config declares no requirement (its author has not; the launcher writes none for it), so its plan
+    neither switches Seamless on nor adds it, and does not stop without it."""
+    off = "profileVersion = \"v1\"\nstart_online = false\n[[natives]]\npath = 'old/ersc.dll'\nenabled = false\n"
+    p, result = planned(off, is_file=lambda _q: True)
+    assert p.ok and not [c for c in p.changes if c.key == "old/ersc.dll"]
+    assert result["natives"][0] == {"path": "old/ersc.dll", "enabled": False}
+    p, result = planned('profileVersion = "v1"\nstart_online = false\n', is_file=lambda _q: True)
+    assert p.ok and [Path(n["path"]).name for n in result["natives"]] == [
+        "ReviveHudBootstrap.dll",
+        "RevivePrototype.dll",
+    ]
 
 
 def test_movement_dlls_get_their_initializer_only_when_they_have_none():
@@ -205,13 +191,13 @@ def test_both_spellings_of_the_lists_are_read():
     ],
 )
 def test_profiles_the_install_cannot_use_are_refused(text, code):
-    p = plan(text, PROFILE, revive()[1], OWN, seamless=SEAMLESS, is_dir=ANY_DIR)
+    p = plan(text, PROFILE, revive()[1], OWN, provided={"ersc.dll": SEAMLESS}, is_dir=ANY_DIR)
     assert code in [x.code for x in p.problems] and not p.ok
 
 
 def test_a_missing_package_folder_stops_the_install():
     there = {Path(install_plan.absolute(PROFILE, "mod/body"))}
-    p, _ = planned(ORDINARY, seamless=SEAMLESS, is_dir=lambda q: Path(q) in there)
+    p, _ = planned(ORDINARY, provided={"ersc.dll": SEAMLESS}, is_dir=lambda q: Path(q) in there)
     assert [x.code for x in p.problems] == ["package-missing"]  # dash; "off" is switched off
     assert "mod/dash" in p.problems[0].message
 
@@ -227,13 +213,15 @@ def test_planning_writes_nothing(tmp_path):
     profile = tmp_path / "my.me3"
     profile.write_text(ORDINARY, encoding="utf-8")
     before = {p: p.read_bytes() for p in tmp_path.rglob("*")}
-    plan(ORDINARY, profile, revive()[1], tmp_path / "NightreignRevive", seamless=SEAMLESS, is_dir=ANY_DIR)
+    plan(ORDINARY, profile, revive()[1], tmp_path / "NightreignRevive", provided={"ersc.dll": SEAMLESS}, is_dir=ANY_DIR)
     assert {p: p.read_bytes() for p in tmp_path.rglob("*")} == before
 
 
 def test_the_check_after_an_install():
-    _, install = revive()
-    _, result = planned(ORDINARY, seamless=SEAMLESS)
+    _, build = revive()
+    install = build.install
+    assert install is not None
+    _, result = planned(ORDINARY, provided={"ersc.dll": SEAMLESS})
     files = {OWN / f for f in install.required_files}
     text = _toml(result)
     every_dll = lambda q: Path(q) in files or str(q).endswith(".dll")  # noqa: E731
@@ -264,3 +252,161 @@ def _toml(data: dict) -> str:
     text = "\n".join(lines) + "\n"
     assert tomllib.loads(text) == data
     return text
+
+
+# ----------------------------------------------------------------------------- requirements are data (any overhaul)
+FAKE = """overhaul = 1
+id = "fake"
+label = "Fake Overhaul"
+short_label = "Fake"
+game = "eldenring"
+
+[recognise]
+folder = "Fake"
+manifest = "fake.json"
+
+[[builds]]
+id = "fake-1"
+match = { files = ["fake.json"] }
+output = { mod = "mod" }
+steps = []
+requires = [
+  { package = "framework", label = "The Framework" },
+  { native = "helper.dll", enable_if_off = true, candidates = ["{profile_dir}/helpers/helper.dll"] },
+]
+
+[builds.install]
+owned_package_ids = ["fake"]
+owned_dlls = ["fake.dll"]
+package = { id = "fake", folder = "mod" }
+"""
+
+
+def fake():
+    config = overhauls.OverhaulConfig.model_validate(tomllib.loads(FAKE))
+    return config, config.builds[0]
+
+
+def fake_plan(text: str, **kw):
+    _, build = fake()
+    kw.setdefault("is_dir", ANY_DIR)
+    kw.setdefault("is_file", lambda _q: False)
+    return plan(text, PROFILE, build, PROFILE.parent / "Fake", **kw)
+
+
+FRAMEWORK = "[[packages]]\nid = \"framework\"\npath = 'mod/framework'\n"
+HELPER = "[[natives]]\npath = 'natives/helper.dll'\n"
+
+
+def test_a_fake_overhauls_requirements_present_and_on_need_nothing():
+    p = fake_plan(FRAMEWORK + HELPER)
+    assert p.ok and [c.action for c in p.changes] == ["add"]  # only its own package
+
+
+def test_a_missing_requirement_stops_the_install_naming_it():
+    p = fake_plan(HELPER)
+    assert [(x.code, x.message) for x in p.problems] == [
+        ("requirement-missing", "The Framework (framework) is required and was not found.")
+    ]
+    p = fake_plan(FRAMEWORK)  # the DLL: not there, and none of its candidates either
+    assert [x.message for x in p.problems] == ["helper.dll is required and was not found."]
+
+
+def test_a_missing_requirement_with_a_copy_found_is_added():
+    there = PROFILE.parent / "helpers/helper.dll"
+    p = fake_plan(FRAMEWORK, is_file=lambda q: Path(q) == there)
+    assert p.ok and p.changes[0] == Change(
+        "add", "native", values={"path": there.as_posix()}, why="helper.dll is required"
+    )
+
+
+def test_a_requirement_switched_off_is_switched_on_only_when_allowed():
+    off_framework = FRAMEWORK + "enabled = false\n"
+    p = fake_plan(off_framework + HELPER)
+    assert [(x.code, x.message) for x in p.problems] == [
+        ("requirement-off", "The Framework (framework) is required and is switched off in the profile.")
+    ]
+    there = PROFILE.parent / "helpers/helper.dll"
+    p = fake_plan(FRAMEWORK + HELPER + "enabled = false\n", is_file=lambda q: Path(q) == there)
+    assert p.ok and p.changes[0] == Change(
+        "update", "native", "natives/helper.dll", {"enabled": True, "path": there.as_posix()}, "helper.dll is required"
+    )
+
+
+def test_one_place_decides_whether_a_requirement_is_met():
+    from roundtable_souls.overhauls import requirements
+
+    req = overhauls.Requirement(native="Helper.DLL")
+    on = {"kind": "native", "path": "x/helper.dll"}
+    off = {"kind": "native", "path": "y/helper.dll", "enabled": False}
+    assert requirements.state(req, [off, on]) == ("on", on)
+    assert requirements.state(req, [off]) == ("off", off)
+    assert requirements.state(req, [{"kind": "package", "id": "helper.dll", "path": "m"}]) == ("missing", None)
+    pkg = overhauls.Requirement(package="framework")
+    assert requirements.state(pkg, [{"kind": "package", "path": "mods/Framework"}])[0] == "on"  # folder name, no id
+
+
+def test_a_requirement_names_one_kind():
+    with pytest.raises(ValueError, match="either native or package"):
+        overhauls.Requirement(native="a.dll", package="b")
+    with pytest.raises(ValueError, match="either native or package"):
+        overhauls.Requirement()
+
+
+# ----------------------------------------------------------------------------- owned entries are data
+def test_installing_again_is_an_update_never_a_second_set_of_entries():
+    first, once = planned(ORDINARY, provided={"ersc.dll": SEAMLESS})
+    assert not first.update
+    again = _toml(once)
+    second, twice = planned(again, provided={"ersc.dll": SEAMLESS})
+    assert second.ok and second.update
+    assert [r["id"] for r in twice["packages"]].count("nightreign-revive") == 1
+    names = [Path(n["path"]).name for n in twice["natives"]]
+    assert names.count("RevivePrototype.dll") == 1 and names.count("ReviveHudBootstrap.dll") == 1
+    assert twice == once  # the same profile as one install
+
+
+def test_a_fake_overhauls_owned_entries_are_replaced_by_its_reinstall():
+    text = FRAMEWORK + HELPER + "[[packages]]\nid = \"fake\"\npath = 'Old/mod'\n[[natives]]\npath = 'Old/FAKE.dll'\n"
+    p = fake_plan(text)
+    assert p.update and [(c.action, c.key) for c in p.changes if c.action == "remove"] == [
+        ("remove", "fake"),
+        ("remove", "Old/FAKE.dll"),
+    ]
+
+
+def test_a_second_overhaul_in_one_profile_is_refused():
+    revive_config, _ = revive()
+    fake_config, _ = fake()
+    _, with_revive = planned(ORDINARY, provided={"ersc.dll": SEAMLESS})
+    p = fake_plan(_toml(with_revive) + FRAMEWORK + HELPER, others=[revive_config, fake_config])
+    assert [(x.code, x.message) for x in p.problems] == [
+        (
+            "another-overhaul",
+            "This profile already has Nightreign Revive. A profile can have one overhaul for now: remove "
+            "Nightreign Revive from it first, or install into another profile.",
+        )
+    ]
+    # its own earlier install is no reason to refuse
+    assert fake_plan(FRAMEWORK + HELPER + "[[packages]]\nid = \"fake\"\npath = 'Fake/mod'\n", others=[fake_config]).ok
+
+
+def test_one_place_says_which_overhaul_owns_an_entry():
+    from roundtable_souls.overhauls import requirements
+
+    revive_config, _ = revive()
+    fake_config, _ = fake()
+    configs = [revive_config, fake_config]
+    entries = [
+        {"kind": "native", "path": "x/ersc.dll"},
+        {"kind": "native", "path": "NightreignRevive/RevivePrototype.dll"},
+        {"kind": "package", "id": "fake", "path": "Fake/mod"},
+        {"kind": "package", "id": "body", "path": "mod/body"},
+    ]
+    assert {k: [e["path"] for e in v] for k, v in requirements.owned_by(configs, entries).items()} == {
+        "nightreign-revive": ["NightreignRevive/RevivePrototype.dll"],
+        "fake": ["Fake/mod"],
+    }
+    assert requirements.needed_by(configs, "native", entries[1]) == []  # Revive declares nothing
+    assert [r.name for r in requirements.needed_by(configs, "package", entries[2])] == ["framework", "helper.dll"]
+    assert requirements.needed_by(configs, "package", entries[3]) == []

@@ -25,6 +25,10 @@ profile_marks = ["myoverhaul"]   # text marking its profile entries (case aside)
 
 [[builds]]                       # one per edition the launcher builds itself; none is fine
 id = "my-overhaul-lite"          # written into the build's manifest as "recipe"
+requires = [                     # other mods it needs, present and switched on (none is fine)
+  { native = "ersc.dll", label = "Seamless Co-op", enable_if_off = true,
+    candidates = ["{profile_dir}/SeamlessCoop/ersc.dll", "{game_dir}/SeamlessCoop/ersc.dll"] },
+]
 
 [builds.match]
 files = ["edition.json", "payload/my-overhaul.dll"]
@@ -52,6 +56,18 @@ with **Skip Revive too** turns off the profile entries containing one of `profil
 
 ## Builds: the launcher builds it itself
 
+### Other mods it needs
+
+`requires` lists the mods a build needs in the profile, present and switched on: `native` names a DLL by its file
+name, `package` a package by its id (its folder's name when it has none), case aside. `label` is how messages name
+it. The build is refused while one is missing or switched off ("My Overhaul needs Seamless Co-op (ersc.dll) switched
+on in the profile."); an install adds it or switches it on as described under *Installing it into a profile*
+(`enable_if_off`, `candidates`, where `{profile_dir}` and `{game_dir}` are filled in). The launcher also keeps it on
+afterwards: a later change to the profile that would switch off or remove what an overhaul's entries need is
+refused. Requirements are the mod author's to declare: the launcher never adds one on a mod's behalf, and a
+config without `requires` needs nothing (the shipped Nightreign Revive config has none). (Before 3.20 this was
+`[builds.install.seamless]`; a config still using it is left out, and the launcher says why.)
+
 For a mod whose installer keeps its download in a setup folder, the launcher can do the installer's merge itself when
 the player turns on **Build Nightreign Revive in the launcher** on Settings. Nothing from the download runs: every
 merge is the launcher's.
@@ -67,7 +83,7 @@ folder. Steps, in order:
 | `merge` | One file merged by the launcher: the last package before it that ships `file`, then the mod's copy (`patch`), against the game's copy (archives file by file, text entry by entry); with no package shipping it, the mod's copy as it is. |
 | `text` | A text archive: the mod's strings (`texts`, a JSON object of text ID to string, by `each` folder, `*` for the rest) set in its `table` of the game's copy (or `vanilla` from the download), then merged like `merge`. |
 | `params` | `regulation.bin`: the launcher's row-by-row combine of that package's copy and the mod's (`patch`) against the game's. |
-| `script_append` | The packages' own `folder` (for example `action/script`) copied in load order, then `append` added to `entry` (or to `base` up to `base_until` when no package has one); `refuse` lists text that means a package already contains it. A compiled entry script (Lua bytecode) is refused; packages shipping different entry scripts are a clash, recorded in the report. |
+| `hook` | A script fragment: the packages' own `folder` (for example `action/script`) copied in load order, then `fragment` appended to `entry` (the last package's copy, or `base` up to `base_until` when no package has one). Several `hook` steps for one entry are appended in their order, each wrapping the one before (a fragment that keeps the current `Update` and defines its own wraps the previous hook's). `markers` lists text that means the script already contains the fragment, which is refused (`refuse_text` says why). A compiled entry script (Lua bytecode) is refused, and so is a result that does not compile as Lua 5.1 (checked, never run; the message names the file, the line and the mod whose part it is); packages shipping different entry scripts are a clash, recorded in the report. Code is never merged. Part of a mod's config (advanced), not a player setting. Before 3.20 this was `script_append` (`append` is now `fragment`, `refuse` is `markers`). |
 | `remove` | Leftovers, a `glob` below the output's `mod` folder. |
 
 `merge`, `text` and `params` take `each = { folders_in, except }` to repeat per folder (`{each}` in their paths).
@@ -75,6 +91,12 @@ As the mod's own installer does, only the **last** enabled package before it tha
 mod's copy. Files no format rule covers (behaviour and animation data, `.hkx`) are taken whole, three-way: changed
 by one side, its copy; changed differently by both, the mod's copy and a clash. Clashes and the rules' notes are
 written to the build's report (`merge-report.txt`).
+
+Only the files the steps name are taken from the download, with one addition: licence and notice files the
+download ships (`LICENSE*`, `NOTICE*`, `COPYING*`, third-party notices, a `licenses/` folder), beside a DLL a `copy`
+step takes or at the download's top, are copied next to that DLL when present, since their licences ask for them to
+travel with the binaries. None is required. What the download says about itself (the values `match.json` checks, its
+`version`) is read once, when it is matched, and written into the build's manifest.
 
 The build runs in a staging folder beside the output and replaces it by renaming; the build it replaced is kept in
 `.roundtable-build/previous` for Undo rebuild. The manifest is written as the mod's installer writes it, with each
@@ -92,14 +114,10 @@ the launcher does not install are listed with the reason in `install_unsupported
 ```toml
 [builds.install]
 profile_settings = { profileVersion = "v1", start_online = false }  # top-level keys set
-owned_package_ids = ["my-overhaul"]          # an earlier install's packages, removed first
-owned_dlls = ["myoverhaul.dll"]              # an earlier install's DLLs (file names, lower-case), removed first
+owned_package_ids = ["my-overhaul"]          # the packages it owns: an earlier install's are removed first
+owned_dlls = ["myoverhaul.dll"]              # the DLLs it owns (file names, case aside), likewise
 required_files = ["MyOverhaul.dll", "mod/regulation.bin"]   # in its folder: the check after an install
 required_folders = ["ui"]                    # in its folder, not empty
-
-[builds.install.seamless]                    # Seamless Co-op must be switched on
-dll = "ersc.dll"
-candidates = ["{profile_dir}/SeamlessCoop/ersc.dll", "{game_dir}/SeamlessCoop/ersc.dll"]
 
 [[builds.install.set_initializers]]          # other mods' DLLs that get an initializer when they have none
 name_prefix = "companionmod"
@@ -117,10 +135,18 @@ folder = "mod"
 after_enabled_packages = true                # load_after every enabled package already there, each optional
 ```
 
-The plan removes an earlier install's own entries, sets the settings that differ, switches Seamless Co-op on (an
-entry switched off is switched on and pointed at the Seamless found; with none, the first candidate that exists is
-added; with no Seamless at all the install stops), gives the matching DLLs their initializer, and adds the
+The plan removes an earlier install's own entries, sets the settings that differ, makes sure every mod the build
+`requires` is there and switched on (an entry switched off is switched on and pointed at the copy found when
+`enable_if_off` allows it, else the install stops; with none, the first candidate that exists is added; with no copy
+at all the install stops, naming it), gives the matching DLLs their initializer, and adds the
 overhaul's DLLs and package last with the load settings written here. The player's other entries are left as they
-are. It stops for a profile me3 cannot use (two enabled packages with one id, a circle of `load_after`), an enabled
+are. **Owned entries.** `owned_package_ids` and `owned_dlls` are the one record of which profile entries are the
+overhaul's own (list every id and file name any version of it has used): installing it again, any version or
+edition, removes those first, so it is an update of the earlier install and never a second set of entries. They are
+also how the launcher tells the overhaul's entries from the player's, which entries its `requires` apply to, and
+whether a profile already has an overhaul: a profile can have one overhaul for now, so installing a different one
+into it stops ("This profile already has Nightreign Revive. A profile can have one overhaul for now: …").
+
+It stops for a profile me3 cannot use (two enabled packages with one id, a circle of `load_after`), an enabled
 package whose folder is missing, or an unreadable profile. Nightreign Revive's LITE description is the one its own
 installer (0.1.33-rc3) applies; the plan gives the same profile as that installer on the profiles compared.
