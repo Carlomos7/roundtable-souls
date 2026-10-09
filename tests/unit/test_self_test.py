@@ -34,6 +34,20 @@ def test_the_qml_module_list_is_what_the_scanner_finds():
     assert self_test.requirements()["qml_modules"] == found
 
 
+def test_the_build_collects_only_the_qml_modules_the_launcher_needs():
+    """scripts/pyinstaller_hooks/hook-PySide6.QtQml.py: every Qt module in the list and what it depends on, nothing
+    like Qt WebEngine or Qt 3D (PyInstaller's own hook takes every QML module Qt ships: about 290 MB more)."""
+    import runpy
+
+    pytest.importorskip("PyInstaller")
+    hook = runpy.run_path(str(PACKAGE_DIR.parents[1] / "scripts" / "pyinstaller_hooks" / "hook-PySide6.QtQml.py"))
+    modules = hook["closure"](hook["WANTED"])
+    shipped_by_qt = [m for m in self_test.requirements()["qml_modules"] if m.startswith("Qt")]
+    assert set(shipped_by_qt) <= set(modules)
+    assert {"QtQuick.Templates", "QtQml.Models"} <= set(modules)  # dependencies, found through the qmldir files
+    assert not any(m.startswith(("QtWebEngine", "Qt3D", "QtQuick3D", "QtCharts", "QtMultimedia")) for m in modules)
+
+
 def test_every_listed_file_is_in_the_source_tree():
     for spec in self_test.requirements()["files"]:
         self_test._files(spec)

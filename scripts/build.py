@@ -69,6 +69,8 @@ def pyinstaller(py: str, identity_file: Path | None) -> Path:
         "--icon", PKG / "assets" / "icon.ico", "--paths", ROOT / "src",
         "--collect-data", "roundtable_souls", "--collect-all", "qfluentwidgets", "--collect-all", "py7zr",
         "--collect-all", "velopack", "--exclude-module", "tkinter", *extra,
+        # our hook for PySide6.QtQml: only the QML modules the launcher imports (PyInstaller's takes every one Qt ships)
+        "--additional-hooks-dir", ROOT / "scripts" / "pyinstaller_hooks",
         "--hidden-import", "lupa.lua51",  # imported inside a function (overhauls/lua_check.py); only Lua 5.1 is used
         "--distpath", DIST, "--workpath", BUILD / "work", "--specpath", BUILD, ROOT / "scripts" / "entry.py",
     )  # fmt: skip
