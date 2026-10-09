@@ -9,10 +9,12 @@ The changes are those Nightreign Revive's installer makes to a profile on a LITE
 installer/installer.py: clean_owned, then patched_profile), with its DLLs' load settings exactly as it writes them:
     remove   earlier installs' own entries (its package ids and DLL file names)
     set      top-level settings (profileVersion, start_online)
-    update   Seamless Co-op's DLL switched back on (pointed at the Seamless found) when the profile has it switched
-             off; a companion mod's DLL given its initializer when it has none
-    add      Seamless Co-op's DLL when the profile has none; the overhaul's DLLs, after the profile's own, the one
-             with after_enabled_natives loading after every enabled DLL; its package, after every enabled package
+    update   a required mod (the build's requires list, as the mod's author declares it) switched back on, pointed at
+             the copy found, when the profile has it switched off and the requirement allows it; a companion mod's
+             DLL given its initializer when it has none
+    add      a required mod when the profile has none (the first of its candidates that exists); the overhaul's
+             DLLs, after the profile's own, the one with after_enabled_natives loading after every enabled DLL; its
+             package, after every enabled package
 Paths of added entries are absolute, as the installer writes them; entries are matched by their path as the profile
 writes it (packages by id). apply() makes the same changes to a parsed profile in memory: what the writer has to
 produce, entry by entry.
@@ -22,12 +24,13 @@ from __future__ import annotations
 
 import os
 import tomllib
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath
 from typing import Any, Literal
 
-from roundtable_souls.overhauls.config import Build, Install, OverhaulConfig
+from roundtable_souls.overhauls import requirements
+from roundtable_souls.overhauls.config import Build, Install, OverhaulConfig, Requirement
 
 Kind = Literal["setting", "package", "native"]
 
@@ -52,6 +55,9 @@ class Problem:
 class Plan:
     changes: list[Change] = field(default_factory=list)
     problems: list[Problem] = field(default_factory=list)
+    # The profile already had this overhaul's entries (an earlier install, any edition or version): the install
+    # replaces them, so it is an update of that install, never a second set of entries.
+    update: bool = False
 
     @property
     def ok(self) -> bool:
@@ -128,17 +134,25 @@ def install_of(config: OverhaulConfig, edition: str | None = None) -> tuple[Buil
 def plan(
     profile_text: str,
     profile: Path,
-    install: Install,
+    build: Build,
     own: Path,
     *,
     game_dir: Path | None = None,
-    seamless: Path | None = None,
+    provided: dict[str, Path] | None = None,
+    others: Sequence[OverhaulConfig] = (),
     is_file: Callable[[Path], bool] = Path.is_file,
     is_dir: Callable[[Path], bool] = Path.is_dir,
 ) -> Plan:
-    """The changes that install the overhaul (its own folder `own`) into the profile at `profile` whose text is
-    profile_text, and the problems. seamless: the Seamless Co-op DLL to use when the profile has none switched on
-    (else the install's candidates are tried)."""
+    """The changes that install one edition of the overhaul (build; its own folder `own`) into the profile at
+    `profile` whose text is profile_text, and the problems. provided: a copy of a required mod to use when the profile
+    has none switched on, by the requirement's name (else its candidates are tried). others: the other overhauls'
+    configs (overhauls.load); a profile that has one of them is refused (one overhaul per profile for now). The
+    entries this edition owns (Install.owned_package_ids, owned_dlls) are removed first: plan.update says the
+    profile had them."""
+    if build.install is None:
+        raise ValueError(f"{build.id} has no install description")
+    install = build.install
+    provided = {k.lower(): v for k, v in (provided or {}).items()}
     out = Plan()
     try:
         data = tomllib.loads(profile_text)
@@ -149,16 +163,34 @@ def plan(
     packages = [dict(r) for r in rows(data, "packages")]
     natives = [dict(r) for r in rows(data, "natives")]
 
-    # clean_owned: an earlier install's own entries go first (any edition's)
-    owned_ids, owned_dlls = set(install.owned_package_ids), {d.lower() for d in install.owned_dlls}
+    # one overhaul per profile (for now): another overhaul's entries stop the install
+    for other in others:
+        if any(
+            requirements.owner([other], kind, r)
+            for kind, rs in (("package", packages), ("native", natives))
+            for r in rs
+        ) and not _same_overhaul(other, build):
+            out.problems.append(
+                Problem(
+                    "another-overhaul",
+                    f"This profile already has {other.label}. A profile can have one overhaul for now: remove "
+                    f"{other.label} from it first, or install into another profile.",
+                )
+            )
+
+    # clean_owned: an earlier install's own entries go first (any edition's): installing again is an update
+    def mine(kind: str, r: dict) -> bool:
+        return requirements.owns(install, kind, r)
+
     for r in packages:
-        if r.get("id") in owned_ids:
+        if mine("package", r):
             out.changes.append(Change("remove", "package", package_id(r), why="an earlier install's own package"))
     for r in natives:
-        if dll_name(r) in owned_dlls:
+        if mine("native", r):
             out.changes.append(Change("remove", "native", str(r.get("path", "")), why="an earlier install's own DLL"))
-    packages = [r for r in packages if r.get("id") not in owned_ids]
-    natives = [r for r in natives if dll_name(r) not in owned_dlls]
+    out.update = any(c.action == "remove" for c in out.changes)
+    packages = [r for r in packages if not mine("package", r)]
+    natives = [r for r in natives if not mine("native", r)]
 
     # install(): every enabled package's folder must be there, in an order me3 can follow
     _, problem = _ordered(packages)
@@ -173,30 +205,11 @@ def plan(
         if data.get(key) != value:
             out.changes.append(Change("set", "setting", key, {key: value}, "the overhaul's installer sets it"))
 
-    # install() + patched_profile: Seamless Co-op switched on
-    if install.seamless is not None:
-        want = install.seamless.dll.lower()
-        if not any(dll_name(n) == want and _enabled(n) for n in natives):
-            found = seamless or _first_candidate(install, profile, game_dir, is_file)
-            if found is None:
-                out.problems.append(
-                    Problem(
-                        "seamless-missing", f"Seamless Co-op ({install.seamless.dll}) is required and was not found."
-                    )
-                )
-            else:
-                path = Path(found).as_posix()
-                off = next((n for n in natives if dll_name(n) == want), None)
-                if off is not None:
-                    values = {"enabled": True, "path": path}
-                    out.changes.append(
-                        Change("update", "native", str(off.get("path", "")), values, "Seamless is required")
-                    )
-                    off.update(values)
-                else:
-                    entry = {"path": path}
-                    out.changes.append(Change("add", "native", values=entry, why="Seamless is required"))
-                    natives.append(dict(entry))
+    # install() + patched_profile: what the overhaul requires, present and switched on
+    for req in build.requires:
+        problem = _require(req, out, packages, natives, profile, game_dir, provided.get(req.name.lower()), is_file)
+        if problem is not None:
+            out.problems.append(problem)
 
     deps = [{"id": native_id(n), "optional": True} for n in natives if _enabled(n)]
 
@@ -226,9 +239,43 @@ def plan(
     return out
 
 
-def _first_candidate(install: Install, profile: Path, game_dir: Path | None, is_file) -> Path | None:
-    assert install.seamless is not None
-    for c in install.seamless.candidates:
+def _same_overhaul(other: OverhaulConfig, build: Build) -> bool:
+    return any(b is build or b.id == build.id for b in other.builds)
+
+
+def _require(req: Requirement, out: Plan, packages, natives, profile, game_dir, given, is_file) -> Problem | None:
+    """One requirement: nothing to do when it is switched on; switched off and enable_if_off, switched on and pointed
+    at the copy found; not there, the copy found added. Without a copy, or switched off and not to be switched on by
+    the install, a blocking problem naming it. given: the copy to use (else the requirement's candidates)."""
+    rows = packages if req.kind == "package" else natives
+    entries = [{**r, "kind": req.kind} for r in rows]
+    found_state, entry = requirements.state(req, entries)
+    if found_state == "on":
+        return None
+    if found_state == "off" and not req.enable_if_off:
+        return Problem("requirement-off", f"{req.shown()} is required and is switched off in the profile.")
+    copy = given or _first_candidate(req, profile, game_dir, is_file)
+    if copy is None:
+        return Problem("requirement-missing", f"{req.shown()} is required and was not found.")
+    path = Path(copy).as_posix()
+    why = f"{req.label or req.name} is required"
+    if entry is not None:
+        row = next(r for r in rows if requirements.matches(req, req.kind, r) and not requirements.is_enabled(r))
+        values = {"enabled": True, "path": path}
+        key = package_id(row) if req.kind == "package" else str(row.get("path", ""))
+        out.changes.append(Change("update", req.kind, key, values, why))
+        row.update(values)
+    else:
+        added: dict[str, Any] = {"path": path}
+        if req.kind == "package":
+            added = {"id": req.name, "path": path}
+        out.changes.append(Change("add", req.kind, values=added, why=why))
+        rows.append(dict(added))
+    return None
+
+
+def _first_candidate(req: Requirement, profile: Path, game_dir: Path | None, is_file) -> Path | None:
+    for c in req.candidates:
         if "{game_dir}" in c and game_dir is None:
             continue
         p = Path(c.replace("{profile_dir}", str(Path(profile).parent)).replace("{game_dir}", str(game_dir or "")))

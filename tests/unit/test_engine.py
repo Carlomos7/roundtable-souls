@@ -282,14 +282,33 @@ def test_a_damaged_file_stops_the_build_with_its_name(world):
     assert not list(world.base.glob(".NightreignRevive.building-*"))
 
 
-def test_seamless_is_required(world):
+def test_without_a_requires_list_nothing_is_required(world):
+    """Revive's config declares no requirement, so it builds without Seamless Co-op switched on."""
     world.profile.write_text(
         PROFILE.replace(
             "path = 'natives/SeamlessCoop/ersc.dll'", "path = 'natives/SeamlessCoop/ersc.dll'\nenabled = false"
         )
     )
-    with pytest.raises(engine.EngineError, match="Seamless"):
-        world.build()
+    world.build()
+    assert (world.own / "mod/regulation.bin").read_bytes() != b"OLD BUILD"
+
+
+def test_a_configs_requirements_refuse_the_build_naming_them(world):
+    """What a config's requires list names: present and switched on, or the build is refused, naming it."""
+    recipe, version, _ = engine.match(world.setup)
+    assert "requires" not in recipe and engine.unmet(world.profile, recipe) == []
+    needs = {
+        **recipe,
+        "requires": [{"package": "body"}, {"package": "trees", "label": "Trees"}, {"native": "ersc.dll"}],
+    }
+    world.profile.write_text(PROFILE.replace("path = 'natives/SeamlessCoop/ersc.dll'\nload_early = true\n", ""))
+    assert engine.unmet(world.profile, needs) == [
+        "Nightreign Revive needs Trees (trees) switched on in the profile.",
+        "Nightreign Revive needs ersc.dll switched on in the profile.",
+    ]
+    with pytest.raises(engine.EngineError, match="needs Trees"):
+        engine.build(world.profile, world.own / "mod", world.setup, needs, version, lambda s: None, loc=er())
+    assert (world.own / "mod/regulation.bin").read_bytes() == b"OLD BUILD"
 
 
 def test_the_inputs_are_only_read(world):
@@ -407,7 +426,8 @@ def test_animation_data_changed_differently_by_the_package_and_the_mod_is_a_reco
     clips = files_of((world.own / "mod/chr/c0000_a00_hi.anibnd.dcx").read_bytes())
     assert clips["a000_000.hkx"] == b"revive walk"
     report = (world.own / "merge-report.txt").read_text()
-    assert "clash: chr/c0000_a00_hi.anibnd.dcx" in report and "a000_000.hkx" in report
+    assert "clash: chr/c0000_a00_hi.anibnd.dcx (the player character's animations) " in report
+    assert "a000_000.hkx" in report
 
 
 def test_packages_with_different_entry_scripts_are_a_recorded_clash(world):
@@ -417,7 +437,7 @@ def test_packages_with_different_entry_scripts_are_a_recorded_clash(world):
     hks = (world.own / "mod/action/script/c0000.hks").read_bytes()
     assert hks.startswith(b"-- anims script")  # the last package's
     report = (world.own / "merge-report.txt").read_text()
-    assert "clash: action/script/c0000.hks: body, anims ship different copies" in report
+    assert "clash: action/script/c0000.hks (behaviour scripts): body, anims ship different copies" in report
 
 
 def test_the_same_entry_script_in_two_packages_is_no_clash(world):
@@ -441,3 +461,120 @@ def test_merge_ini_adds_only_what_is_new():
     assert out.startswith("; mine\r\n[Coop]\r\nEnabled=0\r\nRescue=60\r\n[Input]\r\nKeyboardEnabled=0\r\n")
     assert out.endswith("[New]\r\nX=1\r\n")
     assert engine.merge_ini(mine, "[Coop]\nEnabled=1\n") == mine  # nothing new: byte for byte
+
+
+HOOKS_CONFIG = """overhaul = 1
+id = "hooks"
+label = "Hooks"
+short_label = "Hooks"
+game = "eldenring"
+
+[recognise]
+folder = "Hooks"
+manifest = "installation.json"
+
+[[builds]]
+id = "hooks"
+match = { files = ["hooks.json"] }
+output = { mod = "mod" }
+
+[[builds.steps]]
+do = "hook"
+folder = "action/script"
+entry = "c0000.hks"
+base = "base.hks"
+fragment = "first.hks"
+markers = ["FirstOriginalUpdate"]
+
+[[builds.steps]]
+do = "hook"
+folder = "action/script"
+entry = "c0000.hks"
+base = "base.hks"
+fragment = "second.hks"
+markers = ["SecondOriginalUpdate"]
+"""
+
+
+def hooks_setup(world, tmp_path):
+    local = overhauls.local_dir()
+    assert local is not None
+    local.mkdir(parents=True, exist_ok=True)
+    (local / "hooks.toml").write_text(HOOKS_CONFIG, encoding="utf-8")
+    setup = tmp_path / "hookssetup"
+    setup.mkdir()
+    (setup / "hooks.json").write_text("{}")
+    (setup / "base.hks").write_text("-- base\n")
+    (setup / "first.hks").write_text("local FirstOriginalUpdate = Update\n")
+    (setup / "second.hks").write_text("local SecondOriginalUpdate = Update\n")
+    target = world.base / "Hooks" / "mod"
+    target.mkdir(parents=True)
+    world.profile.write_text(PROFILE + "\n[[packages]]\nid = \"hooks\"\npath = 'Hooks/mod'\n")
+    recipe, version, _ = engine.match(setup)
+    assert recipe is not None and recipe["id"] == "hooks"
+    return setup, target, recipe, version
+
+
+def test_several_hook_steps_are_appended_in_order_to_the_last_packages_script(world, tmp_path):
+    setup, target, recipe, version = hooks_setup(world, tmp_path)
+    engine.build(world.profile, target, setup, recipe, version, lambda s: None, loc=er())
+    # the last package before it with the script: Revive's build ("NightreignRevive/mod" loads after anims)
+    hks = (target / "action/script/c0000.hks").read_text()
+    assert hks.endswith("\nlocal FirstOriginalUpdate = Update\n\nlocal SecondOriginalUpdate = Update\n")
+    assert hks.index("FirstOriginalUpdate") < hks.index("SecondOriginalUpdate")
+
+
+def test_a_hook_already_in_a_package_before_it_is_refused(world, tmp_path):
+    setup, target, recipe, version = hooks_setup(world, tmp_path)
+    (world.base / "mod/anims/action/script/c0000.hks").write_text("local SecondOriginalUpdate = Update\n")
+    with pytest.raises(engine.EngineError, match="A mod before Hooks already contains its script."):
+        engine.build(world.profile, target, setup, recipe, version, lambda s: None, loc=er())
+
+
+def test_licence_and_notice_files_travel_with_the_dlls_when_present(world, tmp_path):
+    """The made-up mod's licences: beside its DLL in the download and at the download's top. Nothing else of the
+    download is taken, and a download without any builds as before."""
+    local = overhauls.local_dir()
+    assert local is not None
+    local.mkdir(parents=True)
+    (local / "toy.toml").write_text(TOY_CONFIG, encoding="utf-8")
+    setup = tmp_path / "toysetup"
+    (setup / "payload/licenses").mkdir(parents=True)
+    (setup / "toy.json").write_text("{}")
+    (setup / "payload/toy.dll").write_bytes(b"toy")
+    (setup / "payload/toy.bin").write_bytes(pack({"EquipParamWeapon": set_word(2000, 2, 9)}))
+    (setup / "payload/LICENSE.txt").write_text("MIT")
+    (setup / "payload/licenses/zlib.txt").write_text("zlib")
+    (setup / "NOTICE").write_text("notice")
+    (setup / "README.md").write_text("not a notice")
+    (setup / "payload/licensed-stuff.ini").write_text("not a notice either")
+    recipe, version, _ = engine.match(setup)
+    target = world.base / "Toy" / "mod"
+    target.mkdir(parents=True)
+    world.profile.write_text(PROFILE + "\n[[packages]]\nid = \"toy\"\npath = 'Toy/mod'\n")
+    (world.own / "mod/regulation.bin").write_bytes(vanilla())
+    said = []
+    engine.build(world.profile, target, setup, recipe, version, said.append, loc=er())
+    toy = world.base / "Toy"
+    assert (toy / "LICENSE.txt").read_text() == "MIT" and (toy / "NOTICE").read_text() == "notice"
+    assert (toy / "licenses/zlib.txt").read_text() == "zlib"
+    assert not (toy / "README.md").exists() and not (toy / "licensed-stuff.ini").exists()
+    assert any("LICENSE.txt kept beside the mod's DLLs" in line for line in said)
+
+
+def test_the_manifest_records_what_the_download_said_about_itself(world):
+    world.build()
+    m = json.loads((world.own / "installation.json").read_text())
+    assert m["edition"] == "LITE" and m["version"] == "0.1.33-rc3"
+
+
+def test_a_composed_script_that_would_not_load_is_refused_offline(world):
+    """Revive's fragment cut short: the build is refused naming the file, the line and the mod; nothing changes."""
+    (world.setup / "installer/revive.hks").write_text("local NrrOriginalUpdate = Update\nfunction Update()\n")
+    with pytest.raises(engine.EngineError) as e:
+        world.build()
+    assert str(e.value).startswith(
+        "action/script/c0000.hks would not load in game: Nightreign Revive's script has a syntax error at its line 2 ("
+    )
+    assert str(e.value).endswith("The previous build is kept.")
+    assert (world.own / "mod/regulation.bin").read_bytes() == b"OLD BUILD"

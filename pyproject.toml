@@ -17,6 +17,7 @@ dependencies = [
     "velopack==1.2.161",  # must match the vpk CLI the release workflow packs with
     "sqlalchemy>=2.1.3,<3",  # 2.x: typed DeclarativeBase, Mapped[], mapped_column (storage/)
     "alembic>=1.20.0",  # storage/migrations, run in code at start-up
+    "lupa>=2.8,<3",  # Lua 5.1 compiler: composed character scripts are checked before a build is used (decision 0006)
 ]
 
 [project.scripts]

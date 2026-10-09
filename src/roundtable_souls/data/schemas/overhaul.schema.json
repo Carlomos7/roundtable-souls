@@ -77,10 +77,10 @@
         "config": "#/$defs/KeepConfig",
         "copy": "#/$defs/Copy",
         "copy_tree": "#/$defs/CopyTree",
+        "hook": "#/$defs/Hook",
         "merge": "#/$defs/Merge",
         "params": "#/$defs/Params",
         "remove": "#/$defs/Remove",
-        "script_append": "#/$defs/ScriptAppend",
         "text": "#/$defs/AddText"
        },
        "propertyName": "do"
@@ -105,7 +105,7 @@
         "$ref": "#/$defs/AddText"
        },
        {
-        "$ref": "#/$defs/ScriptAppend"
+        "$ref": "#/$defs/Hook"
        },
        {
         "$ref": "#/$defs/Remove"
@@ -113,6 +113,13 @@
       ]
      },
      "title": "Steps",
+     "type": "array"
+    },
+    "requires": {
+     "items": {
+      "$ref": "#/$defs/Requirement"
+     },
+     "title": "Requires",
      "type": "array"
     },
     "install": {
@@ -207,6 +214,73 @@
    "title": "Each",
    "type": "object"
   },
+  "Hook": {
+   "additionalProperties": false,
+   "description": "A mod's script fragment added to the entry script (overhauls.hooks): the packages' own script folder copied\nin load order, then the fragment appended to the entry file (the last package's copy, else the download's base).\nSeveral hooks for one entry are appended in the order of the steps, each wrapping the one before.",
+   "properties": {
+    "do": {
+     "const": "hook",
+     "title": "Do",
+     "type": "string"
+    },
+    "folder": {
+     "title": "Folder",
+     "type": "string"
+    },
+    "entry": {
+     "title": "Entry",
+     "type": "string"
+    },
+    "base": {
+     "title": "Base",
+     "type": "string"
+    },
+    "base_until": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Base Until"
+    },
+    "fragment": {
+     "title": "Fragment",
+     "type": "string"
+    },
+    "markers": {
+     "items": {
+      "type": "string"
+     },
+     "title": "Markers",
+     "type": "array"
+    },
+    "refuse_text": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Refuse Text"
+    }
+   },
+   "required": [
+    "do",
+    "folder",
+    "entry",
+    "base",
+    "fragment"
+   ],
+   "title": "Hook",
+   "type": "object"
+  },
   "Initializer": {
    "additionalProperties": false,
    "properties": {
@@ -255,17 +329,6 @@
      },
      "title": "Owned Dlls",
      "type": "array"
-    },
-    "seamless": {
-     "anyOf": [
-      {
-       "$ref": "#/$defs/Seamless"
-      },
-      {
-       "type": "null"
-      }
-     ],
-     "default": null
     },
     "set_initializers": {
      "items": {
@@ -634,27 +697,11 @@
    "title": "Remove",
    "type": "object"
   },
-  "ScriptAppend": {
+  "Requirement": {
    "additionalProperties": false,
+   "description": "Another mod the overhaul needs in the profile, present and switched on: a DLL (native, its file name) or a\npackage (its id). The build is refused without it; an install switches it on when it is there but off and\nenable_if_off allows it, else adds the first of candidates that exists, else stops.",
    "properties": {
-    "do": {
-     "const": "script_append",
-     "title": "Do",
-     "type": "string"
-    },
-    "folder": {
-     "title": "Folder",
-     "type": "string"
-    },
-    "entry": {
-     "title": "Entry",
-     "type": "string"
-    },
-    "base": {
-     "title": "Base",
-     "type": "string"
-    },
-    "base_until": {
+    "native": {
      "anyOf": [
       {
        "type": "string"
@@ -664,20 +711,9 @@
       }
      ],
      "default": null,
-     "title": "Base Until"
+     "title": "Native"
     },
-    "append": {
-     "title": "Append",
-     "type": "string"
-    },
-    "refuse": {
-     "items": {
-      "type": "string"
-     },
-     "title": "Refuse",
-     "type": "array"
-    },
-    "refuse_text": {
+    "package": {
      "anyOf": [
       {
        "type": "string"
@@ -687,27 +723,24 @@
       }
      ],
      "default": null,
-     "title": "Refuse Text"
-    }
-   },
-   "required": [
-    "do",
-    "folder",
-    "entry",
-    "base",
-    "append"
-   ],
-   "title": "ScriptAppend",
-   "type": "object"
-  },
-  "Seamless": {
-   "additionalProperties": false,
-   "description": "The overhaul needs Seamless Co-op's DLL switched on in the profile.",
-   "properties": {
-    "dll": {
-     "default": "ersc.dll",
-     "title": "Dll",
-     "type": "string"
+     "title": "Package"
+    },
+    "label": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "title": "Label"
+    },
+    "enable_if_off": {
+     "default": false,
+     "title": "Enable If Off",
+     "type": "boolean"
     },
     "candidates": {
      "items": {
@@ -717,7 +750,7 @@
      "type": "array"
     }
    },
-   "title": "Seamless",
+   "title": "Requirement",
    "type": "object"
   },
   "SetInitializer": {

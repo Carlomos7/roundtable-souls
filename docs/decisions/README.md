@@ -11,3 +11,4 @@ records are not rewritten afterwards.
 | 0003 | [Release feeds are signed with minisign](0003-signed-releases.md) | in use from the release after 3.13.2 |
 | 0004 | [Velopack installs and applies updates; the launcher decides what to trust and undoes failed starts](0004-velopack.md) | in use from the release after 3.13.2 |
 | 0005 | [The launcher's own records go into one SQLite database, through SQLAlchemy and Alembic](0005-storage.md) | in use since 3.16.0 |
+| 0006 | [Composed character scripts are checked with Lua 5.1 itself (lupa) before a build is used](0006-lua-parser.md) | in use from 3.20.0 |

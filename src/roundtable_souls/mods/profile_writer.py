@@ -18,7 +18,8 @@ The rules are plug-ins of one interface (ProfileRule), run in a fixed order on e
                            of a change aimed at something else
     ValidForMe3            what me3 refuses to start with: a package id used twice, a load order loop, a required
                            dependency that is missing; and two switched-on DLLs with the same file name
-    Requires               a mod's declared dependencies stay present and switched on (Requirements holds the data)
+    Requires               a mod's declared dependencies stay present and switched on (Requirements holds the data;
+                           by default the overhaul configs' requires lists, for the entries each overhaul owns)
     Paths                  entries the launcher adds get paths relative to the profile, short enough for Windows
 
 A rule refuses only what the change itself introduces: a problem the profile already had is noted (Plan.notes), not
@@ -40,6 +41,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
 
+from roundtable_souls import overhauls
 from roundtable_souls.formats import me3_profile
 from roundtable_souls.game import catalog as games
 from roundtable_souls.mods import checks, history, profile_edit
@@ -335,6 +337,26 @@ class StaticRequirements:
         return list(self.table.get(me3_profile.entry_ref(entry).lower(), ()))
 
 
+class OverhaulRequirements:
+    """Requirements from the overhaul configs (overhauls.load): an entry an overhaul owns (its package ids, its DLL
+    file names) needs what that edition's requires list names. game: the configs of one game (all when None)."""
+
+    def __init__(self, configs: Sequence[overhauls.OverhaulConfig] | None = None, game: str | None = None):
+        self._configs = list(configs) if configs is not None else None
+        self.game = game
+
+    @property
+    def configs(self) -> list[overhauls.OverhaulConfig]:
+        if self._configs is None:
+            self._configs = overhauls.load(self.game)
+        return self._configs
+
+    def of(self, entry: dict) -> list[Requirement]:
+        return [
+            Requirement(r.kind, r.name) for r in overhauls.requirements.needed_by(self.configs, entry["kind"], entry)
+        ]
+
+
 class Requires(ProfileRule):
     """A mod's declared dependencies (Requirements) stay present and switched on. Refused when the change removes or
     switches off something a mod that stays on needs, or adds a mod whose needs the profile does not meet."""
@@ -342,7 +364,7 @@ class Requires(ProfileRule):
     name = "requires"
 
     def __init__(self, requirements: Requirements | None = None):
-        self.requirements = requirements or NoRequirements()
+        self.requirements = requirements if requirements is not None else OverhaulRequirements()
 
     def check(self, plan: Plan) -> list[Refusal]:
         before, after = plan.entries_before(), plan.entries()
