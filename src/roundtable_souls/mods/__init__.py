@@ -5,8 +5,8 @@ through, with its rules), order (me3's load order, and keeping the mod that must
 install, extract, remove and checks (installing, unpacking, removing, and what is wrong with a profile's entries),
 conflicts (which file wins), rebuild (merged parameters and files), history and undo, configs (a DLL's settings
 files), profile_settings, models (the install plan's shape), naming (the launcher's folder names and the
-path-length limit), library (the launcher's own mod folder, rs-<game>: its layout and what it holds). engine and
-backends are the setup engines Phase 6 replaces."""
+path-length limit), library (the launcher's own mod folder, rs-<game>: its layout and what it holds), records (its
+versioned records). engine and backends are the setup engines Phase 6 replaces."""
 
 from typing import TYPE_CHECKING
 
@@ -29,6 +29,7 @@ if TYPE_CHECKING:  # each module is imported where it is used, not here: importi
         profile_settings,
         profile_writer,
         rebuild,
+        records,
         remove,
         undo,
     )
@@ -50,6 +51,7 @@ __all__ = [
     "profile_settings",
     "profile_writer",
     "rebuild",
+    "records",
     "remove",
     "undo",
     "backends",

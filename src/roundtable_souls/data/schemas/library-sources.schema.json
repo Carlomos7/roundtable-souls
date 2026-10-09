@@ -1,0 +1,44 @@
+{
+ "$defs": {
+  "SourceFile": {
+   "additionalProperties": false,
+   "properties": {
+    "from": {
+     "description": "its path in the download",
+     "title": "From",
+     "type": "string"
+    },
+    "sha256": {
+     "title": "Sha256",
+     "type": "string"
+    }
+   },
+   "required": [
+    "from",
+    "sha256"
+   ],
+   "title": "SourceFile",
+   "type": "object"
+  }
+ },
+ "additionalProperties": false,
+ "description": "Where each translated source file came from.",
+ "properties": {
+  "version": {
+   "const": 1,
+   "default": 1,
+   "title": "Version",
+   "type": "integer"
+  },
+  "files": {
+   "additionalProperties": {
+    "$ref": "#/$defs/SourceFile"
+   },
+   "description": "each file by its path in the sources folder (role/path), with its origin",
+   "title": "Files",
+   "type": "object"
+  }
+ },
+ "title": "SourcesRecord",
+ "type": "object"
+}
