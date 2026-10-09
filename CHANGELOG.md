@@ -8,6 +8,17 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
   redesigned Activity page in a window of its own: the last Play, install and failure at the top, the jobs by day,
   each job's log one click away, and Undo, which asks before it changes anything. The Activity page you know stays
   as it is.
+- Nightreign Revive (only with "Build Nightreign Revive in the launcher (preview)" on): its build now notes which game
+  version and which config it was made for, so it is rebuilt before Play when the game is updated ("the game was
+  updated since the last build") or when its config changes what the build does ("Nightreign Revive's config changed
+  since the last build"). A build made before this version doesn't say, so it is rebuilt once, the first time you
+  press Play.
+- Overhaul configs (for mod authors): a build can say where its download's files go in the launcher's own layout,
+  `[builds.sources]` (what its builds read: merge, text, hooks, base) and `[builds.runtime]` (what it runs with). They
+  are checked when the config loads; nothing uses them to install yet. docs/Overhaul configs.md has the details.
+
+## [3.20.0] - 2026-10-09
+
 - Appearance: new colours, the first step of the new look. Dark is now a near-neutral charcoal with the gold as its
   only colour (it was brown), with quieter lines between parts; light keeps its Carian blue with softer lines, and
   secondary buttons in both themes have no fill until you point at them. Code in the editors is highlighted in the
@@ -26,13 +37,6 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
   fragment is added with `do = "hook"` (several in order, each wrapping the one before). A config you made yourself
   with `[builds.install.seamless]` or `do = "script_append"` is left out until it is updated, and the launcher says
   which key moved where; docs/Overhaul configs.md has the new form.
-- Nightreign Revive (same preview): its build now notes which game version and which config it was made for, so
-  it is rebuilt before Play when the game is updated ("the game was updated since the last build") or when its
-  config changes what the build does ("Nightreign Revive's config changed since the last build"). A build made
-  before this version doesn't say, so it is rebuilt once, the first time you press Play.
-- Overhaul configs (for mod authors): a build can say where its download's files go in the launcher's own layout,
-  `[builds.sources]` (what its builds read: merge, text, hooks, base) and `[builds.runtime]` (what it runs with). They
-  are checked when the config loads; nothing uses them to install yet. docs/Overhaul configs.md has the details.
 
 ## [3.19.0] - 2026-10-08
 
