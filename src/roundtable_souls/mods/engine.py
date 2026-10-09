@@ -31,7 +31,9 @@ The inputs are only read: the packages' folders and the download. The build happ
 output, is checked (every output there and not empty), then swapped in by renaming. The build it replaced is kept in
 .roundtable-build/previous beside it, with a restore.json, so Undo rebuild swaps it back. The manifest the mod's own
 installer keeps (installation.json: the sources with their sha256) is written the same way, so the launcher's checks
-and the mod's installer keep working. The profile is never written.
+and the mod's installer keep working; the launcher adds what the build was made for under "inputs" (the game's files,
+the config's build, the merger's rules: merging.record), and a change to any makes the build out of date
+(input_reasons). The profile is never written.
 """
 
 from __future__ import annotations
@@ -354,7 +356,8 @@ def build(
         for row in sources:  # an input that changed while it was being merged
             if not Path(row["path"]).is_file() or _sha(Path(row["path"])) != row["sha256"]:
                 raise EngineError(f"An input changed during the build; rebuild again: {row['path']}")
-        manifest = _manifest(own, stage, out_cfg, recipe, version, sources, profile, setup, game_dir, __version__)
+        inputs = inputs_now(recipe, game_dir, loc, version=True)
+        manifest = _manifest(own, out_cfg, recipe, version, sources, profile, setup, game_dir, __version__, inputs)
         (stage / out_cfg.get("manifest", "installation.json")).write_text(
             json.dumps(manifest, indent=2), encoding="utf-8", newline="\n"
         )
@@ -538,9 +541,9 @@ def _hook_step(steps, label, setup, inputs, mod, sources, report, log) -> None:
 _OWN_KEYS = {"version", "game", "profile", "sources", "refreshProtocol", "maintenance", "builtBy", "recipe", "buildKey"}
 
 
-def _manifest(own, stage, out_cfg, recipe, version, sources, profile, setup, game_dir, launcher) -> dict:
+def _manifest(own, out_cfg, recipe, version, sources, profile, setup, game_dir, launcher, inputs) -> dict:
     """The mod's own manifest, as its installer keeps it (so its checks and a later run of it work), with the new
-    sources and a note of who built it."""
+    sources, a note of who built it and what it was built for (inputs; every key of the installer's is kept)."""
     try:
         old = json.loads((own / out_cfg.get("manifest", "installation.json")).read_text(encoding="utf-8"))
     except OSError, ValueError:
@@ -564,7 +567,36 @@ def _manifest(own, stage, out_cfg, recipe, version, sources, profile, setup, gam
         "builtBy": f"Roundtable Souls {launcher}",
         "recipe": recipe["id"],
         "buildKey": key,
+        "inputs": inputs,
     }
+
+
+def inputs_now(recipe: dict, game_dir: Path | None, loc: Locations, *, version: bool = False) -> dict:
+    """What a build of `recipe` is made for today: the merger's rules, the game's own files (when the game is found;
+    the regulation's version too when `version`, as a build records it) and the config's build."""
+    from roundtable_souls.merging import record as merge_record
+    from roundtable_souls.mods import rebuild
+
+    files = (
+        merge_record.game_files(game_dir, loc.game.regulation, rebuild.sha256, version=version) if game_dir else None
+    )
+    return merge_record.facts(loc.game.key, game_files=files, config_sha256=overhauls.recipe_sha256(recipe))
+
+
+def input_reasons(manifest: dict, recipe: dict, loc: Locations) -> list[str]:
+    """Why the launcher's build recorded in `manifest` (its installation.json) is out of date beyond its sources:
+    the game was updated, the config's build or the merger changed, or it does not say (made before 3.21). Empty for
+    a build the mod's own installer made: its sources are checked as before."""
+    from roundtable_souls.merging import record as merge_record
+
+    if not manifest.get("recipe"):
+        return []
+    recorded = manifest.get("inputs")
+    if not isinstance(recorded, dict):
+        return [merge_record.UNNOTED]
+    game_dir = loc.game_dir()
+    now = inputs_now(recipe, Path(game_dir) if game_dir else None, loc)
+    return merge_record.reasons(recorded, loc.game.key, now=now, label=recipe["label"])
 
 
 def _rename(src: Path, dst: Path) -> None:

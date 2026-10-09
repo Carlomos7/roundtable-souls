@@ -9,8 +9,8 @@ files next to a package, never from a mod's name:
     manifest_refresh  a tool that keeps installation.json with a refresh protocol beside its package and its setup
                       files (an installer and the Python that runs it) in a folder of the profile
 
-A Tool wraps a Recipe with what merge.py uses: label, package, own_folders(), merges(), sources(), report_time(),
-problem(), approval_key(), describe() and run(log).
+A Tool wraps a Recipe with what merge.py uses: label, package, own_folders(), merges(), sources(), input_reasons(),
+report_time(), problem(), approval_key(), describe() and run(log).
 """
 
 from __future__ import annotations
@@ -109,6 +109,18 @@ class Tool:
 
     def sources(self) -> list[dict] | None:
         return read_sources(self.recipe.sources_file)
+
+    def input_reasons(self) -> list[str]:
+        """Why the launcher's own build is out of date beyond its sources (the game updated, its config changed; see
+        mods.engine.input_reasons). Empty for a tool's own run."""
+        check = getattr(self.recipe.engine, "reasons", None)
+        if check is None:
+            return []
+        try:
+            data = json.loads(self.recipe.sources_file.read_text(encoding="utf-8"))
+        except OSError, ValueError:
+            return []
+        return check(data) if isinstance(data, dict) else []
 
     def report_time(self) -> float:
         try:

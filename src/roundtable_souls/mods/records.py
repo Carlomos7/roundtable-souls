@@ -48,6 +48,12 @@ class Record(_Strict):
     SCHEMA: ClassVar[str] = ""  # its schema's file name in data/schemas
     # Each record declares `version: Literal[VERSION]`, the version it writes.
 
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Each record class gets a MIGRATIONS of its own, so a step registered on one is never another's."""
+        super().__init_subclass__(**kwargs)
+        if "MIGRATIONS" not in cls.__dict__:
+            cls.MIGRATIONS = {}
+
     @classmethod
     def read(cls, data: dict | str | bytes) -> Self:
         """The record from its JSON (text or already parsed), an older version moved forward first."""

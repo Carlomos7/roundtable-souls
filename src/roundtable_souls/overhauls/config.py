@@ -20,6 +20,7 @@ fit the model is left out, and problems() says why.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import tomllib
 from pathlib import Path
@@ -255,6 +256,12 @@ class OverhaulConfig(_Strict):
         if build.requires:
             out["requires"] = [r.model_dump(exclude_unset=True) for r in build.requires]
         return out
+
+
+def recipe_sha256(recipe: dict) -> str:
+    """What a build records of its overhaul's config: a sha256 of the build as mods.engine reads it (OverhaulConfig.
+    recipe), so a change to what the build does makes it out of date, and a comment or an install setting does not."""
+    return hashlib.sha256(json.dumps(recipe, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 # ----------------------------------------------------------------------------- loading

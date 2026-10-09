@@ -103,6 +103,22 @@ def _index(game_dir: Path, name: str) -> tuple[dict[int, tuple], bytes] | None:
     return entries, index
 
 
+def index_fingerprint(game_dir: Path | str | None) -> str:
+    """Changes when the game's archives do (a game update rewrites their indexes): the sizes and modification times
+    of the .bhd files (the archives themselves are too large to hash). Builds merged against the game's files record
+    it, so they are made again after an update."""
+    import hashlib
+
+    parts = []
+    for name in ARCHIVES:
+        try:
+            st = (Path(game_dir) / f"{name}.bhd").stat()  # type: ignore[arg-type]
+            parts.append(f"{name}:{st.st_size}:{st.st_mtime_ns}")
+        except OSError, TypeError:
+            parts.append(f"{name}:-")
+    return hashlib.sha256("|".join(parts).encode()).hexdigest()[:16]
+
+
 def available(game_dir: Path | None) -> bool:
     return bool(game_dir) and all((Path(game_dir) / f"{n}.bhd").is_file() for n in ARCHIVES[:1])
 

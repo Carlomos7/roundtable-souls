@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from roundtable_souls import formats
+from roundtable_souls.game import archives as gamearchive
 from roundtable_souls.game import catalog as games
 from roundtable_souls.game import config as game_config
 from roundtable_souls.game import oodle as game_oodle
@@ -98,20 +99,6 @@ def shared_files(layers: list[dict]) -> dict[str, list[dict]]:
         for rel in _shipped(Path(layer["folder"])):
             owners.setdefault(rel.lower(), []).append({**layer, "rel": rel})
     return {k: v for k, v in owners.items() if len(v) > 1}
-
-
-def archives_fingerprint(game_dir) -> str:
-    """Changes when the game's archives do (a game update): the merged files are then merged again."""
-    from roundtable_souls.game import archives as gamearchive
-
-    parts = []
-    for name in gamearchive.ARCHIVES:
-        try:
-            st = (Path(game_dir) / f"{name}.bhd").stat()
-            parts.append(f"{name}:{st.st_size}:{st.st_mtime_ns}")
-        except OSError, TypeError:
-            parts.append(f"{name}:-")
-    return hashlib.sha256("|".join(parts).encode()).hexdigest()[:16]
 
 
 def history_root(profile: Path) -> Path:
@@ -219,7 +206,11 @@ class CombineTool:
         done = rec.get("files") or {}
         shared = shared_files(self.file_inputs(all_layers, until))
         out = []
-        if (done or shared) and rec.get("archives") and rec["archives"] != archives_fingerprint(self.loc.game_dir()):
+        if (
+            (done or shared)
+            and rec.get("archives")
+            and rec["archives"] != gamearchive.index_fingerprint(self.loc.game_dir())
+        ):
             return ["the game's own files changed since they were merged (a game update?)"]
         for low, owners in sorted(shared.items()):
             had = done.get(low)
@@ -348,7 +339,7 @@ class CombineTool:
             "made_by": f"Roundtable Souls {version}",
             "when": time.strftime("%Y-%m-%d %H:%M:%S"),
             "files": files,
-            "archives": archives_fingerprint(self.loc.game_dir()),
+            "archives": gamearchive.index_fingerprint(self.loc.game_dir()),
         } | merge_record.facts(me3_version=_me3_version(self.loc))
         if base is None:
             self._put_record(record, build)

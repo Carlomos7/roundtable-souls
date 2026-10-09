@@ -22,6 +22,10 @@ All notable changes to Roundtable Souls. The version is shown in the window titl
   fragment is added with `do = "hook"` (several in order, each wrapping the one before). A config you made yourself
   with `[builds.install.seamless]` or `do = "script_append"` is left out until it is updated, and the launcher says
   which key moved where; docs/Overhaul configs.md has the new form.
+- Nightreign Revive (same preview): its build now notes which game version and which config it was made for, so
+  it is rebuilt before Play when the game is updated ("the game was updated since the last build") or when its
+  config changes what the build does ("Nightreign Revive's config changed since the last build"). A build made
+  before this version doesn't say, so it is rebuilt once, the first time you press Play.
 
 ## [3.19.0] - 2026-10-08
 

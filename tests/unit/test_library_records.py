@@ -170,3 +170,11 @@ def test_older_versions_move_forward_one_step_at_a_time(kind, monkeypatch):
 @pytest.mark.parametrize("kind", records.RECORDS)
 def test_the_published_schemas_are_the_models(kind):
     assert json.loads(records.schema_path(kind).read_text(encoding="utf-8")) == records.schema(kind)
+
+
+def test_each_record_has_its_own_migrations():
+    assert BuildRecord.MIGRATIONS and 0 in BuildRecord.MIGRATIONS
+    assert all(k.MIGRATIONS == {} for k in (OverhaulRecord, SourcesRecord, SideEffectsRecord))
+    assert (
+        len({id(k.MIGRATIONS) for k in records.RECORDS} | {id(records.Record.MIGRATIONS)}) == len(records.RECORDS) + 1
+    )

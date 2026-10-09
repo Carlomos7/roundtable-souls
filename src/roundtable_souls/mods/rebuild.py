@@ -474,7 +474,8 @@ def stale_reasons(profile: Path, all_layers: list[dict], packs: list[dict], back
     own = backend.own_folders()
     package_folders = [e for e in _package_folders(profile) if not any(_within(e, o) for o in own)]
     files = sorted(_winner_files(target["folder"]), key=len, reverse=True)
-    reasons: list[str] = []
+    check = getattr(backend, "input_reasons", None)
+    reasons: list[str] = check() if check is not None else []  # the game, the config, the merger (the launcher's build)
     by_file: dict[str, list[tuple[Path, str]]] = {}
     for s in sources:
         here = backends.local_path(s["path"], profile, game_dir)
