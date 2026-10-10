@@ -132,6 +132,20 @@
       }
      ],
      "default": null
+    },
+    "sources": {
+     "additionalProperties": {
+      "type": "string"
+     },
+     "title": "Sources",
+     "type": "object"
+    },
+    "runtime": {
+     "additionalProperties": {
+      "type": "string"
+     },
+     "title": "Runtime",
+     "type": "object"
     }
    },
    "required": [

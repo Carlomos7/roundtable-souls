@@ -1,0 +1,54 @@
+{
+ "additionalProperties": false,
+ "description": "An installed overhaul.",
+ "properties": {
+  "version": {
+   "const": 1,
+   "default": 1,
+   "title": "Version",
+   "type": "integer"
+  },
+  "build": {
+   "description": "the config's build that was used (its id); 'default' for a form-made overhaul",
+   "title": "Build",
+   "type": "string"
+  },
+  "fingerprint": {
+   "description": "sha256 over the files the config takes from the download, at download paths, before translation",
+   "title": "Fingerprint",
+   "type": "string"
+  },
+  "installed": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "description": "when it was installed (UTC, ISO 8601)",
+   "title": "Installed"
+  },
+  "from": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "description": "where the download was installed from",
+   "title": "From"
+  }
+ },
+ "required": [
+  "build",
+  "fingerprint"
+ ],
+ "title": "OverhaulRecord",
+ "type": "object"
+}

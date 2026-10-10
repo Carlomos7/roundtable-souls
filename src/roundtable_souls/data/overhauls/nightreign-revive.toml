@@ -36,6 +36,23 @@ json = [{ file = "edition.json", key = "edition", equals = "LITE" }]
 version = { file = "revive-maintenance.json", key = "version" }
 versions = ["0.1.33-rc3"]
 
+# Where the download's files go in the launcher's layout (docs/Overhaul configs.md). The build above still reads the
+# download as it is; installing into the launcher's folder will use these (3.22). The most specific pattern wins.
+[builds.sources]
+"payload/mod/**" = "merge/**"  # at game paths, merged on top of the profile's packages
+"payload/mod/**/*.manifest.json" = ""  # notes Revive's merge tool left beside its output, not game files
+"payload/mod/action/script/c0000.hks" = "base/action/script/c0000.hks"  # the hook's base: only when no package has one
+"payload/settings/m00_00_00_00.talkesdbnd.dcx" = "merge/script/talk/m00_00_00_00.talkesdbnd.dcx"  # the grace menu
+"payload/settings/*.json" = "text/*.json"  # its menu strings, per language (engus.json, rusru.json)
+"payload/settings/vanilla/**" = ""  # copies of the game's own files: the game's archives are read instead
+"installer/revive.hks" = "hooks/revive.hks"  # the downed and revive states, appended to the character script
+
+[builds.runtime]
+"payload/*.dll" = "*.dll"
+"payload/RevivePrototype.ini" = "RevivePrototype.ini"  # the player's settings: kept on updates, new keys added
+"payload/ui/**" = "ui/**"
+"payload/audio/**" = "audio/**"
+
 [builds.output]
 mod = "mod"
 report = "merge-report.txt"

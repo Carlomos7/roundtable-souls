@@ -36,6 +36,7 @@ from roundtable_souls.formats.me3_profile import (  # the one profile reader; re
     resolve,
     to_blocks,
 )
+from roundtable_souls.mods import naming
 
 NATIVE_OPTION_KEYS = ("enabled", "optional", "load_early", "initializer", "finalizer", "load_after", "load_before")
 PACKAGE_OPTION_KEYS = ("enabled", "id", "load_after", "load_before")
@@ -335,12 +336,10 @@ def roots(profile: Path, text: str) -> tuple[Path, Path]:
     return pick("package", ("mod", "mods", "packages"), "mod"), pick("native", ("natives", "dll", "dlls"), "natives")
 
 
-_NEXUS_SUFFIX = re.compile(r"-\d+-[\d-]+-\d{10}$")  # "Hair 13-561-1-1-1648994275": mod id, version, upload time
-
-
 def slug(name: str) -> str:
-    """A folder / id friendly name: Nexus's numeric suffix dropped, odd characters collapsed to one dash."""
-    base = _NEXUS_SUFFIX.sub("", name.strip())
+    """A folder / id friendly name: Nexus's numeric suffix dropped, odd characters collapsed to one dash. The case is
+    kept (today's installs); the launcher's own layout names folders with mods.naming.mod_id."""
+    base = naming.NEXUS_SUFFIX.sub("", name.strip())
     s = re.sub(r"[^A-Za-z0-9._-]+", "-", base)
     s = re.sub(r"-{2,}", "-", s).strip("-.")
     return s[:60] or "mod"

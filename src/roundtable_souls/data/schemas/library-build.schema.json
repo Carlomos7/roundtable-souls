@@ -1,0 +1,171 @@
+{
+ "$defs": {
+  "GameFiles": {
+   "additionalProperties": false,
+   "description": "The game's own files a build merged against: a game update changes them.",
+   "properties": {
+    "archives": {
+     "description": "the archive indexes' fingerprint (sizes and times of the .bhd files)",
+     "title": "Archives",
+     "type": "string"
+    },
+    "regulation_sha256": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "the game's regulation.bin",
+     "title": "Regulation Sha256"
+    },
+    "regulation_version": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "the version the regulation names",
+     "title": "Regulation Version"
+    }
+   },
+   "required": [
+    "archives"
+   ],
+   "title": "GameFiles",
+   "type": "object"
+  },
+  "InputFile": {
+   "additionalProperties": false,
+   "properties": {
+    "path": {
+     "description": "relative to the library (with /), or absolute when outside it",
+     "title": "Path",
+     "type": "string"
+    },
+    "sha256": {
+     "title": "Sha256",
+     "type": "string"
+    }
+   },
+   "required": [
+    "path",
+    "sha256"
+   ],
+   "title": "InputFile",
+   "type": "object"
+  }
+ },
+ "additionalProperties": false,
+ "description": "What one profile's build was made from.",
+ "properties": {
+  "merger_revision": {
+   "title": "Merger Revision",
+   "type": "integer"
+  },
+  "ordering": {
+   "title": "Ordering",
+   "type": "string"
+  },
+  "game_config_sha256": {
+   "title": "Game Config Sha256",
+   "type": "string"
+  },
+  "removal_choice": {
+   "title": "Removal Choice",
+   "type": "string"
+  },
+  "me3_version": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "title": "Me3 Version"
+  },
+  "game": {
+   "anyOf": [
+    {
+     "$ref": "#/$defs/GameFiles"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null
+  },
+  "config_sha256": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "description": "the overhaul config's build, for an overhaul's build",
+   "title": "Config Sha256"
+  },
+  "version": {
+   "const": 1,
+   "default": 1,
+   "title": "Version",
+   "type": "integer"
+  },
+  "made_by": {
+   "description": "the launcher that made it, 'Roundtable Souls <version>'",
+   "title": "Made By",
+   "type": "string"
+  },
+  "packages": {
+   "description": "the packages' files it read, in load order",
+   "items": {
+    "$ref": "#/$defs/InputFile"
+   },
+   "title": "Packages",
+   "type": "array"
+  },
+  "sources": {
+   "anyOf": [
+    {
+     "type": "string"
+    },
+    {
+     "type": "null"
+    }
+   ],
+   "default": null,
+   "description": "sha256 over the overhaul's sources record, when it read one",
+   "title": "Sources"
+  },
+  "order": {
+   "description": "the profile's entries before it, in load order",
+   "items": {
+    "type": "string"
+   },
+   "title": "Order",
+   "type": "array"
+  }
+ },
+ "required": [
+  "merger_revision",
+  "ordering",
+  "game_config_sha256",
+  "removal_choice",
+  "made_by"
+ ],
+ "title": "BuildRecord",
+ "type": "object"
+}

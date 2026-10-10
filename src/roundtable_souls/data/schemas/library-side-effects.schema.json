@@ -1,0 +1,118 @@
+{
+ "$defs": {
+  "SideEffect": {
+   "additionalProperties": false,
+   "description": "One change an install made outside its own entries.",
+   "properties": {
+    "entry": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "the entry changed (its id or file name); none: the profile",
+     "title": "Entry"
+    },
+    "setting": {
+     "description": "the key changed, for example enabled or start_online",
+     "title": "Setting",
+     "type": "string"
+    },
+    "before": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "integer"
+      },
+      {
+       "type": "number"
+      },
+      {
+       "type": "boolean"
+      },
+      {
+       "items": {},
+       "type": "array"
+      },
+      {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "default": null,
+     "description": "its value before the install",
+     "title": "Before"
+    },
+    "before_set": {
+     "default": true,
+     "description": "false when the key was not there before the install",
+     "title": "Before Set",
+     "type": "boolean"
+    },
+    "after": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "integer"
+      },
+      {
+       "type": "number"
+      },
+      {
+       "type": "boolean"
+      },
+      {
+       "items": {},
+       "type": "array"
+      },
+      {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "description": "the value the install set",
+     "title": "After"
+    }
+   },
+   "required": [
+    "setting",
+    "after"
+   ],
+   "title": "SideEffect",
+   "type": "object"
+  }
+ },
+ "additionalProperties": false,
+ "description": "What an install changed in entries it does not own.",
+ "properties": {
+  "version": {
+   "const": 1,
+   "default": 1,
+   "title": "Version",
+   "type": "integer"
+  },
+  "changes": {
+   "items": {
+    "$ref": "#/$defs/SideEffect"
+   },
+   "title": "Changes",
+   "type": "array"
+  }
+ },
+ "title": "SideEffectsRecord",
+ "type": "object"
+}

@@ -57,5 +57,11 @@ def test_a_database_outside_the_temporary_folders_is_refused_but_reading_one_is_
     sqlite3.connect(":memory:").close()
 
 
+def test_the_null_device_may_be_written(tmp_path):
+    """Output thrown away (a library starting a quiet subprocess opens os.devnull for writing) changes no file."""
+    with open(os.devnull, "w") as f:
+        f.write("discarded")
+
+
 def test_reading_outside_is_still_allowed(tmp_path):
     assert Path(__file__).read_text(encoding="utf-8").startswith('"""')

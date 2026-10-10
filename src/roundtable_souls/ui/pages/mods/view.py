@@ -41,8 +41,7 @@ from roundtable_souls.mods import extract as mod_extract
 from roundtable_souls.mods import history as mod_history
 from roundtable_souls.mods import install as mod_install
 from roundtable_souls.mods import order as mod_order
-from roundtable_souls.mods import undo as mod_undo
-from roundtable_souls.platform import desktop, trash
+from roundtable_souls.platform import desktop
 from roundtable_souls.platform import logging as run_logging
 from roundtable_souls.services import play as core
 from roundtable_souls.services.mods import (
@@ -79,6 +78,7 @@ from roundtable_souls.ui.dialogs.common import (
 )
 from roundtable_souls.ui.dialogs.config_files import ConfigFilesDialog
 from roundtable_souls.ui.dialogs.install import InstallDialog
+from roundtable_souls.ui.pages.activity.presenter import ActivityPresenter, Refusal
 from roundtable_souls.ui.theme import (
     ghost_btn,
     hint,
@@ -1465,107 +1465,16 @@ class ModsView:
         return ok
 
     def _run_undo(self, rec):
-        """Take a job back from Activity (see mods.undo)."""
-        u = dict(rec.get("undo") or {})
-        if self.busy:
-            self._toast("Wait for the current job", "Undo runs as a job of its own.", error=True)
-            return
-        if not mod_undo.available(u):
-            self._toast("It cannot be taken back any more", "What it needs is gone.", error=True)
+        """Take a job back from Activity (see mods.undo); the plan, its confirmation text and the job come from the
+        Activity presenter, which the Activity window uses too."""
+        plan = ActivityPresenter().undo_plan(rec, busy=self.busy, game_running=self.game_running)
+        if isinstance(plan, Refusal):
+            self._toast(plan.title, plan.body, error=True)
             self.activity.refresh()
             return
-        prof = Path(u.get("profile") or "")
-        if u.get("type") == "rebuild" and self.game_running:
-            self._toast("Close the game first", "The rebuild's files are in use while it runs.", error=True)
+        if not confirm(self, plan.title, changes=list(plan.changes), safety=plan.safety, apply_text=plan.apply_text):
             return
-        if u.get("type") == "rebuild":
-            redo = bool(u.get("redo"))
-            title = "Redo the rebuild" if redo else "Undo the rebuild"
-            ok = confirm(
-                self,
-                title,
-                changes=[
-                    "The rebuild tool's output is swapped with the backup it kept" if u.get("tool_restore") else "",
-                    "The combined parameters are swapped with the ones kept before" if u.get("combined_before") else "",
-                    f"{prof.name} goes back as it was {'after' if redo else 'before'} the rebuild"
-                    if u.get("profile_before")
-                    else "",
-                ],
-                safety="Nothing is deleted: each is swapped with its copy, so this can be done again the other way. "
-                "Load order will say the parameters are out of date until you rebuild.",
-                apply_text=title,
-            )
-            if not ok:
-                return
-            name = "the rebuild"
-        elif u.get("type") in mod_undo.OPERATIONS:
-            name = u.get("name") or "the mod"
-            fresh = u.get("type") == "install"
-            ok = confirm(
-                self,
-                f"Undo the install of {name}" if fresh else f"Roll {name} back",
-                changes=[
-                    f"{prof.name} goes back to exactly what it was before the install"
-                    if fresh
-                    else f"{name}'s folder and its entries go back to the version before",
-                    "The files the install added are removed; any you changed since stay, and are listed"
-                    if fresh
-                    else "The version it replaces is kept aside, with any changes you made to it",
-                    "The merged mods are rebuilt for it" if u.get("rebuild") and not fresh else "",
-                ],
-                safety="Seamless Co-op and your other mods are not touched. If the profile changed since, only "
-                f"{name}'s entries are taken out of it.",
-                apply_text="Undo install" if fresh else "Roll back",
-            )
-            if not ok:
-                return
-        else:
-            name = u.get("name") or "it"
-            in_bin = trash.exists(u.get("trash"))
-            dlg = ConfirmDialog(
-                f"Restore {name}",
-                self,
-                changes=[
-                    f"Its entry goes back into {prof.name}, where it was",
-                    "Its folder comes back from the Recycle Bin" if in_bin else "",
-                    "Play rebuilds the merged mods with it before the game starts (or Rebuild on the Mods page)"
-                    if u.get("merged")
-                    else "",
-                ],
-                safety="The profile as it is now is kept in its versions.",
-                apply_text="Restore",
-            )
-            if not dlg.exec():
-                return
-        job_id = rec.get("id")
-
-        def job(_setup, loc):
-            run_logging.start_log(
-                f"launcher: {'redo' if u.get('redo') else 'undo'} the rebuild"
-                if u.get("type") == "rebuild"
-                else f"launcher: {mod_undo.label(u).lower()} {name}"
-                if u.get("type") in mod_undo.OPERATIONS
-                else f"launcher: restore {name}",
-                loc.game.key,
-            )
-            try:
-                said = mod_undo.run(u, run_logging.log, loc=self.ctx.locations)
-            except (mod_undo.UndoError, OSError) as e:
-                run_logging.log(f"error: {e}")
-                raise SystemExit(1) from e
-            if job_id:
-                core.run_logging.mark_undone(job_id)
-            if u.get("type") == "rebuild":  # the same swap, the other way
-                core.run_logging.set_undo({**u, "redo": not u.get("redo")})
-            run_logging.log(f"done: {said}")
-
-        self.start(
-            job,
-            ("Redoing the rebuild..." if u.get("redo") else "Undoing the rebuild...")
-            if u.get("type") == "rebuild"
-            else f"Restoring {name}...",
-            need_setup=False,
-        )
+        self.start(plan.job(self.ctx.locations), plan.progress, need_setup=False)
 
     def _install_mod(self):
         """Ask what the mod is, then open the one picker for it. Cancelling a picker installs nothing."""

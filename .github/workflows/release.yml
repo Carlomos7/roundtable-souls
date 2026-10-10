@@ -123,6 +123,18 @@ jobs:
         ROUNDTABLE_SOULS_DATA="$RUNNER_TEMP/storage-check" ./dist/RoundtableSouls/RoundtableSouls.exe --check-storage
         cat "$RUNNER_TEMP/storage-check/storage-check.txt"
 
+    # The packaged program starts and initializes: its modules, data and QML, and every QML page in every theme with
+    # no QML warning (technical specification §8.5). Beside --shots, not instead: --shots still covers the Widgets
+    # window, which the self-test does not until the QML shell (S9) replaces it.
+    - name: Self-test the program
+      shell: bash
+      timeout-minutes: 10
+      run: |
+        code=0
+        ./dist/RoundtableSouls/RoundtableSouls.exe --self-test "$RUNNER_TEMP/self-test.txt" || code=$?
+        cat "$RUNNER_TEMP/self-test.txt"
+        exit $code
+
     # The setup on a clean runner: the previous release installed first (the Inno install of 3.13.2 and earlier is
     # replaced, settings kept, shortcuts pointed at the new copy), then uninstall keeps the data.
     - name: Install, migration and uninstall test
@@ -207,6 +219,16 @@ jobs:
         ./dist/share/RoundtableSouls-linux-x86_64.AppImage --check
         ROUNDTABLE_SOULS_DATA="$RUNNER_TEMP/storage-check" ./dist/RoundtableSouls/RoundtableSouls --check-storage
         ROUNDTABLE_SOULS_DATA="$RUNNER_TEMP/storage-check-appimage" ./dist/share/RoundtableSouls-linux-x86_64.AppImage --check-storage
+
+    - name: Self-test the program and the AppImage
+      timeout-minutes: 10
+      run: |
+        code=0
+        ./dist/RoundtableSouls/RoundtableSouls --self-test "$RUNNER_TEMP/self-test.txt" || code=$?
+        cat "$RUNNER_TEMP/self-test.txt"
+        ./dist/share/RoundtableSouls-linux-x86_64.AppImage --self-test "$RUNNER_TEMP/self-test-appimage.txt" || code=$?
+        cat "$RUNNER_TEMP/self-test-appimage.txt"
+        exit $code
 
     - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
