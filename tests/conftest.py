@@ -12,7 +12,8 @@ PermissionError, so a patch undone too early fails the test instead of touching 
   Win32 calls such as the Recycle Bin's SHFileOperation, Qt's own file I/O such as QSettings or QSaveFile, writes
   SQLite makes after a connection is open); files opened before the test started (session- or module-scoped
   fixtures) and writes to already-open file descriptors; paths given relative to a dir_fd.
-  Allowed besides the temporary folders: named pipes, __pycache__ folders, and the Recycle Bin items a test itself
+  Allowed besides the temporary folders: named pipes, the null device (os.devnull: output thrown away, as a
+  library's quiet subprocess does), __pycache__ folders, and the Recycle Bin items a test itself
   created (recycle_bin_left_clean restores and purges them). Reading is never refused."""
 
 import os
@@ -43,6 +44,8 @@ def _refuse_outside(path) -> None:
     except TypeError:
         return
     if text.startswith("\\\\.\\pipe\\"):  # a named pipe (platform.instance talking to the window), not a file
+        return
+    if os.path.normcase(text) == os.path.normcase(os.devnull):  # output thrown away: no file changes
         return
     for candidate in (os.path.abspath(text), os.path.realpath(text)):
         p = os.path.normcase(candidate)
