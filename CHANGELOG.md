@@ -5,6 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.0](https://github.com/Carlomos7/roundtable-souls/compare/v4.0.3...v4.1.0) (2026-10-21)
+
+
+### Added
+
+* **storage:** mirror backup notes, library index and profile history ([c864b4f](https://github.com/Carlomos7/roundtable-souls/commit/c864b4f6561cc5813e1bf682881c2e49a8c58ec3))
+* **storage:** rebuild runs in the database ([a47c135](https://github.com/Carlomos7/roundtable-souls/commit/a47c135df26b97cc41b9b0c7809522fbf7576724))
+
+
+### Changed
+
+* read game file names from the game catalog ([0f053c8](https://github.com/Carlomos7/roundtable-souls/commit/0f053c826d88a583d08a3037c8f6385b5ad6c30a))
+
 ## [4.0.3] - 2026-10-21
 
 ### Fixed
