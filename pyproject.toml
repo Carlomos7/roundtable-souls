@@ -1,6 +1,6 @@
 [project]
 name = "bayle"
-version = "4.6.0-rc.3"
+version = "5.0.0-rc.3"
 description = "An all-in-one toolkit for managing mods, profiles, and saves, with tools for resolving compatibility issues and merging mod changes."
 readme = "README.md"
 license = "GPL-3.0-or-later"
