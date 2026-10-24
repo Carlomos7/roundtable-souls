@@ -5,6 +5,61 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.0-rc.3](https://github.com/Carlomos7/roundtable-souls/compare/v4.6.0-rc.3...v5.0.0-rc.3) (2026-10-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* the import package roundtable_souls is now bayle.
+
+### Added
+
+* **api:** add the generated TypeScript client with a typed SSE reader and use it in the desktop app ([5d1a11f](https://github.com/Carlomos7/roundtable-souls/commit/5d1a11f94c4af6c9fff1aa65904d3af4bff7c2cc))
+* **api:** FastAPI app factory, bearer auth, CORS, backend entry point and OpenAPI snapshot ([f250f0e](https://github.com/Carlomos7/roundtable-souls/commit/f250f0e40f44851eb7d88aa7668cb94817569758))
+* **api:** job manager in the app, SSE event stream, job snapshot and cancel routes ([c1fa121](https://github.com/Carlomos7/roundtable-souls/commit/c1fa121fe74a989c508eaccb0d2da59ff2a21020))
+* **desktop:** add Tailwind v4 theme tokens generated from the Qt theme ([cc461d3](https://github.com/Carlomos7/roundtable-souls/commit/cc461d3382e3f9e8dd3355e2c9f836cd454e42a1))
+* **desktop:** add the app shell, backend plumbing and shared prompt and toast components ([dc99920](https://github.com/Carlomos7/roundtable-souls/commit/dc99920e5c59e9a1a988a0e7b402731bb698d975))
+* **desktop:** add the Tauri v2 shell and React front-end skeleton ([9d64352](https://github.com/Carlomos7/roundtable-souls/commit/9d643522bd4b5094dc03990dc6d8e5e73f6f8579))
+* **desktop:** use the generated @bayle/api client, set the window size and move the token generator ([59aa6ed](https://github.com/Carlomos7/roundtable-souls/commit/59aa6ede3478587563351805f48925ba96735248))
+* **session,api:** Activity operations, plan tokens and generic page/op/plan routes ([90f7283](https://github.com/Carlomos7/roundtable-souls/commit/90f7283c0e14263559ec8e0b4694b14447f5e1c5))
+* **session,ui:** Mods install drafts, overhauls and the Library behind the Session ([d84f433](https://github.com/Carlomos7/roundtable-souls/commit/d84f433c548a3ade035ab2fd1bb2c8467234bef0))
+* **session,ui:** Mods page snapshot, notices and drag table behind the Session ([bad34e6](https://github.com/Carlomos7/roundtable-souls/commit/bad34e6714c684b44f9d4e4e943e1d7b5e677af5))
+* **session,ui:** Mods profile operations behind the Session ([d5bae3b](https://github.com/Carlomos7/roundtable-souls/commit/d5bae3bcef7ed540f19cd563281290cf0832220a))
+* **session,ui:** Settings operations and snapshot behind the Session ([4f6a353](https://github.com/Carlomos7/roundtable-souls/commit/4f6a35384184e6e65b1ba75e0062b57205b99915))
+* **session:** job titles from params, destructive plans, follow_job on the shell host ([41fe18a](https://github.com/Carlomos7/roundtable-souls/commit/41fe18ad1de6f34453f09ecd7a15c9903d5a3220))
+* **session:** JobManager and EventBus over services.jobs ([4c53ae0](https://github.com/Carlomos7/roundtable-souls/commit/4c53ae06fec751c70809b084123ac61d557ca62e))
+* **session:** operation registry, Session.run/snapshot/answer/startup, settings service ([e1faefb](https://github.com/Carlomos7/roundtable-souls/commit/e1faefbaf11f7fb782412498404011e38930aaf7))
+* **views,session:** one Confirm/Refusal/Pick/Choose schema, PlanStore and PromptBroker ([4908e02](https://github.com/Carlomos7/roundtable-souls/commit/4908e02be045c3a0ee43736996204cfe4dc55642))
+
+
+### Fixed
+
+* **api:** give the Mods merge-health pill its own name so the API's Health type keeps its name ([2fc0442](https://github.com/Carlomos7/roundtable-souls/commit/2fc04423de2bdf12eddbe72f166ccc235404a1e0))
+* **api:** type check the event stream's yield ([0e77293](https://github.com/Carlomos7/roundtable-souls/commit/0e77293897ebabc435d93f32bcbf50d82c151af1))
+* **desktop:** send the bearer token on page and plan calls ([17fef23](https://github.com/Carlomos7/roundtable-souls/commit/17fef234fde63bacd2b71753c3d7c856524b53d6))
+* **desktop:** show the backend's message in the status line when the shell page is refused ([bee43af](https://github.com/Carlomos7/roundtable-souls/commit/bee43af7aaadcfadcf2284ae703009a0a333a7bd))
+* **ui:** stop page adapters from outliving their window through reference cycles ([6281deb](https://github.com/Carlomos7/roundtable-souls/commit/6281debf75088edd47acb4e0142802cace65b65b))
+* write worker requests from a writer thread, not under the pool lock ([b690709](https://github.com/Carlomos7/roundtable-souls/commit/b6907097d15ef47e58400346c4c5626e960e7e64))
+
+
+### Changed
+
+* move presenters, load order, install draft, top bar and menu models into bayle.views ([ce20ccd](https://github.com/Carlomos7/roundtable-souls/commit/ce20ccd2aacbd628e6a7fb0385f51dc5a7383603))
+* move the CPU worker pool to platform/cpu_pool.py on subprocess ([11fa1fd](https://github.com/Carlomos7/roundtable-souls/commit/11fa1fd5a258377f5a549712b9a43bc34448a86f))
+* move ui.text to platform.text ([fb36a62](https://github.com/Carlomos7/roundtable-souls/commit/fb36a62e8e9c531914407a92e2e54b1c8cb08963))
+* rename the package to bayle ([69844fa](https://github.com/Carlomos7/roundtable-souls/commit/69844fad3dd007c1c9581ac4b32230b1aacb2f82))
+* **saves:** Saves page reads and writes go through the Session (WP11, WP12) ([a00be35](https://github.com/Carlomos7/roundtable-souls/commit/a00be3591594dace561a6ce36127c74997b0796c))
+* **services:** typed operation errors, JobResult and run_logged ([bc632d1](https://github.com/Carlomos7/roundtable-souls/commit/bc632d16bb278509e5459904852b1275e3354b64))
+* **shell:** move the shell behind the Session ([14a8bf4](https://github.com/Carlomos7/roundtable-souls/commit/14a8bf4abd30855b84c480e825a9b8f8028cc3e7))
+* **ui,session:** Mod Configs page goes through the Session ([fe2b5db](https://github.com/Carlomos7/roundtable-souls/commit/fe2b5dbf9daca67953bba7dcf627fcdab6480428))
+* **ui:** Activity adapter and host go through the Session ([a513d5c](https://github.com/Carlomos7/roundtable-souls/commit/a513d5c01b8d1b38304b869929d26fe0f622308d))
+* **ui:** Profile transfer export and import go through the Session ([b799298](https://github.com/Carlomos7/roundtable-souls/commit/b79929856c5ff270009f6709f94029f6b1dc83fd))
+
+
+### Removed
+
+* take the desktop app, the TypeScript client and their CI off main; they stay on local branches ([ae25905](https://github.com/Carlomos7/roundtable-souls/commit/ae2590597448bb3d98bf5b1826ea6daa3d13d71f))
+
 ## [4.6.0-rc.3] - 2026-10-22
 
 ### Added
